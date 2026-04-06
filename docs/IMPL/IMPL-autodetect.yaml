@@ -272,5 +272,5 @@ pre_mortem:
           likelihood: low
           impact: medium
           mitigation: Task shows exact before/after code with line number context; verification postcondition checks grep count
-state: SCOUT_PENDING
+state: "REVIEWED"
 injection_method: hook
