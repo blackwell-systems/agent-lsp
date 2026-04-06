@@ -234,8 +234,16 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Column     int    `json:"column"`
 		Direction  string `json:"direction,omitempty"`
 	}
+	type GetSemanticTokensArgs struct {
+		FilePath    string `json:"file_path"`
+		LanguageID  string `json:"language_id,omitempty"`
+		StartLine   int    `json:"start_line"`
+		StartColumn int    `json:"start_column"`
+		EndLine     int    `json:"end_line"`
+		EndColumn   int    `json:"end_column"`
+	}
 
-	// ------- Register all 25 tools -------
+	// ------- Register all 26 tools -------
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "start_lsp",
@@ -434,6 +442,14 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Description: "Show call hierarchy for a symbol at a position. Returns callers (incoming), callees (outgoing), or both depending on the direction parameter. Direction defaults to \"both\". Use this to understand code flow -- which functions call this function and which functions it calls.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args CallHierarchyArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleCallHierarchy(ctx, cs.get(), toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_semantic_tokens",
+		Description: "Get semantic tokens for a range in a file. Returns each token's type (function, variable, keyword, parameter, type, etc.) and modifiers (readonly, static, deprecated, etc.) with 1-based line/character positions. Use this to understand the syntactic role of code elements — distinct from hover which gives documentation. Only available when the language server supports textDocument/semanticTokens.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetSemanticTokensArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleGetSemanticTokens(ctx, cs.get(), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
