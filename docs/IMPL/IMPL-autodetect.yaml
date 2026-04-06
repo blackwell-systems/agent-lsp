@@ -238,6 +238,7 @@ waves:
             - cmd/lsp-mcp-go/main.go
           dependencies:
             - A
+      base_commit: ef2c2b461b419f62b769eb350c1519823a0613ec
 quality_gates:
     level: standard
     gates:
@@ -259,6 +260,19 @@ completion_reports:
             - internal/config/autodetect.go
         verification: PASS
         notes: 'ServerSpec type, knownServers table (15 languages), and AutodetectServers() function implemented. Deterministic iteration via sorted keys. All quality gates pass: build, vet, and test. Pre-commit hooks passed.'
+    B:
+        status: complete
+        branch: saw/autodetect/wave2-agent-B
+        commit: 7dde45e
+        files_changed:
+            - internal/config/parse.go
+            - internal/config/parse_test.go
+            - cmd/lsp-mcp-go/main.go
+        tests_added:
+            - TestParseArgs_AutoEmpty
+            - TestParseArgs_AutoFlag
+        verification: PASS
+        notes: Auto-detect mode integrated into ParseArgs. Empty args and --auto flag both trigger AutodetectServers(). Usage text updated in main.go. All tests pass with 9 language servers detected on local PATH.
 pre_mortem:
     overall_risk: low
     rows:
