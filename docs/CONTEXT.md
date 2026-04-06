@@ -9,3 +9,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-parity-fixes-round2.yaml
 - **tier2-lang-expansion**: completed 2026-04-06, 2 waves, 7 agents
   - IMPL doc: docs/IMPL/complete/IMPL-tier2-lang-expansion.yaml
+- **autodetect**: completed 2026-04-06, 2 waves, 2 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-autodetect.yaml

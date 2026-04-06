@@ -1,3 +1,4 @@
+completion_date: "2026-04-06"
 title: Language Server Auto-Detection
 feature_slug: autodetect
 verdict: SUITABLE_WITH_CAVEATS
@@ -296,5 +297,5 @@ pre_mortem:
           likelihood: low
           impact: medium
           mitigation: Task shows exact before/after code with line number context; verification postcondition checks grep count
-state: REVIEWED
+state: COMPLETE
 injection_method: hook
