@@ -924,5 +924,5 @@ critic_report:
     summary: 'All 8 agent briefs verified against the codebase. The described code patterns, function names, struct fields, and edit targets are accurate. One advisory warning for Agent F: the test file internal/resources/resources_test.go (package resources) calls GenerateResourceList and ResourceTemplates by their exported names. After renaming to unexported forms, these test calls will break compilation unless the test file is updated. Since the IMPL explicitly forbids modifying test files, the agent should stop and report this conflict rather than proceeding blindly. Per Check 8, test-file callers are warning severity.'
     reviewed_at: "2026-04-06T18:02:02Z"
     issue_count: 1
-state: SCOUT_PENDING
+state: "REVIEWED"
 injection_method: hook
