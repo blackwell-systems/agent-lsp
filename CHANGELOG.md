@@ -13,7 +13,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - `types.CallHierarchyItem`, `types.CallHierarchyIncomingCall`, `types.CallHierarchyOutgoingCall` — typed protocol structs for call hierarchy responses
 - `types.TextEdit`, `types.SymbolInformation`, `types.SemanticToken` — typed protocol structs; `FormatDocument`/`FormatRange` and `GetWorkspaceSymbols` migrated from `interface{}` to typed returns
 - `types.SymbolKind`, `types.SymbolTag` — integer enum types used across call hierarchy and symbol structs
-- Tool count: 24 → 25 (26 pending semantic tokens)
+- `get_semantic_tokens` tool — classifies each token in a range as function/parameter/variable/type/keyword/etc using `textDocument/semanticTokens/range` (falls back to full); decodes LSP's delta-encoded 5-integer tuple format into absolute 1-based positions with human-readable type and modifier names from the server's legend; only MCP-LSP server to expose this
+- Semantic token legend captured during `initialize` — `legendTypes`/`legendModifiers` stored on `LSPClient` under dedicated mutex; `GetSemanticTokenLegend()` accessor added
+- `types.SemanticToken` — typed struct for decoded token output
+- Tool count: 24 → 26
 
 ### Added (LSP 3.17 spec compliance)
 - `workspace/applyEdit` server-initiated request handler — client now responds `ApplyWorkspaceEditResult{applied:true}` instead of null; servers using this for code actions (e.g. file creation/rename) no longer silently fail
