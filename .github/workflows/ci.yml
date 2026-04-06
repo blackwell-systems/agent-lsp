@@ -85,8 +85,8 @@ jobs:
       - name: Install yaml-language-server
         run: npm install -g yaml-language-server
 
-      - name: Install vscode-json-language-server
-        run: npm install -g vscode-json-language-server
+      - name: Install vscode-langservers-extracted (JSON server)
+        run: npm install -g vscode-langservers-extracted
 
       - name: Install dockerfile-language-server-nodejs
         run: npm install -g dockerfile-language-server-nodejs

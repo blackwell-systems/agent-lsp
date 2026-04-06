@@ -50,7 +50,7 @@ lsp-mcp-go is a bridge — it needs language servers already installed on your m
 | PHP | `intelephense` | `npm i -g intelephense` |
 | Java | `jdtls` | [eclipse.jdt.ls snapshots](https://download.eclipse.org/jdtls/snapshots/) |
 | YAML | `yaml-language-server` | `npm i -g yaml-language-server` |
-| JSON | `vscode-json-language-server` | `npm i -g vscode-json-language-server` |
+| JSON | `vscode-json-language-server` | `npm i -g vscode-langservers-extracted` |
 | Dockerfile | `docker-langserver` | `npm i -g dockerfile-language-server-nodejs` |
 
 ### Step 2 — Add to your AI config
