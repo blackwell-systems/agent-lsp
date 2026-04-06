@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- Multi-server routing — single `lsp-mcp-go` process now manages multiple language servers simultaneously; routes tool calls to the correct server by file extension. Supports inline arg-pairs (`go:gopls typescript:tsserver,--stdio`) and `--config lsp-mcp.json` file; backward-compatible with existing single-server invocation
 - `call_hierarchy` tool — single tool with `direction: "incoming" | "outgoing" | "both"` (default: both); hides the LSP prepare/incoming/outgoing three-step protocol behind one call; returns typed JSON with `items`, `incoming`, `outgoing` fields
 - Fuzzy position fallback for `go_to_definition` and `get_references` — when a position lookup returns empty, falls back to workspace symbol search using the hover name at that position and retries from each candidate; handles AI assistant position imprecision without correctness regression
 - `types.CallHierarchyItem`, `types.CallHierarchyIncomingCall`, `types.CallHierarchyOutgoingCall` — typed protocol structs replacing `interface{}` for call hierarchy responses
