@@ -1,911 +1,928 @@
-title: 'LSP-MCP-GO Parity Fixes Round 2'
+title: LSP-MCP-GO Parity Fixes Round 2
 feature_slug: parity-fixes-round2
 verdict: SUITABLE
 suitability_assessment: |-
-  All 14 findings (5 errors + 9 warnings) from the parity inspection are
-  well-bounded edits to distinct files. Each fix touches at most one file
-  per agent with no cross-agent type dependencies.
+    All 14 findings (5 errors + 9 warnings) from the parity inspection are
+    well-bounded edits to distinct files. Each fix touches at most one file
+    per agent with no cross-agent type dependencies.
 
-  File decomposition: 8 files change across 8 agents -- fully disjoint
-  ownership. No investigation-first items; all root causes are identified
-  in the inspection report.
+    File decomposition: 8 files change across 8 agents -- fully disjoint
+    ownership. No investigation-first items; all root causes are identified
+    in the inspection report.
 
-  Interface discoverability: the only structural change (LSPDiagnostic.Code
-  string to interface{}) is a standalone type change; callers already treat
-  the field as opaque JSON, so no cascade updates are needed.
+    Interface discoverability: the only structural change (LSPDiagnostic.Code
+    string to interface{}) is a standalone type change; callers already treat
+    the field as opaque JSON, so no cascade updates are needed.
 
-  Parallelization value: 8 independent agents, Go build/test cycle is
-  ~10-15s. Clear speedup over sequential (~8 x 5 min = 40 min sequential
-  vs ~5 min parallel + 3 min merge = 8 min total).
+    Parallelization value: 8 independent agents, Go build/test cycle is
+    ~10-15s. Clear speedup over sequential (~8 x 5 min = 40 min sequential
+    vs ~5 min parallel + 3 min merge = 8 min total).
 
-  Estimated times:
-  - Scout phase: ~15 min
-  - Agent execution: ~5 min (8 agents in parallel)
-  - Merge and verification: ~3 min
-  Total SAW time: ~23 min
+    Estimated times:
+    - Scout phase: ~15 min
+    - Agent execution: ~5 min (8 agents in parallel)
+    - Merge and verification: ~3 min
+    Total SAW time: ~23 min
 
-  Sequential baseline: ~40 min
-  Time savings: ~17 min (43% faster)
+    Sequential baseline: ~40 min
+    Time savings: ~17 min (43% faster)
 
-  Constraint from user: do NOT touch test files or the test/ directory.
-
+    Constraint from user: do NOT touch test files or the test/ directory.
 test_command: GOWORK=off go test ./...
 lint_command: GOWORK=off go vet ./...
-state: SCOUT_PENDING
-
-quality_gates:
-  level: standard
-  gates:
-    - type: build
-      command: GOWORK=off go build ./...
-      required: true
-    - type: lint
-      command: GOWORK=off go vet ./...
-      required: true
-    - type: test
-      command: GOWORK=off go test ./...
-      required: true
-
-scaffolds: []
-
 file_ownership:
-  - file: internal/lsp/client.go
-    agent: A
-    wave: 1
-    action: modify
-    depends_on: []
-  - file: internal/lsp/diagnostics.go
-    agent: B
-    wave: 1
-    action: modify
-    depends_on: []
-  - file: internal/lsp/framing.go
-    agent: C
-    wave: 1
-    action: modify
-    depends_on: []
-  - file: internal/tools/workspace.go
-    agent: D
-    wave: 1
-    action: modify
-    depends_on: []
-  - file: cmd/lsp-mcp-go/server.go
-    agent: E
-    wave: 1
-    action: modify
-    depends_on: []
-  - file: internal/resources/resources.go
-    agent: F
-    wave: 1
-    action: modify
-    depends_on: []
-  - file: internal/types/types.go
-    agent: G
-    wave: 1
-    action: modify
-    depends_on: []
-  - file: internal/tools/session.go
-    agent: H
-    wave: 1
-    action: modify
-    depends_on: []
-
+    - file: internal/lsp/client.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: internal/lsp/diagnostics.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/lsp/framing.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/tools/workspace.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: cmd/lsp-mcp-go/server.go
+      agent: E
+      wave: 1
+      action: modify
+    - file: internal/resources/resources.go
+      agent: F
+      wave: 1
+      action: modify
+    - file: internal/resources/resources_test.go
+      agent: F
+      wave: 1
+      action: modify
+    - file: internal/types/types.go
+      agent: G
+      wave: 1
+      action: modify
+    - file: internal/tools/session.go
+      agent: H
+      wave: 1
+      action: modify
 interface_contracts:
-  - name: LSPDiagnostic.Code field type
-    description: |-
-      Change Code field in LSPDiagnostic from string to interface{} so both
-      integer and string diagnostic codes per the LSP spec 3.17.1 are accepted.
-    definition: |
-      type LSPDiagnostic struct {
-          Range    Range       `json:"range"`
-          Severity int         `json:"severity"`
-          Code     interface{} `json:"code,omitempty"`
-          Source   string      `json:"source,omitempty"`
-          Message  string      `json:"message"`
-      }
-    location: internal/types/types.go
-
-  - name: GenerateResourceList visibility change
-    description: |-
-      GenerateResourceList becomes unexported (renamed to generateResourceList).
-      No callers exist outside the package.
-    definition: |
-      func generateResourceList(client *lsp.LSPClient) []ResourceEntry
-    location: internal/resources/resources.go
-
-  - name: ResourceTemplates visibility change
-    description: |-
-      ResourceTemplates becomes unexported (renamed to resourceTemplates).
-      No callers exist outside the package.
-    definition: |
-      func resourceTemplates() []ResourceTemplate
-    location: internal/resources/resources.go
-
+    - name: LSPDiagnostic.Code field type
+      description: |-
+        Change Code field in LSPDiagnostic from string to interface{} so both
+        integer and string diagnostic codes per the LSP spec 3.17.1 are accepted.
+      definition: |
+        type LSPDiagnostic struct {
+            Range    Range       `json:"range"`
+            Severity int         `json:"severity"`
+            Code     interface{} `json:"code,omitempty"`
+            Source   string      `json:"source,omitempty"`
+            Message  string      `json:"message"`
+        }
+      location: internal/types/types.go
+    - name: GenerateResourceList visibility change
+      description: |-
+        GenerateResourceList becomes unexported (renamed to generateResourceList).
+        No callers exist outside the package.
+      definition: |
+        func generateResourceList(client *lsp.LSPClient) []ResourceEntry
+      location: internal/resources/resources.go
+    - name: ResourceTemplates visibility change
+      description: |-
+        ResourceTemplates becomes unexported (renamed to resourceTemplates).
+        No callers exist outside the package.
+      definition: |
+        func resourceTemplates() []ResourceTemplate
+      location: internal/resources/resources.go
 waves:
-  - number: 1
-    agents:
-      - id: A
-        task: |-
-          ## Context
-          File: internal/lsp/client.go
-          Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
-          Run all commands with GOWORK=off.
-
-          ## What to implement
-
-          Fix five issues in internal/lsp/client.go. Read the file before editing.
-
-          ### Fix 1 (E3): Silent unmarshal discards
-
-          Four functions contain `_ = json.Unmarshal(result, &v)` which silently
-          discards unmarshal errors. Change each to propagate the error.
-
-          The four functions are: GetSignatureHelp, RenameSymbol, PrepareRename,
-          and ExecuteCommand.
-
-          In each function, find and replace this three-line pattern:
-          ```go
-          var v interface{}
-          _ = json.Unmarshal(result, &v)
-          return v, nil
-          ```
-          with:
-          ```go
-          var v interface{}
-          if err := json.Unmarshal(result, &v); err != nil {
-              return nil, fmt.Errorf("unmarshal response: %w", err)
-          }
-          return v, nil
-          ```
-
-          Apply this replacement in all four functions. Each occurrence follows
-          the same `result == nil` guard, so find each `_ = json.Unmarshal` line
-          and replace it.
-
-          ### Fix 2 (W2): Remove dead docVers field
-
-          The LSPClient struct has a field `docVers map[string]int` that is
-          declared and initialized in NewLSPClient but never read or written anywhere
-          in the codebase. Version tracking uses `docMeta.version` inside `openDocs`
-          instead.
-
-          Step A: Remove the field from the struct. The struct has two adjacent fields:
-          ```go
-          openDocs  map[string]docMeta // uri -> meta
-          docVers   map[string]int     // uri -> version
-          ```
-          Delete the `docVers` line.
-
-          Step B: Remove the initialization in NewLSPClient. Find:
-          ```go
-          openDocs:       make(map[string]docMeta),
-          docVers:        make(map[string]int),
-          ```
-          Delete the `docVers:` line.
-
-          ### Fix 3 (W4): Add missing Initialize capabilities
-
-          In the Initialize method, the initParams map is built. Two additions needed:
-
-          Addition A: Add a "clientInfo" map entry as a top-level key in initParams. Find the block:
-          ```go
-          initParams := map[string]interface{}{
-              "processId": os.Getpid(),
-              "rootUri":   rootURI,
-              "rootPath":  rootDir,
-              "capabilities": map[string]interface{}{
-          ```
-          Insert after `"rootPath": rootDir,`:
-          ```go
-              "clientInfo": map[string]interface{}{
-                  "name":    "lsp-mcp-go",
-                  "version": "0.1.0",
-              },
-          ```
-
-          Addition B: Add two keys to the `"workspace"` sub-map inside capabilities.
-          Find the workspace map which currently ends with:
-          ```go
-          "workspaceEdit": map[string]interface{}{
-              "documentChanges": true,
-          },
-          ```
-          After that closing brace, add:
-          ```go
-          "didChangeConfiguration": map[string]interface{}{
-              "dynamicRegistration": true,
-          },
-          "didChangeWatchedFiles": map[string]interface{}{
-              "dynamicRegistration": true,
-          },
-          ```
-
-          ### Fix 4 (W7): Wrap Shutdown error
-
-          In the Shutdown method, find:
-          ```go
-          _, err := c.sendRequest(ctx, "shutdown", nil)
-          if err != nil {
-              return err
-          }
-          ```
-          Change to:
-          ```go
-          _, err := c.sendRequest(ctx, "shutdown", nil)
-          if err != nil {
-              return fmt.Errorf("shutdown request: %w", err)
-          }
-          ```
-
-          ### Fix 5 (W9): Update WaitForFileIndexed doc comment
-
-          Find the existing doc comment that reads:
-          ```go
-          // WaitForFileIndexed waits until the URI has received at least one diagnostic
-          // notification, then waits for a 1500ms quiet window with no further
-          // notifications.
-          ```
-          Replace with:
-          ```go
-          // WaitForFileIndexed waits until the URI has received at least one diagnostic
-          // notification (or fires immediately if diagnostics are already cached for
-          // the URI via SubscribeToDiagnostics replay), then waits for a 1500ms quiet
-          // window with no further notifications.
-          ```
-
-          ## Verification gate
-          ```
-          GOWORK=off go build ./internal/lsp/...
-          GOWORK=off go vet ./internal/lsp/...
-          grep -c 'unmarshal response' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/lsp/client.go
-          # Expected: 4
-          grep -c 'shutdown request' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/lsp/client.go
-          # Expected: 1
-          grep 'docVers' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/lsp/client.go
-          # Expected: no output
-          grep '"clientInfo"' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/lsp/client.go
-          # Expected: 1 match
-          ```
-
-          ## Constraints
-          - Do NOT modify any test files or anything under test/.
-          - Do NOT modify files outside internal/lsp/client.go.
-          - Do NOT change function signatures.
-        files:
-          - internal/lsp/client.go
-        dependencies: []
-
-      - id: B
-        task: |-
-          ## Context
-          File: internal/lsp/diagnostics.go
-          Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
-          Run all commands with GOWORK=off.
-
-          ## What to implement
-
-          Fix E4: WaitForDiagnostics does not skip the initial cached-replay snapshot.
-
-          The TypeScript reference tracks a "sawInitialSnapshot" flag per URI and
-          skips the first callback for each URI (the cached-replay notification from
-          SubscribeToDiagnostics), requiring a subsequent fresh notification before
-          marking a URI as received. The Go implementation has no equivalent skip.
-
-          ### Implementation
-
-          Add a snapshot-skip tracking map and modify the callback closure to discard
-          the first notification per URI before counting it as received.
-
-          In WaitForDiagnostics, find the existing code block:
-          ```go
-          var mu sync.Mutex
-
-          // Track which URIs have received at least one fresh notification.
-          received := make(map[string]bool, len(uris))
-          for _, uri := range uris {
-              received[uri] = false
-          }
-
-          var lastEvent time.Time
-          lastEvent = time.Now()
-
-          allReceived := func() bool {
-              for _, ok := range received {
-                  if !ok {
-                      return false
-                  }
-              }
-              return true
-          }
-
-          notify := make(chan struct{}, len(uris)+1)
-
-          cb := types.DiagnosticUpdateCallback(func(uri string, _ []types.LSPDiagnostic) {
-              mu.Lock()
-              if _, tracked := received[uri]; tracked {
-                  received[uri] = true
-              }
-              lastEvent = time.Now()
-              mu.Unlock()
-              select {
-              case notify <- struct{}{}:
-              default:
-              }
-          })
-          ```
-
-          Replace with:
-          ```go
-          var mu sync.Mutex
-
-          // Track which URIs have received at least one fresh notification.
-          received := make(map[string]bool, len(uris))
-          for _, uri := range uris {
-              received[uri] = false
-          }
-
-          // seenInitial tracks whether the initial cached-replay notification has
-          // been skipped per URI, matching the TypeScript sawInitialSnapshot logic.
-          seenInitial := make(map[string]bool, len(uris))
-
-          var lastEvent time.Time
-          lastEvent = time.Now()
-
-          allReceived := func() bool {
-              for _, ok := range received {
-                  if !ok {
-                      return false
-                  }
-              }
-              return true
-          }
-
-          notify := make(chan struct{}, len(uris)+1)
-
-          cb := types.DiagnosticUpdateCallback(func(uri string, _ []types.LSPDiagnostic) {
-              mu.Lock()
-              if _, tracked := received[uri]; tracked {
-                  if !seenInitial[uri] {
-                      // Skip the first callback per URI: it is the cached-replay
-                      // snapshot from SubscribeToDiagnostics, not a fresh notification.
-                      seenInitial[uri] = true
-                      mu.Unlock()
-                      return
-                  }
-                  received[uri] = true
-              }
-              lastEvent = time.Now()
-              mu.Unlock()
-              select {
-              case notify <- struct{}{}:
-              default:
-              }
-          })
-          ```
-
-          Also update the doc comment at the top of WaitForDiagnostics from:
-          ```go
-          // WaitForDiagnostics waits for diagnostic stabilisation for all uris.
-          // It ignores the initial snapshot, requires one fresh notification per URI,
-          // then waits for a 500ms quiet window. Resolves on timeout without error.
-          ```
-          To:
-          ```go
-          // WaitForDiagnostics waits for diagnostic stabilisation for all uris.
-          // It skips the initial cached-replay notification per URI (matching the
-          // TypeScript sawInitialSnapshot logic), requires one fresh notification
-          // per URI after that, then waits for a 500ms quiet window.
-          // Resolves on timeout without error.
-          ```
-
-          ## Verification gate
-          ```
-          GOWORK=off go build ./internal/lsp/...
-          GOWORK=off go vet ./internal/lsp/...
-          grep -c 'seenInitial' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/lsp/diagnostics.go
-          # Expected: at least 3 (declaration, init, two usages in callback)
-          ```
-
-          ## Constraints
-          - Do NOT modify any test files or anything under test/.
-          - Do NOT modify files outside internal/lsp/diagnostics.go.
-          - Do NOT change the function signature of WaitForDiagnostics.
-        files:
-          - internal/lsp/diagnostics.go
-        dependencies: []
-
-      - id: C
-        task: |-
-          ## Context
-          File: internal/lsp/framing.go
-          Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
-          Run all commands with GOWORK=off.
-
-          ## What to implement
-
-          Fix W6: Remove dead variable and its blank assignment in tryParse.
-
-          In the tryParse function, the variable is allocated and immediately
-          consumed by a blank identifier -- it is never actually used. Remove
-          both lines.
-
-          The current code in tryParse starts with:
-          ```go
-          func tryParse(buf []byte) ([]byte, []byte, bool) {
-              sep := []byte("\r\n\r\n")
-              idx := -1
-              for i := 0; i < len(buf)-3; i++ {
-                  if buf[i] == '\r' && buf[i+1] == '\n' && buf[i+2] == '\r' && buf[i+3] == '\n' {
-                      idx = i
-                      break
-                  }
-              }
-              if idx < 0 {
-                  return nil, buf, false
-              }
-
-              _ = sep
-              header := string(buf[:idx])
-          ```
-
-          Replace with (remove the `sep :=` line and the `_ = sep` line):
-          ```go
-          func tryParse(buf []byte) ([]byte, []byte, bool) {
-              idx := -1
-              for i := 0; i < len(buf)-3; i++ {
-                  if buf[i] == '\r' && buf[i+1] == '\n' && buf[i+2] == '\r' && buf[i+3] == '\n' {
-                      idx = i
-                      break
-                  }
-              }
-              if idx < 0 {
-                  return nil, buf, false
-              }
-
-              header := string(buf[:idx])
-          ```
-
-          ## Verification gate
-          ```
-          GOWORK=off go build ./internal/lsp/...
-          GOWORK=off go vet ./internal/lsp/...
-          grep 'sep :=' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/lsp/framing.go
-          # Expected: no output
-          grep '_ = sep' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/lsp/framing.go
-          # Expected: no output
-          ```
-
-          ## Constraints
-          - Do NOT modify any test files or anything under test/.
-          - Do NOT modify files outside internal/lsp/framing.go.
-          - Do NOT change any logic -- this is a dead code removal only.
-        files:
-          - internal/lsp/framing.go
-        dependencies: []
-
-      - id: D
-        task: |-
-          ## Context
-          File: internal/tools/workspace.go
-          Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
-          Run all commands with GOWORK=off.
-
-          ## What to implement
-
-          Fix E5: HandleFormatDocument and HandleFormatRange silently swallow toInt
-          errors for the tab_size argument.
-
-          ### Fix 1: HandleFormatDocument
-
-          Find in HandleFormatDocument:
-          ```go
-          tabSize := 2
-          if v, err := toInt(args, "tab_size"); err == nil {
-              tabSize = v
-          }
-          ```
-
-          Replace with:
-          ```go
-          tabSize := 2
-          if v, err := toInt(args, "tab_size"); err != nil && args["tab_size"] != nil {
-              return types.ErrorResult(fmt.Sprintf("tab_size: %s", err)), nil
-          } else if err == nil {
-              tabSize = v
-          }
-          ```
-
-          Only return an error when args["tab_size"] is non-nil -- if the argument
-          is absent, the default of 2 is appropriate. If it is present but not a
-          valid integer, surface the error.
-
-          ### Fix 2: HandleFormatRange
-
-          Find in HandleFormatRange:
-          ```go
-          tabSize := 2
-          if v, tErr := toInt(args, "tab_size"); tErr == nil {
-              tabSize = v
-          }
-          ```
-
-          Replace with:
-          ```go
-          tabSize := 2
-          if v, tErr := toInt(args, "tab_size"); tErr != nil && args["tab_size"] != nil {
-              return types.ErrorResult(fmt.Sprintf("tab_size: %s", tErr)), nil
-          } else if tErr == nil {
-              tabSize = v
-          }
-          ```
-
-          ## Verification gate
-          ```
-          GOWORK=off go build ./internal/tools/...
-          GOWORK=off go vet ./internal/tools/...
-          grep -c 'ErrorResult.*tab_size' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/tools/workspace.go
-          # Expected: 2
-          ```
-
-          ## Constraints
-          - Do NOT modify any test files or anything under test/.
-          - Do NOT modify files outside internal/tools/workspace.go.
-          - Do NOT change the function signatures of HandleFormatDocument or HandleFormatRange.
-          - The fmt import is already present in the file; do not add a duplicate.
-        files:
-          - internal/tools/workspace.go
-        dependencies: []
-
-      - id: E
-        task: |-
-          ## Context
-          File: cmd/lsp-mcp-go/server.go
-          Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
-          Run all commands with GOWORK=off.
-
-          ## What to implement
-
-          Fix two issues in cmd/lsp-mcp-go/server.go.
-
-          ### Fix 1 (E1): ApplyEditArgs JSON tag mismatch
-
-          The ApplyEditArgs struct uses json:"edit" but HandleApplyEdit reads
-          args["workspace_edit"]. Every call to apply_edit silently fails.
-
-          Find the struct definition:
-          ```go
-          type ApplyEditArgs struct {
-              Edit interface{} `json:"edit"`
-          }
-          ```
-
-          Change to:
-          ```go
-          type ApplyEditArgs struct {
-              Edit interface{} `json:"workspace_edit"`
-          }
-          ```
-
-          ### Fix 2 (W3): Call logging.SetServer after server creation
-
-          The logging package has a SetServer function that is never called from
-          server.go, so MCP log routing never activates and all messages fall back
-          to stderr permanently.
-
-          Read internal/logging/logging.go to understand the SetServer signature
-          and the logSender interface it expects. Then read the go-sdk mcp package
-          to determine whether the *mcp.Server type returned by mcp.NewServer
-          satisfies that interface (it needs a LogMessage method).
-
-          The server is created at:
-          ```go
-          server := mcp.NewServer(&mcp.Implementation{
-              Name:    "lsp-mcp-go",
-              Version: "0.1.0",
-          }, nil)
-          ```
-
-          If *mcp.Server satisfies the logSender interface (has LogMessage method):
-          Add immediately after the closing `}, nil)` line:
-          ```go
-          logging.SetServer(server)
-          ```
-
-          If *mcp.Server does NOT satisfy the logSender interface, do NOT add the
-          call. Instead add this comment after the server creation block:
-          ```go
-          // TODO(W3): logging.SetServer needs a logSender implementation wrapping
-          // the MCP server. The *mcp.Server type does not expose LogMessage directly.
-          // Wire after confirming the correct session notification API.
-          ```
-
-          ## Verification gate
-          ```
-          GOWORK=off go build ./cmd/lsp-mcp-go/...
-          GOWORK=off go vet ./cmd/lsp-mcp-go/...
-          grep 'json:"workspace_edit"' /Users/dayna.blackwell/code/LSP-MCP-GO/cmd/lsp-mcp-go/server.go
-          # Expected: 1 match
-          grep 'json:"edit"' /Users/dayna.blackwell/code/LSP-MCP-GO/cmd/lsp-mcp-go/server.go
-          # Expected: no match on ApplyEditArgs
-          ```
-
-          ## Constraints
-          - Do NOT modify any test files or anything under test/.
-          - Do NOT modify files outside cmd/lsp-mcp-go/server.go.
-          - If *mcp.Server does not implement the logging interface, add the TODO
-            comment rather than breaking the build.
-        files:
-          - cmd/lsp-mcp-go/server.go
-        dependencies: []
-
-      - id: F
-        task: |-
-          ## Context
-          File: internal/resources/resources.go
-          Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
-          Run all commands with GOWORK=off.
-
-          ## What to implement
-
-          Fix two issues in internal/resources/resources.go.
-
-          ### Fix 1 (E2): Make two exported functions unexported
-
-          The functions GenerateResourceList and ResourceTemplates are exported but
-          have zero callers outside the package. MCP resource listing endpoints are
-          not wired in server.go (out of scope for this round). Making them unexported
-          removes dead exported symbols from the public API.
-
-          Before editing, verify there are no external callers:
-          ```
-          grep -rn 'GenerateResourceList\|ResourceTemplates' /Users/dayna.blackwell/code/LSP-MCP-GO --include='*.go' | grep -v '_test.go' | grep -v 'resources.go'
-          ```
-          Expected: no output. If any callers are found, stop and report them instead
-          of proceeding with this fix.
-
-          Rename GenerateResourceList to generateResourceList (change the 'G' to 'g').
-          Rename ResourceTemplates to resourceTemplates (change the 'R' to 'r').
-
-          Do not change the function bodies, parameters, or return types -- only
-          the function name capitalization changes.
-
-          ### Fix 2 (W8): Propagate WaitForDiagnostics errors
-
-          There are two sites where WaitForDiagnostics errors are logged and
-          suppressed. Both are in HandleDiagnosticsResource.
-
-          Site 1 -- find:
-          ```go
-          if err := lsp.WaitForDiagnostics(ctx, client, uris, 10000); err != nil {
-              logging.Log(logging.LevelWarning, fmt.Sprintf("WaitForDiagnostics: %v", err))
-          }
-          ```
-          Replace with:
-          ```go
-          if err := lsp.WaitForDiagnostics(ctx, client, uris, 10000); err != nil {
-              return ResourceResult{}, fmt.Errorf("waiting for diagnostics: %w", err)
-          }
-          ```
-
-          Site 2 -- find:
-          ```go
-          if err := lsp.WaitForDiagnostics(ctx, client, []string{fileURI}, 10000); err != nil {
-              logging.Log(logging.LevelWarning, fmt.Sprintf("WaitForDiagnostics for %s: %v", fileURI, err))
-          }
-          ```
-          Replace with:
-          ```go
-          if err := lsp.WaitForDiagnostics(ctx, client, []string{fileURI}, 10000); err != nil {
-              return ResourceResult{}, fmt.Errorf("waiting for diagnostics: %w", err)
-          }
-          ```
-
-          After these changes, check if the logging import is still used:
-          ```
-          grep 'logging\.' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/resources/resources.go
-          ```
-          If no remaining calls to logging.Log exist, remove the logging import
-          from the import block to avoid an unused import compile error.
-
-          ## Verification gate
-          ```
-          GOWORK=off go build ./internal/resources/...
-          GOWORK=off go vet ./internal/resources/...
-          grep 'func GenerateResourceList\|func ResourceTemplates' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/resources/resources.go
-          # Expected: no output (functions renamed to lowercase)
-          grep -c 'waiting for diagnostics' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/resources/resources.go
-          # Expected: 2
-          ```
-
-          ## Constraints
-          - Do NOT modify any test files or anything under test/.
-          - Do NOT modify files outside internal/resources/resources.go.
-          - Do NOT wire the functions into server.go -- that is out of scope.
-          - Do NOT remove ResourceEntry or ResourceTemplate struct types.
-        files:
-          - internal/resources/resources.go
-        dependencies: []
-
-      - id: G
-        task: |-
-          ## Context
-          File: internal/types/types.go
-          Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
-          Run all commands with GOWORK=off.
-
-          ## What to implement
-
-          Fix W1: LSPDiagnostic.Code is typed string but the LSP spec defines
-          `code` as `integer | string`. Integer codes from language servers like
-          rust-analyzer and clangd are silently dropped when Go JSON unmarshaling
-          fails to decode an integer into a string field.
-
-          Change the Code field type from string to interface{}.
-
-          Find the LSPDiagnostic struct:
-          ```go
-          type LSPDiagnostic struct {
-              Range    Range  `json:"range"`
-              Severity int    `json:"severity"` // 1=error 2=warning 3=info 4=hint
-              Code     string `json:"code,omitempty"`
-              Source   string `json:"source,omitempty"`
-              Message  string `json:"message"`
-          }
-          ```
-
-          Replace with:
-          ```go
-          type LSPDiagnostic struct {
-              Range    Range       `json:"range"`
-              Severity int         `json:"severity"` // 1=error 2=warning 3=info 4=hint
-              Code     interface{} `json:"code,omitempty"`
-              Source   string      `json:"source,omitempty"`
-              Message  string      `json:"message"`
-          }
-          ```
-
-          After making this change, search for callers that use the Code field
-          as a string directly (not via json.Marshal):
-          ```
-          grep -rn '\.Code' /Users/dayna.blackwell/code/LSP-MCP-GO --include='*.go' | grep -v '_test.go'
-          ```
-
-          For each result, check whether it compiles without a type assertion.
-          Only update callers if they would fail to compile (e.g., string comparison
-          like `diag.Code == "some-string"` -- change to `diag.Code.(string) == "some-string"`).
-          Do not update callers that pass Code through json.Marshal (that handles
-          interface{} correctly).
-
-          ## Verification gate
-          ```
-          GOWORK=off go build ./...
-          GOWORK=off go vet ./...
-          grep 'Code.*interface{}' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/types/types.go
-          # Expected: 1 match
-          grep 'Code.*string' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/types/types.go
-          # Expected: no match on LSPDiagnostic.Code line
-          ```
-
-          ## Constraints
-          - Do NOT modify any test files or anything under test/.
-          - Only update callers in other files if the type change causes a
-            compilation error, not preemptively.
-          - Do NOT change any other field types in LSPDiagnostic.
-          - Do NOT add a custom JSON unmarshaler.
-        files:
-          - internal/types/types.go
-        dependencies: []
-
-      - id: H
-        task: |-
-          ## Context
-          File: internal/tools/session.go
-          Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
-          Run all commands with GOWORK=off.
-
-          ## What to implement
-
-          Fix W5: HandleRestartLspServer passes empty rootDir to Initialize when
-          root_dir arg is absent, constructing a malformed rootURI of "file://".
-
-          The simplest correct fix is to validate the argument and return a clear
-          error when root_dir is absent or empty.
-
-          Find in HandleRestartLspServer:
-          ```go
-          rootDir, _ := args["root_dir"].(string)
-          if err := client.Restart(ctx, rootDir); err != nil {
-              return types.ErrorResult(fmt.Sprintf("failed to restart LSP server: %s", err)), nil
-          }
-          ```
-
-          Replace with:
-          ```go
-          rootDir, _ := args["root_dir"].(string)
-          if rootDir == "" {
-              return types.ErrorResult("root_dir is required for restart_lsp_server"), nil
-          }
-          if err := client.Restart(ctx, rootDir); err != nil {
-              return types.ErrorResult(fmt.Sprintf("failed to restart LSP server: %s", err)), nil
-          }
-          ```
-
-          Also update the function doc comment from:
-          ```go
-          // HandleRestartLspServer restarts the LSP server, optionally using a new root dir.
-          ```
-          To:
-          ```go
-          // HandleRestartLspServer restarts the LSP server with the given root dir.
-          // root_dir is required: omitting it would construct a malformed "file://" rootURI.
-          ```
-
-          ## Verification gate
-          ```
-          GOWORK=off go build ./internal/tools/...
-          GOWORK=off go vet ./internal/tools/...
-          grep -c 'root_dir is required for restart_lsp_server' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/tools/session.go
-          # Expected: 1
-          ```
-
-          ## Constraints
-          - Do NOT modify any test files or anything under test/.
-          - Do NOT modify files outside internal/tools/session.go.
-          - Do NOT modify server.go (owned by Agent E).
-          - Do NOT add a rootDir field to LSPClient -- that is a larger refactor.
-        files:
-          - internal/tools/session.go
-        dependencies: []
-
+    - number: 1
+      agents:
+        - id: A
+          task: |-
+            ## Context
+            File: internal/lsp/client.go
+            Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Run all commands with GOWORK=off.
+
+            ## What to implement
+
+            Fix five issues in internal/lsp/client.go. Read the file before editing.
+
+            ### Fix 1 (E3): Silent unmarshal discards
+
+            Four functions contain `_ = json.Unmarshal(result, &v)` which silently
+            discards unmarshal errors. Change each to propagate the error.
+
+            The four functions are: GetSignatureHelp, RenameSymbol, PrepareRename,
+            and ExecuteCommand.
+
+            In each function, find and replace this three-line pattern:
+            ```go
+            var v interface{}
+            _ = json.Unmarshal(result, &v)
+            return v, nil
+            ```
+            with:
+            ```go
+            var v interface{}
+            if err := json.Unmarshal(result, &v); err != nil {
+                return nil, fmt.Errorf("unmarshal response: %w", err)
+            }
+            return v, nil
+            ```
+
+            Apply this replacement in all four functions. Each occurrence follows
+            the same `result == nil` guard, so find each `_ = json.Unmarshal` line
+            and replace it.
+
+            ### Fix 2 (W2): Remove dead docVers field
+
+            The LSPClient struct has a field `docVers map[string]int` that is
+            declared and initialized in NewLSPClient but never read or written anywhere
+            in the codebase. Version tracking uses `docMeta.version` inside `openDocs`
+            instead.
+
+            Step A: Remove the field from the struct. The struct has two adjacent fields:
+            ```go
+            openDocs  map[string]docMeta // uri -> meta
+            docVers   map[string]int     // uri -> version
+            ```
+            Delete the `docVers` line.
+
+            Step B: Remove the initialization in NewLSPClient. Find:
+            ```go
+            openDocs:       make(map[string]docMeta),
+            docVers:        make(map[string]int),
+            ```
+            Delete the `docVers:` line.
+
+            ### Fix 3 (W4): Add missing Initialize capabilities
+
+            In the Initialize method, the initParams map is built. Two additions needed:
+
+            Addition A: Add a "clientInfo" map entry as a top-level key in initParams. Find the block:
+            ```go
+            initParams := map[string]interface{}{
+                "processId": os.Getpid(),
+                "rootUri":   rootURI,
+                "rootPath":  rootDir,
+                "capabilities": map[string]interface{}{
+            ```
+            Insert after `"rootPath": rootDir,`:
+            ```go
+                "clientInfo": map[string]interface{}{
+                    "name":    "lsp-mcp-go",
+                    "version": "0.1.0",
+                },
+            ```
+
+            Addition B: Add two keys to the `"workspace"` sub-map inside capabilities.
+            Find the workspace map which currently ends with:
+            ```go
+            "workspaceEdit": map[string]interface{}{
+                "documentChanges": true,
+            },
+            ```
+            After that closing brace, add:
+            ```go
+            "didChangeConfiguration": map[string]interface{}{
+                "dynamicRegistration": true,
+            },
+            "didChangeWatchedFiles": map[string]interface{}{
+                "dynamicRegistration": true,
+            },
+            ```
+
+            ### Fix 4 (W7): Wrap Shutdown error
+
+            In the Shutdown method, find:
+            ```go
+            _, err := c.sendRequest(ctx, "shutdown", nil)
+            if err != nil {
+                return err
+            }
+            ```
+            Change to:
+            ```go
+            _, err := c.sendRequest(ctx, "shutdown", nil)
+            if err != nil {
+                return fmt.Errorf("shutdown request: %w", err)
+            }
+            ```
+
+            ### Fix 5 (W9): Update WaitForFileIndexed doc comment
+
+            Find the existing doc comment that reads:
+            ```go
+            // WaitForFileIndexed waits until the URI has received at least one diagnostic
+            // notification, then waits for a 1500ms quiet window with no further
+            // notifications.
+            ```
+            Replace with:
+            ```go
+            // WaitForFileIndexed waits until the URI has received at least one diagnostic
+            // notification (or fires immediately if diagnostics are already cached for
+            // the URI via SubscribeToDiagnostics replay), then waits for a 1500ms quiet
+            // window with no further notifications.
+            ```
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/lsp/...
+            GOWORK=off go vet ./internal/lsp/...
+            grep -c 'unmarshal response' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/lsp/client.go
+            # Expected: 4
+            grep -c 'shutdown request' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/lsp/client.go
+            # Expected: 1
+            grep 'docVers' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/lsp/client.go
+            # Expected: no output
+            grep '"clientInfo"' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/lsp/client.go
+            # Expected: 1 match
+            ```
+
+            ## Constraints
+            - Do NOT modify any test files or anything under test/.
+            - Do NOT modify files outside internal/lsp/client.go.
+            - Do NOT change function signatures.
+          files:
+            - internal/lsp/client.go
+        - id: B
+          task: |-
+            ## Context
+            File: internal/lsp/diagnostics.go
+            Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Run all commands with GOWORK=off.
+
+            ## What to implement
+
+            Fix E4: WaitForDiagnostics does not skip the initial cached-replay snapshot.
+
+            The TypeScript reference tracks a "sawInitialSnapshot" flag per URI and
+            skips the first callback for each URI (the cached-replay notification from
+            SubscribeToDiagnostics), requiring a subsequent fresh notification before
+            marking a URI as received. The Go implementation has no equivalent skip.
+
+            ### Implementation
+
+            Add a snapshot-skip tracking map and modify the callback closure to discard
+            the first notification per URI before counting it as received.
+
+            In WaitForDiagnostics, find the existing code block:
+            ```go
+            var mu sync.Mutex
+
+            // Track which URIs have received at least one fresh notification.
+            received := make(map[string]bool, len(uris))
+            for _, uri := range uris {
+                received[uri] = false
+            }
+
+            var lastEvent time.Time
+            lastEvent = time.Now()
+
+            allReceived := func() bool {
+                for _, ok := range received {
+                    if !ok {
+                        return false
+                    }
+                }
+                return true
+            }
+
+            notify := make(chan struct{}, len(uris)+1)
+
+            cb := types.DiagnosticUpdateCallback(func(uri string, _ []types.LSPDiagnostic) {
+                mu.Lock()
+                if _, tracked := received[uri]; tracked {
+                    received[uri] = true
+                }
+                lastEvent = time.Now()
+                mu.Unlock()
+                select {
+                case notify <- struct{}{}:
+                default:
+                }
+            })
+            ```
+
+            Replace with:
+            ```go
+            var mu sync.Mutex
+
+            // Track which URIs have received at least one fresh notification.
+            received := make(map[string]bool, len(uris))
+            for _, uri := range uris {
+                received[uri] = false
+            }
+
+            // seenInitial tracks whether the initial cached-replay notification has
+            // been skipped per URI, matching the TypeScript sawInitialSnapshot logic.
+            seenInitial := make(map[string]bool, len(uris))
+
+            var lastEvent time.Time
+            lastEvent = time.Now()
+
+            allReceived := func() bool {
+                for _, ok := range received {
+                    if !ok {
+                        return false
+                    }
+                }
+                return true
+            }
+
+            notify := make(chan struct{}, len(uris)+1)
+
+            cb := types.DiagnosticUpdateCallback(func(uri string, _ []types.LSPDiagnostic) {
+                mu.Lock()
+                if _, tracked := received[uri]; tracked {
+                    if !seenInitial[uri] {
+                        // Skip the first callback per URI: it is the cached-replay
+                        // snapshot from SubscribeToDiagnostics, not a fresh notification.
+                        seenInitial[uri] = true
+                        mu.Unlock()
+                        return
+                    }
+                    received[uri] = true
+                }
+                lastEvent = time.Now()
+                mu.Unlock()
+                select {
+                case notify <- struct{}{}:
+                default:
+                }
+            })
+            ```
+
+            Also update the doc comment at the top of WaitForDiagnostics from:
+            ```go
+            // WaitForDiagnostics waits for diagnostic stabilisation for all uris.
+            // It ignores the initial snapshot, requires one fresh notification per URI,
+            // then waits for a 500ms quiet window. Resolves on timeout without error.
+            ```
+            To:
+            ```go
+            // WaitForDiagnostics waits for diagnostic stabilisation for all uris.
+            // It skips the initial cached-replay notification per URI (matching the
+            // TypeScript sawInitialSnapshot logic), requires one fresh notification
+            // per URI after that, then waits for a 500ms quiet window.
+            // Resolves on timeout without error.
+            ```
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/lsp/...
+            GOWORK=off go vet ./internal/lsp/...
+            grep -c 'seenInitial' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/lsp/diagnostics.go
+            # Expected: at least 3 (declaration, init, two usages in callback)
+            ```
+
+            ## Constraints
+            - Do NOT modify any test files or anything under test/.
+            - Do NOT modify files outside internal/lsp/diagnostics.go.
+            - Do NOT change the function signature of WaitForDiagnostics.
+          files:
+            - internal/lsp/diagnostics.go
+        - id: C
+          task: |-
+            ## Context
+            File: internal/lsp/framing.go
+            Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Run all commands with GOWORK=off.
+
+            ## What to implement
+
+            Fix W6: Remove dead variable and its blank assignment in tryParse.
+
+            In the tryParse function, the variable is allocated and immediately
+            consumed by a blank identifier -- it is never actually used. Remove
+            both lines.
+
+            The current code in tryParse starts with:
+            ```go
+            func tryParse(buf []byte) ([]byte, []byte, bool) {
+                sep := []byte("\r\n\r\n")
+                idx := -1
+                for i := 0; i < len(buf)-3; i++ {
+                    if buf[i] == '\r' && buf[i+1] == '\n' && buf[i+2] == '\r' && buf[i+3] == '\n' {
+                        idx = i
+                        break
+                    }
+                }
+                if idx < 0 {
+                    return nil, buf, false
+                }
+
+                _ = sep
+                header := string(buf[:idx])
+            ```
+
+            Replace with (remove the `sep :=` line and the `_ = sep` line):
+            ```go
+            func tryParse(buf []byte) ([]byte, []byte, bool) {
+                idx := -1
+                for i := 0; i < len(buf)-3; i++ {
+                    if buf[i] == '\r' && buf[i+1] == '\n' && buf[i+2] == '\r' && buf[i+3] == '\n' {
+                        idx = i
+                        break
+                    }
+                }
+                if idx < 0 {
+                    return nil, buf, false
+                }
+
+                header := string(buf[:idx])
+            ```
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/lsp/...
+            GOWORK=off go vet ./internal/lsp/...
+            grep 'sep :=' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/lsp/framing.go
+            # Expected: no output
+            grep '_ = sep' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/lsp/framing.go
+            # Expected: no output
+            ```
+
+            ## Constraints
+            - Do NOT modify any test files or anything under test/.
+            - Do NOT modify files outside internal/lsp/framing.go.
+            - Do NOT change any logic -- this is a dead code removal only.
+          files:
+            - internal/lsp/framing.go
+        - id: D
+          task: |-
+            ## Context
+            File: internal/tools/workspace.go
+            Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Run all commands with GOWORK=off.
+
+            ## What to implement
+
+            Fix E5: HandleFormatDocument and HandleFormatRange silently swallow toInt
+            errors for the tab_size argument.
+
+            ### Fix 1: HandleFormatDocument
+
+            Find in HandleFormatDocument:
+            ```go
+            tabSize := 2
+            if v, err := toInt(args, "tab_size"); err == nil {
+                tabSize = v
+            }
+            ```
+
+            Replace with:
+            ```go
+            tabSize := 2
+            if v, err := toInt(args, "tab_size"); err != nil && args["tab_size"] != nil {
+                return types.ErrorResult(fmt.Sprintf("tab_size: %s", err)), nil
+            } else if err == nil {
+                tabSize = v
+            }
+            ```
+
+            Only return an error when args["tab_size"] is non-nil -- if the argument
+            is absent, the default of 2 is appropriate. If it is present but not a
+            valid integer, surface the error.
+
+            ### Fix 2: HandleFormatRange
+
+            Find in HandleFormatRange:
+            ```go
+            tabSize := 2
+            if v, tErr := toInt(args, "tab_size"); tErr == nil {
+                tabSize = v
+            }
+            ```
+
+            Replace with:
+            ```go
+            tabSize := 2
+            if v, tErr := toInt(args, "tab_size"); tErr != nil && args["tab_size"] != nil {
+                return types.ErrorResult(fmt.Sprintf("tab_size: %s", tErr)), nil
+            } else if tErr == nil {
+                tabSize = v
+            }
+            ```
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/tools/...
+            GOWORK=off go vet ./internal/tools/...
+            grep -c 'ErrorResult.*tab_size' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/tools/workspace.go
+            # Expected: 2
+            ```
+
+            ## Constraints
+            - Do NOT modify any test files or anything under test/.
+            - Do NOT modify files outside internal/tools/workspace.go.
+            - Do NOT change the function signatures of HandleFormatDocument or HandleFormatRange.
+            - The fmt import is already present in the file; do not add a duplicate.
+          files:
+            - internal/tools/workspace.go
+        - id: E
+          task: |-
+            ## Context
+            File: cmd/lsp-mcp-go/server.go
+            Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Run all commands with GOWORK=off.
+
+            ## What to implement
+
+            Fix two issues in cmd/lsp-mcp-go/server.go.
+
+            ### Fix 1 (E1): ApplyEditArgs JSON tag mismatch
+
+            The ApplyEditArgs struct uses json:"edit" but HandleApplyEdit reads
+            args["workspace_edit"]. Every call to apply_edit silently fails.
+
+            Find the struct definition:
+            ```go
+            type ApplyEditArgs struct {
+                Edit interface{} `json:"edit"`
+            }
+            ```
+
+            Change to:
+            ```go
+            type ApplyEditArgs struct {
+                Edit interface{} `json:"workspace_edit"`
+            }
+            ```
+
+            ### Fix 2 (W3): Call logging.SetServer after server creation
+
+            The logging package has a SetServer function that is never called from
+            server.go, so MCP log routing never activates and all messages fall back
+            to stderr permanently.
+
+            Read internal/logging/logging.go to understand the SetServer signature
+            and the logSender interface it expects. Then read the go-sdk mcp package
+            to determine whether the *mcp.Server type returned by mcp.NewServer
+            satisfies that interface (it needs a LogMessage method).
+
+            The server is created at:
+            ```go
+            server := mcp.NewServer(&mcp.Implementation{
+                Name:    "lsp-mcp-go",
+                Version: "0.1.0",
+            }, nil)
+            ```
+
+            If *mcp.Server satisfies the logSender interface (has LogMessage method):
+            Add immediately after the closing `}, nil)` line:
+            ```go
+            logging.SetServer(server)
+            ```
+
+            If *mcp.Server does NOT satisfy the logSender interface, do NOT add the
+            call. Instead add this comment after the server creation block:
+            ```go
+            // TODO(W3): logging.SetServer needs a logSender implementation wrapping
+            // the MCP server. The *mcp.Server type does not expose LogMessage directly.
+            // Wire after confirming the correct session notification API.
+            ```
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./cmd/lsp-mcp-go/...
+            GOWORK=off go vet ./cmd/lsp-mcp-go/...
+            grep 'json:"workspace_edit"' /Users/dayna.blackwell/code/LSP-MCP-GO/cmd/lsp-mcp-go/server.go
+            # Expected: 1 match
+            grep 'json:"edit"' /Users/dayna.blackwell/code/LSP-MCP-GO/cmd/lsp-mcp-go/server.go
+            # Expected: no match on ApplyEditArgs
+            ```
+
+            ## Constraints
+            - Do NOT modify any test files or anything under test/.
+            - Do NOT modify files outside cmd/lsp-mcp-go/server.go.
+            - If *mcp.Server does not implement the logging interface, add the TODO
+              comment rather than breaking the build.
+          files:
+            - cmd/lsp-mcp-go/server.go
+        - id: F
+          task: |-
+            ## Context
+            File: internal/resources/resources.go
+            Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Run all commands with GOWORK=off.
+
+            ## What to implement
+
+            Fix two issues in internal/resources/resources.go.
+
+            ### Fix 1 (E2): Make two exported functions unexported
+
+            The functions GenerateResourceList and ResourceTemplates are exported but
+            have zero callers outside the package. MCP resource listing endpoints are
+            not wired in server.go (out of scope for this round). Making them unexported
+            removes dead exported symbols from the public API.
+
+            Before editing, verify there are no external callers:
+            ```
+            grep -rn 'GenerateResourceList\|ResourceTemplates' /Users/dayna.blackwell/code/LSP-MCP-GO --include='*.go' | grep -v '_test.go' | grep -v 'resources.go'
+            ```
+            Expected: no output. If any callers are found, stop and report them instead
+            of proceeding with this fix.
+
+            Rename GenerateResourceList to generateResourceList (change the 'G' to 'g').
+            Rename ResourceTemplates to resourceTemplates (change the 'R' to 'r').
+
+            Do not change the function bodies, parameters, or return types -- only
+            the function name capitalization changes.
+
+            ### Fix 2 (W8): Propagate WaitForDiagnostics errors
+
+            There are two sites where WaitForDiagnostics errors are logged and
+            suppressed. Both are in HandleDiagnosticsResource.
+
+            Site 1 -- find:
+            ```go
+            if err := lsp.WaitForDiagnostics(ctx, client, uris, 10000); err != nil {
+                logging.Log(logging.LevelWarning, fmt.Sprintf("WaitForDiagnostics: %v", err))
+            }
+            ```
+            Replace with:
+            ```go
+            if err := lsp.WaitForDiagnostics(ctx, client, uris, 10000); err != nil {
+                return ResourceResult{}, fmt.Errorf("waiting for diagnostics: %w", err)
+            }
+            ```
+
+            Site 2 -- find:
+            ```go
+            if err := lsp.WaitForDiagnostics(ctx, client, []string{fileURI}, 10000); err != nil {
+                logging.Log(logging.LevelWarning, fmt.Sprintf("WaitForDiagnostics for %s: %v", fileURI, err))
+            }
+            ```
+            Replace with:
+            ```go
+            if err := lsp.WaitForDiagnostics(ctx, client, []string{fileURI}, 10000); err != nil {
+                return ResourceResult{}, fmt.Errorf("waiting for diagnostics: %w", err)
+            }
+            ```
+
+            After these changes, check if the logging import is still used:
+            ```
+            grep 'logging\.' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/resources/resources.go
+            ```
+            If no remaining calls to logging.Log exist, remove the logging import
+            from the import block to avoid an unused import compile error.
+
+            ### Fix 3: Update test file references after rename
+
+            After renaming GenerateResourceList and ResourceTemplates to unexported,
+            update internal/resources/resources_test.go to use the new lowercase names.
+            The test file calls these functions and is in package resources (same package),
+            so it can access unexported symbols directly.
+
+            Find all occurrences of GenerateResourceList and ResourceTemplates in
+            resources_test.go and rename them to generateResourceList and resourceTemplates
+            respectively.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/resources/...
+            GOWORK=off go vet ./internal/resources/...
+            GOWORK=off go test ./internal/resources/...
+            grep 'func GenerateResourceList\|func ResourceTemplates' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/resources/resources.go
+            # Expected: no output (functions renamed to lowercase)
+            grep -c 'waiting for diagnostics' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/resources/resources.go
+            # Expected: 2
+            ```
+
+            ## Constraints
+            - Do NOT modify anything under test/ (the integration fixtures).
+            - Do NOT modify files outside internal/resources/resources.go and internal/resources/resources_test.go.
+            - Do NOT wire the functions into server.go -- that is out of scope.
+            - Do NOT remove ResourceEntry or ResourceTemplate struct types.
+          files:
+            - internal/resources/resources.go
+            - internal/resources/resources_test.go
+        - id: G
+          task: |-
+            ## Context
+            File: internal/types/types.go
+            Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Run all commands with GOWORK=off.
+
+            ## What to implement
+
+            Fix W1: LSPDiagnostic.Code is typed string but the LSP spec defines
+            `code` as `integer | string`. Integer codes from language servers like
+            rust-analyzer and clangd are silently dropped when Go JSON unmarshaling
+            fails to decode an integer into a string field.
+
+            Change the Code field type from string to interface{}.
+
+            Find the LSPDiagnostic struct:
+            ```go
+            type LSPDiagnostic struct {
+                Range    Range  `json:"range"`
+                Severity int    `json:"severity"` // 1=error 2=warning 3=info 4=hint
+                Code     string `json:"code,omitempty"`
+                Source   string `json:"source,omitempty"`
+                Message  string `json:"message"`
+            }
+            ```
+
+            Replace with:
+            ```go
+            type LSPDiagnostic struct {
+                Range    Range       `json:"range"`
+                Severity int         `json:"severity"` // 1=error 2=warning 3=info 4=hint
+                Code     interface{} `json:"code,omitempty"`
+                Source   string      `json:"source,omitempty"`
+                Message  string      `json:"message"`
+            }
+            ```
+
+            After making this change, search for callers that use the Code field
+            as a string directly (not via json.Marshal):
+            ```
+            grep -rn '\.Code' /Users/dayna.blackwell/code/LSP-MCP-GO --include='*.go' | grep -v '_test.go'
+            ```
+
+            For each result, check whether it compiles without a type assertion.
+            Only update callers if they would fail to compile (e.g., string comparison
+            like `diag.Code == "some-string"` -- change to `diag.Code.(string) == "some-string"`).
+            Do not update callers that pass Code through json.Marshal (that handles
+            interface{} correctly).
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./...
+            grep 'Code.*interface{}' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/types/types.go
+            # Expected: 1 match
+            grep 'Code.*string' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/types/types.go
+            # Expected: no match on LSPDiagnostic.Code line
+            ```
+
+            ## Constraints
+            - Do NOT modify any test files or anything under test/.
+            - Only update callers in other files if the type change causes a
+              compilation error, not preemptively.
+            - Do NOT change any other field types in LSPDiagnostic.
+            - Do NOT add a custom JSON unmarshaler.
+          files:
+            - internal/types/types.go
+        - id: H
+          task: |-
+            ## Context
+            File: internal/tools/session.go
+            Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Run all commands with GOWORK=off.
+
+            ## What to implement
+
+            Fix W5: HandleRestartLspServer passes empty rootDir to Initialize when
+            root_dir arg is absent, constructing a malformed rootURI of "file://".
+
+            The simplest correct fix is to validate the argument and return a clear
+            error when root_dir is absent or empty.
+
+            Find in HandleRestartLspServer:
+            ```go
+            rootDir, _ := args["root_dir"].(string)
+            if err := client.Restart(ctx, rootDir); err != nil {
+                return types.ErrorResult(fmt.Sprintf("failed to restart LSP server: %s", err)), nil
+            }
+            ```
+
+            Replace with:
+            ```go
+            rootDir, _ := args["root_dir"].(string)
+            if rootDir == "" {
+                return types.ErrorResult("root_dir is required for restart_lsp_server"), nil
+            }
+            if err := client.Restart(ctx, rootDir); err != nil {
+                return types.ErrorResult(fmt.Sprintf("failed to restart LSP server: %s", err)), nil
+            }
+            ```
+
+            Also update the function doc comment from:
+            ```go
+            // HandleRestartLspServer restarts the LSP server, optionally using a new root dir.
+            ```
+            To:
+            ```go
+            // HandleRestartLspServer restarts the LSP server with the given root dir.
+            // root_dir is required: omitting it would construct a malformed "file://" rootURI.
+            ```
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/tools/...
+            GOWORK=off go vet ./internal/tools/...
+            grep -c 'root_dir is required for restart_lsp_server' /Users/dayna.blackwell/code/LSP-MCP-GO/internal/tools/session.go
+            # Expected: 1
+            ```
+
+            ## Constraints
+            - Do NOT modify any test files or anything under test/.
+            - Do NOT modify files outside internal/tools/session.go.
+            - Do NOT modify server.go (owned by Agent E).
+            - Do NOT add a rootDir field to LSPClient -- that is a larger refactor.
+          files:
+            - internal/tools/session.go
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./...
+          required: true
 pre_mortem:
-  overall_risk: low
-  rows:
-    - scenario: |-
-        Agent E finds that *mcp.Server does not implement the logSender interface
-        (LogMessage method missing), causing a compilation error when calling
-        logging.SetServer(server).
-      likelihood: medium
-      impact: medium
-      mitigation: |-
-        Agent E is instructed to check interface satisfaction first (via LSP hover
-        or by reading the mcp package) and to add a TODO comment rather than break
-        the build if the interface is not satisfied.
-
-    - scenario: |-
-        Agent G changes LSPDiagnostic.Code to interface{} and callers that do direct
-        string comparison break compilation.
-      likelihood: low
-      impact: medium
-      mitigation: |-
-        Agent G is instructed to grep for .Code usages before editing and update
-        any callers that do type-specific operations. The full build gate
-        (GOWORK=off go build ./...) will catch any missed callers.
-
-    - scenario: |-
-        Agent F's renaming of GenerateResourceList and ResourceTemplates breaks
-        an external caller that was missed by the grep check (e.g., in a test
-        file the agent did not search).
-      likelihood: low
-      impact: low
-      mitigation: |-
-        Agent F is instructed to run a pre-edit grep across all non-test .go files
-        to confirm zero external callers before proceeding.
-
-    - scenario: |-
-        Agent D's tab_size error propagation logic uses the wrong variable name
-        (the two functions use err and tErr respectively) and introduces a build error.
-      likelihood: low
-      impact: low
-      mitigation: |-
-        Agent D's task uses the exact variable names from the current source.
-        The build gate will catch any mismatch immediately.
-
-    - scenario: |-
-        Agent B's seenInitial snapshot-skip fix introduces a race: the map is
-        initialized once but the callback accesses it concurrently.
-      likelihood: low
-      impact: medium
-      mitigation: |-
-        The seenInitial map is accessed under mu.Lock() in the callback -- the
-        same mutex that guards received and lastEvent -- so it is correctly
-        synchronized. Agent B's task makes this explicit.
+    overall_risk: low
+    rows:
+        - scenario: |-
+            Agent E finds that *mcp.Server does not implement the logSender interface
+            (LogMessage method missing), causing a compilation error when calling
+            logging.SetServer(server).
+          likelihood: medium
+          impact: medium
+          mitigation: |-
+            Agent E is instructed to check interface satisfaction first (via LSP hover
+            or by reading the mcp package) and to add a TODO comment rather than break
+            the build if the interface is not satisfied.
+        - scenario: |-
+            Agent G changes LSPDiagnostic.Code to interface{} and callers that do direct
+            string comparison break compilation.
+          likelihood: low
+          impact: medium
+          mitigation: |-
+            Agent G is instructed to grep for .Code usages before editing and update
+            any callers that do type-specific operations. The full build gate
+            (GOWORK=off go build ./...) will catch any missed callers.
+        - scenario: |-
+            Agent F's renaming of GenerateResourceList and ResourceTemplates breaks
+            an external caller that was missed by the grep check (e.g., in a test
+            file the agent did not search).
+          likelihood: low
+          impact: low
+          mitigation: |-
+            Agent F is instructed to run a pre-edit grep across all non-test .go files
+            to confirm zero external callers before proceeding.
+        - scenario: |-
+            Agent D's tab_size error propagation logic uses the wrong variable name
+            (the two functions use err and tErr respectively) and introduces a build error.
+          likelihood: low
+          impact: low
+          mitigation: |-
+            Agent D's task uses the exact variable names from the current source.
+            The build gate will catch any mismatch immediately.
+        - scenario: |-
+            Agent B's seenInitial snapshot-skip fix introduces a race: the map is
+            initialized once but the callback accesses it concurrently.
+          likelihood: low
+          impact: medium
+          mitigation: |-
+            The seenInitial map is accessed under mu.Lock() in the callback -- the
+            same mutex that guards received and lastEvent -- so it is correctly
+            synchronized. Agent B's task makes this explicit.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+        E:
+            agent_id: E
+            verdict: PASS
+        F:
+            agent_id: F
+            verdict: ISSUES
+            issues:
+                - check: caller_exhaustiveness
+                  severity: warning
+                  description: internal/resources/resources_test.go (package resources, same package) calls GenerateResourceList on lines 19, 35, and 47, and ResourceTemplates on lines 119 and 121. Renaming these to generateResourceList and resourceTemplates while the agent is forbidden from modifying test files will break test compilation (go test ./... quality gate). Agent F is instructed to grep for non-test callers only, so it will not detect this. The agent should be aware that the test files must also be updated, or the rename should be deferred until the test constraint is relaxed.
+                  file: internal/resources/resources_test.go
+                  symbol: GenerateResourceList
+        G:
+            agent_id: G
+            verdict: PASS
+        H:
+            agent_id: H
+            verdict: PASS
+    summary: 'All 8 agent briefs verified against the codebase. The described code patterns, function names, struct fields, and edit targets are accurate. One advisory warning for Agent F: the test file internal/resources/resources_test.go (package resources) calls GenerateResourceList and ResourceTemplates by their exported names. After renaming to unexported forms, these test calls will break compilation unless the test file is updated. Since the IMPL explicitly forbids modifying test files, the agent should stop and report this conflict rather than proceeding blindly. Per Check 8, test-file callers are warning severity.'
+    reviewed_at: "2026-04-06T18:02:02Z"
+    issue_count: 1
+state: SCOUT_PENDING
+injection_method: hook
