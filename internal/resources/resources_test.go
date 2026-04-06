@@ -11,12 +11,12 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// GenerateResourceList tests
+// generateResourceList tests
 // ---------------------------------------------------------------------------
 
 // TestGenerateResourceList_EmptyClient verifies that a nil LSPClient returns nil.
 func TestGenerateResourceList_EmptyClient(t *testing.T) {
-	result := GenerateResourceList(nil)
+	result := generateResourceList(nil)
 	if result != nil {
 		t.Errorf("expected nil for nil client, got %v", result)
 	}
@@ -32,7 +32,7 @@ func TestGenerateResourceList_WithOpenDocs(t *testing.T) {
 	//
 	// Full integration of GetOpenDocuments is covered by Agent A/B's lsp tests.
 	// Here we confirm the structure and count via a nil-client guard.
-	result := GenerateResourceList(nil)
+	result := generateResourceList(nil)
 	if result != nil {
 		t.Errorf("nil client must return nil, got %d entries", len(result))
 	}
@@ -44,7 +44,7 @@ func TestGenerateResourceList_WithOpenDocs(t *testing.T) {
 func TestGenerateResourceList_Structure(t *testing.T) {
 	// NewLSPClient creates an unconnected client; GetOpenDocuments returns empty.
 	client := lsp.NewLSPClient("/nonexistent/gopls", nil)
-	entries := GenerateResourceList(client)
+	entries := generateResourceList(client)
 	if len(entries) == 0 {
 		t.Fatal("expected at least 1 static entry")
 	}
@@ -116,9 +116,9 @@ func TestURIParsing_HoverCompletions(t *testing.T) {
 
 // TestResourceTemplates verifies that 3 static templates are returned.
 func TestResourceTemplates(t *testing.T) {
-	templates := ResourceTemplates()
+	templates := resourceTemplates()
 	if len(templates) != 3 {
-		t.Fatalf("len(ResourceTemplates())=%d, want 3", len(templates))
+		t.Fatalf("len(resourceTemplates())=%d, want 3", len(templates))
 	}
 	names := map[string]bool{}
 	for _, tmpl := range templates {

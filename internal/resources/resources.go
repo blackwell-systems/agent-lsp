@@ -63,7 +63,7 @@ func HandleDiagnosticsResource(ctx context.Context, client *lsp.LSPClient, uri s
 		}
 
 		if err := lsp.WaitForDiagnostics(ctx, client, uris, 10000); err != nil {
-			logging.Log(logging.LevelWarning, fmt.Sprintf("WaitForDiagnostics: %v", err))
+			return ResourceResult{}, fmt.Errorf("waiting for diagnostics: %w", err)
 		}
 
 		allDiag := client.GetAllDiagnostics()
@@ -94,7 +94,7 @@ func HandleDiagnosticsResource(ctx context.Context, client *lsp.LSPClient, uri s
 	}
 
 	if err := lsp.WaitForDiagnostics(ctx, client, []string{fileURI}, 10000); err != nil {
-		logging.Log(logging.LevelWarning, fmt.Sprintf("WaitForDiagnostics for %s: %v", fileURI, err))
+		return ResourceResult{}, fmt.Errorf("waiting for diagnostics: %w", err)
 	}
 
 	diags := client.GetDiagnostics(fileURI)
@@ -224,9 +224,9 @@ func HandleCompletionsResource(ctx context.Context, client *lsp.LSPClient, uri s
 	}, nil
 }
 
-// GenerateResourceList returns the dynamic list of available resources
+// generateResourceList returns the dynamic list of available resources
 // based on currently open documents. Returns nil if client is nil.
-func GenerateResourceList(client *lsp.LSPClient) []ResourceEntry {
+func generateResourceList(client *lsp.LSPClient) []ResourceEntry {
 	if client == nil {
 		return nil
 	}
@@ -273,9 +273,9 @@ func GenerateResourceList(client *lsp.LSPClient) []ResourceEntry {
 	return entries
 }
 
-// ResourceTemplates returns the static resource template definitions
+// resourceTemplates returns the static resource template definitions
 // for the MCP server's resources/templates/list response.
-func ResourceTemplates() []ResourceTemplate {
+func resourceTemplates() []ResourceTemplate {
 	return []ResourceTemplate{
 		{
 			Name:        "lsp-diagnostics",
