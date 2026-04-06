@@ -27,6 +27,14 @@ func (m *mockExtension) ResourceHandlers() map[string]types.ResourceHandler {
 	return m.resourceHandlers
 }
 
+func (m *mockExtension) SubscriptionHandlers() map[string]types.ResourceHandler {
+	return nil
+}
+
+func (m *mockExtension) PromptHandlers() map[string]interface{} {
+	return nil
+}
+
 // TestNewRegistry_Empty verifies that a freshly created registry has no extensions.
 func TestNewRegistry_Empty(t *testing.T) {
 	r := NewRegistry()
