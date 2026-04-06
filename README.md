@@ -3,13 +3,15 @@
 [![Blackwell Systems](https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg)](https://github.com/blackwell-systems)
 [![CI](https://github.com/blackwell-systems/lsp-mcp-go/actions/workflows/ci.yml/badge.svg)](https://github.com/blackwell-systems/lsp-mcp-go/actions)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
-[![Languages](https://img.shields.io/badge/languages-7_verified-green.svg)](#multi-language-support)
+[![Languages](https://img.shields.io/badge/languages-13_verified-green.svg)](#multi-language-support)
 [![Tools](https://img.shields.io/badge/tools-26-blue.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships. lsp-mcp-go exposes that intelligence to agents through MCP.
 
-**26 tools** across navigation, analysis, refactoring, and formatting. Multi-server routing: one process handles an entire multi-language codebase. CI-verified against real language servers across **7 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+**26 tools** across navigation, analysis, refactoring, and formatting. CI-verified against real language servers across **13 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+
+**Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One lsp-mcp-go process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright — no reconfiguration when you switch projects.
 
 **Persistent session, warm index.** Unlike per-request bridges, lsp-mcp-go maintains a live language server session. `start_lsp` indexes the workspace once; every subsequent call hits the warm index. `get_references` returns all 12 call sites without loading files into context. `get_diagnostics` returns only the errors. `get_info_on_location` returns the type signature at one position without loading the module. The index stays fresh via `did_change_watched_files` — no restart needed after edits.
 
@@ -29,7 +31,7 @@ This installs the `lsp-mcp-go` binary to `$GOPATH/bin` (typically `~/go/bin`). M
 
 | | lsp-mcp-go | other MCP-LSP implementations |
 |--|---------|---------------------|
-| Languages (CI-verified) | **7** (end-to-end integration tests) | config-listed, untested |
+| Languages (CI-verified) | **13** (end-to-end integration tests) | config-listed, untested |
 | Tools | **26** | 3–18 |
 | Multi-server routing | **✓** (one process, many languages) | varies |
 | LSP spec compliance | **3.17, built to spec** | ad hoc |
@@ -44,14 +46,41 @@ This installs the `lsp-mcp-go` binary to `$GOPATH/bin` (typically `~/go/bin`). M
 
 ## Use Cases
 
-- Agent-driven analysis across large, multi-language repositories
-- Safe, workspace-wide refactoring with full context
-- CI pipelines that validate against real language server behavior
-- Code intelligence without relying on an IDE
+- **Multi-project AI sessions** — point your AI assistant at `~/code/`, work across any project without reconfiguring
+- **Polyglot development** — Go backend + TypeScript frontend + Python scripts in one session
+- **Large monorepos** — one server handles all languages, routes by file extension
+- **Code migration** — refactor across repos (e.g., extracting a Go library used by 3 services)
+- **CI pipelines** — validate against real language server behavior
+
+## The One-Config Workflow
+
+Configure lsp-mcp-go once with all the languages you use:
+
+```json
+{
+  "mcpServers": {
+    "lsp": {
+      "command": "lsp-mcp-go",
+      "args": [
+        "go:gopls",
+        "typescript:typescript-language-server,--stdio",
+        "python:pyright-langserver,--stdio"
+      ]
+    }
+  }
+}
+```
+
+Now work across your entire code directory:
+- Jump from your Go API to your TypeScript frontend
+- Fix a Python script, then back to Go
+- Your AI navigates seamlessly — lsp-mcp-go routes by file extension
+
+**No per-project MCP configs. No server restarts. Just code.**
 
 ## Quick Start
 
-**Multi-language project** (one server handles the whole codebase):
+**Multi-language setup** (one server handles the whole codebase):
 ```json
 {
   "mcpServers": {
@@ -93,6 +122,12 @@ Tier 2 results per language from the latest CI run:
 | Java | pass | — | — | — | — | — | — |
 | C | pass | pass | pass | pass | pass | pass | pass |
 | PHP | pass | pass | pass | pass | pass | pass | — |
+| C++ | pass | pass | pass | pass | pass | pass | pass |
+| JavaScript | pass | pass | pass | pass | pass | pass | pass |
+| Ruby | pass | pass | pass | pass | pass | pass | pass |
+| YAML | pass | — | — | — | pass | pass | pass |
+| JSON | pass | — | — | — | pass | pass | pass |
+| Dockerfile | pass | — | — | — | pass | pass | — |
 
 Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout (a known jdtls cold-start characteristic, not a tool bug).
 
@@ -107,6 +142,10 @@ Language server install commands:
 | Java | `jdtls` | [eclipse.jdt.ls snapshots](https://download.eclipse.org/jdtls/snapshots/) |
 | C / C++ | `clangd` | `apt install clangd` / `brew install llvm` |
 | PHP | `intelephense` | `npm i -g intelephense` |
+| Ruby | `solargraph` | `gem install solargraph` |
+| YAML | `yaml-language-server` | `npm i -g yaml-language-server` |
+| JSON | `vscode-json-language-server` | `npm i -g vscode-json-language-server` |
+| Dockerfile | `docker-langserver` | `npm i -g dockerfile-language-server-nodejs` |
 
 ## Tools
 
