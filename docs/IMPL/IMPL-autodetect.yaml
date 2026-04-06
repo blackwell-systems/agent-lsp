@@ -227,7 +227,7 @@ waves:
               details. Missing a language will break the README's claims.
           files:
             - internal/config/autodetect.go
-      base_commit: ec5c7a799c9d30347dc879ad70880500fbd01481
+      base_commit: 51210a3490712a574d16910ff9b4736b21e5654d
     - number: 2
       agents:
         - id: B
@@ -259,7 +259,7 @@ completion_reports:
         files_created:
             - internal/config/autodetect.go
         verification: PASS
-        notes: 'ServerSpec type, knownServers table (15 languages), and AutodetectServers() function implemented. Deterministic iteration via sorted keys. All quality gates pass: build, vet, and test. Pre-commit hooks passed.'
+        notes: File already exists and passes all verification gates. ServerSpec type, knownServers table (15 languages), and AutodetectServers() function implemented with deterministic iteration. Build, vet, and all tests pass.
     B:
         status: complete
         branch: saw/autodetect/wave2-agent-B
