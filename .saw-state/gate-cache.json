@@ -60,6 +60,18 @@
         "cached_at": "2026-04-06T10:47:10.393471-07:00"
       }
     },
+    "27234288b2bdc898a7cb201a5a074fb6": {
+      "build": {
+        "gate_type": "build",
+        "command": "GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T11:03:33.290365-07:00"
+      }
+    },
     "2ce2d7538a3a14e629827892b6572a3f": {
       "build": {
         "gate_type": "build",
@@ -82,6 +94,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T10:00:52.807475-07:00"
+      }
+    },
+    "39abe7fa0d308f414c25355d4fc11a3e": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "GOWORK=off go vet ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T11:03:33.656908-07:00"
       }
     },
     "3c1b40eda648df4171bfe434a795b065": {
@@ -274,6 +298,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T09:13:31.507153-07:00"
+      }
+    },
+    "ce1a530e6e7eaf8db351e38f52c9b664": {
+      "test": {
+        "gate_type": "test",
+        "command": "GOWORK=off go test ./...",
+        "passed": false,
+        "exit_code": 1,
+        "stdout": "ok  \tgithub.com/blackwell-systems/lsp-mcp-go\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/cmd/lsp-mcp-go\t[no test files]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/extensions/haskell\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/extensions\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/logging\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/lsp\t(cached)\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/resources\t(cached)\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/tools\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/types\t[no test files]\n--- FAIL: TestMultiLanguage (192.43s)\n    --- FAIL: TestMultiLanguage/Java (121.00s)\n        multi_lang_test.go:842: [Java] open_document failed: context deadline exceeded\n    multi_lang_test.go:851: \n        Language       | T1 | symbols  | definition  | references  | completions  | workspace  | format | declaration \n        --------------------------------------------------------------------------------------------------------------\n    multi_lang_test.go:851: TypeScript     | ✓  | ✓        | ✓           | ✓           | ✓            | ✓          | ✓      | -           \n    multi_lang_test.go:851: Python         | ✓  | ✓        | ✓           | ✓           | ✓            | ✓          | -      | -           \n    multi_lang_test.go:851: Go             | ✓  | ✓        | ✓           | ✓           | ✓            | ✓          | ✓      | -           \n    multi_lang_test.go:851: Rust           | ✓  | ✓        | ✓           | ✓           | ✓            | ✓          | ✓      | -           \n    multi_lang_test.go:851: Java           | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:851: C              | ✓  | ✓        | ✓           | ✓           | ✓            | ✓          | ✓      | ✓           \n    multi_lang_test.go:851: PHP            | ✓  | ✓        | ✓           | ✓           | ✓            | ✓          | -      | -           \n    multi_lang_test.go:851: --------------------------------------------------------------------------------------------------------------\nFAIL\nFAIL\tgithub.com/blackwell-systems/lsp-mcp-go/test\t192.619s\nFAIL\n",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T11:06:46.73981-07:00"
       }
     },
     "e12b3699db139c8465537fc063621ee1": {
