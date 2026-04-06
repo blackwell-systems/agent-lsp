@@ -6,12 +6,14 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Added
-- Multi-server routing — single `lsp-mcp-go` process now manages multiple language servers simultaneously; routes tool calls to the correct server by file extension. Supports inline arg-pairs (`go:gopls typescript:tsserver,--stdio`) and `--config lsp-mcp.json` file; backward-compatible with existing single-server invocation
-- `call_hierarchy` tool — single tool with `direction: "incoming" | "outgoing" | "both"` (default: both); hides the LSP prepare/incoming/outgoing three-step protocol behind one call; returns typed JSON with `items`, `incoming`, `outgoing` fields
-- Fuzzy position fallback for `go_to_definition` and `get_references` — when a position lookup returns empty, falls back to workspace symbol search using the hover name at that position and retries from each candidate; handles AI assistant position imprecision without correctness regression
-- `types.CallHierarchyItem`, `types.CallHierarchyIncomingCall`, `types.CallHierarchyOutgoingCall` — typed protocol structs replacing `interface{}` for call hierarchy responses
-- `types.TextEdit`, `types.SymbolInformation` — typed protocol structs for format and symbol responses
-- Tool count: 24 → 25
+- Multi-server routing — single `lsp-mcp-go` process manages multiple language servers; routes tool calls to the correct server by file extension. Supports inline arg-pairs (`go:gopls typescript:tsserver,--stdio`) and `--config lsp-mcp.json`; backward-compatible with existing single-server invocation
+- `call_hierarchy` tool — single tool with `direction: "incoming" | "outgoing" | "both"` (default: both); hides the two-step LSP prepare/query protocol behind one call; returns typed JSON with `items`, `incoming`, `outgoing`
+- Fuzzy position fallback for `go_to_definition` and `get_references` — when a direct position lookup returns empty, falls back to workspace symbol search by hover name and retries at each candidate; handles AI assistant position imprecision without correctness regression
+- Path traversal prevention — `ValidateFilePath` in `WithDocument` resolves all `..` components and verifies the result is within the workspace root; stores `rootDir` on `LSPClient` (set during `Initialize`)
+- `types.CallHierarchyItem`, `types.CallHierarchyIncomingCall`, `types.CallHierarchyOutgoingCall` — typed protocol structs for call hierarchy responses
+- `types.TextEdit`, `types.SymbolInformation`, `types.SemanticToken` — typed protocol structs; `FormatDocument`/`FormatRange` and `GetWorkspaceSymbols` migrated from `interface{}` to typed returns
+- `types.SymbolKind`, `types.SymbolTag` — integer enum types used across call hierarchy and symbol structs
+- Tool count: 24 → 25 (26 pending semantic tokens)
 
 ### Added (LSP 3.17 spec compliance)
 - `workspace/applyEdit` server-initiated request handler — client now responds `ApplyWorkspaceEditResult{applied:true}` instead of null; servers using this for code actions (e.g. file creation/rename) no longer silently fail
