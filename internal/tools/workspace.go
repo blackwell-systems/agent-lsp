@@ -98,7 +98,9 @@ func HandleFormatDocument(ctx context.Context, client *lsp.LSPClient, args map[s
 	}
 
 	tabSize := 2
-	if v, err := toInt(args, "tab_size"); err == nil {
+	if v, err := toInt(args, "tab_size"); err != nil && args["tab_size"] != nil {
+		return types.ErrorResult(fmt.Sprintf("tab_size: %s", err)), nil
+	} else if err == nil {
 		tabSize = v
 	}
 
@@ -143,7 +145,9 @@ func HandleFormatRange(ctx context.Context, client *lsp.LSPClient, args map[stri
 	}
 
 	tabSize := 2
-	if v, tErr := toInt(args, "tab_size"); tErr == nil {
+	if v, tErr := toInt(args, "tab_size"); tErr != nil && args["tab_size"] != nil {
+		return types.ErrorResult(fmt.Sprintf("tab_size: %s", tErr)), nil
+	} else if tErr == nil {
 		tabSize = v
 	}
 
