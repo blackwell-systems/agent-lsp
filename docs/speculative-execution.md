@@ -210,6 +210,173 @@ Do not frame it as a testing tool or a linting tool. Frame it as **planning infr
 
 ---
 
+## Invariants
+
+These must hold for every execution of `simulate_edit`:
+
+1. **No external observation of simulated state** — no other tool call may read or mutate LSP document state during a simulation window
+2. **Exact revert** — the document must be restored to the byte-identical state prior to simulation; version numbers do not roll back (they increment forward)
+3. **Strict monotonic versioning** — each `didChange` increments the document version by exactly 1; the revert uses the next version number, not the pre-simulation version
+4. **Complete or invalid** — a simulation either completes with a valid result, or fails and marks the session dirty; there is no silent partial success
+
+---
+
+## Failure Semantics
+
+Each step has a defined failure behavior:
+
+| Step | Failure | Behavior |
+|------|---------|----------|
+| `didChange` (apply) | Server rejects or connection fails | Abort immediately; no mutation occurred; return error |
+| `WaitForDiagnostics` timeout | Diagnostics did not settle | Return current snapshot with `confidence: "partial"`, `timeout: true` |
+| `WaitForDiagnostics` error | Connection failure after mutation | Attempt revert; mark session dirty if revert also fails |
+| Revert `didChange` | Server rejects or connection fails | Mark session corrupted; block all further operations; surface error immediately |
+| Concurrent mutation detected | Another `didChange` arrived during window | Mark result stale; return `confidence: "stale"`; do not retry automatically |
+
+**Guarantee:** the system will not silently continue in a corrupted state. Any unrecoverable failure surfaces immediately.
+
+---
+
+## Session Integrity
+
+The LSP session is assumed valid only when:
+
+- Document versions are consistent (monotonically increasing with no gaps)
+- Revert completed successfully
+- No concurrent mutation was detected during the simulation window
+
+If any of these are violated, the session is marked **dirty**:
+
+- All subsequent tool calls fail fast with `"session dirty: reinitialize required"`
+- The client must call `restart_lsp_server` to recover
+- The dirty flag is cleared on successful reinitialization
+
+This prevents ghost bugs — subtle misbehavior caused by a language server holding stale in-memory state while the rest of the system assumes it is clean.
+
+---
+
+## Isolation Model
+
+`simulate_edit` executes under a **global simulation lock** (V1).
+
+**Guarantee:** no other tool call may read or mutate LSP state between the `didChange` (apply) and `didChange` (revert) calls. From the perspective of all other tools, the simulation is atomic.
+
+This is the transaction boundary. The lock is per `LSPClient` instance. In multi-server mode, each server has its own lock; simulations on different servers may execute concurrently.
+
+---
+
+## Document Versioning
+
+- Each `textDocument/didChange` call increments the document version by 1
+- Version is tracked per open document on `LSPClient` (not currently implemented — prerequisite for V1)
+- The revert `didChange` uses the next version number (pre-simulation version + 2), not the original version
+- A version mismatch between expected and actual (detectable if the server echoes version) invalidates the simulation result
+
+```
+pre-simulation version:  N
+apply didChange:          N+1
+revert didChange:         N+2
+post-simulation version:  N+2  (not N — versions never roll back)
+```
+
+---
+
+## Diagnostic Diffing
+
+Two diagnostics are considered identical if all of the following match:
+
+- `range.start` (line + character)
+- `range.end` (line + character)
+- `message` (exact string)
+- `severity` (error / warning / info / hint)
+- `source` (optional — ignored if absent in either)
+
+The diff is computed as:
+
+- **introduced:** present in post-simulation diagnostics, not in baseline
+- **resolved:** present in baseline, not in post-simulation diagnostics
+- **unchanged:** present in both (not returned — reduces noise)
+
+Position matching uses the post-edit line/character coordinates. If the edit shifts lines, the baseline diagnostics are not adjusted — they reflect the pre-edit positions, which is intentional (the delta communicates what changed, not where things moved to).
+
+---
+
+## Timeout Behavior
+
+If diagnostics do not settle within the timeout window:
+
+- Return the current diagnostic snapshot (whatever the server has published so far)
+- Set `confidence: "partial"` and `timeout: true` in the response
+- The revert still executes — timeout applies only to diagnostic collection, not to session cleanup
+- No automatic retry
+
+Default timeout: 3000ms (single-file), 8000ms (workspace scope). Configurable via `timeout_ms` argument.
+
+---
+
+## Revert Guarantee
+
+Revert is unconditional. It executes via `defer` before any return path, including panics.
+
+```go
+defer func() {
+    if err := client.RevertSimulation(ctx, uri, originalContent, nextVersion); err != nil {
+        client.MarkSessionDirty(fmt.Errorf("revert failed: %w", err))
+    }
+}()
+```
+
+If revert fails:
+- Session is marked dirty
+- Error is returned to the caller (not silenced)
+- No further operations on this client will succeed until reinitialization
+
+---
+
+## Observability
+
+Emit structured log events at each phase:
+
+| Event | Fields |
+|-------|--------|
+| `simulate_edit.start` | `simulation_id`, `file`, `range`, `new_text_length` |
+| `simulate_edit.apply` | `simulation_id`, `version_before`, `version_after` |
+| `simulate_edit.diagnostics_ready` | `simulation_id`, `duration_ms`, `diagnostic_count`, `timed_out` |
+| `simulate_edit.revert` | `simulation_id`, `version` |
+| `simulate_edit.complete` | `simulation_id`, `total_duration_ms`, `net_delta`, `confidence` |
+| `simulate_edit.failure` | `simulation_id`, `step`, `error`, `session_dirty` |
+
+These events flow through the existing `logging` package at `LevelDebug` (complete/start) and `LevelError` (failure). No new infrastructure required.
+
+---
+
+## Full Response Contract
+
+```json
+{
+  "errors_introduced": [
+    { "line": 42, "col": 5, "message": "cannot use string as int", "severity": "error" }
+  ],
+  "errors_resolved": [],
+  "net_delta": 1,
+  "scope": "file",
+  "confidence": "high",
+  "timeout": false,
+  "duration_ms": 412,
+  "simulation_id": "a3f2-..."
+}
+```
+
+`simulation_id` is a UUID generated at handler entry. Aids tracing across log events and agent reasoning ("simulation a3f2 showed +1 error at line 42").
+
+`confidence` values:
+- `"high"` — single-file, diagnostics settled within timeout
+- `"partial"` — timed out, returned snapshot may be incomplete
+- `"stale"` — concurrent mutation detected during simulation window
+- `"eventual"` — workspace scope, cross-file propagation may be incomplete
+
+---
+
 ## Implementation Notes
 
 **Tool handler structure:**
