@@ -69,7 +69,7 @@
     {
       "step": "stale_cleanup",
       "status": "success",
-      "detail": "no stale worktrees"
+      "detail": "cleaned 3 stale worktree(s)"
     },
     {
       "step": "repo_match",
@@ -84,7 +84,7 @@
     {
       "step": "commit_baseline",
       "status": "success",
-      "detail": "committed 1 file(s)"
+      "detail": "committed 2 file(s)"
     },
     {
       "step": "baseline_gates",
@@ -125,11 +125,6 @@
       "step": "pre_wave_gate",
       "status": "success",
       "detail": "pre-wave gate passed"
-    },
-    {
-      "step": "advance_state",
-      "status": "success",
-      "detail": "IMPL state advanced to REVIEWED"
     },
     {
       "step": "create_worktrees",

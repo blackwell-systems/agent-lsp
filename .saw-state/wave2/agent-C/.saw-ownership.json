@@ -1,0 +1,9 @@
+{
+  "agent": "C",
+  "wave": 2,
+  "impl_doc": "docs/IMPL/IMPL-call-hierarchy-fuzzy-position.yaml",
+  "owned_files": [
+    "cmd/lsp-mcp-go/server.go"
+  ],
+  "repo_root": "/Users/dayna.blackwell/code/LSP-MCP-GO"
+}
