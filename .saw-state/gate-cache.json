@@ -240,6 +240,30 @@
         "cached_at": "2026-04-06T09:12:55.51672-07:00"
       }
     },
+    "6a790fea10c4c9c00d7793ae0862efb1": {
+      "test": {
+        "gate_type": "test",
+        "command": "GOWORK=off go test ./...",
+        "passed": false,
+        "exit_code": 1,
+        "stdout": "ok  \tgithub.com/blackwell-systems/lsp-mcp-go\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/cmd/lsp-mcp-go\t[no test files]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/extensions/haskell\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/extensions\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/logging\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/lsp\t2.368s\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/resources\t(cached)\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/tools\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/types\t[no test files]\n--- FAIL: TestMultiLanguage (253.03s)\n    --- FAIL: TestMultiLanguage/Java (155.43s)\n        multi_lang_test.go:842: [Java] diagnostics count: 0\n        multi_lang_test.go:842: [Java] get_info_on_location returned empty hover text\n    multi_lang_test.go:851: \n        Language       | T1 | symbols  | definition  | references  | completions  | workspace  | format | declaration \n        --------------------------------------------------------------------------------------------------------------\n    multi_lang_test.go:851: TypeScript     | ✓  | ✓        | ✓           | ✓           | ✓            | ✓          | ✓      | -           \n    multi_lang_test.go:851: Python         | ✓  | ✓        | ✓           | ✓           | ✓            | ✓          | -      | -           \n    multi_lang_test.go:851: Go             | ✓  | ✓        | ✓           | ✓           | ✓            | ✓          | ✓      | -           \n    multi_lang_test.go:851: Rust           | ✓  | ✓        | ✓           | ✓           | ✓            | ✓          | ✓      | -           \n    multi_lang_test.go:851: Java           | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:851: C              | ✓  | ✓        | ✓           | ✓           | ✓            | ✓          | ✓      | ✓           \n    multi_lang_test.go:851: PHP            | ✓  | ✓        | ✓           | ✓           | ✓            | ✓          | -      | -           \n    multi_lang_test.go:851: --------------------------------------------------------------------------------------------------------------\nFAIL\nFAIL\tgithub.com/blackwell-systems/lsp-mcp-go/test\t253.335s\nFAIL\n",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T12:25:41.42855-07:00"
+      }
+    },
+    "746c96e5a49cd1cdb3b2f369275ae187": {
+      "build": {
+        "gate_type": "build",
+        "command": "GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T12:21:26.912995-07:00"
+      }
+    },
     "7acf01568aad4e6ec8aa839eee803cba": {
       "build": {
         "gate_type": "build",
@@ -274,6 +298,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T10:51:59.208897-07:00"
+      }
+    },
+    "9962937c2f1d282ecfd67639084645dd": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "GOWORK=off go vet ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T12:21:27.392614-07:00"
       }
     },
     "ad80641214a59f3a9f7d454336da3eeb": {
