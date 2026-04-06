@@ -105,6 +105,16 @@ type CallHierarchyOutgoingCall struct {
 	FromRanges []Range `json:"fromRanges"`
 }
 
+// SemanticToken is a single decoded semantic token with absolute 1-based position
+// and resolved type/modifier names from the server's legend.
+type SemanticToken struct {
+	Line      int      `json:"line"`
+	Character int      `json:"character"`
+	Length    int      `json:"length"`
+	TokenType string   `json:"tokenType"`
+	Modifiers []string `json:"modifiers"`
+}
+
 // TextEdit represents a textual edit on a document (insert, replace, or delete).
 // See LSP 3.16 § TextEdit.
 type TextEdit struct {
