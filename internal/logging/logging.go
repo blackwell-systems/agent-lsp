@@ -1,5 +1,11 @@
 package logging
 
+import (
+	"fmt"
+	"os"
+	"sync"
+)
+
 // Level constants matching the MCP logging/message severity levels.
 const (
 	LevelDebug     = "debug"
@@ -12,23 +18,103 @@ const (
 	LevelEmergency = "emergency"
 )
 
-// Log emits a log message at the given level.
-// Before the MCP server is initialized, messages go to stderr.
-// After initialization, messages route through MCP logging/message notifications.
-// Stub body — implemented in logging_impl.go (Wave 2, Agent E).
-func Log(level, message string) {}
+// logLevelPriority maps level names to numeric priorities for comparison.
+var logLevelPriority = map[string]int{
+	LevelDebug:     0,
+	LevelInfo:      1,
+	LevelNotice:    2,
+	LevelWarning:   3,
+	LevelError:     4,
+	LevelCritical:  5,
+	LevelAlert:     6,
+	LevelEmergency: 7,
+}
 
-// SetLevel changes the minimum log level. Valid values are the Level* constants.
-// Messages below this level are suppressed.
-// Stub body — implemented in logging_impl.go (Wave 2, Agent E).
-func SetLevel(level string) {}
+// logState holds the mutable logging state protected by mu.
+var (
+	mu                sync.RWMutex
+	currentLevel      = LevelInfo
+	mcpServer         interface{}
+	serverInitialized bool
+)
+
+// serverSender is an interface satisfied by *mcp.ServerSession for Log calls.
+// We use interface{} to avoid a hard dependency on the mcp package here.
+type logSender interface {
+	LogMessage(level, logger, message string) error
+}
+
+func init() {
+	// Initialize level from LOG_LEVEL env var.
+	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
+		if _, ok := logLevelPriority[envLevel]; ok {
+			currentLevel = envLevel
+		} else {
+			fmt.Fprintf(os.Stderr, "lsp-mcp-go: invalid LOG_LEVEL %q, defaulting to \"info\"\n", envLevel)
+		}
+	}
+}
 
 // SetServer stores a reference to the MCP server notification sender.
 // Called by server.go (Wave 2) after the server is created.
-// Stub body — implemented in logging_impl.go (Wave 2, Agent E).
-func SetServer(sender interface{}) {}
+func SetServer(sender interface{}) {
+	mu.Lock()
+	defer mu.Unlock()
+	mcpServer = sender
+}
 
 // MarkServerInitialized signals that the MCP server is ready to receive
 // logging/message notifications. Called by server.go after server.Run starts.
-// Stub body — implemented in logging_impl.go (Wave 2, Agent E).
-func MarkServerInitialized() {}
+func MarkServerInitialized() {
+	mu.Lock()
+	defer mu.Unlock()
+	serverInitialized = true
+}
+
+// SetLevel changes the minimum log level. Valid values are the Level* constants.
+// Messages below this level are suppressed.
+func SetLevel(level string) {
+	if _, ok := logLevelPriority[level]; !ok {
+		return
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	currentLevel = level
+}
+
+// Log emits a log message at the given level.
+// Before the MCP server is initialized, messages go to stderr.
+// After initialization, messages route through MCP logging/message notifications.
+func Log(level, message string) {
+	mu.RLock()
+	minLevel := currentLevel
+	initialized := serverInitialized
+	sender := mcpServer
+	mu.RUnlock()
+
+	// Filter by level.
+	msgPriority, ok := logLevelPriority[level]
+	if !ok {
+		// Unknown level: treat as info.
+		msgPriority = logLevelPriority[LevelInfo]
+	}
+	minPriority, ok := logLevelPriority[minLevel]
+	if !ok {
+		minPriority = logLevelPriority[LevelInfo]
+	}
+	if msgPriority < minPriority {
+		return
+	}
+
+	formatted := fmt.Sprintf("[%s] %s", level, message)
+
+	if initialized && sender != nil {
+		if ls, ok := sender.(logSender); ok {
+			_ = ls.LogMessage(level, "lsp-mcp-go", message)
+			return
+		}
+	}
+
+	// Fallback: write to stderr.
+	fmt.Fprintln(os.Stderr, formatted)
+}
