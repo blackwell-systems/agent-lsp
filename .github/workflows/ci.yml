@@ -79,5 +79,17 @@ jobs:
           printf '#!/bin/bash\nexec java \\\n  -Declipse.application=org.eclipse.jdt.ls.core.id1 \\\n  -Dosgi.bundles.defaultStartLevel=4 \\\n  -Declipse.product=org.eclipse.jdt.ls.core.product \\\n  -Dlog.level=ERROR \\\n  -Xmx1G \\\n  --add-modules=ALL-SYSTEM \\\n  --add-opens java.base/java.util=ALL-UNNAMED \\\n  --add-opens java.base/java.lang=ALL-UNNAMED \\\n  -jar %s \\\n  -configuration /opt/jdtls/config_linux \\\n  -data /tmp/jdtls-data "$@"\n' "$LAUNCHER" | sudo tee /usr/local/bin/jdtls > /dev/null
           sudo chmod +x /usr/local/bin/jdtls
 
+      - name: Install solargraph (Ruby)
+        run: gem install solargraph
+
+      - name: Install yaml-language-server
+        run: npm install -g yaml-language-server
+
+      - name: Install vscode-json-language-server
+        run: npm install -g vscode-json-language-server
+
+      - name: Install dockerfile-language-server-nodejs
+        run: npm install -g dockerfile-language-server-nodejs
+
       - name: Run multi-language tests
         run: GOWORK=off go test -v -run TestMultiLanguage ./test/ -timeout 15m
