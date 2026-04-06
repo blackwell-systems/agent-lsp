@@ -60,6 +60,18 @@
         "cached_at": "2026-04-06T10:47:10.393471-07:00"
       }
     },
+    "271e5719e4c26afd23cd191fd67b739a": {
+      "test": {
+        "gate_type": "test",
+        "command": "GOWORK=off go test -run TestBinary ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "ok  \tgithub.com/blackwell-systems/lsp-mcp-go\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/cmd/lsp-mcp-go\t[no test files]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/extensions/haskell\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/extensions\t(cached) [no tests to run]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/logging\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/lsp\t(cached) [no tests to run]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/resources\t(cached) [no tests to run]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/tools\t(cached) [no tests to run]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/types\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/test\t(cached) [no tests to run]\n",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T11:16:05.753505-07:00"
+      }
+    },
     "27234288b2bdc898a7cb201a5a074fb6": {
       "build": {
         "gate_type": "build",
@@ -82,6 +94,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T09:13:31.219749-07:00"
+      }
+    },
+    "32874e01c29e4803bb9f06ec6dd1b7dc": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "GOWORK=off go vet ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T11:16:05.447747-07:00"
       }
     },
     "36c041d4a321a041a8a101a550d09a5a": {
@@ -334,6 +358,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T11:06:46.73981-07:00"
+      }
+    },
+    "de10655cbb0627eea2a56fd073316e45": {
+      "build": {
+        "gate_type": "build",
+        "command": "GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T11:16:05.091402-07:00"
       }
     },
     "e12b3699db139c8465537fc063621ee1": {
