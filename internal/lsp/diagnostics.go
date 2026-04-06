@@ -9,8 +9,10 @@ import (
 )
 
 // WaitForDiagnostics waits for diagnostic stabilisation for all uris.
-// It ignores the initial snapshot, requires one fresh notification per URI,
-// then waits for a 500ms quiet window. Resolves on timeout without error.
+// It skips the initial cached-replay notification per URI (matching the
+// TypeScript sawInitialSnapshot logic), requires one fresh notification
+// per URI after that, then waits for a 500ms quiet window.
+// Resolves on timeout without error.
 func WaitForDiagnostics(ctx context.Context, client *LSPClient, uris []string, timeoutMs int) error {
 	if len(uris) == 0 {
 		return nil
@@ -23,6 +25,10 @@ func WaitForDiagnostics(ctx context.Context, client *LSPClient, uris []string, t
 	for _, uri := range uris {
 		received[uri] = false
 	}
+
+	// seenInitial tracks whether the initial cached-replay notification has
+	// been skipped per URI, matching the TypeScript sawInitialSnapshot logic.
+	seenInitial := make(map[string]bool, len(uris))
 
 	var lastEvent time.Time
 	lastEvent = time.Now()
@@ -41,6 +47,13 @@ func WaitForDiagnostics(ctx context.Context, client *LSPClient, uris []string, t
 	cb := types.DiagnosticUpdateCallback(func(uri string, _ []types.LSPDiagnostic) {
 		mu.Lock()
 		if _, tracked := received[uri]; tracked {
+			if !seenInitial[uri] {
+				// Skip the first callback per URI: it is the cached-replay
+				// snapshot from SubscribeToDiagnostics, not a fresh notification.
+				seenInitial[uri] = true
+				mu.Unlock()
+				return
+			}
 			received[uri] = true
 		}
 		lastEvent = time.Now()
