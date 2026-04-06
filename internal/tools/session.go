@@ -37,13 +37,17 @@ func HandleStartLsp(
 	return types.TextResult("LSP server started successfully"), nil
 }
 
-// HandleRestartLspServer restarts the LSP server, optionally using a new root dir.
+// HandleRestartLspServer restarts the LSP server with the given root dir.
+// root_dir is required: omitting it would construct a malformed "file://" rootURI.
 func HandleRestartLspServer(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
 
 	rootDir, _ := args["root_dir"].(string)
+	if rootDir == "" {
+		return types.ErrorResult("root_dir is required for restart_lsp_server"), nil
+	}
 	if err := client.Restart(ctx, rootDir); err != nil {
 		return types.ErrorResult(fmt.Sprintf("failed to restart LSP server: %s", err)), nil
 	}
