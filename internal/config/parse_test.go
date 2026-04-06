@@ -106,10 +106,39 @@ func TestParseArgs_ConfigFlag(t *testing.T) {
 	}
 }
 
-func TestParseArgs_Empty(t *testing.T) {
-	_, err := config.ParseArgs([]string{})
-	if err == nil {
-		t.Error("expected error for empty args, got nil")
+func TestParseArgs_AutoEmpty(t *testing.T) {
+	// NOTE: This test requires at least one language server in PATH to pass.
+	// If no servers are found, AutodetectServers() will return an error.
+	result, err := config.ParseArgs([]string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Config == nil {
+		t.Fatal("expected Config to be set")
+	}
+	if len(result.Config.Servers) == 0 {
+		t.Error("expected at least one server found via auto-detect")
+	}
+	if result.IsSingleServer {
+		t.Error("expected IsSingleServer=false for auto-detect mode")
+	}
+}
+
+func TestParseArgs_AutoFlag(t *testing.T) {
+	// NOTE: This test requires at least one language server in PATH to pass.
+	// If no servers are found, AutodetectServers() will return an error.
+	result, err := config.ParseArgs([]string{"--auto"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Config == nil {
+		t.Fatal("expected Config to be set")
+	}
+	if len(result.Config.Servers) == 0 {
+		t.Error("expected at least one server found via auto-detect")
+	}
+	if result.IsSingleServer {
+		t.Error("expected IsSingleServer=false for auto-detect mode")
 	}
 }
 

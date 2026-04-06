@@ -26,6 +26,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage (single-server): lsp-mcp-go <language-id> <lsp-server-binary> [args...]")
 		fmt.Fprintln(os.Stderr, "usage (multi-server):   lsp-mcp-go go:gopls typescript:tsserver,--stdio")
 		fmt.Fprintln(os.Stderr, "usage (config file):    lsp-mcp-go --config /path/to/lsp-mcp.json")
+		fmt.Fprintln(os.Stderr, "usage (auto-detect):    lsp-mcp-go")
 		os.Exit(1)
 	}
 

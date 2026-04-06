@@ -53,16 +53,22 @@ var extensionMap = map[string][]string{
 //
 // Mode 3 — config file: lsp-mcp-go --config /path/to/lsp-mcp.json
 func ParseArgs(args []string) (ParseResult, error) {
-	if len(args) == 0 {
-		return ParseResult{}, fmt.Errorf("usage: lsp-mcp-go <language-id> <binary> [args...]\n" +
-			"       lsp-mcp-go go:gopls typescript:typescript-language-server,--stdio\n" +
-			"       lsp-mcp-go --config /path/to/lsp-mcp.json")
+	if len(args) == 0 || (len(args) == 1 && args[0] == "--auto") {
+		cfg, err := AutodetectServers()
+		if err != nil {
+			return ParseResult{}, fmt.Errorf("auto-detect: %w", err)
+		}
+		return ParseResult{Config: cfg}, nil
 	}
 
 	// Mode 3: config file
 	if args[0] == "--config" {
 		if len(args) < 2 {
-			return ParseResult{}, fmt.Errorf("--config requires a file path argument")
+			return ParseResult{}, fmt.Errorf("--config requires a file path argument\n" +
+				"usage: lsp-mcp-go <language-id> <binary> [args...]\n" +
+				"       lsp-mcp-go go:gopls typescript:typescript-language-server,--stdio\n" +
+				"       lsp-mcp-go --config /path/to/lsp-mcp.json\n" +
+				"       lsp-mcp-go (auto-detect mode)")
 		}
 		cfg, err := LoadConfig(args[1])
 		if err != nil {
