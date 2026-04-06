@@ -3,41 +3,44 @@
   "worktrees": [
     {
       "agent": "A",
-      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/call-hierarchy-fuzzy-position/wave1-agent-A",
-      "branch": "saw/call-hierarchy-fuzzy-position/wave1-agent-A"
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/multi-server-routing/wave1-agent-A",
+      "branch": "saw/multi-server-routing/wave1-agent-A"
     },
     {
       "agent": "B",
-      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/call-hierarchy-fuzzy-position/wave1-agent-B",
-      "branch": "saw/call-hierarchy-fuzzy-position/wave1-agent-B"
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/multi-server-routing/wave1-agent-B",
+      "branch": "saw/multi-server-routing/wave1-agent-B"
     },
     {
-      "agent": "D",
-      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/call-hierarchy-fuzzy-position/wave1-agent-D",
-      "branch": "saw/call-hierarchy-fuzzy-position/wave1-agent-D"
+      "agent": "C",
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/multi-server-routing/wave1-agent-C",
+      "branch": "saw/multi-server-routing/wave1-agent-C"
     }
   ],
   "agent_briefs": [
     {
       "agent": "A",
-      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/call-hierarchy-fuzzy-position/wave1-agent-A/.saw-agent-brief.md",
-      "brief_length": 8525,
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/multi-server-routing/wave1-agent-A/.saw-agent-brief.md",
+      "brief_length": 11767,
       "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-A",
-      "files_owned": 1
+      "files_owned": 2,
+      "repo": "LSP-MCP-GO"
     },
     {
       "agent": "B",
-      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/call-hierarchy-fuzzy-position/wave1-agent-B/.saw-agent-brief.md",
-      "brief_length": 9130,
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/multi-server-routing/wave1-agent-B/.saw-agent-brief.md",
+      "brief_length": 11645,
       "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-B",
-      "files_owned": 1
+      "files_owned": 1,
+      "repo": "LSP-MCP-GO"
     },
     {
-      "agent": "D",
-      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/call-hierarchy-fuzzy-position/wave1-agent-D/.saw-agent-brief.md",
-      "brief_length": 11389,
-      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-D",
-      "files_owned": 2
+      "agent": "C",
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/multi-server-routing/wave1-agent-C/.saw-agent-brief.md",
+      "brief_length": 9775,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-C",
+      "files_owned": 1,
+      "repo": "LSP-MCP-GO"
     }
   ],
   "steps": [
@@ -69,7 +72,7 @@
     {
       "step": "stale_cleanup",
       "status": "success",
-      "detail": "cleaned 3 stale worktree(s)"
+      "detail": "no stale worktrees"
     },
     {
       "step": "repo_match",
@@ -84,7 +87,7 @@
     {
       "step": "commit_baseline",
       "status": "success",
-      "detail": "committed 2 file(s)"
+      "detail": "committed 5 file(s)"
     },
     {
       "step": "baseline_gates",
@@ -125,6 +128,11 @@
       "step": "pre_wave_gate",
       "status": "success",
       "detail": "pre-wave gate passed"
+    },
+    {
+      "step": "advance_state",
+      "status": "success",
+      "detail": "IMPL state advanced to REVIEWED"
     },
     {
       "step": "create_worktrees",
