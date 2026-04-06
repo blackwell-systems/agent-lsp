@@ -1,0 +1,58 @@
+version: 2
+
+project_name: lsp-mcp-go
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: lsp-mcp-go
+    main: ./cmd/lsp-mcp-go
+    binary: lsp-mcp-go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+
+archives:
+  - id: lsp-mcp-go
+    ids:
+      - lsp-mcp-go
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - "^chore:"
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: blackwell-systems
+    name: lsp-mcp-go
+  name_template: "v{{ .Version }}"
+  draft: false
+  prerelease: auto
