@@ -1,0 +1,955 @@
+title: Speculative Code Sessions for lsp-mcp-go
+feature_slug: speculative-sessions
+verdict: SUITABLE
+suitability_assessment: |
+    All five suitability criteria pass cleanly:
+
+    1. File decomposition: The feature decomposes into 4 disjoint file groups:
+       (a) session types in internal/session/types.go, (b) session manager + executor
+       in internal/session/manager.go, (c) diagnostic differ in internal/session/differ.go,
+       (d) MCP tool handlers in internal/tools/simulation.go, (e) tool registration in
+       cmd/lsp-mcp-go/server.go, (f) tests split per component. 4+ agents with no file overlap.
+
+    2. Investigation-first: None required. The design spec (docs/speculative-execution.md)
+       is comprehensive with all contracts, invariants, and failure semantics resolved.
+
+    3. Interface discoverability: All cross-agent interfaces are fully defined in the spec:
+       SessionManager, SimulationSession, SessionExecutor, DiagnosticDiffer, and the 7 MCP
+       tool signatures. No ambiguity.
+
+    4. Pre-implementation status: Entirely greenfield. No existing code to check against.
+
+    5. Parallelization value: Go build+test cycle ~10s. 4 agents each creating 2-3 new files
+       with non-trivial logic (state machines, mutex serialization, diagnostic diffing).
+       Clear speedup over sequential.
+
+    Estimated times:
+    - Scout phase: ~10 min
+    - Agent execution: ~15 min (4 agents x 10 min avg, 1 wave parallel + 1 integration wave)
+    - Merge and verification: ~5 min
+    Total SAW time: ~30 min
+
+    Sequential baseline: ~40 min (4 agents x 10 min avg sequential)
+    Time savings: ~10 min (25% faster)
+
+    Recommendation: Clear speedup. Proceed.
+test_command: GOWORK=off go test ./...
+lint_command: GOWORK=off go vet ./...
+build_command: GOWORK=off go build ./...
+file_ownership:
+    - file: internal/session/types.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/session/executor.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/session/differ.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/session/differ_test.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/session/manager.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/session/manager_test.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/tools/simulation.go
+      agent: C
+      wave: 1
+      action: new
+    - file: internal/tools/simulation_test.go
+      agent: C
+      wave: 1
+      action: new
+    - file: cmd/lsp-mcp-go/server.go
+      agent: D
+      wave: 2
+      action: modify
+interface_contracts:
+    - name: SessionManager
+      description: |
+        Manages session lifecycle. Holds a map of active sessions and the
+        SessionExecutor for serialized LSP access. All public methods are
+        thread-safe.
+      definition: |
+        type SessionManager struct {
+            sessions map[string]*SimulationSession
+            executor SessionExecutor
+            resolver lsp.ClientResolver
+            mu       sync.RWMutex
+        }
+
+        func NewSessionManager(resolver lsp.ClientResolver) *SessionManager
+        func (m *SessionManager) CreateSession(ctx context.Context, workspaceRoot, language string) (string, error)
+        func (m *SessionManager) GetSession(sessionID string) (*SimulationSession, error)
+        func (m *SessionManager) ApplyEdit(ctx context.Context, sessionID, fileURI string, rng types.Range, newText string) (*EditResult, error)
+        func (m *SessionManager) Evaluate(ctx context.Context, sessionID string, scope string, timeoutMs int) (*EvaluationResult, error)
+        func (m *SessionManager) SimulateChain(ctx context.Context, sessionID string, edits []ChainEdit, timeoutMs int) (*ChainResult, error)
+        func (m *SessionManager) Commit(ctx context.Context, sessionID string, target string, apply bool) (*CommitResult, error)
+        func (m *SessionManager) Discard(ctx context.Context, sessionID string) error
+        func (m *SessionManager) Destroy(ctx context.Context, sessionID string) error
+      location: internal/session/manager.go
+    - name: SessionExecutor
+      description: |
+        Abstracts LSP access serialization. V1 uses SerializedExecutor with
+        a per-server mutex. Future IsolatedExecutor can provide per-session LSP.
+      definition: |
+        type SessionExecutor interface {
+            Acquire(ctx context.Context, session *SimulationSession) error
+            Release(session *SimulationSession)
+        }
+
+        type SerializedExecutor struct {
+            mu sync.Mutex
+        }
+
+        func NewSerializedExecutor() *SerializedExecutor
+        func (e *SerializedExecutor) Acquire(ctx context.Context, s *SimulationSession) error
+        func (e *SerializedExecutor) Release(s *SimulationSession)
+      location: internal/session/executor.go
+    - name: DiagnosticDiffer
+      description: |
+        Computes the diff between baseline and post-simulation diagnostics.
+        Two diagnostics match if range, message, severity, and source are equal.
+      definition: |
+        func DiffDiagnostics(baseline, current []types.LSPDiagnostic) (introduced, resolved []DiagnosticEntry)
+        func DiagnosticsEqual(a, b types.LSPDiagnostic) bool
+        func SeverityString(severity int) string
+      location: internal/session/differ.go
+    - name: SimulationToolHandlers
+      description: |
+        MCP tool handler functions for all 8 simulation tools. Follow the existing
+        pattern: accept (ctx, client/manager, args) and return (types.ToolResult, error).
+      definition: |
+        func HandleCreateSimulationSession(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error)
+        func HandleSimulateEdit(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error)
+        func HandleEvaluateSession(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error)
+        func HandleSimulateChain(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error)
+        func HandleCommitSession(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error)
+        func HandleDiscardSession(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error)
+        func HandleDestroySession(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error)
+        func HandleSimulateEditAtomic(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error)
+      location: internal/tools/simulation.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Agent A: Session Types, Executor, and Diagnostic Differ
+
+            ### What to implement
+
+            Create the `internal/session/` package with three files containing the
+            foundational types, the executor abstraction, and the diagnostic differ.
+
+            **File 1: `internal/session/types.go`**
+
+            The scaffold has pre-created this file with all type definitions. Review the
+            scaffold contents and ensure all types are correct and complete. The scaffold
+            includes: SessionStatus enum, Confidence enum, AppliedEdit, DiagnosticsSnapshot,
+            EvaluationResult, DiagnosticEntry, EditResult, ChainEdit, ChainStepResult,
+            ChainResult, CommitResult, SessionExecutor interface, SimulationSession struct,
+            and helper methods (MarkDirty, IsDirty, IsTerminal).
+
+            Your task is to:
+            1. Review the scaffold and fix any issues (remove the `var _ = ...` import guards,
+               ensure proper formatting)
+            2. Ensure all JSON tags are correct per the design spec at `docs/speculative-execution.md`
+            3. Add any missing types you discover while implementing the other files
+
+            **File 2: `internal/session/executor.go`**
+
+            Define the `SessionExecutor` interface and the V1 `SerializedExecutor`:
+
+            ```go
+            package session
+
+            import (
+            	"context"
+            	"sync"
+            )
+
+            // SerializedExecutor is the V1 implementation of SessionExecutor.
+            // It serializes all session operations through a single mutex,
+            // ensuring only one session mutates LSP state at a time.
+            type SerializedExecutor struct {
+            	mu sync.Mutex
+            }
+
+            // NewSerializedExecutor creates a new SerializedExecutor.
+            func NewSerializedExecutor() *SerializedExecutor {
+            	return &SerializedExecutor{}
+            }
+
+            // Acquire locks the executor for exclusive session access.
+            func (e *SerializedExecutor) Acquire(ctx context.Context, s *SimulationSession) error {
+            	e.mu.Lock()
+            	return nil
+            }
+
+            // Release unlocks the executor after session operation completes.
+            func (e *SerializedExecutor) Release(s *SimulationSession) {
+            	e.mu.Unlock()
+            }
+            ```
+
+            **File 3: `internal/session/differ.go`**
+
+            Implement diagnostic diffing per the spec's "Diagnostic Diffing" section.
+
+            Two diagnostics are identical if ALL of these match:
+            - `Range.Start` (line + character)
+            - `Range.End` (line + character)
+            - `Message` (exact string)
+            - `Severity` (int value)
+            - `Source` (ignored if absent in either — i.e., if either has empty Source, skip Source comparison)
+
+            Functions to implement:
+
+            ```go
+            // DiagnosticsEqual reports whether two LSP diagnostics are semantically identical.
+            func DiagnosticsEqual(a, b types.LSPDiagnostic) bool
+
+            // DiffDiagnostics computes introduced and resolved diagnostics between baseline and current.
+            func DiffDiagnostics(baseline, current []types.LSPDiagnostic) (introduced, resolved []DiagnosticEntry)
+
+            // SeverityString converts an LSP severity int to a human-readable string.
+            func SeverityString(severity int) string
+            ```
+
+            `DiffDiagnostics` algorithm:
+            - `introduced`: present in `current` but not matched by any in `baseline`
+            - `resolved`: present in `baseline` but not matched by any in `current`
+            - Use O(n*m) comparison with `DiagnosticsEqual` (n and m are typically small)
+            - Convert `types.LSPDiagnostic` to `DiagnosticEntry` using 1-indexed line/col
+              (add 1 to the 0-indexed LSP Range.Start positions)
+
+            `SeverityString` mapping: 1="error", 2="warning", 3="info", 4="hint", default="unknown"
+
+            **File 4: `internal/session/differ_test.go`**
+
+            Test the differ thoroughly:
+            - `TestDiagnosticsEqual_Match` — identical diagnostics return true
+            - `TestDiagnosticsEqual_DifferentMessage` — message mismatch returns false
+            - `TestDiagnosticsEqual_DifferentRange` — range mismatch returns false
+            - `TestDiagnosticsEqual_SourceIgnoredWhenAbsent` — empty source on either side still matches
+            - `TestDiffDiagnostics_NewErrors` — new errors appear in introduced
+            - `TestDiffDiagnostics_ResolvedErrors` — removed errors appear in resolved
+            - `TestDiffDiagnostics_NoChange` — identical lists produce empty slices
+            - `TestDiffDiagnostics_Mixed` — some introduced, some resolved, some unchanged
+            - `TestSeverityString` — all 4 severity levels map correctly
+
+            ### Constraints
+            - Do NOT import `internal/tools` — types flow the other direction
+            - Do NOT create `internal/session/manager.go` — that is Agent B's file
+            - Do NOT modify any files outside the ownership list
+          files:
+            - internal/session/types.go
+            - internal/session/executor.go
+            - internal/session/differ.go
+            - internal/session/differ_test.go
+        - id: B
+          task: |
+            ## Agent B: Session Manager
+
+            ### What to implement
+
+            Create `internal/session/manager.go` and `internal/session/manager_test.go`.
+            This is the core session lifecycle engine.
+
+            The scaffold file `internal/session/types.go` will exist before your worktree
+            is created. All types (SimulationSession, SessionStatus, etc.) are defined there.
+            Code against those types directly — they are in the same package `session`.
+
+            **SessionManager struct and constructor:**
+
+            ```go
+            type SessionManager struct {
+            	sessions map[string]*SimulationSession
+            	executor SessionExecutor
+            	resolver lsp.ClientResolver
+            	mu       sync.RWMutex
+            }
+
+            func NewSessionManager(resolver lsp.ClientResolver) *SessionManager {
+            	return &SessionManager{
+            		sessions: make(map[string]*SimulationSession),
+            		executor: NewSerializedExecutor(),
+            		resolver: resolver,
+            	}
+            }
+            ```
+
+            **Methods to implement:**
+
+            1. `CreateSession(ctx context.Context, workspaceRoot, language string) (string, error)`
+               - Generate session ID: use `crypto/rand` to produce 16 random bytes, hex-encode.
+                 ```go
+                 b := make([]byte, 16)
+                 if _, err := rand.Read(b); err != nil {
+                 	return "", fmt.Errorf("generating session ID: %w", err)
+                 }
+                 id := hex.EncodeToString(b)
+                 ```
+               - Create `SimulationSession` with Status=StatusCreated, empty maps for Baselines,
+                 Versions, Contents, Edits
+               - Resolve LSP client: `m.resolver.DefaultClient()`. Return error if nil.
+               - Store in sessions map under write lock
+               - Log: `logging.Log(logging.LevelDebug, "session.created: "+id)`
+               - Return id, nil
+
+            2. `GetSession(sessionID string) (*SimulationSession, error)`
+               - RLock, lookup, RUnlock
+               - Return `fmt.Errorf("session not found: %s", sessionID)` if missing
+
+            3. `ApplyEdit(ctx context.Context, sessionID, fileURI string, rng types.Range, newText string) (*EditResult, error)`
+               - GetSession, check not terminal/dirty
+               - `m.executor.Acquire(ctx, session)` / `defer m.executor.Release(session)`
+               - Lazy baseline: if `session.Baselines[fileURI]` not set:
+                 - Call `lsp.WaitForDiagnostics(ctx, session.Client, []string{fileURI}, 3000)`
+                 - Snapshot: `session.Baselines[fileURI] = DiagnosticsSnapshot{URI: fileURI, Diagnostics: session.Client.GetDiagnostics(fileURI), Confidence: ConfidenceHigh}`
+                 - Read file content from disk: parse fileURI to path, `os.ReadFile`, store in `session.Contents[fileURI]`
+                 - Open the document: `session.Client.OpenDocument(ctx, fileURI, content, session.Language)`
+               - Increment version: `session.Versions[fileURI]++`
+               - Apply range edit in-memory: `session.Contents[fileURI] = applyRangeEdit(session.Contents[fileURI], rng, newText)`
+               - Send to LSP via: `session.Client.OpenDocument(ctx, fileURI, session.Contents[fileURI], session.Language)`
+                 (OpenDocument sends didChange when already open)
+               - Record edit: append to `session.Edits`
+               - Set `session.Status = StatusMutated`
+               - Log: `logging.Log(logging.LevelDebug, fmt.Sprintf("session.edit_applied: %s file=%s version=%d", sessionID, fileURI, session.Versions[fileURI]))`
+               - Return `&EditResult{SessionID: sessionID, EditApplied: true, VersionAfter: session.Versions[fileURI]}`
+
+            4. `Evaluate(ctx context.Context, sessionID, scope string, timeoutMs int) (*EvaluationResult, error)`
+               - Defaults: scope="" means "file", timeoutMs=0 means 3000 (file) or 8000 (workspace)
+               - GetSession, verify status in (StatusMutated, StatusEvaluated)
+               - Set `session.Status = StatusEvaluating`
+               - `m.executor.Acquire` / `defer m.executor.Release`
+               - Start timer: `start := time.Now()`
+               - For each file in `session.Baselines`:
+                 - `lsp.WaitForDiagnostics(ctx, session.Client, []string{uri}, timeoutMs)`
+                 - `current := session.Client.GetDiagnostics(uri)`
+                 - `introduced, resolved := DiffDiagnostics(baseline.Diagnostics, current)`
+                 - Aggregate into result slices
+               - `netDelta := len(allIntroduced) - len(allResolved)`
+               - Determine confidence: "high" for file scope, "eventual" for workspace,
+                 "partial" if WaitForDiagnostics timed out
+               - `session.Status = StatusEvaluated`
+               - Log evaluation complete
+               - Return result with `DurationMs: time.Since(start).Milliseconds()`
+
+            5. `SimulateChain(ctx context.Context, sessionID string, edits []ChainEdit, timeoutMs int) (*ChainResult, error)`
+               - For i, edit := range edits:
+                 - `m.ApplyEdit(ctx, sessionID, edit.FileURI, edit.Range, edit.NewText)`
+                 - `evalResult, _ := m.Evaluate(ctx, sessionID, "file", timeoutMs)`
+                 - Record ChainStepResult{Step: i+1, NetDelta: evalResult.NetDelta, ErrorsIntroduced: evalResult.ErrorsIntroduced}
+               - Compute SafeToApplyThroughStep: iterate backwards from last step, find last step where NetDelta==0
+               - CumulativeDelta: final NetDelta after all steps
+
+            6. `Commit(ctx context.Context, sessionID, target string, apply bool) (*CommitResult, error)`
+               - GetSession, verify status in (StatusMutated, StatusEvaluated) — not dirty, not created
+               - Build workspace edit patch: map of fileURI -> content from session.Contents
+               - If apply: write each file to disk via `os.WriteFile`, notify LSP
+               - Set `session.Status = StatusCommitted`
+               - Log `session.committed`
+               - Return CommitResult
+
+            7. `Discard(ctx context.Context, sessionID string) error`
+               - GetSession, verify not terminal
+               - For each file in session.Contents:
+                 - Read original content from disk
+                 - `session.Client.OpenDocument(ctx, fileURI, originalContent, session.Language)` to revert
+                 - If error: `session.MarkDirty(err)`, return error
+               - `session.Status = StatusDiscarded`
+               - Log `session.discarded`
+
+            8. `Destroy(ctx context.Context, sessionID string) error`
+               - Write-lock sessions map
+               - Set `session.Status = StatusDestroyed`
+               - `delete(m.sessions, sessionID)`
+               - Log `session.destroyed`
+
+            **Helper function:**
+
+            ```go
+            // applyRangeEdit applies a range edit to content in-memory and returns the new content.
+            func applyRangeEdit(content string, rng types.Range, newText string) string {
+            	lines := strings.Split(content, "\n")
+            	// ... same algorithm as LSPClient.applyEditsToFile but for a single edit
+            }
+            ```
+
+            Follow the algorithm in `internal/lsp/client.go` `applyEditsToFile` method (lines 1487-1539),
+            adapted for a single edit on in-memory content.
+
+            **File 2: `internal/session/manager_test.go`**
+
+            Unit tests:
+            - `TestNewSessionManager` — verify non-nil manager created
+            - `TestCreateSession_ReturnsID` — use a nil resolver (will return error for nil client)
+            - `TestGetSession_NotFound` — verify error for unknown ID
+            - `TestApplyRangeEdit_SingleLine` — replace text in middle of a line
+            - `TestApplyRangeEdit_MultiLine` — replace across multiple lines
+            - `TestApplyRangeEdit_Insert` — insert with empty range (start == end)
+            - `TestApplyRangeEdit_Delete` — replace with empty newText
+            - `TestSessionDirtyState_BlocksCommit` — manually set dirty, verify commit fails
+
+            ### Constraints
+            - Do NOT modify `internal/lsp/client.go` — use public OpenDocument API for didChange
+            - Do NOT create `internal/session/types.go` or `internal/session/differ.go` — Agent A
+            - Do NOT create `internal/tools/simulation.go` — Agent C
+            - Do NOT modify `cmd/lsp-mcp-go/server.go` — Agent D (wave 2)
+          files:
+            - internal/session/manager.go
+            - internal/session/manager_test.go
+        - id: C
+          task: |
+            ## Agent C: MCP Tool Handlers for Simulation
+
+            ### What to implement
+
+            Create `internal/tools/simulation.go` and `internal/tools/simulation_test.go`.
+
+            This file imports `internal/session` for the SessionManager type and result types.
+            The scaffold pre-creates `internal/session/types.go` with all type definitions.
+            However, `manager.go` (Agent B) will NOT exist in your worktree.
+
+            **To make your worktree compile:** Create a minimal stub file
+            `internal/session/manager_stub_test.go` — no wait, that approach has issues.
+
+            **Best approach:** Write your code against the interface contract. Accept that
+            `go build` may fail in your isolated worktree because `SessionManager` methods
+            are defined in manager.go (Agent B). Your code WILL compile after merge. Focus
+            on correctness. For tests, test only argument validation paths that return before
+            calling any SessionManager method.
+
+            **Handler functions to implement:**
+
+            All handlers follow the existing pattern in `internal/tools/`:
+            - Accept `(ctx context.Context, mgr *session.SessionManager, args map[string]interface{})`
+            - Return `(types.ToolResult, error)`
+            - Validate arguments first, return `types.ErrorResult(...)` for bad input
+            - On success, JSON-marshal the result and return `types.TextResult(string(data))`
+
+            1. **`HandleCreateSimulationSession`**
+               - Extract `workspace_root` (string, required), `language` (string, required)
+               - Validate: `ValidateFilePath(workspaceRoot, "")` for path safety
+               - Call `mgr.CreateSession(ctx, workspaceRoot, language)`
+               - Return JSON: `{"session_id": "<id>", "status": "created"}`
+
+            2. **`HandleSimulateEdit`**
+               - Extract `session_id` (string, required)
+               - Extract `file_path` (string, required) — convert to URI: `CreateFileURI(filePath)`
+               - Extract range via `extractRange(args)` — returns 0-indexed types.Range
+               - Extract `new_text` (string, required)
+               - Call `mgr.ApplyEdit(ctx, sessionID, fileURI, rng, newText)`
+               - Return JSON-marshaled `*session.EditResult`
+
+            3. **`HandleEvaluateSession`**
+               - Extract `session_id` (required)
+               - Extract `scope` (optional, default "file")
+               - Extract `timeout_ms` (optional int, default 0)
+               - Call `mgr.Evaluate(ctx, sessionID, scope, timeoutMs)`
+               - Return JSON-marshaled `*session.EvaluationResult`
+
+            4. **`HandleSimulateChain`**
+               - Extract `session_id` (required)
+               - Extract `edits` (required, `[]interface{}` — array of objects)
+               - Parse each edit: extract `file_path`, range fields, `new_text`
+               - Convert each to `session.ChainEdit{FileURI: CreateFileURI(fp), Range: rng, NewText: text}`
+               - Extract `timeout_ms` (optional)
+               - Call `mgr.SimulateChain(ctx, sessionID, chainEdits, timeoutMs)`
+               - Return JSON-marshaled `*session.ChainResult`
+
+            5. **`HandleCommitSession`**
+               - Extract `session_id` (required), `target` (optional string), `apply` (optional bool)
+               - Call `mgr.Commit(ctx, sessionID, target, apply)`
+               - Return JSON-marshaled `*session.CommitResult`
+
+            6. **`HandleDiscardSession`**
+               - Extract `session_id` (required)
+               - Call `mgr.Discard(ctx, sessionID)`
+               - Return JSON: `{"session_id": "<id>", "status": "discarded"}`
+
+            7. **`HandleDestroySession`**
+               - Extract `session_id` (required)
+               - Call `mgr.Destroy(ctx, sessionID)`
+               - Return JSON: `{"session_id": "<id>", "status": "destroyed"}`
+
+            8. **`HandleSimulateEditAtomic`**
+               - Extract all args: `workspace_root`, `language`, `file_path`, range, `new_text`,
+                 optional `scope`, `timeout_ms`
+               - Validate file_path
+               - `sid, err := mgr.CreateSession(ctx, workspaceRoot, language)`
+               - `defer mgr.Destroy(ctx, sid)`
+               - `fileURI := CreateFileURI(filePath)`
+               - `_, err = mgr.ApplyEdit(ctx, sid, fileURI, rng, newText)`
+               - `result, err := mgr.Evaluate(ctx, sid, scope, timeoutMs)`
+               - Return JSON-marshaled `*session.EvaluationResult`
+
+            **File 2: `internal/tools/simulation_test.go`**
+
+            Test argument validation (nil manager — validation errors fire before mgr calls):
+            - `TestHandleCreateSimulationSession_MissingWorkspaceRoot` — missing workspace_root returns error
+            - `TestHandleCreateSimulationSession_MissingLanguage` — missing language returns error
+            - `TestHandleSimulateEdit_MissingSessionID` — missing session_id returns error
+            - `TestHandleSimulateEdit_MissingFilePath` — missing file_path returns error
+            - `TestHandleSimulateEdit_InvalidRange` — bad range values return error
+            - `TestHandleEvaluateSession_MissingSessionID` — missing session_id returns error
+            - `TestHandleSimulateChain_MissingEdits` — missing edits array returns error
+            - `TestHandleCommitSession_MissingSessionID` — missing session_id returns error
+            - `TestHandleDestroySession_MissingSessionID` — missing session_id returns error
+
+            ### Constraints
+            - Do NOT modify `internal/tools/helpers.go` — reuse `extractRange`, `toInt`,
+              `ValidateFilePath`, `CreateFileURI`, `CheckInitialized`
+            - Do NOT create any files in `internal/session/` — Agents A and B own those
+            - Do NOT modify `cmd/lsp-mcp-go/server.go` — Agent D (wave 2)
+            - Import: `"github.com/blackwell-systems/lsp-mcp-go/internal/session"`
+          files:
+            - internal/tools/simulation.go
+            - internal/tools/simulation_test.go
+    - number: 2
+      agents:
+        - id: D
+          task: |
+            ## Agent D: Wire Simulation Tools into MCP Server
+
+            ### What to implement
+
+            Modify `cmd/lsp-mcp-go/server.go` to register the 8 new simulation tools
+            and initialize the SessionManager.
+
+            **Step 1: Add import**
+
+            Add to the import block, after the existing internal imports. Insert after
+            this exact text:
+
+            ```go
+            	"github.com/blackwell-systems/lsp-mcp-go/internal/tools"
+            	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+            ```
+
+            Add this line:
+            ```go
+            	"github.com/blackwell-systems/lsp-mcp-go/internal/session"
+            ```
+
+            **Step 2: Create SessionManager in Run function**
+
+            Insert after this exact text:
+            ```go
+            	cs := &clientState{client: resolver.DefaultClient()}
+            ```
+
+            Add:
+            ```go
+            	sessionMgr := session.NewSessionManager(resolver)
+            ```
+
+            **Step 3: Add argument types**
+
+            Insert after the closing brace of `GetSemanticTokensArgs` (find the exact text below)
+            and before `// ------- Register all 26 tools -------`:
+
+            ```go
+            	type GetSemanticTokensArgs struct {
+            		FilePath    string `json:"file_path"`
+            		LanguageID  string `json:"language_id,omitempty"`
+            		StartLine   int    `json:"start_line"`
+            		StartColumn int    `json:"start_column"`
+            		EndLine     int    `json:"end_line"`
+            		EndColumn   int    `json:"end_column"`
+            	}
+            ```
+
+            Add these 7 arg types after it:
+            ```go
+            	type CreateSimulationSessionArgs struct {
+            		WorkspaceRoot string `json:"workspace_root"`
+            		Language      string `json:"language"`
+            	}
+            	type SimulateEditArgs struct {
+            		SessionID   string `json:"session_id"`
+            		FilePath    string `json:"file_path"`
+            		StartLine   int    `json:"start_line"`
+            		StartColumn int    `json:"start_column"`
+            		EndLine     int    `json:"end_line"`
+            		EndColumn   int    `json:"end_column"`
+            		NewText     string `json:"new_text"`
+            	}
+            	type EvaluateSessionArgs struct {
+            		SessionID string `json:"session_id"`
+            		Scope     string `json:"scope,omitempty"`
+            		TimeoutMs int    `json:"timeout_ms,omitempty"`
+            	}
+            	type SimulateChainArgs struct {
+            		SessionID string        `json:"session_id"`
+            		Edits     []interface{} `json:"edits"`
+            		TimeoutMs int           `json:"timeout_ms,omitempty"`
+            	}
+            	type CommitSessionArgs struct {
+            		SessionID string `json:"session_id"`
+            		Target    string `json:"target,omitempty"`
+            		Apply     bool   `json:"apply,omitempty"`
+            	}
+            	type SessionIDArgs struct {
+            		SessionID string `json:"session_id"`
+            	}
+            	type SimulateEditAtomicArgs struct {
+            		WorkspaceRoot string `json:"workspace_root"`
+            		Language      string `json:"language"`
+            		FilePath      string `json:"file_path"`
+            		StartLine     int    `json:"start_line"`
+            		StartColumn   int    `json:"start_column"`
+            		EndLine       int    `json:"end_line"`
+            		EndColumn     int    `json:"end_column"`
+            		NewText       string `json:"new_text"`
+            		Scope         string `json:"scope,omitempty"`
+            		TimeoutMs     int    `json:"timeout_ms,omitempty"`
+            	}
+            ```
+
+            **Step 4: Update tool count comment**
+
+            Change `// ------- Register all 26 tools -------` to
+            `// ------- Register all 34 tools -------`
+
+            **Step 5: Register 8 new tools**
+
+            Insert after the `get_semantic_tokens` tool registration block and before
+            `// ------- Register resources -------`. The get_semantic_tokens block ends with:
+
+            ```go
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "get_semantic_tokens",
+            		Description: "Get semantic tokens for a range in a file. Returns each token's type (function, variable, keyword, parameter, type, etc.) and modifiers (readonly, static, deprecated, etc.) with 1-based line/character positions. Use this to understand the syntactic role of code elements — distinct from hover which gives documentation. Only available when the language server supports textDocument/semanticTokens.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetSemanticTokensArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleGetSemanticTokens(ctx, cs.get(), toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+            ```
+
+            After that block, add these 8 registrations:
+
+            ```go
+            	// ------- Simulation session tools -------
+
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "create_simulation_session",
+            		Description: "Create an isolated speculative code session. Returns a session_id for use with simulate_edit, evaluate_session, commit_session, and other session tools. Sessions use in-memory LSP buffers to simulate edits without touching disk. Multiple sessions can exist concurrently but are serialized for isolation.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args CreateSimulationSessionArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleCreateSimulationSession(ctx, sessionMgr, toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "simulate_edit",
+            		Description: "Apply a hypothetical edit within a simulation session. The edit is applied to in-memory LSP buffers only — no files are written to disk. Use evaluate_session afterward to see the diagnostic impact. Requires an active session from create_simulation_session.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args SimulateEditArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleSimulateEdit(ctx, sessionMgr, toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "evaluate_session",
+            		Description: "Evaluate the diagnostic impact of all edits accumulated in a simulation session. Returns errors introduced, errors resolved, net delta, and confidence level. Scope can be 'file' (default) or 'workspace'. Does not mutate session state.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args EvaluateSessionArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleEvaluateSession(ctx, sessionMgr, toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "simulate_chain",
+            		Description: "Apply a sequence of edits within a simulation session, evaluating after each step. Returns per-step diagnostic results and identifies the last safe-to-apply step (net_delta == 0). Useful for multi-step refactoring where you want to find the breakpoint.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args SimulateChainArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleSimulateChain(ctx, sessionMgr, toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "commit_session",
+            		Description: "Materialize a simulation session's accumulated edits. By default returns a WorkspaceEdit patch without writing to disk (functional commit). Pass apply: true to write files to disk (imperative commit). Pass target to write to a specific directory.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args CommitSessionArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleCommitSession(ctx, sessionMgr, toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "discard_session",
+            		Description: "Discard all accumulated edits in a simulation session, reverting in-memory LSP state to baseline. Nothing is written to disk. The session transitions to 'discarded' state and cannot be reused.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args SessionIDArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleDiscardSession(ctx, sessionMgr, toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "destroy_session",
+            		Description: "Force-destroy a simulation session and release all resources. Use this to clean up after commit, discard, or when a session is in 'dirty' state. The session_id becomes invalid after this call.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args SessionIDArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleDestroySession(ctx, sessionMgr, toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "simulate_edit_atomic",
+            		Description: "Convenience wrapper: create session, apply one edit, evaluate diagnostics, and discard — all in one call. Returns the evaluation result. Use this for quick single-edit impact analysis without managing session lifecycle.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args SimulateEditAtomicArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleSimulateEditAtomic(ctx, sessionMgr, toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+            ```
+
+            ### Constraints
+            - Do NOT modify any files in `internal/session/` or `internal/tools/`
+            - Do NOT change existing tool registrations — only add new ones
+            - Follow the EXACT same registration pattern as existing tools
+            - The `session` import is `"github.com/blackwell-systems/lsp-mcp-go/internal/session"`
+            - Use `_ = sessionMgr` if needed to suppress unused variable warning during development
+          files:
+            - cmd/lsp-mcp-go/server.go
+          dependencies:
+            - A
+            - B
+            - C
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: cd /Users/dayna.blackwell/code/LSP-MCP-GO && GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: cd /Users/dayna.blackwell/code/LSP-MCP-GO && GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: cd /Users/dayna.blackwell/code/LSP-MCP-GO && GOWORK=off go test ./...
+          required: true
+scaffolds:
+    - file_path: internal/session/types.go
+      contents: |
+        package session
+
+        import (
+        	"context"
+        	"sync"
+
+        	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
+        	"github.com/blackwell-systems/lsp-mcp-go/internal/logging"
+        	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+        )
+
+        // SessionStatus represents the lifecycle phase of a simulation session.
+        type SessionStatus string
+
+        const (
+        	StatusCreated    SessionStatus = "created"
+        	StatusMutated    SessionStatus = "mutated"
+        	StatusEvaluating SessionStatus = "evaluating"
+        	StatusEvaluated  SessionStatus = "evaluated"
+        	StatusCommitted  SessionStatus = "committed"
+        	StatusDiscarded  SessionStatus = "discarded"
+        	StatusDirty      SessionStatus = "dirty"
+        	StatusDestroyed  SessionStatus = "destroyed"
+        	StatusTimedOut   SessionStatus = "timed_out"
+        )
+
+        // Confidence indicates diagnostic reliability.
+        type Confidence string
+
+        const (
+        	ConfidenceHigh     Confidence = "high"
+        	ConfidencePartial  Confidence = "partial"
+        	ConfidenceStale    Confidence = "stale"
+        	ConfidenceEventual Confidence = "eventual"
+        )
+
+        // AppliedEdit records a single edit applied within a session.
+        type AppliedEdit struct {
+        	FileURI string
+        	Range   types.Range
+        	NewText string
+        	Version int
+        }
+
+        // DiagnosticsSnapshot is a frozen copy of diagnostics for a URI.
+        type DiagnosticsSnapshot struct {
+        	URI         string
+        	Diagnostics []types.LSPDiagnostic
+        	Confidence  Confidence
+        }
+
+        // EvaluationResult is the structured output of evaluate_session.
+        type EvaluationResult struct {
+        	SessionID        string            `json:"session_id"`
+        	ErrorsIntroduced []DiagnosticEntry `json:"errors_introduced"`
+        	ErrorsResolved   []DiagnosticEntry `json:"errors_resolved"`
+        	NetDelta         int               `json:"net_delta"`
+        	Scope            string            `json:"scope"`
+        	Confidence       Confidence        `json:"confidence"`
+        	Timeout          bool              `json:"timeout"`
+        	DurationMs       int64             `json:"duration_ms"`
+        }
+
+        // DiagnosticEntry is a single diagnostic in an evaluation result.
+        type DiagnosticEntry struct {
+        	Line     int    `json:"line"`
+        	Col      int    `json:"col"`
+        	Message  string `json:"message"`
+        	Severity string `json:"severity"`
+        	Source   string `json:"source,omitempty"`
+        }
+
+        // EditResult is the response from simulate_edit.
+        type EditResult struct {
+        	SessionID    string `json:"session_id"`
+        	EditApplied  bool   `json:"edit_applied"`
+        	VersionAfter int    `json:"version_after"`
+        }
+
+        // ChainEdit is a single edit in a simulate_chain request.
+        type ChainEdit struct {
+        	FileURI string
+        	Range   types.Range
+        	NewText string
+        }
+
+        // ChainStepResult is one step in a simulate_chain response.
+        type ChainStepResult struct {
+        	Step             int               `json:"step"`
+        	NetDelta         int               `json:"net_delta"`
+        	ErrorsIntroduced []DiagnosticEntry `json:"errors_introduced"`
+        }
+
+        // ChainResult is the response from simulate_chain.
+        type ChainResult struct {
+        	SessionID              string            `json:"session_id"`
+        	Steps                  []ChainStepResult `json:"steps"`
+        	SafeToApplyThroughStep int               `json:"safe_to_apply_through_step"`
+        	CumulativeDelta        int               `json:"cumulative_delta"`
+        }
+
+        // CommitResult is the response from commit_session.
+        type CommitResult struct {
+        	SessionID    string      `json:"session_id"`
+        	FilesWritten int         `json:"files_written,omitempty"`
+        	Patch        interface{} `json:"patch"`
+        }
+
+        // SessionExecutor abstracts how a session acquires and releases LSP access.
+        type SessionExecutor interface {
+        	Acquire(ctx context.Context, session *SimulationSession) error
+        	Release(session *SimulationSession)
+        }
+
+        // SimulationSession holds per-session state.
+        type SimulationSession struct {
+        	ID        string
+        	Status    SessionStatus
+        	Client    *lsp.LSPClient
+        	Edits     []AppliedEdit
+        	Baselines map[string]DiagnosticsSnapshot
+        	Versions  map[string]int
+        	Contents  map[string]string // per-file current content (in-memory)
+        	Workspace string
+        	Language  string
+        	DirtyErr  error
+        	mu        sync.Mutex
+        }
+
+        // MarkDirty sets the session to dirty state with the given error.
+        func (s *SimulationSession) MarkDirty(err error) {
+        	s.mu.Lock()
+        	defer s.mu.Unlock()
+        	s.Status = StatusDirty
+        	s.DirtyErr = err
+        	logging.Log(logging.LevelError, "session.dirty: "+s.ID+": "+err.Error())
+        }
+
+        // IsDirty reports whether the session is in dirty state.
+        func (s *SimulationSession) IsDirty() bool {
+        	s.mu.Lock()
+        	defer s.mu.Unlock()
+        	return s.Status == StatusDirty
+        }
+
+        // IsTerminal reports whether the session is in a terminal state.
+        func (s *SimulationSession) IsTerminal() bool {
+        	s.mu.Lock()
+        	defer s.mu.Unlock()
+        	return s.Status == StatusCommitted || s.Status == StatusDiscarded ||
+        		s.Status == StatusDestroyed || s.Status == StatusDirty
+        }
+
+        // Ensure imports are used.
+        var _ = context.Background
+        var _ = lsp.NewLSPClient
+      import_path: github.com/blackwell-systems/lsp-mcp-go/internal/session
+      status: pending
+pre_mortem:
+    overall_risk: medium
+    rows:
+        - scenario: |
+            Agent B's manager.go cannot compile in isolation because it depends on
+            types.go (Agent A) which may not be in the worktree yet.
+          likelihood: high
+          impact: low
+          mitigation: |
+            Scaffold pre-creates types.go with all shared types before worktrees
+            are created. All agents in wave 1 will have types.go available.
+        - scenario: |
+            Agent C's simulation.go imports session.SessionManager but manager.go
+            (Agent B) doesn't exist in C's worktree. Build fails in isolation.
+          likelihood: high
+          impact: medium
+          mitigation: |
+            Agent C's task explicitly acknowledges this. Tests focus on argument
+            validation that returns before calling SessionManager methods.
+            Full compilation verified post-merge only.
+        - scenario: |
+            LSPClient.sendNotification is unexported. Agent B needs to send
+            textDocument/didChange for incremental edits.
+          likelihood: high
+          impact: medium
+          mitigation: |
+            Agent B uses the public OpenDocument API which sends didChange for
+            already-open documents (full content sync). Less efficient than
+            incremental changes but correct and avoids modifying lsp/client.go.
+        - scenario: |
+            Agent D adds 8 tool registrations to server.go. If the registration
+            pattern doesn't exactly match, compilation fails.
+          likelihood: low
+          impact: high
+          mitigation: |
+            Agent D's task includes exact code snippets. The pattern is
+            well-established with 26 existing examples in the file.
+        - scenario: |
+            Session revert in Discard fails, leaving LSP in-memory state corrupted.
+          likelihood: medium
+          impact: high
+          mitigation: |
+            Per the spec, failed revert marks session dirty and prevents commit.
+            Agent B's task specifies defer-based revert with dirty state propagation.
+        - scenario: |
+            The Contents field on SimulationSession (for in-memory file tracking)
+            is missing from the scaffold, causing Agent B to add it and conflict
+            with Agent A's types.go.
+          likelihood: low
+          impact: high
+          mitigation: |
+            The scaffold explicitly includes the Contents field. Both agents
+            code against the same scaffold definition.
+critic_report:
+    verdict: PASS
+    agent_reviews: {}
+    summary: Skipped by operator
+    reviewed_at: "2026-04-06T22:23:00Z"
+    issue_count: 0
+state: SCOUT_PENDING
+injection_method: hook
