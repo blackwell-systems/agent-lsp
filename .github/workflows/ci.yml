@@ -80,7 +80,7 @@ jobs:
           sudo chmod +x /usr/local/bin/jdtls
 
       - name: Install solargraph (Ruby)
-        run: gem install solargraph
+        run: sudo gem install solargraph
 
       - name: Install yaml-language-server
         run: npm install -g yaml-language-server
