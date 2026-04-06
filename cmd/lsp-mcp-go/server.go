@@ -86,6 +86,9 @@ func Run(ctx context.Context, lspClient *lsp.LSPClient, registry *extensions.Ext
 		Name:    "lsp-mcp-go",
 		Version: "0.1.0",
 	}, nil)
+	// TODO(W3): logging.SetServer needs a logSender implementation wrapping
+	// the MCP server. The *mcp.Server type does not expose LogMessage directly.
+	// Wire after confirming the correct session notification API.
 
 	// ------- Tool argument types -------
 
@@ -200,7 +203,7 @@ func Run(ctx context.Context, lspClient *lsp.LSPClient, registry *extensions.Ext
 		InsertSpaces *bool `json:"insert_spaces,omitempty"`
 	}
 	type ApplyEditArgs struct {
-		Edit interface{} `json:"edit"`
+		Edit interface{} `json:"workspace_edit"`
 	}
 	type ExecuteCommandArgs struct {
 		Command   string        `json:"command"`
