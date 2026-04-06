@@ -17,10 +17,24 @@ import (
 	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
 )
 
-// Per-method request timeouts (seconds).
+// Per-method request timeouts. Mirrors the TypeScript REQUEST_TIMEOUTS table
+// in src/lspClient.ts for parity. References require full workspace indexing;
+// initialize can be slow on cold-start JVM-based servers.
 var requestTimeouts = map[string]time.Duration{
-	"initialize":               300 * time.Second,
-	"textDocument/references":  120 * time.Second,
+	"initialize":                    300 * time.Second,
+	"textDocument/references":       120 * time.Second,
+	"textDocument/hover":            30 * time.Second,
+	"textDocument/completion":       30 * time.Second,
+	"textDocument/codeAction":       30 * time.Second,
+	"textDocument/definition":       30 * time.Second,
+	"textDocument/documentSymbol":   30 * time.Second,
+	"workspace/symbol":              30 * time.Second,
+	"textDocument/signatureHelp":    30 * time.Second,
+	"textDocument/formatting":       30 * time.Second,
+	"textDocument/rename":           30 * time.Second,
+	"workspace/executeCommand":      30 * time.Second,
+	"textDocument/declaration":      30 * time.Second,
+	"textDocument/prepareRename":    30 * time.Second,
 }
 
 const defaultTimeout = 30 * time.Second
@@ -676,10 +690,22 @@ func (c *LSPClient) GetAllDiagnostics() map[string][]types.LSPDiagnostic {
 }
 
 // SubscribeToDiagnostics registers cb to be called on every publishDiagnostics notification.
+// It immediately fires cb for every URI already in the diagnostics cache so that
+// new subscribers do not miss diagnostics published before they registered.
 func (c *LSPClient) SubscribeToDiagnostics(cb types.DiagnosticUpdateCallback) {
 	c.diagMu.Lock()
-	defer c.diagMu.Unlock()
 	c.diagSubs = append(c.diagSubs, cb)
+	// Replay existing diagnostics under the same lock to avoid races.
+	snapshot := make(map[string][]types.LSPDiagnostic, len(c.diags))
+	for uri, diags := range c.diags {
+		cp := make([]types.LSPDiagnostic, len(diags))
+		copy(cp, diags)
+		snapshot[uri] = cp
+	}
+	c.diagMu.Unlock()
+	for uri, diags := range snapshot {
+		cb(uri, diags)
+	}
 }
 
 // UnsubscribeFromDiagnostics removes a previously registered callback.
@@ -703,7 +729,14 @@ func (c *LSPClient) ReopenDocument(ctx context.Context, uri string) error {
 	meta, ok := c.openDocs[uri]
 	c.mu.Unlock()
 	if !ok {
-		return fmt.Errorf("document not open: %s", uri)
+		// URI not tracked — attempt to open from disk, mirroring TypeScript behavior.
+		logging.Log(logging.LevelDebug, "ReopenDocument: URI not tracked, attempting disk open: "+uri)
+		filePath := uriToPath(uri)
+		data, readErr := os.ReadFile(filePath)
+		if readErr != nil {
+			return fmt.Errorf("ReopenDocument: URI not tracked and disk read failed for %s: %w", uri, readErr)
+		}
+		return c.OpenDocument(ctx, uri, string(data), "plaintext")
 	}
 
 	// didClose without removing metadata.
@@ -801,7 +834,32 @@ func (c *LSPClient) GetInfoOnLocation(ctx context.Context, uri string, pos types
 	if err := json.Unmarshal(result, &hover); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%v", hover.Contents), nil
+	switch v := hover.Contents.(type) {
+	case string:
+		return v, nil
+	case map[string]interface{}:
+		// MarkupContent: {kind: "markdown"|"plaintext", value: "..."}
+		if val, ok := v["value"].(string); ok {
+			return val, nil
+		}
+		return fmt.Sprintf("%v", v), nil
+	case []interface{}:
+		// MarkedString array: each element is string or {language, value}
+		var parts []string
+		for _, item := range v {
+			switch s := item.(type) {
+			case string:
+				parts = append(parts, s)
+			case map[string]interface{}:
+				if val, ok := s["value"].(string); ok {
+					parts = append(parts, val)
+				}
+			}
+		}
+		return strings.Join(parts, "\n"), nil
+	default:
+		return fmt.Sprintf("%v", hover.Contents), nil
+	}
 }
 
 // GetCompletion requests completion items at a position.
@@ -826,10 +884,31 @@ func (c *LSPClient) GetCodeActions(ctx context.Context, uri string, rng types.Ra
 		logging.Log(logging.LevelDebug, "server does not support codeAction")
 		return []interface{}{}, nil
 	}
+	// Retrieve diagnostics that overlap the requested range.
+	c.diagMu.RLock()
+	allDiags := c.diags[uri]
+	c.diagMu.RUnlock()
+	var overlapping []types.LSPDiagnostic
+	for _, d := range allDiags {
+		// A diagnostic overlaps if its range intersects the requested range.
+		// Intersection: diag.start <= rng.end AND diag.end >= rng.start
+		diagStart := d.Range.Start
+		diagEnd := d.Range.End
+		beforeRange := diagEnd.Line < rng.Start.Line ||
+			(diagEnd.Line == rng.Start.Line && diagEnd.Character < rng.Start.Character)
+		afterRange := diagStart.Line > rng.End.Line ||
+			(diagStart.Line == rng.End.Line && diagStart.Character > rng.End.Character)
+		if !beforeRange && !afterRange {
+			overlapping = append(overlapping, d)
+		}
+	}
+	if overlapping == nil {
+		overlapping = []types.LSPDiagnostic{}
+	}
 	result, err := c.sendRequest(ctx, "textDocument/codeAction", map[string]interface{}{
 		"textDocument": map[string]interface{}{"uri": uri},
 		"range":        rng,
-		"context":      map[string]interface{}{"diagnostics": []interface{}{}},
+		"context":      map[string]interface{}{"diagnostics": overlapping},
 	})
 	if err != nil {
 		return nil, err
@@ -909,6 +988,7 @@ func (c *LSPClient) GetReferences(ctx context.Context, uri string, pos types.Pos
 		return []types.Location{}, nil
 	}
 	c.waitForWorkspaceReady(ctx)
+	_ = c.WaitForFileIndexed(ctx, uri, 15000)
 	result, err := c.sendRequest(ctx, "textDocument/references", map[string]interface{}{
 		"textDocument": map[string]interface{}{"uri": uri},
 		"position":     pos,
