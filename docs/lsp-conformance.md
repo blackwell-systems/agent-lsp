@@ -78,8 +78,8 @@ Every LSP 3.17 method and its MCP surface. "Protocol only" means the method is c
 
 - `window/workDoneProgress/create` — the progress token is pre-registered in `activeProgressTokens` before the response is sent, so subsequent `$/progress` notifications are always recognized
 - `$/progress` begin/report/end — all three `WorkDoneProgress` kinds are handled:
-  - `begin`: token added to active set, title logged
-  - `report`: intermediate progress logged
+  - `begin`: token added to active set
+  - `report`: logged at debug level
   - `end`: token removed; when active set reaches zero, workspace-ready resolvers are notified
 - `waitForWorkspaceReady()` blocks `textDocument/references` requests until all active progress tokens complete, ensuring gopls has finished workspace indexing before reference queries are sent
 
@@ -173,6 +173,6 @@ These issues were identified via spec audit and corrected:
 | `process.on('exit', async)` — await never completes | §3.15.4 | Replaced with SIGINT/SIGTERM handlers |
 | `workspace/configuration` not responded to | §3.16.14 | Added handler; this was blocking gopls workspace loading |
 | `window/workDoneProgress/create` response in wrong code path | §3.18 | Moved to server-initiated request handler block |
-| `rootPath` sent in `initialize` params | §3.15.1 | Removed (deprecated, superseded by `rootUri`) |
+| `rootPath` sent in `initialize` params | §3.15.1 | Removed — deprecated in favour of `rootUri`; `rootUri` itself deprecated in favour of `workspaceFolders` (also sent) |
 | Empty `diagnostics: []` in `codeAction` context | §3.15.22 | Replaced with overlapping diagnostics filter |
 | `MarkupContent.kind` ignored in hover response | §3.15.11 | `kind` now checked before accessing `value` |

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -262,6 +263,17 @@ func (c *LSPClient) dispatch(raw []byte) {
 			nulls := make([]interface{}, len(p.Items))
 			c.sendResponse(*msg.ID, nulls)
 		}
+	case "workspace/applyEdit":
+		// Apply the workspace edit and respond with ApplyWorkspaceEditResult.
+		if msg.ID != nil {
+			var p struct {
+				Edit interface{} `json:"edit"`
+			}
+			if err := json.Unmarshal(msg.Params, &p); err == nil && p.Edit != nil {
+				_ = c.ApplyWorkspaceEdit(context.Background(), p.Edit)
+			}
+			c.sendResponse(*msg.ID, map[string]interface{}{"applied": true})
+		}
 	case "client/registerCapability":
 		if msg.ID != nil {
 			c.sendResponse(*msg.ID, nil)
@@ -325,6 +337,8 @@ func (c *LSPClient) handleProgress(params json.RawMessage) {
 	switch p.Value.Kind {
 	case "begin":
 		c.progressTokens[p.Token] = struct{}{}
+	case "report":
+		logging.Log(logging.LevelDebug, fmt.Sprintf("$/progress report token=%v", p.Token))
 	case "end":
 		delete(c.progressTokens, p.Token)
 	}
@@ -456,7 +470,7 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	initParams := map[string]interface{}{
 		"processId": os.Getpid(),
 		"rootUri":   rootURI,
-		"rootPath":  rootDir,
+		// rootPath is deprecated in favour of rootUri; omitted per LSP 3.17.
 		"clientInfo": map[string]interface{}{
 			"name":    "lsp-mcp-go",
 			"version": "0.1.0",
@@ -1171,6 +1185,10 @@ func (c *LSPClient) PrepareRename(ctx context.Context, uri string, pos types.Pos
 			logging.Log(logging.LevelDebug, "server does not support prepareRename")
 			return nil, nil
 		}
+	case bool:
+		// renameProvider: true means rename is supported but no prepareProvider declared.
+		logging.Log(logging.LevelDebug, "server does not support prepareRename (renameProvider is bool, no options object)")
+		return nil, nil
 	case nil:
 		logging.Log(logging.LevelDebug, "server does not support rename/prepareRename")
 		return nil, nil
@@ -1243,16 +1261,54 @@ func (c *LSPClient) ApplyWorkspaceEdit(ctx context.Context, edit interface{}) er
 	// Process documentChanges first if present.
 	if dc, ok := editMap["documentChanges"]; ok {
 		b, _ := json.Marshal(dc)
-		var docChanges []struct {
-			TextDocument struct {
-				URI string `json:"uri"`
-			} `json:"textDocument"`
-			Edits []textEdit `json:"edits"`
-		}
-		if err := json.Unmarshal(b, &docChanges); err == nil {
-			for _, dc := range docChanges {
-				if err := c.applyEditsToFile(ctx, dc.TextDocument.URI, dc.Edits); err != nil {
-					return err
+		// documentChanges is (TextDocumentEdit | CreateFile | RenameFile | DeleteFile)[].
+		// Each entry is discriminated by the presence of a "kind" field.
+		var raw []json.RawMessage
+		if err := json.Unmarshal(b, &raw); err == nil {
+			for _, entry := range raw {
+				var disc struct {
+					Kind string `json:"kind"`
+				}
+				_ = json.Unmarshal(entry, &disc)
+				switch disc.Kind {
+				case "create":
+					var op struct {
+						URI string `json:"uri"`
+					}
+					if err := json.Unmarshal(entry, &op); err == nil && op.URI != "" {
+						path := uriToPath(op.URI)
+						if _, err := os.Stat(path); os.IsNotExist(err) {
+							_ = os.WriteFile(path, []byte{}, 0644)
+						}
+					}
+				case "rename":
+					var op struct {
+						OldURI string `json:"oldUri"`
+						NewURI string `json:"newUri"`
+					}
+					if err := json.Unmarshal(entry, &op); err == nil {
+						_ = os.Rename(uriToPath(op.OldURI), uriToPath(op.NewURI))
+					}
+				case "delete":
+					var op struct {
+						URI string `json:"uri"`
+					}
+					if err := json.Unmarshal(entry, &op); err == nil && op.URI != "" {
+						_ = os.Remove(uriToPath(op.URI))
+					}
+				default:
+					// TextDocumentEdit (no kind field).
+					var te struct {
+						TextDocument struct {
+							URI string `json:"uri"`
+						} `json:"textDocument"`
+						Edits []textEdit `json:"edits"`
+					}
+					if err := json.Unmarshal(entry, &te); err == nil && te.TextDocument.URI != "" {
+						if err := c.applyEditsToFile(ctx, te.TextDocument.URI, te.Edits); err != nil {
+							return err
+						}
+					}
 				}
 			}
 			return nil
@@ -1469,8 +1525,13 @@ func parseInterfaceArray(raw json.RawMessage) []interface{} {
 	return []interface{}{}
 }
 
-// uriToPath converts a file:// URI to a local path.
+// uriToPath converts a file:// URI to a local path, correctly decoding
+// percent-encoded characters (e.g. %20 -> space) per RFC 3986.
 func uriToPath(uri string) string {
+	if u, err := url.Parse(uri); err == nil && u.Path != "" {
+		return u.Path
+	}
+	// Fallback: strip scheme prefix without decoding.
 	if strings.HasPrefix(uri, "file://") {
 		return uri[len("file://"):]
 	}
