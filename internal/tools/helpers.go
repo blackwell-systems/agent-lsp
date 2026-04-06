@@ -6,10 +6,31 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
 )
+
+// ValidateFilePath resolves filePath to a clean absolute path and, when rootDir
+// is non-empty, verifies the result is within the workspace root. This prevents
+// path traversal attacks (e.g. "../../etc/passwd").
+func ValidateFilePath(filePath, rootDir string) (string, error) {
+	if filePath == "" {
+		return "", errors.New("file_path is required")
+	}
+	clean, err := filepath.Abs(filepath.Clean(filePath))
+	if err != nil {
+		return "", fmt.Errorf("invalid file path: %w", err)
+	}
+	if rootDir != "" {
+		absRoot, _ := filepath.Abs(rootDir)
+		if clean != absRoot && !strings.HasPrefix(clean, absRoot+string(filepath.Separator)) {
+			return "", fmt.Errorf("file path %q is outside workspace root %q", clean, absRoot)
+		}
+	}
+	return clean, nil
+}
 
 // WithDocument reads filePath from disk, opens it on the LSP client, then calls cb.
 // T is the callback return type. On error, returns zero value of T and the error.
@@ -21,6 +42,12 @@ func WithDocument[T any](
 	cb func(fileURI string) (T, error),
 ) (T, error) {
 	var zero T
+
+	clean, err := ValidateFilePath(filePath, client.RootDir())
+	if err != nil {
+		return zero, err
+	}
+	filePath = clean
 
 	content, err := os.ReadFile(filePath)
 	if err != nil {

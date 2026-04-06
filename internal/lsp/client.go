@@ -86,6 +86,9 @@ type LSPClient struct {
 	serverPath string
 	serverArgs []string
 
+	// workspace root (set during Initialize)
+	rootDir string
+
 	mu          sync.Mutex
 	cmd         *exec.Cmd
 	stdin       io.WriteCloser
@@ -463,11 +466,18 @@ func (c *LSPClient) sendNotification(method string, params interface{}) error {
 }
 
 // Initialize starts the LSP process and performs the LSP handshake.
+// RootDir returns the workspace root directory set during Initialize.
+func (c *LSPClient) RootDir() string {
+	return c.rootDir
+}
+
+// Initialize starts the LSP process and performs the LSP handshake.
 func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	if err := c.start(); err != nil {
 		return err
 	}
 
+	c.rootDir = rootDir
 	rootURI := "file://" + rootDir
 
 	initParams := map[string]interface{}{
