@@ -22,20 +22,24 @@ func TestWaitForDiagnostics_SettlesAfterQuietWindow(t *testing.T) {
 		done <- WaitForDiagnostics(ctx, c, uris, 5000)
 	}()
 
-	// Fire notifications for both URIs.
-	time.Sleep(10 * time.Millisecond)
-	for _, uri := range uris {
-		if err := writeMsg(serverW, map[string]interface{}{
-			"jsonrpc": "2.0",
-			"method":  "textDocument/publishDiagnostics",
-			"params": map[string]interface{}{
-				"uri":         uri,
-				"diagnostics": []interface{}{},
-			},
-		}); err != nil {
-			t.Fatalf("write diag: %v", err)
-		}
+	// Fire two rounds of notifications per URI: the first is the initial-snapshot
+	// (skipped by seenInitial logic), the second is the fresh notification that
+	// triggers settlement.
+	for round := 0; round < 2; round++ {
 		time.Sleep(10 * time.Millisecond)
+		for _, uri := range uris {
+			if err := writeMsg(serverW, map[string]interface{}{
+				"jsonrpc": "2.0",
+				"method":  "textDocument/publishDiagnostics",
+				"params": map[string]interface{}{
+					"uri":         uri,
+					"diagnostics": []interface{}{},
+				},
+			}); err != nil {
+				t.Fatalf("write diag round %d: %v", round, err)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 	}
 
 	// WaitForDiagnostics should settle after 500ms quiet window.
