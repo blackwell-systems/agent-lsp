@@ -360,6 +360,18 @@
         "cached_at": "2026-04-06T12:49:04.375448-07:00"
       }
     },
+    "58afa6233c839057a973796eb06de797": {
+      "build": {
+        "gate_type": "build",
+        "command": "GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T13:43:48.186061-07:00"
+      }
+    },
     "636004376472d33ed817ddbf49758502": {
       "test": {
         "gate_type": "test",
@@ -672,6 +684,18 @@
         "cached_at": "2026-04-06T12:57:20.912926-07:00"
       }
     },
+    "dd34ae3344228173b52a66a1bb126c9d": {
+      "test": {
+        "gate_type": "test",
+        "command": "GOWORK=off go test -v -run TestMultiLanguage ./test/ -timeout 15m",
+        "passed": false,
+        "exit_code": 1,
+        "stdout": "=== RUN   TestMultiLanguage\n=== PAUSE TestMultiLanguage\n=== CONT  TestMultiLanguage\n=== RUN   TestMultiLanguage/TypeScript\n    multi_lang_test.go:847: [TypeScript] open_document returned IsError=true: [0x1c74ddce800]\n=== RUN   TestMultiLanguage/Python\n    multi_lang_test.go:847: [Python] open_document returned IsError=true: [0x1c74de92860]\n=== RUN   TestMultiLanguage/Go\n    multi_lang_test.go:847: [Go] open_document returned IsError=true: [0x1c74e04a040]\n=== RUN   TestMultiLanguage/Rust\n    multi_lang_test.go:847: [Rust] open_document returned IsError=true: [0x1c74dd36060]\n=== RUN   TestMultiLanguage/Java\n    multi_lang_test.go:847: [Java] open_document returned IsError=true: [0x1c74ddce000]\n=== RUN   TestMultiLanguage/C\n    multi_lang_test.go:847: [C] open_document returned IsError=true: [0x1c74dd364a0]\n=== RUN   TestMultiLanguage/PHP\n    multi_lang_test.go:847: [PHP] open_document returned IsError=true: [0x1c74ded6040]\n=== NAME  TestMultiLanguage\n    multi_lang_test.go:856: \n        Language       | T1 | symbols  | definition  | references  | completions  | workspace  | format | declaration \n        --------------------------------------------------------------------------------------------------------------\n    multi_lang_test.go:856: TypeScript     | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:856: Python         | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:856: Go             | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:856: Rust           | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:856: Java           | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:856: C              | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:856: PHP            | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:856: --------------------------------------------------------------------------------------------------------------\n--- FAIL: TestMultiLanguage (202.14s)\n    --- FAIL: TestMultiLanguage/TypeScript (8.63s)\n    --- FAIL: TestMultiLanguage/Python (8.23s)\n    --- FAIL: TestMultiLanguage/Go (8.28s)\n    --- FAIL: TestMultiLanguage/Rust (8.31s)\n    --- FAIL: TestMultiLanguage/Java (151.33s)\n    --- FAIL: TestMultiLanguage/C (8.19s)\n    --- FAIL: TestMultiLanguage/PHP (8.53s)\nFAIL\nFAIL\tgithub.com/blackwell-systems/lsp-mcp-go/test\t202.709s\nFAIL\n",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T13:47:12.318972-07:00"
+      }
+    },
     "de10655cbb0627eea2a56fd073316e45": {
       "build": {
         "gate_type": "build",
@@ -718,6 +742,18 @@
         "stderr": "# ./...\npattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies\n",
         "from_cache": true,
         "cached_at": "2026-04-06T09:13:20.443563-07:00"
+      }
+    },
+    "ed3916d5667648b6b95587aee59e97b6": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "GOWORK=off go vet ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T13:43:48.979604-07:00"
       }
     },
     "fa15caeb1a7cb52d6bff525f8e174cca": {

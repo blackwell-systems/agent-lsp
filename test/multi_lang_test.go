@@ -342,7 +342,8 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		return langTestResult{tier1: "fail"}
 	}
 	if res.IsError {
-		t.Skipf("[%s] start_lsp returned IsError=true (LSP server unavailable or failed to start): %v", lang.name, res.Content)
+		errText, _ := textFromResult(res)
+		t.Skipf("[%s] start_lsp returned IsError=true (LSP server unavailable or failed to start): %s", lang.name, errText)
 		return langTestResult{tier1: "skip"}
 	}
 	startText, err := textFromResult(res)
@@ -354,6 +355,7 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		t.Errorf("[%s] start_lsp returned empty text", lang.name)
 		return langTestResult{tier1: "fail"}
 	}
+	t.Logf("[%s] start_lsp result: %s", lang.name, startText)
 
 	// LSP init wait.
 	var initWait time.Duration
@@ -374,7 +376,8 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		return langTestResult{tier1: "fail"}
 	}
 	if res.IsError {
-		t.Errorf("[%s] open_document returned IsError=true: %v", lang.name, res.Content)
+		errText, _ := textFromResult(res)
+		t.Errorf("[%s] open_document returned IsError=true: %s", lang.name, errText)
 		return langTestResult{tier1: "fail"}
 	}
 
@@ -390,7 +393,8 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		return langTestResult{tier1: "fail"}
 	}
 	if res.IsError {
-		t.Errorf("[%s] get_diagnostics returned IsError=true: %v", lang.name, res.Content)
+		errText, _ := textFromResult(res)
+		t.Errorf("[%s] get_diagnostics returned IsError=true: %s", lang.name, errText)
 		return langTestResult{tier1: "fail"}
 	}
 	diagText, err := textFromResult(res)
