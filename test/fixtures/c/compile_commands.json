@@ -1,0 +1,12 @@
+[
+  {
+    "directory": "/Users/dayna.blackwell/code/LSP-MCP-GO/test/fixtures/c",
+    "command": "cc -std=c11 person.c greeter.c -o person",
+    "file": "person.c"
+  },
+  {
+    "directory": "/Users/dayna.blackwell/code/LSP-MCP-GO/test/fixtures/c",
+    "command": "cc -std=c11 person.c greeter.c -o person",
+    "file": "greeter.c"
+  }
+]
