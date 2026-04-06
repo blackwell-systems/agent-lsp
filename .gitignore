@@ -1,0 +1,15 @@
+# Build output
+/lsp-mcp-go
+
+# Test fixture build artifacts
+test/fixtures/rust/target/
+test/fixtures/java/target/
+test/fixtures/c/.cache/
+test/fixtures/go/lsp-mcp-go-fixtures
+
+# SAW worktrees
+.claude/worktrees/
+
+# Go workspace (local only)
+go.work
+go.work.sum
