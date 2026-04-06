@@ -114,7 +114,7 @@ func HandleFormatDocument(ctx context.Context, client *lsp.LSPClient, args map[s
 		languageID = "plaintext"
 	}
 
-	result, wErr := WithDocument[[]interface{}](ctx, client, filePath, languageID, func(fileURI string) ([]interface{}, error) {
+	result, wErr := WithDocument[[]types.TextEdit](ctx, client, filePath, languageID, func(fileURI string) ([]types.TextEdit, error) {
 		return client.FormatDocument(ctx, fileURI, tabSize, insertSpaces)
 	})
 	if wErr != nil {
@@ -161,7 +161,7 @@ func HandleFormatRange(ctx context.Context, client *lsp.LSPClient, args map[stri
 		languageID = "plaintext"
 	}
 
-	result, wErr := WithDocument[[]interface{}](ctx, client, filePath, languageID, func(fileURI string) ([]interface{}, error) {
+	result, wErr := WithDocument[[]types.TextEdit](ctx, client, filePath, languageID, func(fileURI string) ([]types.TextEdit, error) {
 		return client.FormatRange(ctx, fileURI, rng, tabSize, insertSpaces)
 	})
 	if wErr != nil {

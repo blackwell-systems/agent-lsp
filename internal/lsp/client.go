@@ -1082,10 +1082,10 @@ func (c *LSPClient) GetDocumentSymbols(ctx context.Context, uri string) ([]inter
 }
 
 // GetWorkspaceSymbols queries workspace symbols.
-func (c *LSPClient) GetWorkspaceSymbols(ctx context.Context, query string) ([]interface{}, error) {
+func (c *LSPClient) GetWorkspaceSymbols(ctx context.Context, query string) ([]types.SymbolInformation, error) {
 	if !c.hasCapability("workspaceSymbolProvider") {
 		logging.Log(logging.LevelDebug, "server does not support workspaceSymbol")
-		return []interface{}{}, nil
+		return []types.SymbolInformation{}, nil
 	}
 	result, err := c.sendRequest(ctx, "workspace/symbol", map[string]interface{}{
 		"query": query,
@@ -1093,7 +1093,14 @@ func (c *LSPClient) GetWorkspaceSymbols(ctx context.Context, query string) ([]in
 	if err != nil {
 		return nil, err
 	}
-	return parseInterfaceArray(result), nil
+	if result == nil {
+		return []types.SymbolInformation{}, nil
+	}
+	var syms []types.SymbolInformation
+	if err := json.Unmarshal(result, &syms); err != nil {
+		return nil, err
+	}
+	return syms, nil
 }
 
 // PrepareCallHierarchy resolves the call hierarchy item at a position.
@@ -1180,10 +1187,10 @@ func (c *LSPClient) GetSignatureHelp(ctx context.Context, uri string, pos types.
 }
 
 // FormatDocument formats the entire document.
-func (c *LSPClient) FormatDocument(ctx context.Context, uri string, tabSize int, insertSpaces bool) ([]interface{}, error) {
+func (c *LSPClient) FormatDocument(ctx context.Context, uri string, tabSize int, insertSpaces bool) ([]types.TextEdit, error) {
 	if !c.hasCapability("documentFormattingProvider") {
 		logging.Log(logging.LevelDebug, "server does not support formatting")
-		return []interface{}{}, nil
+		return []types.TextEdit{}, nil
 	}
 	result, err := c.sendRequest(ctx, "textDocument/formatting", map[string]interface{}{
 		"textDocument": map[string]interface{}{"uri": uri},
@@ -1195,14 +1202,21 @@ func (c *LSPClient) FormatDocument(ctx context.Context, uri string, tabSize int,
 	if err != nil {
 		return nil, err
 	}
-	return parseInterfaceArray(result), nil
+	if result == nil {
+		return []types.TextEdit{}, nil
+	}
+	var edits []types.TextEdit
+	if err := json.Unmarshal(result, &edits); err != nil {
+		return nil, err
+	}
+	return edits, nil
 }
 
 // FormatRange formats a range within the document.
-func (c *LSPClient) FormatRange(ctx context.Context, uri string, rng types.Range, tabSize int, insertSpaces bool) ([]interface{}, error) {
+func (c *LSPClient) FormatRange(ctx context.Context, uri string, rng types.Range, tabSize int, insertSpaces bool) ([]types.TextEdit, error) {
 	if !c.hasCapability("documentRangeFormattingProvider") {
 		logging.Log(logging.LevelDebug, "server does not support rangeFormatting")
-		return []interface{}{}, nil
+		return []types.TextEdit{}, nil
 	}
 	result, err := c.sendRequest(ctx, "textDocument/rangeFormatting", map[string]interface{}{
 		"textDocument": map[string]interface{}{"uri": uri},
@@ -1215,7 +1229,14 @@ func (c *LSPClient) FormatRange(ctx context.Context, uri string, rng types.Range
 	if err != nil {
 		return nil, err
 	}
-	return parseInterfaceArray(result), nil
+	if result == nil {
+		return []types.TextEdit{}, nil
+	}
+	var edits []types.TextEdit
+	if err := json.Unmarshal(result, &edits); err != nil {
+		return nil, err
+	}
+	return edits, nil
 }
 
 // RenameSymbol performs a rename refactor.

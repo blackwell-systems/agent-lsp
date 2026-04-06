@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 
 	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
@@ -40,23 +39,18 @@ func fuzzyPositionFallback(
 
 	logging.Log(logging.LevelDebug, "fuzzyFallback: searching workspace symbols for "+symbolName)
 
-	rawSymbols, symErr := client.GetWorkspaceSymbols(ctx, symbolName)
-	if symErr != nil || len(rawSymbols) == 0 {
+	syms, symErr := client.GetWorkspaceSymbols(ctx, symbolName)
+	if symErr != nil || len(syms) == 0 {
 		return []types.Location{}, nil
 	}
 
-	for _, rawSym := range rawSymbols {
-		symMap, ok := rawSym.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		loc, locOK := extractSymbolLocation(symMap)
-		if !locOK {
+	for _, sym := range syms {
+		if sym.Location.URI == "" {
 			continue
 		}
 		candidatePos := types.Position{
-			Line:      loc.Range.Start.Line,
-			Character: loc.Range.Start.Character,
+			Line:      sym.Location.Range.Start.Line,
+			Character: sym.Location.Range.Start.Character,
 		}
 		results, lErr := lookupFn(candidatePos)
 		if lErr == nil && len(results) > 0 {
@@ -88,21 +82,4 @@ func extractSymbolName(hover string) string {
 		}
 	}
 	return sb.String()
-}
-
-// extractSymbolLocation extracts a types.Location from a workspace symbol map.
-func extractSymbolLocation(symMap map[string]interface{}) (types.Location, bool) {
-	locRaw, ok := symMap["location"]
-	if !ok {
-		return types.Location{}, false
-	}
-	b, err := json.Marshal(locRaw)
-	if err != nil {
-		return types.Location{}, false
-	}
-	var loc types.Location
-	if err := json.Unmarshal(b, &loc); err != nil || loc.URI == "" {
-		return types.Location{}, false
-	}
-	return loc, true
 }
