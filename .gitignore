@@ -13,3 +13,4 @@ test/fixtures/go/lsp-mcp-go-fixtures
 # Go workspace (local only)
 go.work
 go.work.sum
+.mcp.json

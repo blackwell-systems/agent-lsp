@@ -1,0 +1,276 @@
+title: Language Server Auto-Detection
+feature_slug: autodetect
+verdict: SUITABLE_WITH_CAVEATS
+suitability_assessment: |
+    Feature adds zero-config mode: when lsp-mcp-go runs with no args (or --auto),
+    scan PATH for known language server binaries and start all found servers
+    automatically. Log what's discovered and what's missing.
+
+    File decomposition: 4 files across 2 agents in 2 waves -- fully disjoint ownership.
+    - Wave 1 Agent A: create internal/config/autodetect.go (new file, ~80 lines)
+    - Wave 2 Agent B: modify internal/config/parse.go to call autodetect when args are
+      empty or contain --auto flag (~20 lines), add tests to parse_test.go (~40 lines),
+      update usage text in main.go (~1 line)
+
+    Investigation-first: None. Feature is well-defined with clear spec.
+
+    Interface discoverability: AutodetectServers() returns existing Config type.
+    No new interfaces needed. The known server table is static data.
+
+    Wave structure: 2 waves required because Agent B depends on AutodetectServers()
+    from Agent A. Wave 1 is Agent A (foundation), Wave 2 is Agent B (integration).
+
+    Parallelization value: Low. Sequential waves (no parallel agents) with minimal
+    implementation time (~5 min per wave). Go build/test cycle is fast (~2s). SAW
+    overhead (scout 10 min + orchestration 3 min = 13 min) likely exceeds sequential
+    implementation time (~10 min total). SUITABLE WITH CAVEATS because the IMPL doc
+    provides value as a specification and test plan even when time savings are marginal.
+
+    Estimated times:
+    - Scout phase: ~10 min (dependency mapping, IMPL doc)
+    - Wave 1 execution: ~5 min (Agent A creates autodetect.go)
+    - Wave 2 execution: ~5 min (Agent B integrates + tests)
+    - Merge & verification: ~2 min
+    Total SAW time: ~22 min
+
+    Sequential baseline: ~10 min (create autodetect.go, modify parse.go, add tests)
+    Time savings: -12 min (slower due to SAW overhead)
+
+    Recommendation: Proceed for coordination value (IMPL doc as spec/test plan),
+    not for time savings. The structured plan ensures complete coverage of edge
+    cases (PATH scanning, missing servers, logging) that might be missed in ad-hoc
+    sequential implementation.
+test_command: GOWORK=off go test -run TestBinary ./...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: internal/config/autodetect.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/config/parse.go
+      agent: B
+      wave: 2
+      action: modify
+    - file: internal/config/parse_test.go
+      agent: B
+      wave: 2
+      action: modify
+    - file: cmd/lsp-mcp-go/main.go
+      agent: B
+      wave: 2
+      action: modify
+interface_contracts:
+    - name: AutodetectServers
+      description: |
+        Scans PATH for known language server binaries and returns a Config
+        with all found servers. Logs INFO for discovered servers and WARN
+        for missing servers.
+      definition: |
+        // AutodetectServers scans PATH for known language server binaries
+        // and returns a Config struct with all discovered servers.
+        // Logs INFO for each found server and WARN for each missing server.
+        func AutodetectServers() (*Config, error)
+      location: internal/config/autodetect.go
+    - name: knownServers table
+      description: |
+        Static table mapping language ID to server binary name and default args.
+        Based on README Multi-Language Support section. Format allows iteration
+        for PATH scanning.
+      definition: |
+        // ServerSpec describes a language server's binary name and default args.
+        type ServerSpec struct {
+            Binary      string   // e.g. "gopls", "typescript-language-server"
+            Args        []string // e.g. ["--stdio"] or nil for no args
+            Extensions  []string // e.g. ["go"] or ["ts", "tsx"]
+        }
+
+        // knownServers maps language ID to server specification.
+        // Ordered by popularity (Go, TypeScript, Python first).
+        var knownServers = map[string]ServerSpec{
+            "go":         {Binary: "gopls", Args: nil, Extensions: []string{"go"}},
+            "typescript": {Binary: "typescript-language-server", Args: []string{"--stdio"}, Extensions: []string{"ts", "tsx"}},
+            "javascript": {Binary: "typescript-language-server", Args: []string{"--stdio"}, Extensions: []string{"js", "jsx", "mjs", "cjs"}},
+            "python":     {Binary: "pyright-langserver", Args: []string{"--stdio"}, Extensions: []string{"py", "pyw"}},
+            "rust":       {Binary: "rust-analyzer", Args: nil, Extensions: []string{"rs"}},
+            "c":          {Binary: "clangd", Args: nil, Extensions: []string{"c", "h"}},
+            "cpp":        {Binary: "clangd", Args: nil, Extensions: []string{"cpp", "cc", "cxx", "c++", "hpp", "hxx"}},
+            "ruby":       {Binary: "solargraph", Args: []string{"stdio"}, Extensions: []string{"rb", "rake", "gemspec"}},
+            "yaml":       {Binary: "yaml-language-server", Args: []string{"--stdio"}, Extensions: []string{"yaml", "yml"}},
+            "json":       {Binary: "vscode-json-language-server", Args: []string{"--stdio"}, Extensions: []string{"json"}},
+            "dockerfile": {Binary: "docker-langserver", Args: []string{"--stdio"}, Extensions: []string{"dockerfile"}},
+            "csharp":     {Binary: "csharp-ls", Args: nil, Extensions: []string{"cs", "csx"}},
+            "java":       {Binary: "jdtls", Args: nil, Extensions: []string{"java"}},
+            "kotlin":     {Binary: "kotlin-language-server", Args: nil, Extensions: []string{"kt", "kts"}},
+            "php":        {Binary: "intelephense", Args: []string{"--stdio"}, Extensions: []string{"php", "phtml"}},
+        }
+      location: internal/config/autodetect.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Context
+            File: internal/config/autodetect.go (new file)
+            Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Run all commands with GOWORK=off.
+
+            ## What to implement
+
+            Create internal/config/autodetect.go with auto-detection logic for
+            language servers. The file contains:
+
+            1. ServerSpec type (3 fields: Binary string, Args []string, Extensions []string)
+            2. knownServers map[string]ServerSpec with 15 language entries
+            3. AutodetectServers() function that scans PATH and builds Config
+
+            ### Implementation details
+
+            **ServerSpec type** — define before knownServers map:
+            ```go
+            // ServerSpec describes a language server's binary name and default args.
+            type ServerSpec struct {
+                Binary      string   // e.g. "gopls", "typescript-language-server"
+                Args        []string // e.g. ["--stdio"] or nil for no args
+                Extensions  []string // e.g. ["go"] or ["ts", "tsx"]
+            }
+            ```
+
+            **knownServers table** — static data, ordered by popularity (Go first):
+            - go: gopls, no args, extensions ["go"]
+            - typescript: typescript-language-server, ["--stdio"], ["ts", "tsx"]
+            - javascript: typescript-language-server, ["--stdio"], ["js", "jsx", "mjs", "cjs"]
+            - python: pyright-langserver, ["--stdio"], ["py", "pyw"]
+            - rust: rust-analyzer, no args, ["rs"]
+            - c: clangd, no args, ["c", "h"]
+            - cpp: clangd, no args, ["cpp", "cc", "cxx", "c++", "hpp", "hxx"]
+            - ruby: solargraph, ["stdio"], ["rb", "rake", "gemspec"]
+            - yaml: yaml-language-server, ["--stdio"], ["yaml", "yml"]
+            - json: vscode-json-language-server, ["--stdio"], ["json"]
+            - dockerfile: docker-langserver, ["--stdio"], ["dockerfile"]
+            - csharp: csharp-ls, no args, ["cs", "csx"]
+            - java: jdtls, no args, ["java"]
+            - kotlin: kotlin-language-server, no args, ["kt", "kts"]
+            - php: intelephense, ["--stdio"], ["php", "phtml"]
+
+            **AutodetectServers() function**:
+            - Signature: `func AutodetectServers() (*Config, error)`
+            - Algorithm:
+              1. Create empty []ServerEntry slice
+              2. For each entry in knownServers (iterate in deterministic order):
+                 a. Call exec.LookPath(spec.Binary)
+                 b. If found (err == nil):
+                    - Build ServerEntry with spec.Extensions and spec.Command (binary + args)
+                    - Add LanguageID field (language ID key from map)
+                    - Append to slice
+                    - Log INFO: "auto-detected <language>: <binary>"
+                 c. If not found (err != nil):
+                    - Log WARN: "language server not found: <binary> (for <language>)"
+              3. If slice is empty, return error "no language servers found in PATH"
+              4. Return &Config{Servers: slice}, nil
+
+            **Imports needed**:
+            - os/exec (for LookPath)
+            - github.com/blackwell-systems/lsp-mcp-go/internal/logging (for Log)
+            - sort (for deterministic iteration over knownServers map)
+
+            **Deterministic iteration**: Extract keys from knownServers into a slice,
+            sort it, then iterate over sorted keys. This ensures consistent log order
+            and test reproducibility.
+
+            ## Interface contracts used
+            - Config type (already exists in internal/config/config.go)
+            - ServerEntry type (already exists)
+            - logging.Log(level, message) (already exists in internal/logging/logging.go)
+            - logging.LevelInfo, logging.LevelWarning constants
+
+            ## Tests
+            None in this file. Agent B handles tests in parse_test.go.
+
+            ## Verification gate
+
+            After implementation, verify compilation and structure:
+
+            ```bash
+            # Build check
+            cd /Users/dayna.blackwell/code/LSP-MCP-GO
+            GOWORK=off go build ./internal/config/...
+
+            # Vet check
+            GOWORK=off go vet ./internal/config/...
+            ```
+
+            **Postconditions** (verify after build passes):
+
+            1. AutodetectServers function exists:
+               ```bash
+               grep -c "func AutodetectServers" internal/config/autodetect.go
+               # Expected: 1
+               ```
+
+            2. ServerSpec type is defined:
+               ```bash
+               grep -c "type ServerSpec struct" internal/config/autodetect.go
+               # Expected: 1
+               ```
+
+            3. knownServers map has 15 entries (count language keys):
+               ```bash
+               grep -c '"go":\|"typescript":\|"javascript":\|"python":\|"rust":\|"c":\|"cpp":\|"ruby":\|"yaml":\|"json":\|"dockerfile":\|"csharp":\|"java":\|"kotlin":\|"php":' internal/config/autodetect.go
+               # Expected: 15
+               ```
+
+            ## Constraints
+            - Do NOT modify any other files. Only create internal/config/autodetect.go.
+            - Do NOT add tests to autodetect.go. Tests belong in parse_test.go (Agent B).
+            - Use the exact ServerSpec field names and types from the interface contract.
+            - knownServers MUST include all 15 languages listed in the implementation
+              details. Missing a language will break the README's claims.
+          files:
+            - internal/config/autodetect.go
+    - number: 2
+      agents:
+        - id: B
+          task: "## Context\nFiles: internal/config/parse.go, internal/config/parse_test.go, cmd/lsp-mcp-go/main.go\nRepo: /Users/dayna.blackwell/code/LSP-MCP-GO\nRun all commands with GOWORK=off.\n\n## What to implement\n\nModify ParseArgs in internal/config/parse.go to support auto-detection\nmode, add comprehensive tests in parse_test.go, and update usage text\nin main.go.\n\n### Part 1: Modify ParseArgs (internal/config/parse.go)\n\nCurrent ParseArgs behavior when len(args) == 0: return error.\n\nNew behavior:\n- If len(args) == 0 OR args[0] == \"--auto\": call AutodetectServers()\n  and return ParseResult with the discovered Config\n- All other modes (legacy, multi-arg, --config) remain unchanged\n\n**Implementation steps**:\n\n1. Read internal/config/parse.go to understand current structure\n2. Find the len(args) == 0 error block at the top of ParseArgs\n3. Replace the error return with auto-detection:\n\nBefore \n```go\nif len(args) == 0 {\n    return ParseResult{}, fmt.Errorf(\"usage: lsp-mcp-go <language-id> <binary> [args...]\\n\" +\n        \"       lsp-mcp-go go:gopls typescript:typescript-language-server,--stdio\\n\" +\n        \"       lsp-mcp-go --config /path/to/lsp-mcp.json\")\n}\n```\n\nAfter:\n```go\nif len(args) == 0 || (len(args) == 1 && args[0] == \"--auto\") {\n    cfg, err := AutodetectServers()\n    if err != nil {\n        return ParseResult{}, fmt.Errorf(\"auto-detect: %w\", err)\n    }\n    return ParseResult{Config: cfg}, nil\n}\n```\n\n4. Update the usage text in the --config error case  to mention\n   auto mode. Add a fourth line:\n   ```go\n   \"       lsp-mcp-go (auto-detect mode)\"\n   ```\n\n### Part 2: Update main.go usage text\n\nUpdate cmd/lsp-mcp-go/main.go usage text  to include\nauto-detect mode. Add a fourth line to the usage \n\nInsert after this exact text:\n```go\nfmt.Fprintln(os.Stderr, \"usage (config file):    lsp-mcp-go --config /path/to/lsp-mcp.json\")\n```\n\nAdd this line:\n```go\nfmt.Fprintln(os.Stderr, \"usage (auto-detect):    lsp-mcp-go\")\n```\n\n### Part 3: Add tests (internal/config/parse_test.go)\n\nAdd three test functions at the end of parse_test.go:\n\n**TestParseArgs_AutoEmpty** — verify empty args triggers auto-detection:\n- Call ParseArgs([]string{})\n- Assert no error\n- Assert result.Config is not nil\n- Assert result.Config.Servers length > 0 (at least one server found)\n- Assert result.IsSingleServer == false\n\n**TestParseArgs_AutoFlag** — verify --auto flag triggers auto-detection:\n- Call ParseArgs([]string{\"--auto\"})\n- Assert no error\n- Assert result.Config is not nil\n- Assert result.Config.Servers length > 0\n- Assert result.IsSingleServer == false\n\n**TestAutodetectServers_NoServersFound** — verify error when no servers\nin PATH (requires mocking exec.LookPath, optional if too complex):\n- If easy to test: temporarily modify PATH to empty and verify error\n- If complex: skip this test (document in comment)\n\n**Test implementation notes**:\n- Tests depend on the developer's local PATH, so they may find different\n  server counts. The key assertion is \"length > 0\" not a specific count.\n- If no servers are found, the test will fail — document this expectation\n  in a comment: \"Requires at least one language server in PATH to pass.\"\n\n## Interface contracts used\n- AutodetectServers() from internal/config/autodetect.go (Agent A's output)\n- Config, ServerEntry types (already exist)\n\n## Tests\nThree new test functions in internal/config/parse_test.go (see Part 3).\n\n## Verification gate\n\nAfter implementation, verify all tests pass:\n\n```bash\ncd /Users/dayna.blackwell/code/LSP-MCP-GO\n\n# Build check\nGOWORK=off go build ./...\n\n# Lint check\nGOWORK=off go vet ./...\n\n# Test check (run only config tests to avoid unrelated failures)\nGOWORK=off go test -v ./internal/config/... -run TestParseArgs\n```\n\n**Postconditions** (verify after tests pass):\n\n1. ParseArgs handles empty args (auto-detect branch exists):\n   ```bash\n   grep -c \"AutodetectServers()\" internal/config/parse.go\n   # Expected: 1\n   ```\n\n2. Three new test functions exist:\n   ```bash\n   grep -c \"func TestParseArgs_Auto\\|func TestAutodetectServers\" internal/config/parse_test.go\n   # Expected: 2 (TestParseArgs_AutoEmpty + TestParseArgs_AutoFlag)\n   ```\n\n3. Usage text includes auto-detect mode:\n   ```bash\n   grep -c \"auto-detect\" cmd/lsp-mcp-go/main.go\n   # Expected: 1\n   ```\n\n## Constraints\n- Do NOT create internal/config/autodetect.go. Agent A owns that file.\n- Only modify internal/config/parse.go, internal/config/parse_test.go,\n  and cmd/lsp-mcp-go/main.go (usage text only).\n- Tests may fail if no language servers are installed in PATH — this is\n  expected behavior. Document this in a comment.\n- Do NOT change existing ParseArgs behavior for legacy/multi-arg/--config\n  modes. Only add the auto-detection branch at the top.\n"
+          files:
+            - internal/config/parse.go
+            - internal/config/parse_test.go
+            - cmd/lsp-mcp-go/main.go
+          dependencies:
+            - A
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test -run TestBinary ./...
+          required: true
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: Agent A forgets to make knownServers iteration deterministic, causing test flakiness
+          likelihood: medium
+          impact: low
+          mitigation: Task explicitly requires sorted iteration over map keys
+        - scenario: Agent B modifies ParseArgs logic incorrectly, breaking existing modes
+          likelihood: low
+          impact: high
+          mitigation: Task specifies exact line numbers and before/after code blocks; verification gate runs all existing parse tests
+        - scenario: Tests fail because no language servers are installed in CI/developer PATH
+          likelihood: high
+          impact: low
+          mitigation: Tests are PATH-dependent by design (feature requires servers in PATH); document this expectation in test comments
+        - scenario: Agent A uses wrong import path for logging package
+          likelihood: low
+          impact: low
+          mitigation: Task lists exact import paths; build verification catches import errors immediately
+        - scenario: Agent B accidentally adds AutodetectServers call to wrong branch (e.g., --config path)
+          likelihood: low
+          impact: medium
+          mitigation: Task shows exact before/after code with line number context; verification postcondition checks grep count
+state: SCOUT_PENDING
+injection_method: hook

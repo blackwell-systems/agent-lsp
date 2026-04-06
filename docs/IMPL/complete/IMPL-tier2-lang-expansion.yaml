@@ -1,3 +1,4 @@
+completion_date: "2026-04-06"
 title: Add 6 Tier 2 Languages to Integration Test Harness
 feature_slug: tier2-lang-expansion
 verdict: SUITABLE
@@ -576,6 +577,7 @@ waves:
             - test/fixtures/dockerfile/Dockerfile
           files:
             - test/fixtures/dockerfile/Dockerfile
+      base_commit: 5fe686ac0c3f711b8cb28cecf9e2dcf2ff051aa6
     - number: 2
       agents:
         - id: G
@@ -592,6 +594,7 @@ waves:
             - D
             - E
             - F
+          context_source: prepared-brief
 quality_gates:
     level: standard
     gates:
@@ -604,6 +607,72 @@ quality_gates:
         - type: test
           command: GOWORK=off go test -v -run TestMultiLanguage ./test/ -timeout 15m
           required: true
+completion_reports:
+    A:
+        status: complete
+        branch: saw/tier2-lang-expansion/wave1-agent-A
+        commit: 3e181f6
+        files_created:
+            - test/fixtures/cpp/person.h
+            - test/fixtures/cpp/person.cpp
+            - test/fixtures/cpp/greeter.cpp
+            - test/fixtures/cpp/compile_commands.json
+        verification: PASS
+        notes: All four C++ fixture files created following Person/Greeter pattern. Person class declared in header, implementation in person.cpp, cross-file consumer in greeter.cpp, and valid compile_commands.json for clangd. All postcondition checks pass.
+    B:
+        status: complete
+        branch: saw/tier2-lang-expansion/wave1-agent-B
+        commit: 3d8d630
+        files_created:
+            - test/fixtures/javascript/src/example.js
+            - test/fixtures/javascript/src/consumer.js
+        verification: PASS
+        notes: 'JavaScript fixture files created following ES6 module syntax. Person class exports name, age, email fields. add() function exported. consumer.js imports from example.js. All postcondition checks pass: Person export (1), cross-file import (1), no TypeScript syntax (pass). Build and lint gates pass.'
+    C:
+        status: complete
+        branch: saw/tier2-lang-expansion/wave1-agent-C
+        commit: 351b726
+        files_created:
+            - test/fixtures/ruby/person.rb
+            - test/fixtures/ruby/greeter.rb
+        verification: PASS
+        notes: Ruby fixtures complete. person.rb defines Person class with name/age/greet. greeter.rb uses require_relative for cross-file reference. All postconditions pass. Syntax validated with ruby -c.
+    D:
+        status: complete
+        branch: saw/tier2-lang-expansion/wave1-agent-D
+        commit: 86592f3
+        files_created:
+            - test/fixtures/yaml/workflow.yml
+            - test/fixtures/yaml/.schema.json
+        verification: PASS
+        notes: YAML fixtures created with GitHub Actions workflow schema. All postcondition checks pass. Schema validation via inline comment and separate .schema.json file.
+    E:
+        status: complete
+        branch: saw/tier2-lang-expansion/wave1-agent-E
+        commit: "5789089"
+        files_created:
+            - test/fixtures/json/package.json
+        verification: PASS
+        notes: JSON fixture created with standard npm package.json structure. All validation checks pass (valid JSON, name field, version field). Build and lint gates pass.
+    F:
+        status: complete
+        branch: saw/tier2-lang-expansion/wave1-agent-F
+        commit: ee63f62
+        files_created:
+            - test/fixtures/dockerfile/Dockerfile
+        verification: PASS
+        notes: Dockerfile fixture complete. Multi-stage build with named stages (builder, runtime). All postconditions pass.
+    G:
+        status: complete
+        branch: main
+        commit: b38ce3a
+        files_changed:
+            - test/multi_lang_test.go
+            - .github/workflows/ci.yml
+            - README.md
+            - docs/language-support.md
+        verification: PASS
+        notes: 'All 6 Tier 2 languages successfully integrated. Added langConfig entries with line numbers verified against actual Wave 1 fixtures. CI install steps added for 4 language servers (clangd and typescript-language-server already present). README and docs updated to reflect 13 current languages. All postcondition checks pass: solargraph install present, 13-language badge updated, docs heading updated.'
 pre_mortem:
     overall_risk: low
     rows:
@@ -637,5 +706,5 @@ critic_report:
     summary: Skipped by operator
     reviewed_at: "2026-04-06T20:43:39Z"
     issue_count: 0
-state: REVIEWED
+state: COMPLETE
 injection_method: hook

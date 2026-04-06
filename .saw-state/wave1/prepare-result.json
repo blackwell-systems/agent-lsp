@@ -3,29 +3,77 @@
   "worktrees": [
     {
       "agent": "A",
-      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/semantic-tokens/wave1-agent-A",
-      "branch": "saw/semantic-tokens/wave1-agent-A"
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/tier2-lang-expansion/wave1-agent-A",
+      "branch": "saw/tier2-lang-expansion/wave1-agent-A"
     },
     {
       "agent": "B",
-      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/semantic-tokens/wave1-agent-B",
-      "branch": "saw/semantic-tokens/wave1-agent-B"
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/tier2-lang-expansion/wave1-agent-B",
+      "branch": "saw/tier2-lang-expansion/wave1-agent-B"
+    },
+    {
+      "agent": "C",
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/tier2-lang-expansion/wave1-agent-C",
+      "branch": "saw/tier2-lang-expansion/wave1-agent-C"
+    },
+    {
+      "agent": "D",
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/tier2-lang-expansion/wave1-agent-D",
+      "branch": "saw/tier2-lang-expansion/wave1-agent-D"
+    },
+    {
+      "agent": "E",
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/tier2-lang-expansion/wave1-agent-E",
+      "branch": "saw/tier2-lang-expansion/wave1-agent-E"
+    },
+    {
+      "agent": "F",
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/tier2-lang-expansion/wave1-agent-F",
+      "branch": "saw/tier2-lang-expansion/wave1-agent-F"
     }
   ],
   "agent_briefs": [
     {
       "agent": "A",
-      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/semantic-tokens/wave1-agent-A/.saw-agent-brief.md",
-      "brief_length": 10525,
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/tier2-lang-expansion/wave1-agent-A/.saw-agent-brief.md",
+      "brief_length": 5329,
       "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-A",
-      "files_owned": 1
+      "files_owned": 4
     },
     {
       "agent": "B",
-      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/semantic-tokens/wave1-agent-B/.saw-agent-brief.md",
-      "brief_length": 8308,
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/tier2-lang-expansion/wave1-agent-B/.saw-agent-brief.md",
+      "brief_length": 5170,
       "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-B",
-      "files_owned": 3
+      "files_owned": 2
+    },
+    {
+      "agent": "C",
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/tier2-lang-expansion/wave1-agent-C/.saw-agent-brief.md",
+      "brief_length": 4966,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-C",
+      "files_owned": 2
+    },
+    {
+      "agent": "D",
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/tier2-lang-expansion/wave1-agent-D/.saw-agent-brief.md",
+      "brief_length": 5334,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-D",
+      "files_owned": 2
+    },
+    {
+      "agent": "E",
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/tier2-lang-expansion/wave1-agent-E/.saw-agent-brief.md",
+      "brief_length": 4991,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-E",
+      "files_owned": 1
+    },
+    {
+      "agent": "F",
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/tier2-lang-expansion/wave1-agent-F/.saw-agent-brief.md",
+      "brief_length": 5098,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-F",
+      "files_owned": 1
     }
   ],
   "steps": [
@@ -51,8 +99,8 @@
     },
     {
       "step": "critic_verdict",
-      "status": "skipped",
-      "detail": "threshold not met — critic review not required"
+      "status": "success",
+      "detail": "critic review passed"
     },
     {
       "step": "stale_cleanup",
@@ -70,9 +118,9 @@
       "detail": "all files validated"
     },
     {
-      "step": "commit_baseline",
+      "step": "working_dir_check",
       "status": "success",
-      "detail": "committed 1 file(s)"
+      "detail": "working directory is clean"
     },
     {
       "step": "baseline_gates",
@@ -115,14 +163,9 @@
       "detail": "pre-wave gate passed"
     },
     {
-      "step": "advance_state",
-      "status": "success",
-      "detail": "IMPL state advanced to REVIEWED"
-    },
-    {
       "step": "create_worktrees",
       "status": "success",
-      "detail": "created 2 worktree(s)"
+      "detail": "created 6 worktree(s)"
     },
     {
       "step": "workspace_setup",
@@ -137,7 +180,7 @@
     {
       "step": "extract_briefs",
       "status": "success",
-      "detail": "prepared 2 agent(s)"
+      "detail": "prepared 6 agent(s)"
     }
   ],
   "success": false

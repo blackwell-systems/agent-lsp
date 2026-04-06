@@ -1,7 +1,7 @@
 # Speculative Execution for Code
 
 **Status:** Planning
-**Feature:** `simulate_edit` tool
+**Feature:** Speculative code sessions — `create_simulation_session`, `simulate_edit`, `evaluate_session`, `commit_session`, `discard_session`
 
 ---
 
@@ -9,275 +9,348 @@
 
 LSP today is a query engine — agents ask what exists and react to what they find. This makes AI-assisted editing inherently trial-and-error: edit, discover breakage, fix, repeat.
 
-`simulate_edit` turns LSP into a simulation engine. Push a change to the language server's in-memory buffer, evaluate the resulting diagnostic state, revert, return the impact — without touching disk.
+Speculative code sessions turn LSP into a simulation engine. Create an isolated semantic workspace, apply hypothetical changes, evaluate the resulting diagnostic state, then commit or discard — without ever touching disk.
 
 ```
 Current workflow:    edit → discover breakage → fix → repeat
-With simulate_edit:  simulate → see full impact → decide → apply once
+With sessions:       create session → mutate → evaluate → decide → commit once (or discard)
 ```
 
-This is the first agent-native primitive in lsp-mcp-go. Everything else (navigation, diagnostics, hover) is LSP exposed. This is new capability: **state mutation → evaluation → rollback**.
+The valuable primitive is not "preview one edit." It is:
+
+> create an isolated semantic future of the codebase
+
+This is the first agent-native primitive in lsp-mcp-go. Everything else (navigation, diagnostics, hover) is LSP exposed. This is new capability: **isolated state → mutation → evaluation → commit or discard**.
 
 ---
 
-## Why This Works
+## Session Lifecycle
 
-LSP already supports `textDocument/didChange` for in-memory document state. The language server typechecks the buffer and publishes diagnostics — without any disk writes. Reverting is another `didChange` with the original content.
+A speculative code session is an isolated semantic workspace rooted in a baseline code state.
 
-The infrastructure already exists in this codebase:
-- `WithDocument` — document lifecycle management
-- `WaitForDiagnostics` — diagnostic settling with timeout
-- `did_change_watched_files` — change notification plumbing
+```
+create_simulation_session(workspace_root, language)
+    → session_id
 
-Implementation cost is a new tool handler that sequences: **push → wait → diff → revert → return**.
+simulate_edit(session_id, file_path, range, new_text)
+    → edit_result
+
+evaluate_session(session_id)
+    → evaluation_result
+
+[optional: additional simulate_edit calls]
+
+commit_session(session_id, target?)   OR   discard_session(session_id)
+    → commit_result                            → ok
+
+destroy_session(session_id)
+    → ok
+```
+
+Session state persists across operations. A session accumulates speculative edits and maintains its own diagnostic snapshot. Multiple sessions may exist in parallel, each with independent state.
+
+### Session Phases
+
+| Phase | Entered by | Exits to |
+|-------|-----------|----------|
+| `created` | `create_simulation_session` | `mutated`, `evaluating` |
+| `mutated` | `simulate_edit` | `mutated`, `evaluating` |
+| `evaluating` | `evaluate_session` | `evaluated`, `timed_out` |
+| `evaluated` | evaluation completes | `mutated`, `committed`, `discarded` |
+| `committed` | `commit_session` | `destroyed` |
+| `discarded` | `discard_session` | `destroyed` |
+| `dirty` | revert failure or version mismatch | — (terminal, requires destroy) |
+
+A `dirty` session must not be committed. Call `destroy_session` to clean up.
 
 ---
 
-## What Diagnostics Give You
-
-Diagnostics accurately detect:
-- Type errors (broken signatures, wrong argument types)
-- Syntax errors
-- Unresolved symbols
-- Interface implementation failures
-
-Diagnostics do **not** directly give:
-- "K call sites will break" — use `get_references` + simulation together for this
-- Behavioral/runtime changes
-- Cross-language impact in multi-server mode
-
-**Do not promise:** "K call sites break"
-**Do promise:** "diagnostic impact — N errors introduced, M resolved"
-
----
-
-## Delivery Tiers
-
-### V1 — Single-file impact preview (ship first)
-
-```
-simulate_edit(
-  file_path:  string,
-  start_line: int,
-  start_col:  int,
-  end_line:   int,
-  end_col:    int,
-  new_text:   string
-) → {
-  errors_introduced: [{ line, col, message, severity }],
-  errors_resolved:   [{ line, col, message, severity }],
-  net_delta:         int,      // positive = more errors, negative = fewer
-  scope:             "file",
-  confidence:        "high"
-}
-```
-
-**Implementation:** get diagnostics → `didChange` → `WaitForDiagnostics` → diff → `didChange` revert → return delta.
-
-Single-file response is instant (~500ms) and reliable. Confidence is high because the language server fully retypechecks the in-memory buffer.
-
-**What agents can do with V1:**
-- "Does this rename introduce any errors in this file?"
-- "Is it safe to delete this function body?"
-- "Does changing this type signature break anything visible?"
-
----
-
-### V1.5 — Enriched impact signal
-
-Extend the response with inferred signals:
-
-```json
-{
-  "errors_introduced": [...],
-  "errors_resolved":   [...],
-  "net_delta":         2,
-  "affected_symbols":  ["HandleRequest", "ServeHTTP"],
-  "edit_risk_score":   0.73,   // 0.0 = safe, 1.0 = high risk
-  "scope":             "file",
-  "confidence":        "high"
-}
-```
-
-**`edit_risk_score` heuristics:**
-- Errors introduced in exported symbols → higher risk
-- Errors in test files only → lower risk
-- Net delta 0 (no diagnostic change) → 0.0
-- Multiple errors in call sites → higher risk
-
-Agents can now **compare plans** — simulate option A, simulate option B, pick the one with lower risk score.
-
----
-
-### V1.5 — Workspace-scope (opt-in, slower)
-
-```
-simulate_edit(..., scope: "workspace", timeout_ms: 8000) → {
-  errors_introduced:  [...],   // may include errors in other files
-  errors_resolved:    [...],
-  net_delta:          int,
-  scope:              "workspace",
-  confidence:         "eventual"  // cross-file propagation may be incomplete
-}
-```
-
-Cross-file diagnostic propagation behavior by server:
-| Server | Cross-file reliability | Typical propagation time |
-|--------|----------------------|--------------------------|
-| gopls | High (re-typechecks importing packages) | 2-5s |
-| tsserver | Good (project-wide) | 1-3s |
-| rust-analyzer | High | 2-4s |
-| Others | Inconsistent | unknown |
-
-Workspace scope is honest about confidence: cross-file propagation may be incomplete within the timeout window.
-
----
-
-### V2 — Chained simulations (refactor planning)
-
-```
-simulate_chain([
-  { file, edit_1 },
-  { file, edit_2 },
-  { file, edit_3 }
-]) → {
-  steps: [
-    { step: 1, net_delta: 0, errors_introduced: [] },
-    { step: 2, net_delta: 3, errors_introduced: [...] },
-    { step: 3, net_delta: 0, errors_introduced: [] }
-  ],
-  safe_to_apply_through_step: 1,  // last step with net_delta 0
-  cumulative_delta: 0
-}
-```
-
-Each step builds on the previous in-memory state. Agent can simulate an entire multi-step refactor before applying any of it. The server sees a sequence of incremental edits; diagnostics reflect the cumulative state after each.
-
-This requires sequential didChange + WaitForDiagnostics calls with state accumulation, reverted in reverse at the end.
-
----
-
-## The Architectural Problem: Concurrency
-
-This is the only real blocker. Between `didChange` and revert, the document is in a mutated in-memory state. Another MCP tool call arriving during this window would run against simulated state — returning results based on a change that was never applied to disk.
-
-Three viable designs:
-
-### Option A — Global simulation lock (V1)
-
-Acquire a per-client mutex before pushing the edit, release after revert. Other tool calls block until the simulation completes (~500ms for single-file).
-
-```
-Pros:  Simple to implement. Completely safe.
-Cons:  Serializes all tool calls during simulation window.
-       Acceptable for V1 given short duration (~500ms).
-```
-
-### Option B — Document version guard (V1.5)
-
-Tag the simulation with a document version number. Detect if any concurrent `didChange` arrived during the simulation window; if so, mark result as stale and retry once.
-
-```
-Pros:  Non-blocking for unrelated files.
-Cons:  Adds retry logic. Version tracking per document.
-```
-
-### Option C — Shadow buffer (V2, if servers support it)
-
-Maintain separate real and simulated document state. Only the simulation uses the shadow. Requires server cooperation (most LSP servers don't support multiple views cleanly — one document URI, one state).
-
-**Verdict:** Ship V1 with Option A (global lock). The simulation window is short enough that serialization isn't a user-facing problem. Upgrade to Option B for V1.5 if lock contention is observed.
-
----
-
-## Cross-Language Limits
-
-In multi-server mode, `simulate_edit` operates on one language server at a time. A TypeScript change that breaks a Go caller (via a shared JSON contract) will not surface in the simulation — the Go server has no knowledge of the TypeScript edit.
-
-This is an honest constraint, not a flaw. Single-language impact is the right scope for V1.
-
----
-
-## Positioning
-
-When shipping:
-
-> "Simulate code changes before applying them. See exactly what breaks — without touching your files."
-
-This is the correct message. It describes the behavior precisely and makes the agent-native value immediate.
-
-Do not frame it as a testing tool or a linting tool. Frame it as **planning infrastructure**.
-
----
-
-## Invariants
-
-These must hold for every execution of `simulate_edit`:
-
-1. **No external observation of simulated state** — no other tool call may read or mutate LSP document state during a simulation window
-2. **Exact revert** — the document must be restored to the byte-identical state prior to simulation; version numbers do not roll back (they increment forward)
-3. **Strict monotonic versioning** — each `didChange` increments the document version by exactly 1; the revert uses the next version number, not the pre-simulation version
-4. **Complete or invalid** — a simulation either completes with a valid result, or fails and marks the session dirty; there is no silent partial success
-
----
-
-## Failure Semantics
-
-Each step has a defined failure behavior:
-
-| Step | Failure | Behavior |
-|------|---------|----------|
-| `didChange` (apply) | Server rejects or connection fails | Abort immediately; no mutation occurred; return error |
-| `WaitForDiagnostics` timeout | Diagnostics did not settle | Return current snapshot with `confidence: "partial"`, `timeout: true` |
-| `WaitForDiagnostics` error | Connection failure after mutation | Attempt revert; mark session dirty if revert also fails |
-| Revert `didChange` | Server rejects or connection fails | Mark session corrupted; block all further operations; surface error immediately |
-| Concurrent mutation detected | Another `didChange` arrived during window | Mark result stale; return `confidence: "stale"`; do not retry automatically |
-
-**Guarantee:** the system will not silently continue in a corrupted state. Any unrecoverable failure surfaces immediately.
-
----
-
-## Session Integrity
-
-The LSP session is assumed valid only when:
-
-- Document versions are consistent (monotonically increasing with no gaps)
-- Revert completed successfully
-- No concurrent mutation was detected during the simulation window
-
-If any of these are violated, the session is marked **dirty**:
-
-- All subsequent tool calls fail fast with `"session dirty: reinitialize required"`
-- The client must call `restart_lsp_server` to recover
-- The dirty flag is cleared on successful reinitialization
-
-This prevents ghost bugs — subtle misbehavior caused by a language server holding stale in-memory state while the rest of the system assumes it is clean.
+## Session State Model
+
+A session holds:
+
+- **baseline_ref** — the workspace state at session creation (read-only within session)
+- **isolated LSP semantic state** — in-memory document buffers managed by the session
+- **document versions** — per-document version counter, monotonically increasing
+- **accumulated speculative edits** — ordered list of edits applied within the session
+- **diagnostics snapshot** — latest diagnostic state after most recent evaluation
+- **session status** — one of: `created`, `mutated`, `evaluated`, `committed`, `discarded`, `dirty`
+- **session_id** — UUID assigned at creation, used for tracing
+
+The baseline is the code state at the moment `create_simulation_session` is called. It is immutable from the session's perspective — the session can only mutate its own overlay.
 
 ---
 
 ## Isolation Model
 
-`simulate_edit` executes under a **global simulation lock** (V1).
+**Session isolation is per-session, not per-call.**
 
-**Guarantee:** no other tool call may read or mutate LSP state between the `didChange` (apply) and `didChange` (revert) calls. From the perspective of all other tools, the simulation is atomic.
+- One session must not observe another session's speculative state
+- The baseline is conceptually shared (read-only); speculative overlays are session-local
+- Commit materializes one session's state; discard removes it without side effects
+- No cross-session visibility at any point
 
-This is the transaction boundary. The lock is per `LSPClient` instance. In multi-server mode, each server has its own lock; simulations on different servers may execute concurrently.
+### Logical isolation vs physical isolation
+
+This is the primary unresolved architectural tension.
+
+**Logical isolation (current design):** a single LSP server instance handles all sessions. Concurrent sessions on the same server are serialized — only one session may hold mutated in-memory state at a time. The mutex enforces ordering; sessions do not run truly in parallel against the same server.
+
+```
+session_a and session_b on same server:
+  → session_a acquires lock, mutates, evaluates, reverts, releases
+  → session_b acquires lock (was blocked), mutates, evaluates, reverts, releases
+```
+
+This provides **correct results** and **no state leakage**, but sessions are sequential, not parallel.
+
+**Physical isolation (future path):** each session gets its own LSP server instance. Sessions run truly in parallel with no serialization. Cost: LSP startup per session (~1-3s, memory per server), which makes it impractical for short-lived sessions.
+
+**Current choice: logical isolation.**
+
+Reasoning: for the primary use cases (single-agent planning, sequential comparison), serialization is not a bottleneck. The ~500ms per simulation is fast enough that the queue rarely matters. Physical isolation is the right upgrade path if parallel multi-agent simulation becomes a real workload.
+
+This is explicitly documented, not hidden:
+
+> Speculative code sessions use serialized access to a shared language server to guarantee isolation. This provides deterministic behavior without the overhead of per-session LSP instances. True parallel execution with per-session language servers may be introduced in future versions if workload characteristics justify it.
+
+---
+
+## Concurrent Session Semantics
+
+Multiple sessions may exist simultaneously:
+
+- Each session has independent semantic state
+- Evaluation results are comparable across sessions (different strategies, same baseline)
+- No cross-session visibility
+- Sessions on different language servers may evaluate concurrently
+- Sessions on the same language server are serialized within that server's scope (V1)
+
+This enables consumers (like Scout-and-Wave) to run strategy comparison:
+
+```
+session_a = create_simulation_session(...)    # strategy A
+session_b = create_simulation_session(...)    # strategy B
+
+simulate_edit(session_a, edit_1a)
+simulate_edit(session_b, edit_1b)
+
+result_a = evaluate_session(session_a)
+result_b = evaluate_session(session_b)
+
+# compare result_a.net_delta vs result_b.net_delta
+# pick the winner, commit that session
+```
+
+---
+
+## Evaluation Model
+
+Mutation and observation are separate operations.
+
+**`simulate_edit(session_id, edit)` → edit_result**
+
+Mutates session state. Pushes `textDocument/didChange` to the language server's in-memory buffer. Does not evaluate diagnostics — returns only whether the edit was applied.
+
+```json
+{
+  "session_id": "a3f2-...",
+  "edit_applied": true,
+  "version_after": 3
+}
+```
+
+**`evaluate_session(session_id)` → evaluation_result**
+
+Observes current session state. Calls `WaitForDiagnostics`, diffs against baseline, returns impact summary. Does not mutate state.
+
+```json
+{
+  "session_id": "a3f2-...",
+  "errors_introduced": [{ "line": 42, "col": 5, "message": "cannot use string as int", "severity": "error" }],
+  "errors_resolved": [],
+  "net_delta": 1,
+  "affected_symbols": ["HandleRequest"],
+  "edit_risk_score": 0.73,
+  "scope": "file",
+  "confidence": "high",
+  "timeout": false,
+  "duration_ms": 412
+}
+```
+
+A caller may call `simulate_edit` multiple times before calling `evaluate_session`. The evaluation reflects the cumulative state.
+
+**Atomic convenience wrapper:** `simulate_edit_atomic(edit)` is internally a create → apply → evaluate → discard cycle. Useful for callers that don't need session persistence.
+
+---
+
+## Commit Semantics
+
+`commit_session(session_id, target?)` materializes the accumulated speculative state.
+
+### Functional vs imperative commit
+
+Two models, both supported:
+
+**Functional (default):** `commit_session` returns a `WorkspaceEdit`-compatible patch. The caller decides whether and how to apply it. No disk writes. Safe for CI, multi-agent orchestration, and any caller that wants to inspect the patch before applying.
+
+**Imperative (opt-in):** pass `apply: true` (or a `target` path) to write files to disk directly. Equivalent to calling `apply_edit` on the returned patch, but in one step.
+
+Default is **functional** — return patch only, no side effects. Callers opt into disk writes explicitly.
+
+```
+commit_session(session_id)                  # → WorkspaceEdit patch, no disk write
+commit_session(session_id, apply: true)     # → writes to disk + returns patch
+commit_session(session_id, target: "/path") # → writes to target path + returns patch
+```
+
+This matters for:
+- **CI** — inspect patch, validate, then decide whether to apply
+- **Multi-agent** — one agent commits a patch, orchestrator applies after comparing
+- **Safety** — patch-only commit cannot corrupt workspace state
+
+**Commit constraints:**
+
+- Commit is only allowed from a session in `evaluated` or `mutated` state
+- Commit is prohibited on `dirty` sessions — the state may be corrupt
+- Commit is prohibited on `created` sessions — no edits have been applied
+- A timed-out evaluation does not block commit, but the session carries `confidence: "partial"`
+
+**After commit:**
+
+- Session transitions to `committed`
+- Session may not be mutated further
+- Call `destroy_session` to release resources
+
+**Discard:**
+
+`discard_session(session_id)` reverts all accumulated in-memory state and releases the session. Nothing is written to disk. Equivalent to rolling back a transaction.
+
+---
+
+## Failure and Corruption Semantics
+
+### Per-operation failure behavior
+
+| Operation | Failure | Behavior |
+|-----------|---------|----------|
+| `create_simulation_session` | Server unavailable | Return error; no session created |
+| `simulate_edit` | Server rejects `didChange` | Abort; session state unchanged; return error |
+| `evaluate_session` timeout | Diagnostics did not settle | Return snapshot with `confidence: "partial"`, `timeout: true`; session remains usable |
+| `evaluate_session` connection failure | After mutation | Attempt internal revert; mark session `dirty` if revert fails |
+| `commit_session` | Write failure | Return error; session state preserved; retry allowed |
+| `discard_session` | Revert failure | Mark session `dirty`; error returned; call `destroy_session` to force cleanup |
+| Concurrent mutation detected | Another `didChange` arrived during evaluation | Mark result `confidence: "stale"`; session remains usable; do not retry automatically |
+
+### Session dirty state
+
+A session becomes `dirty` when:
+
+- An internal revert fails during `discard_session`
+- A connection failure occurs while the session holds mutated state
+- Document version tracking detects a gap (concurrent external mutation)
+
+A dirty session:
+
+- Must not be committed — state may not reflect intended mutations
+- Must be destroyed via `destroy_session` (forced cleanup)
+- Reports `session_dirty: true` on all subsequent operation calls
+
+**Guarantee:** the system will not silently continue in a corrupted state. Any unrecoverable failure surfaces immediately.
+
+---
+
+## Session Invariants
+
+These must hold for every session, for every operation:
+
+1. **Isolation** — no other session may read or mutate this session's speculative state
+2. **Baseline immutability** — the baseline is read-only from the session's perspective; only the session's overlay is mutable
+3. **Monotonic versioning** — document versions are strictly increasing within a session; `N → N+1 → N+2 → ...`; version never rolls back
+4. **No silent corruption** — a session either holds valid state or is marked `dirty`; there is no in-between
+5. **Evaluation reflects session state only** — `evaluate_session` returns diagnostics caused by edits in this session, not external mutations
+6. **Commit requires valid state** — `dirty` sessions must not be committed under any circumstances
+
+---
+
+## Implementation Scope
+
+Build the full session model in one pass. There are no delivery tiers — the session API is the foundation from day one.
+
+### Core API (full implementation)
+
+```
+create_simulation_session(workspace_root, language) → session_id
+simulate_edit(session_id, file_path, range, new_text) → edit_result
+evaluate_session(session_id, scope?, timeout_ms?) → evaluation_result
+simulate_chain(session_id, edits[]) → chain_result
+commit_session(session_id, target?) → commit_result
+discard_session(session_id) → ok
+destroy_session(session_id) → ok
+```
+
+### Convenience alias
+
+`simulate_edit_atomic` is a thin wrapper — not a separate API, just a helper for callers that don't need session persistence:
+
+```go
+func SimulateEditAtomic(ctx, mgr, args) (ToolResult, error) {
+    sid := mgr.Create(ctx, ...)
+    defer mgr.Destroy(ctx, sid)
+    mgr.ApplyEdit(ctx, sid, ...)
+    return mgr.Evaluate(ctx, sid, ...)
+}
+```
+
+Exposed as an MCP tool for single-edit use cases. Backed by the same session infrastructure — no separate code path.
+
+### Scope support
+
+Both single-file (`scope: "file"`) and workspace (`scope: "workspace"`) are implemented together. Workspace scope carries `confidence: "eventual"` to be honest about cross-file propagation timing.
+
+Cross-file diagnostic propagation behavior by server:
+| Server | Cross-file reliability | Typical propagation time |
+|--------|----------------------|-----------------------------|
+| gopls | High (re-typechecks importing packages) | 2-5s |
+| tsserver | Good (project-wide) | 1-3s |
+| rust-analyzer | High | 2-4s |
+| Others | Inconsistent | unknown |
+
+### Chained mutations
+
+`simulate_chain` applies a sequence of edits within a session and evaluates after each step:
+
+```
+simulate_chain(session_id, [edit_1, edit_2, edit_3]) → {
+  steps: [
+    { step: 1, net_delta: 0, errors_introduced: [] },
+    { step: 2, net_delta: 3, errors_introduced: [...] },
+    { step: 3, net_delta: 0, errors_introduced: [] }
+  ],
+  safe_to_apply_through_step: 1,
+  cumulative_delta: 0
+}
+```
+
+Each step builds on the previous in-memory state. `safe_to_apply_through_step` is the last step with `net_delta: 0`.
 
 ---
 
 ## Document Versioning
 
-- Each `textDocument/didChange` call increments the document version by 1
-- Version is tracked per open document on `LSPClient` (not currently implemented — prerequisite for V1)
-- The revert `didChange` uses the next version number (pre-simulation version + 2), not the original version
-- A version mismatch between expected and actual (detectable if the server echoes version) invalidates the simulation result
+Version numbers are per-session, per-document:
 
 ```
-pre-simulation version:  N
-apply didChange:          N+1
-revert didChange:         N+2
-post-simulation version:  N+2  (not N — versions never roll back)
+session created, document opened: version N (baseline)
+simulate_edit call 1:             N+1
+simulate_edit call 2:             N+2
+discard / revert:                 N+3  (revert is itself a new version, not a rollback)
 ```
+
+Versions never roll back. The revert `didChange` sends the original content with the next monotonically increasing version number.
+
+Version is tracked per open document on the session's `LSPClient`. Mismatch between expected and tracked version invalidates the session (marks `dirty`).
 
 ---
 
@@ -297,7 +370,69 @@ The diff is computed as:
 - **resolved:** present in baseline, not in post-simulation diagnostics
 - **unchanged:** present in both (not returned — reduces noise)
 
-Position matching uses the post-edit line/character coordinates. If the edit shifts lines, the baseline diagnostics are not adjusted — they reflect the pre-edit positions, which is intentional (the delta communicates what changed, not where things moved to).
+Position matching uses post-edit coordinates. Baseline diagnostics reflect pre-edit positions by design — the delta communicates what changed, not where things moved to.
+
+---
+
+## Evaluation Response Contract
+
+```json
+{
+  "session_id": "a3f2-...",
+  "errors_introduced": [
+    { "line": 42, "col": 5, "message": "cannot use string as int", "severity": "error" }
+  ],
+  "errors_resolved": [],
+  "net_delta": 1,
+  "affected_symbols": ["HandleRequest"],
+  "edit_risk_score": 0.73,
+  "scope": "file",
+  "confidence": "high",
+  "timeout": false,
+  "duration_ms": 412
+}
+```
+
+`confidence` values:
+- `"high"` — single-file, diagnostics settled within timeout
+- `"partial"` — timed out, returned snapshot may be incomplete
+- `"stale"` — concurrent mutation detected during evaluation window
+- `"eventual"` — workspace scope, cross-file propagation may be incomplete
+
+`edit_risk_score` heuristics:
+- Errors introduced in exported symbols → higher risk
+- Errors in test files only → lower risk
+- Net delta 0 (no diagnostic change) → 0.0
+- Multiple errors in call sites → higher risk
+
+---
+
+## Baseline Stability
+
+The diagnostic diff is only as trustworthy as the baseline. If the baseline is incomplete, errors that already exist appear in `errors_introduced` — false positives that corrupt the diff.
+
+**The problem:** LSP diagnostic publication is asynchronous. After a document opens, the language server processes it and publishes via `textDocument/publishDiagnostics` over a window of milliseconds to seconds. Snapshotting before this window closes produces an incomplete baseline.
+
+### Strategy: lazy per-file settle
+
+On first `simulate_edit` for a given file, wait for that file's diagnostics to settle before recording its per-file baseline. Do not pay for files the session never touches.
+
+```
+simulate_edit(session_id, file_path, edit)
+  → if file not in session.baselines:
+      WaitForDiagnostics(file_path)
+      session.baselines[file_path] = snapshot
+  → apply edit
+  → return edit_result
+```
+
+This is the correct strategy for all cases: pay per touched file, not per session. A session that touches one file in a large workspace does not pay settle cost for the rest.
+
+### What "settled" means
+
+Diagnostics are considered settled when no new `textDocument/publishDiagnostics` notification has arrived for the target file within a quiet window (default: 300ms). The existing `WaitForDiagnostics` implementation handles this.
+
+A settle timeout (default: 3000ms) caps the wait. If the server has not published anything within the timeout, use whatever is cached — and mark the baseline with `baseline_confidence: "partial"` to flag that the diff may contain false positives.
 
 ---
 
@@ -307,29 +442,31 @@ If diagnostics do not settle within the timeout window:
 
 - Return the current diagnostic snapshot (whatever the server has published so far)
 - Set `confidence: "partial"` and `timeout: true` in the response
-- The revert still executes — timeout applies only to diagnostic collection, not to session cleanup
+- Internal revert still executes — timeout applies only to diagnostic collection, not session cleanup
 - No automatic retry
 
 Default timeout: 3000ms (single-file), 8000ms (workspace scope). Configurable via `timeout_ms` argument.
 
 ---
 
-## Revert Guarantee
+## Revert Guarantee (Internal)
 
-Revert is unconditional. It executes via `defer` before any return path, including panics.
+Revert is unconditional within the session. When a session is discarded or an evaluation produces partial results, the in-memory state is always restored via `defer`:
 
 ```go
 defer func() {
-    if err := client.RevertSimulation(ctx, uri, originalContent, nextVersion); err != nil {
-        client.MarkSessionDirty(fmt.Errorf("revert failed: %w", err))
+    if err := session.Revert(ctx); err != nil {
+        session.MarkDirty(fmt.Errorf("revert failed: %w", err))
     }
 }()
 ```
 
 If revert fails:
-- Session is marked dirty
+- Session is marked `dirty`
 - Error is returned to the caller (not silenced)
-- No further operations on this client will succeed until reinitialization
+- No further operations on this session will succeed
+
+This is an internal implementation detail, not a user-visible contract. Users see session state (`dirty` or clean); they do not manage revert explicitly.
 
 ---
 
@@ -339,66 +476,101 @@ Emit structured log events at each phase:
 
 | Event | Fields |
 |-------|--------|
-| `simulate_edit.start` | `simulation_id`, `file`, `range`, `new_text_length` |
-| `simulate_edit.apply` | `simulation_id`, `version_before`, `version_after` |
-| `simulate_edit.diagnostics_ready` | `simulation_id`, `duration_ms`, `diagnostic_count`, `timed_out` |
-| `simulate_edit.revert` | `simulation_id`, `version` |
-| `simulate_edit.complete` | `simulation_id`, `total_duration_ms`, `net_delta`, `confidence` |
-| `simulate_edit.failure` | `simulation_id`, `step`, `error`, `session_dirty` |
+| `session.created` | `session_id`, `workspace_root`, `language` |
+| `session.edit_applied` | `session_id`, `file`, `range`, `version_after` |
+| `session.evaluation_start` | `session_id`, `edit_count`, `scope` |
+| `session.evaluation_complete` | `session_id`, `duration_ms`, `net_delta`, `confidence` |
+| `session.committed` | `session_id`, `files_written`, `duration_ms` |
+| `session.discarded` | `session_id`, `edit_count` |
+| `session.dirty` | `session_id`, `step`, `error` |
+| `session.destroyed` | `session_id` |
 
-These events flow through the existing `logging` package at `LevelDebug` (complete/start) and `LevelError` (failure). No new infrastructure required.
+These events flow through the existing `logging` package at `LevelDebug` (lifecycle events) and `LevelError` (dirty/failure). No new infrastructure required.
 
 ---
 
-## Full Response Contract
+## Cross-Language Limits
 
-```json
-{
-  "errors_introduced": [
-    { "line": 42, "col": 5, "message": "cannot use string as int", "severity": "error" }
-  ],
-  "errors_resolved": [],
-  "net_delta": 1,
-  "scope": "file",
-  "confidence": "high",
-  "timeout": false,
-  "duration_ms": 412,
-  "simulation_id": "a3f2-..."
-}
-```
+In multi-server mode, a session operates on one language server at a time. A TypeScript change that breaks a Go caller (via a shared JSON contract) will not surface in the session — the Go server has no knowledge of the TypeScript edit.
 
-`simulation_id` is a UUID generated at handler entry. Aids tracing across log events and agent reasoning ("simulation a3f2 showed +1 error at line 42").
+This is an honest constraint, not a flaw. Single-language impact is the right scope.
 
-`confidence` values:
-- `"high"` — single-file, diagnostics settled within timeout
-- `"partial"` — timed out, returned snapshot may be incomplete
-- `"stale"` — concurrent mutation detected during simulation window
-- `"eventual"` — workspace scope, cross-file propagation may be incomplete
+---
+
+## Positioning
+
+When shipping:
+
+> "Simulate code changes before applying them. See exactly what breaks — without touching your files."
+
+This is the correct message. It describes the behavior precisely and makes the agent-native value immediate.
+
+Do not frame it as a testing tool or a linting tool. Frame it as **planning infrastructure**.
 
 ---
 
 ## Implementation Notes
 
-**Tool handler structure:**
+**V1 tool handler (atomic wrapper):**
 
 ```go
-func HandleSimulateEdit(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleSimulateEditAtomic(ctx context.Context, mgr *SessionManager, args map[string]interface{}) (types.ToolResult, error) {
     // 1. Validate args (file_path, range, new_text)
     // 2. ValidateFilePath
-    // 3. Get current diagnostics (baseline)
-    // 4. Acquire simulation lock
-    // 5. Apply textDocument/didChange (in-memory only, not disk)
-    // 6. WaitForDiagnostics (with timeout)
-    // 7. Get new diagnostics
-    // 8. Diff old vs new
-    // 9. Push revert didChange (restore original content)
-    // 10. WaitForDiagnostics (confirm revert settled)
-    // 11. Release lock
-    // 12. Return SimulateEditResult
+    // 3. session = mgr.Create(ctx, workspaceRoot, language)
+    // 4. defer session.Destroy(ctx)
+    // 5. baseline = session.GetDiagnostics(ctx, uri)
+    // 6. session.ApplyEdit(ctx, uri, range, newText)
+    // 7. result = session.Evaluate(ctx, timeout)
+    // 8. return SimulateEditResult from result.Diff(baseline)
 }
 ```
 
-**Key: the revert in step 9 must always run, even if step 6-8 fail.** Use defer.
+**Session executor interface (pluggable isolation):**
+
+```go
+// SessionExecutor abstracts how a session acquires and releases LSP access.
+// V1 serializes; future versions may provide per-session LSP instances.
+type SessionExecutor interface {
+    Acquire(ctx context.Context, session *SimulationSession) error
+    Release(session *SimulationSession)
+}
+
+// SerializedExecutor — V1 implementation. Per-server mutex.
+type SerializedExecutor struct {
+    mu sync.Mutex
+}
+
+func (e *SerializedExecutor) Acquire(ctx context.Context, s *SimulationSession) error {
+    e.mu.Lock()
+    return nil
+}
+
+func (e *SerializedExecutor) Release(s *SimulationSession) {
+    e.mu.Unlock()
+}
+```
+
+Session IDs and the full API remain unchanged regardless of executor. Swapping `SerializedExecutor` for an `IsolatedExecutor` (per-session LSP) requires no API changes.
+
+**Session manager structure:**
+
+```go
+type SessionManager struct {
+    sessions map[string]*SimulationSession
+    executor SessionExecutor
+    mu       sync.RWMutex
+}
+
+type SimulationSession struct {
+    ID        string
+    client    *lsp.LSPClient
+    status    SessionStatus
+    edits     []AppliedEdit
+    baselines map[string]DiagnosticsSnapshot // per-file, populated lazily on first simulate_edit
+    mu        sync.Mutex
+}
+```
 
 **`textDocument/didChange` format:**
 ```json
@@ -413,18 +585,92 @@ func HandleSimulateEdit(ctx context.Context, client *lsp.LSPClient, args map[str
 }
 ```
 
-Version must increment on each change. Track version per open document on `LSPClient`.
-
-**Revert:** Apply the inverse range edit (original text for the same range).
+Version must increment on each change. Tracked per open document on `SimulationSession`.
 
 ---
 
-## Open Questions Before Scouting
+## Open Questions
 
-1. **Document version tracking** — `LSPClient` currently doesn't track `textDocument/didChange` version numbers. Need to add version counter per open document, incremented on each mutation.
+### Resolved
+- ✅ **Baseline diagnostic timing** — lazy per-file settle. See **Baseline Stability**.
+- ✅ **Session lifecycle** — create / mutate / evaluate / commit / discard / destroy.
+- ✅ **Mutation vs evaluation separation** — `simulate_edit` mutates, `evaluate_session` observes.
+- ✅ **Diagnostic diff model** — range + message + severity + source equality. See **Diagnostic Diffing**.
+- ✅ **Versioning model** — monotonic, never rolls back. See **Document Versioning**.
+- ✅ **Commit semantics** — functional by default (patch only), imperative opt-in. See **Commit Semantics**.
+- ✅ **Failure surfacing** — dirty state, no silent corruption. See **Failure and Corruption Semantics**.
 
-2. **Baseline diagnostic timing** — should we call `WaitForDiagnostics` before pushing the edit to ensure we have a stable baseline? Or trust whatever diagnostics are currently cached? Recommend: use cached diagnostics as baseline (avoids additional wait), document the assumption.
+### Open (ranked)
 
-3. **Revert reliability** — if the client crashes between push and revert, the language server holds mutated state until it's restarted. Acceptable for V1; V2 should add a cleanup hook on `LSPClient.Shutdown`.
+**1. Isolation model: logical vs physical**
 
-4. **Scope parameter** — default to `"file"` in V1, add `"workspace"` as opt-in in V1.5. Don't expose workspace scope until cross-server timing is validated.
+Current design provides logical isolation (serialized shared LSP). This is correct but sequential — parallel sessions on the same server block each other.
+
+Decision needed: accept serialization permanently, or plan a per-session LSP instance upgrade path?
+
+Recommendation: accept serialization, document the constraint explicitly, revisit only if parallel multi-agent simulation becomes a bottleneck in practice.
+
+**2. Workspace evaluation: best-effort or deterministic?**
+
+Current design: `confidence: "eventual"` honestly flags that cross-file propagation may be incomplete within the timeout window.
+
+Decision needed: is best-effort acceptable long-term, or do we need a stronger guarantee (e.g., wait for all pending `$/progress` tokens to clear before evaluating)?
+
+Recommendation: best-effort is fine for planning use cases. Agents can re-evaluate or fall back to file scope when `confidence: "eventual"`.
+
+**3. Session resource cost**
+
+Unknown until implemented: how many concurrent sessions can the system support before LSP memory becomes the bottleneck? Each session holds in-memory document buffers for its touched files.
+
+Decision needed: enforce a session cap (e.g., max 10 concurrent), or monitor and document?
+
+Recommendation: implement, measure, then decide. Don't prematurely optimize.
+
+**4. Session storage**
+
+Sessions are in-memory only. Session IDs become invalid on MCP server restart.
+
+Decision needed: is this acceptable for all consumers, or do some (e.g., CI pipelines) need persistent sessions across restarts?
+
+Recommendation: in-memory is fine. Document the constraint. Persistence adds significant complexity for a rarely-needed property.
+
+**5. Dirty state recovery**
+
+Current: dirty is terminal — destroy and reinitialize.
+
+Decision needed: is there ever a recovery path worth adding (partial rollback, rehydrate from baseline)?
+
+Recommendation: no. Dirty means the LSP state is unknown. Recovery would require replaying edits against an uncertain base, which is worse than reinitializing.
+
+---
+
+## Deferred by Design
+
+These are intentional deferrals with designed seams for future upgrade — not missing features.
+
+### Physical isolation (per-session LSP instances)
+
+**Deferred.** Serialized execution provides correctness. The `SessionExecutor` interface is the upgrade seam — swap `SerializedExecutor` for `IsolatedExecutor` without API changes.
+
+**Revisit triggers:**
+- p95 queue wait > 1s
+- Sustained concurrent sessions > 5–10
+- Users reporting blocked workflows from serialization
+
+### Session persistence
+
+**Deferred.** Sessions are ephemeral compute artifacts. Durability is provided via returned patches — `commit_session` returns a portable `WorkspaceEdit` that callers can persist, store, or replay independently.
+
+> Sessions are ephemeral; artifacts are durable.
+
+**Revisit triggers:**
+- Long-running planning sessions that span MCP restarts
+- Human-in-the-loop workflows that require resume
+
+### Deterministic workspace evaluation
+
+**Deferred.** Best-effort with explicit `confidence` flags. Agents can re-evaluate or fall back to file scope when results carry `confidence: "eventual"`. Final correctness comes from re-validation after commit, not from the simulation itself.
+
+**Revisit triggers:**
+- CI-grade guarantees required at workspace scope
+- Addition of a final validation pass (fresh session post-merge)
