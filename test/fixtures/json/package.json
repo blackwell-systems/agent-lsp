@@ -1,0 +1,16 @@
+{
+  "name": "test-fixture",
+  "version": "1.0.0",
+  "description": "JSON fixture for LSP schema validation testing",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Test script\"",
+    "start": "node index.js"
+  },
+  "keywords": [
+    "test",
+    "fixture"
+  ],
+  "author": "Test",
+  "license": "MIT"
+}
