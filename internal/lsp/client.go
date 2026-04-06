@@ -96,7 +96,6 @@ type LSPClient struct {
 
 	// open documents
 	openDocs  map[string]docMeta // uri -> meta
-	docVers   map[string]int     // uri -> version
 
 	// diagnostics
 	diagMu    sync.RWMutex
@@ -123,7 +122,6 @@ func NewLSPClient(serverPath string, serverArgs []string) *LSPClient {
 		serverArgs:     serverArgs,
 		pending:        make(map[int]*pendingRequest),
 		openDocs:       make(map[string]docMeta),
-		docVers:        make(map[string]int),
 		diags:          make(map[string][]types.LSPDiagnostic),
 		progressTokens: make(map[interface{}]struct{}),
 		capabilities:   make(map[string]interface{}),
@@ -459,6 +457,10 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 		"processId": os.Getpid(),
 		"rootUri":   rootURI,
 		"rootPath":  rootDir,
+		"clientInfo": map[string]interface{}{
+			"name":    "lsp-mcp-go",
+			"version": "0.1.0",
+		},
 		"capabilities": map[string]interface{}{
 			"workspace": map[string]interface{}{
 				"configuration":    true,
@@ -466,6 +468,12 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 				"applyEdit":        true,
 				"workspaceEdit": map[string]interface{}{
 					"documentChanges": true,
+				},
+				"didChangeConfiguration": map[string]interface{}{
+					"dynamicRegistration": true,
+				},
+				"didChangeWatchedFiles": map[string]interface{}{
+					"dynamicRegistration": true,
 				},
 			},
 			"textDocument": map[string]interface{}{
@@ -559,7 +567,7 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 func (c *LSPClient) Shutdown(ctx context.Context) error {
 	_, err := c.sendRequest(ctx, "shutdown", nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("shutdown request: %w", err)
 	}
 	_ = c.sendNotification("exit", nil)
 	c.mu.Lock()
@@ -786,8 +794,9 @@ func (c *LSPClient) ReopenAllDocuments(ctx context.Context) error {
 }
 
 // WaitForFileIndexed waits until the URI has received at least one diagnostic
-// notification, then waits for a 1500ms quiet window with no further
-// notifications. This matches the TypeScript reference: gopls runs a
+// notification (or fires immediately if diagnostics are already cached for
+// the URI via SubscribeToDiagnostics replay), then waits for a 1500ms quiet
+// window with no further notifications. This matches the TypeScript reference: gopls runs a
 // cross-package background load after the first publishDiagnostics, and the
 // stability window lets that finish so cross-file references are available.
 func (c *LSPClient) WaitForFileIndexed(ctx context.Context, uri string, timeoutMs int) error {
@@ -1084,7 +1093,9 @@ func (c *LSPClient) GetSignatureHelp(ctx context.Context, uri string, pos types.
 		return nil, nil
 	}
 	var v interface{}
-	_ = json.Unmarshal(result, &v)
+	if err := json.Unmarshal(result, &v); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
 	return v, nil
 }
 
@@ -1145,7 +1156,9 @@ func (c *LSPClient) RenameSymbol(ctx context.Context, uri string, pos types.Posi
 		return nil, nil
 	}
 	var v interface{}
-	_ = json.Unmarshal(result, &v)
+	if err := json.Unmarshal(result, &v); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
 	return v, nil
 }
 
@@ -1173,7 +1186,9 @@ func (c *LSPClient) PrepareRename(ctx context.Context, uri string, pos types.Pos
 		return nil, nil
 	}
 	var v interface{}
-	_ = json.Unmarshal(result, &v)
+	if err := json.Unmarshal(result, &v); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
 	return v, nil
 }
 
@@ -1190,7 +1205,9 @@ func (c *LSPClient) ExecuteCommand(ctx context.Context, command string, args []i
 		return nil, nil
 	}
 	var v interface{}
-	_ = json.Unmarshal(result, &v)
+	if err := json.Unmarshal(result, &v); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
 	return v, nil
 }
 
