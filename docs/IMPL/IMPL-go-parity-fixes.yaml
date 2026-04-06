@@ -1,0 +1,881 @@
+title: Go LSP-MCP Parity Fixes (16 Inspector Findings)
+feature_slug: go-parity-fixes
+verdict: SUITABLE
+suitability_assessment: |
+    All 16 findings decompose cleanly across 4 files with disjoint ownership.
+    No root-cause investigation is required; each fix is a well-defined code
+    change. Interfaces are definable upfront (F10 interface extension is the
+    only cross-agent contract, and it is fully specifiable from the finding
+    description and current source). Parallelization value is moderate: the
+    Go build/test cycle is fast but Agent C owns a large, complex file
+    (internal/lsp/client.go) with 6 changes, making isolation worthwhile.
+
+    Estimated times:
+    - Scout phase: ~10 min (codebase read, interface contract definition, IMPL doc)
+    - Agent execution: ~20 min (4 agents x ~5 min avg, accounting for parallelism)
+    - Merge and verification: ~5 min
+    Total SAW time: ~35 min
+
+    Sequential baseline: ~40 min (4 agents x ~10 min sequential)
+    Time savings: ~5 min (12% faster)
+
+    Recommendation: Moderate gains; primary value is coordination and parallel
+    isolation of the 6-change client.go work.
+test_command: GOWORK=off go test ./...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: internal/types/types.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: extensions/haskell/haskell.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: internal/tools/refactoring.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/tools/navigation.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/tools/analysis.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/tools/utilities.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/tools/session.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/lsp/client.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/extensions/registry.go
+      agent: D
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: Extension
+      description: |-
+        The Extension interface gains two new methods so that extensions can
+        expose subscription resource handlers and prompt handlers.
+      definition: |
+        // Extension is implemented by per-language extension packages.
+        type Extension interface {
+            ToolHandlers() map[string]ToolHandler
+            ResourceHandlers() map[string]ResourceHandler
+            SubscriptionHandlers() map[string]ResourceHandler
+            PromptHandlers() map[string]interface{}
+        }
+      location: internal/types/types.go
+    - name: FormattedLocation
+      description: |-
+        JSON field names on FormattedLocation are changed to match the TypeScript
+        response shape. No Go struct field names change; only json tags change.
+      definition: |
+        type FormattedLocation struct {
+            FilePath  string `json:"file"`
+            StartLine int    `json:"line"`
+            StartCol  int    `json:"column"`
+            EndLine   int    `json:"end_line"`
+            EndCol    int    `json:"end_column"`
+        }
+      location: internal/types/types.go
+    - name: ExtensionRegistry.SubscriptionHandlers
+      description: New aggregation method on ExtensionRegistry, mirroring ToolHandlers pattern.
+      definition: |
+        func (r *ExtensionRegistry) SubscriptionHandlers() map[string]types.ResourceHandler
+      location: internal/extensions/registry.go
+    - name: ExtensionRegistry.PromptHandlers
+      description: New aggregation method on ExtensionRegistry, mirroring ToolHandlers pattern.
+      definition: |
+        func (r *ExtensionRegistry) PromptHandlers() map[string]interface{}
+      location: internal/extensions/registry.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Context
+            Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Files owned: internal/types/types.go, extensions/haskell/haskell.go
+            Use GOWORK=off for all build/test commands.
+
+            ## What to implement
+
+            ### F1 — FormattedLocation JSON field names
+            In `internal/types/types.go`, change the JSON struct tags on `FormattedLocation`
+            (lines 22-28). Do NOT rename the Go struct fields (FilePath, StartLine, StartCol,
+            EndLine, EndCol); only change the json tags:
+
+            Change from:
+            ```go
+            type FormattedLocation struct {
+            	FilePath  string `json:"filePath"`
+            	StartLine int    `json:"startLine"`
+            	StartCol  int    `json:"startColumn"`
+            	EndLine   int    `json:"endLine"`
+            	EndCol    int    `json:"endColumn"`
+            }
+            ```
+            Change to:
+            ```go
+            type FormattedLocation struct {
+            	FilePath  string `json:"file"`
+            	StartLine int    `json:"line"`
+            	StartCol  int    `json:"column"`
+            	EndLine   int    `json:"end_line"`
+            	EndCol    int    `json:"end_column"`
+            }
+            ```
+
+            ### F10 (interface part) — Extension interface new methods
+            In `internal/types/types.go`, add two new methods to the `Extension` interface
+            after the existing `ResourceHandlers` method:
+
+            Find this exact text:
+            ```go
+            // Extension is implemented by per-language extension packages.
+            type Extension interface {
+            	ToolHandlers() map[string]ToolHandler
+            	ResourceHandlers() map[string]ResourceHandler
+            }
+            ```
+            Replace it with:
+            ```go
+            // Extension is implemented by per-language extension packages.
+            type Extension interface {
+            	ToolHandlers() map[string]ToolHandler
+            	ResourceHandlers() map[string]ResourceHandler
+            	SubscriptionHandlers() map[string]ResourceHandler
+            	PromptHandlers() map[string]interface{}
+            }
+            ```
+
+            ### F10 (stub part) — HaskellExtension stub update
+            In `extensions/haskell/haskell.go`, add two stub method implementations to
+            `HaskellExtension` to satisfy the updated Extension interface.
+
+            Find this exact text:
+            ```go
+            func (h *HaskellExtension) ToolHandlers() map[string]types.ToolHandler         { return nil }
+            func (h *HaskellExtension) ResourceHandlers() map[string]types.ResourceHandler { return nil }
+            ```
+            Replace it with:
+            ```go
+            func (h *HaskellExtension) ToolHandlers() map[string]types.ToolHandler         { return nil }
+            func (h *HaskellExtension) ResourceHandlers() map[string]types.ResourceHandler { return nil }
+            func (h *HaskellExtension) SubscriptionHandlers() map[string]types.ResourceHandler { return nil }
+            func (h *HaskellExtension) PromptHandlers() map[string]interface{}              { return nil }
+            ```
+
+            ## Tests
+            No new test files are required. Verify that the build passes and that
+            the existing tests still pass after the interface expansion.
+
+            ## Verification gate
+            ```
+            cd /Users/dayna.blackwell/code/LSP-MCP-GO
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./...
+            GOWORK=off go test ./internal/types/... ./extensions/...
+            # Postconditions:
+            grep -n '"file"' internal/types/types.go        # must find json:"file" tag
+            grep -n '"line"' internal/types/types.go        # must find json:"line" tag
+            grep -n '"column"' internal/types/types.go      # must find json:"column" tag
+            grep -n 'SubscriptionHandlers' internal/types/types.go  # must exist in interface
+            grep -n 'PromptHandlers' internal/types/types.go        # must exist in interface
+            grep -n 'SubscriptionHandlers' extensions/haskell/haskell.go  # must exist
+            grep -n 'PromptHandlers' extensions/haskell/haskell.go        # must exist
+            ```
+
+            ## Constraints
+            - Do NOT rename the Go struct fields on FormattedLocation (FilePath, StartLine,
+              StartCol, EndLine, EndCol). Only the json tags change.
+            - Do NOT modify internal/extensions/registry.go — that is owned by Agent D.
+            - Do NOT add SubscriptionHandlers or PromptHandlers aggregation methods — those
+              are owned by Agent D.
+            - Do NOT modify files not in your ownership list.
+          files:
+            - internal/types/types.go
+            - extensions/haskell/haskell.go
+        - id: B
+          task: |
+            ## Context
+            Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Files owned: internal/tools/refactoring.go, internal/tools/navigation.go,
+              internal/tools/analysis.go, internal/tools/utilities.go, internal/tools/session.go
+            Use GOWORK=off for all build/test commands.
+
+            ## What to implement
+
+            ### F2 — apply_edit argument field name (refactoring.go:180)
+            In `HandleApplyEdit`, change `args["edit"]` to `args["workspace_edit"]`.
+
+            Find this exact text:
+            ```go
+            	edit, ok := args["edit"]
+            	if !ok || edit == nil {
+            		return types.ErrorResult("edit is required"), nil
+            	}
+            ```
+            Replace with:
+            ```go
+            	edit, ok := args["workspace_edit"]
+            	if !ok || edit == nil {
+            		return types.ErrorResult("workspace_edit is required"), nil
+            	}
+            ```
+
+            ### F3 — execute_command argument field name (refactoring.go:203)
+            In `HandleExecuteCommand`, change `args["arguments"]` to `args["args"]`.
+
+            Find this exact text:
+            ```go
+            	var cmdArgs []interface{}
+            	if v, ok := args["arguments"].([]interface{}); ok {
+            		cmdArgs = v
+            	}
+            ```
+            Replace with:
+            ```go
+            	var cmdArgs []interface{}
+            	if v, ok := args["args"].([]interface{}); ok {
+            		cmdArgs = v
+            	}
+            ```
+
+            ### F12 — format_document/format_range default tab_size (refactoring.go:100,145)
+            In `HandleFormatDocument`, change `tabSize := 4` to `tabSize := 2`.
+
+            Find this exact text (in the HandleFormatDocument function):
+            ```go
+            	tabSize := 4
+            	if v, err := toInt(args, "tab_size"); err == nil {
+            		tabSize = v
+            	}
+            ```
+            Replace with:
+            ```go
+            	tabSize := 2
+            	if v, err := toInt(args, "tab_size"); err == nil {
+            		tabSize = v
+            	}
+            ```
+
+            In `HandleFormatRange`, change `tabSize := 4` to `tabSize := 2`.
+
+            Find this exact text (in the HandleFormatRange function):
+            ```go
+            	tabSize := 4
+            	if v, tErr := toInt(args, "tab_size"); tErr == nil {
+            		tabSize = v
+            	}
+            ```
+            Replace with:
+            ```go
+            	tabSize := 2
+            	if v, tErr := toInt(args, "tab_size"); tErr == nil {
+            		tabSize = v
+            	}
+            ```
+
+            ### F4 — get_references include_declaration default (navigation.go:61)
+            In `HandleGetReferences`, change the default for `includeDecl` from `true` to `false`.
+
+            Find this exact text:
+            ```go
+            	includeDecl := true
+            	if v, ok := args["include_declaration"].(bool); ok {
+            		includeDecl = v
+            	}
+            ```
+            Replace with:
+            ```go
+            	includeDecl := false
+            	if v, ok := args["include_declaration"].(bool); ok {
+            		includeDecl = v
+            	}
+            ```
+
+            ### F7 — WaitForDiagnostics timeout (analysis.go:27,37)
+            In `HandleGetDiagnostics`, change both calls to `lsp.WaitForDiagnostics` from
+            timeout 10000 to 25000.
+
+            Find this exact text (single-file branch):
+            ```go
+            		if err := lsp.WaitForDiagnostics(ctx, client, []string{fileURI}, 10000); err != nil {
+            ```
+            Replace with:
+            ```go
+            		if err := lsp.WaitForDiagnostics(ctx, client, []string{fileURI}, 25000); err != nil {
+            ```
+
+            Find this exact text (all-documents branch):
+            ```go
+            		if err := lsp.WaitForDiagnostics(ctx, client, openURIs, 10000); err != nil {
+            ```
+            Replace with:
+            ```go
+            		if err := lsp.WaitForDiagnostics(ctx, client, openURIs, 25000); err != nil {
+            ```
+
+            ### F11 — did_change_watched_files rejects empty array (utilities.go:31)
+            In `HandleDidChangeWatchedFiles`, remove the `len(rawChanges) == 0` guard so that
+            an empty changes array is accepted (per LSP spec it is valid).
+
+            Find this exact text:
+            ```go
+            	rawChanges, ok := args["changes"].([]interface{})
+            	if !ok || len(rawChanges) == 0 {
+            		return types.ErrorResult("changes is required and must be a non-empty array"), nil
+            	}
+            ```
+            Replace with:
+            ```go
+            	rawChanges, ok := args["changes"].([]interface{})
+            	if !ok {
+            		return types.ErrorResult("changes must be an array"), nil
+            	}
+            ```
+
+            ### F16 — open_document undocumented text parameter (session.go:69)
+            Add a comment before the `text` extraction in `HandleOpenDocument` documenting
+            the Go-specific enhancement.
+
+            Find this exact text:
+            ```go
+            	text, _ := args["text"].(string)
+            	fileURI := CreateFileURI(filePath)
+            ```
+            Replace with:
+            ```go
+            	// text is an optional Go-specific extension not present in the TypeScript schema.
+            	// Callers may provide file content directly to avoid a disk read.
+            	// If omitted or empty, the LSP server will read the file from disk on didOpen.
+            	text, _ := args["text"].(string)
+            	fileURI := CreateFileURI(filePath)
+            ```
+
+            ## Tests
+            No new test files are required. Verify the build and existing tests pass.
+
+            ## Verification gate
+            ```
+            cd /Users/dayna.blackwell/code/LSP-MCP-GO
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./...
+            GOWORK=off go test ./internal/tools/...
+            # Postconditions:
+            grep -n 'workspace_edit' internal/tools/refactoring.go  # must find args["workspace_edit"]
+            grep -n '"args"' internal/tools/refactoring.go          # must find args["args"]
+            grep -n 'tabSize := 2' internal/tools/refactoring.go    # must appear twice (FormatDocument + FormatRange)
+            grep -n 'includeDecl := false' internal/tools/navigation.go  # must find false default
+            grep -n '25000' internal/tools/analysis.go              # must appear twice
+            grep -n 'rawChanges == 0' internal/tools/utilities.go   # must NOT match (0 lines)
+            grep -n 'Go-specific extension' internal/tools/session.go  # must find comment
+            ```
+
+            ## Constraints
+            - Do NOT change the Go field name `Arguments` anywhere in the LSP wire protocol
+              path (client.go `ExecuteCommand` passes `"arguments"` to the LSP server per
+              the LSP spec — only the MCP tool arg key changes from "arguments" to "args").
+            - Do NOT modify internal/lsp/client.go — that is owned by Agent C.
+            - Do NOT modify files not in your ownership list.
+          files:
+            - internal/tools/refactoring.go
+            - internal/tools/navigation.go
+            - internal/tools/analysis.go
+            - internal/tools/utilities.go
+            - internal/tools/session.go
+        - id: C
+          task: |
+            ## Context
+            Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Files owned: internal/lsp/client.go
+            Use GOWORK=off for all build/test commands.
+
+            ## What to implement
+
+            ### F5 — GetReferences skips WaitForFileIndexed (client.go:906)
+            In `GetReferences`, add a `WaitForFileIndexed` call after `waitForWorkspaceReady`.
+
+            Find this exact text:
+            ```go
+            	c.waitForWorkspaceReady(ctx)
+            	result, err := c.sendRequest(ctx, "textDocument/references", map[string]interface{}{
+            ```
+            Replace with:
+            ```go
+            	c.waitForWorkspaceReady(ctx)
+            	_ = c.WaitForFileIndexed(ctx, uri, 15000)
+            	result, err := c.sendRequest(ctx, "textDocument/references", map[string]interface{}{
+            ```
+
+            ### F6 — hover contents parsing (client.go:804)
+            In `GetInfoOnLocation`, replace the `fmt.Sprintf("%v", hover.Contents)` return
+            with a proper type-switch that handles string, MarkupContent map, and
+            MarkedString array shapes.
+
+            Find this exact text:
+            ```go
+            	return fmt.Sprintf("%v", hover.Contents), nil
+            }
+            ```
+            Replace with:
+            ```go
+            	switch v := hover.Contents.(type) {
+            	case string:
+            		return v, nil
+            	case map[string]interface{}:
+            		// MarkupContent: {kind: "markdown"|"plaintext", value: "..."}
+            		if val, ok := v["value"].(string); ok {
+            			return val, nil
+            		}
+            		return fmt.Sprintf("%v", v), nil
+            	case []interface{}:
+            		// MarkedString array: each element is string or {language, value}
+            		var parts []string
+            		for _, item := range v {
+            			switch s := item.(type) {
+            			case string:
+            				parts = append(parts, s)
+            			case map[string]interface{}:
+            				if val, ok := s["value"].(string); ok {
+            					parts = append(parts, val)
+            				}
+            			}
+            		}
+            		return strings.Join(parts, "\n"), nil
+            	default:
+            		return fmt.Sprintf("%v", hover.Contents), nil
+            	}
+            }
+            ```
+            Note: `strings` is already imported in client.go.
+
+            ### F8 — GetCodeActions empty context.diagnostics (client.go:830)
+            In `GetCodeActions`, replace the hardcoded empty diagnostics in the request
+            with a filtered slice from the stored diagnostics map.
+
+            The current code sends `"context": map[string]interface{}{"diagnostics": []interface{}{}}`.
+
+            Find this exact text:
+            ```go
+            	result, err := c.sendRequest(ctx, "textDocument/codeAction", map[string]interface{}{
+            		"textDocument": map[string]interface{}{"uri": uri},
+            		"range":        rng,
+            		"context":      map[string]interface{}{"diagnostics": []interface{}{}},
+            	})
+            ```
+            Replace with:
+            ```go
+            	// Retrieve diagnostics that overlap the requested range.
+            	c.diagMu.RLock()
+            	allDiags := c.diags[uri]
+            	c.diagMu.RUnlock()
+            	var overlapping []types.LSPDiagnostic
+            	for _, d := range allDiags {
+            		// A diagnostic overlaps if its range intersects the requested range.
+            		// Intersection: diag.start <= rng.end AND diag.end >= rng.start
+            		diagStart := d.Range.Start
+            		diagEnd := d.Range.End
+            		beforeRange := diagEnd.Line < rng.Start.Line ||
+            			(diagEnd.Line == rng.Start.Line && diagEnd.Character < rng.Start.Character)
+            		afterRange := diagStart.Line > rng.End.Line ||
+            			(diagStart.Line == rng.End.Line && diagStart.Character > rng.End.Character)
+            		if !beforeRange && !afterRange {
+            			overlapping = append(overlapping, d)
+            		}
+            	}
+            	if overlapping == nil {
+            		overlapping = []types.LSPDiagnostic{}
+            	}
+            	result, err := c.sendRequest(ctx, "textDocument/codeAction", map[string]interface{}{
+            		"textDocument": map[string]interface{}{"uri": uri},
+            		"range":        rng,
+            		"context":      map[string]interface{}{"diagnostics": overlapping},
+            	})
+            ```
+
+            ### F9 — subscribeToDiagnostics no replay (client.go:678)
+            In `SubscribeToDiagnostics`, after appending the callback, replay the current
+            diagnostics snapshot for all tracked URIs.
+            Copy the snapshot under the lock then release before firing callbacks —
+            calling the callback while holding diagMu causes a deadlock because the
+            callback itself may call SubscribeToDiagnostics.
+
+            Find this exact text:
+            ```go
+            // SubscribeToDiagnostics registers cb to be called on every publishDiagnostics notification.
+            func (c *LSPClient) SubscribeToDiagnostics(cb types.DiagnosticUpdateCallback) {
+            	c.diagMu.Lock()
+            	defer c.diagMu.Unlock()
+            	c.diagSubs = append(c.diagSubs, cb)
+            }
+            ```
+            Replace with:
+            ```go
+            // SubscribeToDiagnostics registers cb to be called on every publishDiagnostics notification.
+            // It immediately fires cb for every URI already in the diagnostics cache so that
+            // new subscribers do not miss diagnostics published before they registered.
+            func (c *LSPClient) SubscribeToDiagnostics(cb types.DiagnosticUpdateCallback) {
+            	c.diagMu.Lock()
+            	c.diagSubs = append(c.diagSubs, cb)
+            	// Replay existing diagnostics under the same lock to avoid races.
+            	snapshot := make(map[string][]types.LSPDiagnostic, len(c.diags))
+            	for uri, diags := range c.diags {
+            		cp := make([]types.LSPDiagnostic, len(diags))
+            		copy(cp, diags)
+            		snapshot[uri] = cp
+            	}
+            	c.diagMu.Unlock()
+            	for uri, diags := range snapshot {
+            		cb(uri, diags)
+            	}
+            }
+            ```
+
+            ### F13 — ReopenDocument errors on untracked URI (client.go:703)
+            In `ReopenDocument`, when the URI is not in `c.openDocs`, attempt to open the
+            file from disk instead of returning an error.
+
+            Find this exact text:
+            ```go
+            	c.mu.Lock()
+            	meta, ok := c.openDocs[uri]
+            	c.mu.Unlock()
+            	if !ok {
+            		return fmt.Errorf("document not open: %s", uri)
+            	}
+            ```
+            Replace with:
+            ```go
+            	c.mu.Lock()
+            	meta, ok := c.openDocs[uri]
+            	c.mu.Unlock()
+            	if !ok {
+            		// URI not tracked — attempt to open from disk, mirroring TypeScript behavior.
+            		logging.Log(logging.LevelDebug, "ReopenDocument: URI not tracked, attempting disk open: "+uri)
+            		filePath := uriToPath(uri)
+            		data, readErr := os.ReadFile(filePath)
+            		if readErr != nil {
+            			return fmt.Errorf("ReopenDocument: URI not tracked and disk read failed for %s: %w", uri, readErr)
+            		}
+            		return c.OpenDocument(ctx, uri, string(data), "plaintext")
+            	}
+            ```
+            Note: `os` and `logging` are already imported. The `ctx` argument from the
+            surrounding function should be passed to OpenDocument instead of nil:
+            the function signature is `ReopenDocument(ctx context.Context, uri string)`,
+            so use `ctx` not `nil`.
+
+            ### F14 — Timeout table covers only 2 methods (client.go:22)
+            Expand `requestTimeouts` to match the full 14-method TypeScript table.
+            The TypeScript table from `src/lspClient.ts` (lines 370-385) is:
+              - "initialize": 300000ms
+              - "textDocument/references": 120000ms
+              - "textDocument/hover": 30000ms
+              - "textDocument/completion": 30000ms
+              - "textDocument/codeAction": 30000ms
+              - "textDocument/definition": 30000ms
+              - "textDocument/documentSymbol": 30000ms
+              - "workspace/symbol": 30000ms
+              - "textDocument/signatureHelp": 30000ms
+              - "textDocument/formatting": 30000ms
+              - "textDocument/rename": 30000ms
+              - "workspace/executeCommand": 30000ms
+              - "textDocument/declaration": 30000ms
+              - "textDocument/prepareRename": 30000ms
+
+            Find this exact text:
+            ```go
+            // Per-method request timeouts (seconds).
+            var requestTimeouts = map[string]time.Duration{
+            	"initialize":               300 * time.Second,
+            	"textDocument/references":  120 * time.Second,
+            }
+            ```
+            Replace with:
+            ```go
+            // Per-method request timeouts. Mirrors the TypeScript REQUEST_TIMEOUTS table
+            // in src/lspClient.ts for parity. References require full workspace indexing;
+            // initialize can be slow on cold-start JVM-based servers.
+            var requestTimeouts = map[string]time.Duration{
+            	"initialize":                    300 * time.Second,
+            	"textDocument/references":       120 * time.Second,
+            	"textDocument/hover":            30 * time.Second,
+            	"textDocument/completion":       30 * time.Second,
+            	"textDocument/codeAction":       30 * time.Second,
+            	"textDocument/definition":       30 * time.Second,
+            	"textDocument/documentSymbol":   30 * time.Second,
+            	"workspace/symbol":              30 * time.Second,
+            	"textDocument/signatureHelp":    30 * time.Second,
+            	"textDocument/formatting":       30 * time.Second,
+            	"textDocument/rename":           30 * time.Second,
+            	"workspace/executeCommand":      30 * time.Second,
+            	"textDocument/declaration":      30 * time.Second,
+            	"textDocument/prepareRename":    30 * time.Second,
+            }
+            ```
+
+            ## Tests
+            No new test files required. Verify build and existing tests pass.
+
+            ## Verification gate
+            ```
+            cd /Users/dayna.blackwell/code/LSP-MCP-GO
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./...
+            GOWORK=off go test ./internal/lsp/...
+            # Postconditions:
+            grep -c '"textDocument/hover"' internal/lsp/client.go    # must be >= 1 (in timeout table)
+            grep -c 'WaitForFileIndexed' internal/lsp/client.go      # must be >= 2 (definition + call in GetReferences)
+            grep -n 'MarkupContent' internal/lsp/client.go           # must find the hover type-switch comment
+            grep -n 'overlapping' internal/lsp/client.go             # must find overlapping diagnostics logic
+            grep -n 'Replay existing diagnostics' internal/lsp/client.go  # must find replay comment
+            grep -n 'attempting disk open' internal/lsp/client.go    # must find fallback open log
+            grep -c '"textDocument/prepareRename"' internal/lsp/client.go  # must be >= 1 (in table)
+            ```
+
+            ## Constraints
+            - Do NOT touch the `"arguments"` key inside `ExecuteCommand` in client.go — that
+              is the LSP wire protocol key (correct per spec); only the MCP tool arg key
+              changes (owned by Agent B in refactoring.go).
+            - Do NOT modify any file outside internal/lsp/client.go.
+            - The `strings` package import is already present; do not add a duplicate import.
+            - For F13, pass `ctx` (not nil) as the first argument to `OpenDocument` in the
+              fallback path.
+          files:
+            - internal/lsp/client.go
+        - id: D
+          task: |
+            ## Context
+            Repo: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Files owned: internal/extensions/registry.go
+            Use GOWORK=off for all build/test commands.
+
+            NOTE: Agent A (running in parallel) modifies `internal/types/types.go` to add
+            `SubscriptionHandlers()` and `PromptHandlers()` to the `Extension` interface.
+            Your task depends on that interface change being present. When you build, the
+            interface will already be updated in types.go (agents run concurrently and merge
+            before your verification; wait for the full build to confirm).
+            If the build fails with "does not implement Extension", that means Agent A's
+            changes have not yet merged. In that case, add the same two method signatures
+            as stubs in your aggregation methods and proceed.
+
+            ## What to implement
+
+            ### F10 (registry part) — SubscriptionHandlers and PromptHandlers aggregation
+            Add two new aggregation methods to `ExtensionRegistry` in `registry.go`,
+            mirroring the existing `ToolHandlers` and `ResourceHandlers` pattern.
+
+            Insert the following two methods after the existing `ResourceHandlers` method.
+
+            Find this exact text (end of file / after ResourceHandlers):
+            ```go
+            // ResourceHandlers returns the merged map of all resource handlers across active extensions.
+            // Keys are prefixed with "<languageID>." to avoid conflicts.
+            func (r *ExtensionRegistry) ResourceHandlers() map[string]types.ResourceHandler {
+            	r.mu.RLock()
+            	defer r.mu.RUnlock()
+
+            	result := map[string]types.ResourceHandler{}
+            	for langID, ext := range r.extensions {
+            		for name, handler := range ext.ResourceHandlers() {
+            			result[langID+"."+name] = handler
+            		}
+            	}
+            	return result
+            }
+            ```
+            After that closing brace, append:
+            ```go
+
+            // SubscriptionHandlers returns the merged map of all subscription resource handlers
+            // across active extensions. Keys are prefixed with "<languageID>." to avoid conflicts.
+            func (r *ExtensionRegistry) SubscriptionHandlers() map[string]types.ResourceHandler {
+            	r.mu.RLock()
+            	defer r.mu.RUnlock()
+
+            	result := map[string]types.ResourceHandler{}
+            	for langID, ext := range r.extensions {
+            		for name, handler := range ext.SubscriptionHandlers() {
+            			result[langID+"."+name] = handler
+            		}
+            	}
+            	return result
+            }
+
+            // PromptHandlers returns the merged map of all prompt handlers across active extensions.
+            // Keys are prefixed with "<languageID>." to avoid conflicts.
+            func (r *ExtensionRegistry) PromptHandlers() map[string]interface{} {
+            	r.mu.RLock()
+            	defer r.mu.RUnlock()
+
+            	result := map[string]interface{}{}
+            	for langID, ext := range r.extensions {
+            		for name, handler := range ext.PromptHandlers() {
+            			result[langID+"."+name] = handler
+            		}
+            	}
+            	return result
+            }
+            ```
+
+            ### F15 — Extension compile-time vs runtime (registry.go)
+            Add a documentation comment near the top of `registry.go`, just before the
+            `factories` variable declaration, explaining the compile-time design choice.
+
+            Find this exact text:
+            ```go
+            // factories is the compile-time registry of extension constructors.
+            // Extensions register themselves by calling RegisterFactory in their init()
+            // functions. No concurrent writes occur after package initialisation.
+            ```
+            Replace with:
+            ```go
+            // factories is the compile-time registry of extension constructors.
+            // Extensions register themselves by calling RegisterFactory in their init()
+            // functions. No concurrent writes occur after package initialisation.
+            //
+            // Design note: unlike the TypeScript implementation which supports runtime
+            // extension loading, Go uses compile-time factory registration via init().
+            // This is a deliberate architectural choice: it eliminates dynamic plugin
+            // loading complexity and leverages Go's type system for safety. The trade-off
+            // is that adding a new extension requires recompilation and a new binary.
+            ```
+
+            ## Tests
+            No new test files required. Verify build and existing tests pass.
+
+            ## Verification gate
+            ```
+            cd /Users/dayna.blackwell/code/LSP-MCP-GO
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./...
+            GOWORK=off go test ./internal/extensions/...
+            # Postconditions:
+            grep -n 'SubscriptionHandlers' internal/extensions/registry.go  # must appear (method def)
+            grep -n 'PromptHandlers' internal/extensions/registry.go        # must appear (method def)
+            grep -n 'compile-time factory registration' internal/extensions/registry.go  # must find design note
+            grep -n 'recompilation' internal/extensions/registry.go         # must find trade-off note
+            ```
+
+            ## Constraints
+            - Do NOT modify internal/types/types.go — that is owned by Agent A.
+            - Do NOT add the two new interface methods to types.go — Agent A owns that.
+            - Do NOT modify files not in your ownership list.
+            - The SubscriptionHandlers and PromptHandlers methods on the registry iterate
+              `ext.SubscriptionHandlers()` and `ext.PromptHandlers()` — these methods will
+              return nil for the Haskell stub (nil map range is a no-op in Go, safe).
+          files:
+            - internal/extensions/registry.go
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+          repo: LSP-MCP-GO
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+          repo: LSP-MCP-GO
+        - type: test
+          command: GOWORK=off go test ./...
+          required: true
+          repo: LSP-MCP-GO
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |-
+            Agent C's F13 fix uses `nil` as the context argument when calling OpenDocument
+            in the fallback path, which could panic at runtime if OpenDocument dereferences ctx.
+          likelihood: medium
+          impact: medium
+          mitigation: |-
+            Agent C's task explicitly says to use `ctx` (the function parameter) not `nil`.
+            The constraint section repeats this. Verify with grep after implementation.
+        - scenario: |-
+            Agent D's aggregation methods call ext.SubscriptionHandlers() and
+            ext.PromptHandlers() before Agent A's interface change has merged, causing
+            a compile error "HaskellExtension does not implement Extension".
+          likelihood: low
+          impact: low
+          mitigation: |-
+            All agents are in Wave 1 (parallel). Merges happen before post-merge
+            quality gates run. Agent D's brief notes the dependency and includes a
+            fallback instruction. The issue only manifests if agents are run
+            sequentially before merge; the wave executor merges all branches before
+            running quality gates.
+        - scenario: |-
+            Agent C's F6 hover type-switch does not handle the MarkedString single-object
+            case (a plain {language, value} object, not wrapped in an array).
+          likelihood: low
+          impact: low
+          mitigation: |-
+            The LSP spec defines hover.contents as string | MarkupContent | MarkedString |
+            MarkedString[]. The `map[string]interface{}` arm covers both MarkupContent
+            (has "value") and single MarkedString (also has "value"). The fix correctly
+            handles both via the value key extraction.
+        - scenario: |-
+            F11 removes the len(rawChanges) == 0 guard. An empty changes array now
+            reaches the for loop which is a no-op, then calls DidChangeWatchedFiles
+            with an empty slice. This is correct per LSP spec but callers that passed
+            empty arrays expecting an error will silently succeed.
+          likelihood: low
+          impact: low
+          mitigation: |-
+            Per LSP spec an empty changes array is valid. The change is intentional.
+            No callers in this repo pass empty arrays in tests.
+        - scenario: |-
+            Agent C's F9 replay fires callbacks while holding the write lock (diagMu),
+            potentially deadlocking if a callback tries to call SubscribeToDiagnostics
+            again or read the diags map.
+          likelihood: low
+          impact: high
+          mitigation: |-
+            Agent C's task spec copies the snapshot under the lock then releases
+            the lock before firing callbacks. The replacement code uses `c.diagMu.Unlock()`
+            before iterating the snapshot. This avoids the deadlock. Review the
+            replacement carefully to ensure the unlock happens before the callback loop.
+known_issues:
+    - title: validate-briefs false positives (cross-repo brief validator limitations)
+      description: |-
+        finalize-scout validate_briefs reports false positives and cannot be
+        resolved without changing the brief text to remove all numeric references
+        from prose. Two validator bugs trigger here:
+        (1) symbol-missing checks test per-file rather than per-agent-owned-file-set;
+        Agent A owns both types.go and haskell.go, and symbols in types.go are
+        falsely flagged as missing from haskell.go.
+        (2) line-number checks parse parenthetical finding labels in prose (e.g.
+        "analysis.go:27,37") as agent line-anchor references.
+        All four structural checks pass: schema validation, E35 gaps, test cascade,
+        wave structure. Agent briefs use verbatim text anchors exclusively.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+    summary: 'Both previously-reported issues are resolved in the updated IMPL doc. (1) The F13 replacement code block now passes ctx (not nil) to OpenDocument in the fallback path — the error-severity conflict between the code block and the trailing note is eliminated. (2) The F9 SubscribeToDiagnostics brief prose now explicitly documents the deadlock prevention strategy: ''Copy the snapshot under the lock then release before firing callbacks — calling the callback while holding diagMu causes a deadlock because the callback itself may call SubscribeToDiagnostics.'' All file existence checks pass: all 9 owned files (action: modify) exist on disk. All prior PASS verdicts for Agents A, B, and D remain valid. No new issues found.'
+    reviewed_at: "2026-04-06T16:58:00Z"
+    issue_count: 0
+state: SCOUT_PENDING
+injection_method: hook
