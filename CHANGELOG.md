@@ -5,6 +5,13 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- `call_hierarchy` tool — single tool with `direction: "incoming" | "outgoing" | "both"` (default: both); hides the LSP prepare/incoming/outgoing three-step protocol behind one call; returns typed JSON with `items`, `incoming`, `outgoing` fields
+- Fuzzy position fallback for `go_to_definition` and `get_references` — when a position lookup returns empty, falls back to workspace symbol search using the hover name at that position and retries from each candidate; handles AI assistant position imprecision without correctness regression
+- `types.CallHierarchyItem`, `types.CallHierarchyIncomingCall`, `types.CallHierarchyOutgoingCall` — typed protocol structs replacing `interface{}` for call hierarchy responses
+- `types.TextEdit`, `types.SymbolInformation` — typed protocol structs for format and symbol responses
+- Tool count: 24 → 25
+
 ### Added (LSP 3.17 spec compliance)
 - `workspace/applyEdit` server-initiated request handler — client now responds `ApplyWorkspaceEditResult{applied:true}` instead of null; servers using this for code actions (e.g. file creation/rename) no longer silently fail
 - `documentChanges` resource operations: `CreateFile`, `RenameFile`, `DeleteFile` entries now executed (discriminated by `kind` field); previously only `TextDocumentEdit` was processed
