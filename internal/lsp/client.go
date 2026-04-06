@@ -39,6 +39,8 @@ var requestTimeouts = map[string]time.Duration{
 	"textDocument/prepareCallHierarchy": 30 * time.Second,
 	"callHierarchy/incomingCalls":        60 * time.Second,
 	"callHierarchy/outgoingCalls":         60 * time.Second,
+	"textDocument/semanticTokens/range":   30 * time.Second,
+	"textDocument/semanticTokens/full":    30 * time.Second,
 }
 
 const defaultTimeout = 30 * time.Second
@@ -116,6 +118,11 @@ type LSPClient struct {
 	// server capabilities (from initialize response)
 	capsMu       sync.RWMutex
 	capabilities map[string]interface{}
+
+	// semantic token legend (from initialize response)
+	legendMu        sync.RWMutex
+	legendTypes     []string
+	legendModifiers []string
 
 	// stderr drain
 	stderrBuf []byte
@@ -560,6 +567,18 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 				"callHierarchy": map[string]interface{}{
 					"dynamicRegistration": true,
 				},
+				"semanticTokens": map[string]interface{}{
+					"dynamicRegistration": true,
+					"requests": map[string]interface{}{
+						"range": true,
+						"full":  true,
+					},
+					"tokenTypes":              []string{},
+					"tokenModifiers":          []string{},
+					"formats":                 []string{"relative"},
+					"overlappingTokenSupport": false,
+					"multilineTokenSupport":   false,
+				},
 			},
 			"window": map[string]interface{}{
 				"workDoneProgress": true,
@@ -583,6 +602,37 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 		c.capsMu.Lock()
 		c.capabilities = initResult.Capabilities
 		c.capsMu.Unlock()
+	}
+
+	// Extract semantic token legend if advertised.
+	var fullResult struct {
+		Capabilities struct {
+			SemanticTokensProvider interface{} `json:"semanticTokensProvider"`
+		} `json:"capabilities"`
+	}
+	if err := json.Unmarshal(result, &fullResult); err == nil && fullResult.Capabilities.SemanticTokensProvider != nil {
+		// Legend may be nested inside an options object or at the top level.
+		var legend struct {
+			Legend struct {
+				TokenTypes     []string `json:"tokenTypes"`
+				TokenModifiers []string `json:"tokenModifiers"`
+			} `json:"legend"`
+			// Handle case where semanticTokensProvider IS the options object directly.
+			TokenTypes     []string `json:"tokenTypes"`
+			TokenModifiers []string `json:"tokenModifiers"`
+		}
+		b, _ := json.Marshal(fullResult.Capabilities.SemanticTokensProvider)
+		if err := json.Unmarshal(b, &legend); err == nil {
+			c.legendMu.Lock()
+			if len(legend.Legend.TokenTypes) > 0 {
+				c.legendTypes = legend.Legend.TokenTypes
+				c.legendModifiers = legend.Legend.TokenModifiers
+			} else if len(legend.TokenTypes) > 0 {
+				c.legendTypes = legend.TokenTypes
+				c.legendModifiers = legend.TokenModifiers
+			}
+			c.legendMu.Unlock()
+		}
 	}
 
 	// Set initialized = true BEFORE sending the notification (race fix).
@@ -1533,6 +1583,126 @@ func (c *LSPClient) getCapabilityRaw(key string) interface{} {
 	c.capsMu.RLock()
 	defer c.capsMu.RUnlock()
 	return c.capabilities[key]
+}
+
+// GetSemanticTokenLegend returns the token type and modifier name arrays
+// captured from the initialize response. Returns nil slices if the server
+// did not advertise semanticTokensProvider.
+func (c *LSPClient) GetSemanticTokenLegend() (tokenTypes []string, tokenModifiers []string) {
+	c.legendMu.RLock()
+	defer c.legendMu.RUnlock()
+	return c.legendTypes, c.legendModifiers
+}
+
+// GetSemanticTokens sends textDocument/semanticTokens/range for the given range.
+// Falls back to textDocument/semanticTokens/full when range is unsupported.
+// Returns decoded tokens with absolute 1-based positions and human-readable
+// type/modifier names resolved from the legend captured during Initialize.
+func (c *LSPClient) GetSemanticTokens(ctx context.Context, uri string, rng types.Range) ([]types.SemanticToken, error) {
+	// Check capability: semanticTokensProvider may be bool, object, or absent.
+	cap := c.getCapabilityRaw("semanticTokensProvider")
+	if cap == nil {
+		logging.Log(logging.LevelDebug, "server does not support semanticTokens")
+		return []types.SemanticToken{}, nil
+	}
+
+	c.legendMu.RLock()
+	tokenTypes := make([]string, len(c.legendTypes))
+	copy(tokenTypes, c.legendTypes)
+	tokenModifiers := make([]string, len(c.legendModifiers))
+	copy(tokenModifiers, c.legendModifiers)
+	c.legendMu.RUnlock()
+
+	// Try range request first; fall back to full if not supported.
+	useRange := false
+	switch v := cap.(type) {
+	case map[string]interface{}:
+		if req, ok := v["requests"].(map[string]interface{}); ok {
+			_, useRange = req["range"]
+		}
+	case bool:
+		// bool capability: full is implied, range may not be.
+		useRange = false
+	}
+
+	var raw json.RawMessage
+	var err error
+	if useRange {
+		raw, err = c.sendRequest(ctx, "textDocument/semanticTokens/range", map[string]interface{}{
+			"textDocument": map[string]interface{}{"uri": uri},
+			"range":        rng,
+		})
+	} else {
+		raw, err = c.sendRequest(ctx, "textDocument/semanticTokens/full", map[string]interface{}{
+			"textDocument": map[string]interface{}{"uri": uri},
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil || string(raw) == "null" {
+		return []types.SemanticToken{}, nil
+	}
+
+	var result struct {
+		Data []int `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal semanticTokens response: %w", err)
+	}
+
+	return decodeSemanticTokens(result.Data, tokenTypes, tokenModifiers), nil
+}
+
+// decodeSemanticTokens converts the flat delta-encoded int array from LSP into
+// absolute-position SemanticToken values. The LSP spec encodes tokens as a
+// flat []int with 5 integers per token:
+//   [deltaLine, deltaStartChar, length, tokenTypeIndex, tokenModifierBitmask]
+// Positions are delta-encoded: deltaLine is relative to previous token's line;
+// deltaStartChar is relative to previous token's startChar on the SAME line
+// (resets to absolute when line changes).
+func decodeSemanticTokens(data []int, tokenTypes []string, tokenModifiers []string) []types.SemanticToken {
+	tokens := make([]types.SemanticToken, 0, len(data)/5)
+	prevLine := 0
+	prevChar := 0
+	for i := 0; i+4 < len(data); i += 5 {
+		deltaLine := data[i]
+		deltaChar := data[i+1]
+		length := data[i+2]
+		typeIdx := data[i+3]
+		modBitmask := data[i+4]
+
+		if deltaLine > 0 {
+			prevLine += deltaLine
+			prevChar = deltaChar
+		} else {
+			prevChar += deltaChar
+		}
+
+		tokenType := ""
+		if typeIdx >= 0 && typeIdx < len(tokenTypes) {
+			tokenType = tokenTypes[typeIdx]
+		}
+
+		var modifiers []string
+		for bit := 0; bit < len(tokenModifiers); bit++ {
+			if modBitmask&(1<<bit) != 0 {
+				modifiers = append(modifiers, tokenModifiers[bit])
+			}
+		}
+		if modifiers == nil {
+			modifiers = []string{}
+		}
+
+		tokens = append(tokens, types.SemanticToken{
+			Line:      prevLine + 1,
+			Character: prevChar + 1,
+			Length:    length,
+			TokenType: tokenType,
+			Modifiers: modifiers,
+		})
+	}
+	return tokens
 }
 
 // ---- Parse Helpers ----
