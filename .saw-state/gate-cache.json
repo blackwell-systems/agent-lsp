@@ -336,6 +336,30 @@
         "cached_at": "2026-04-06T11:07:50.093165-07:00"
       }
     },
+    "b963a0fbfd1c10caa27fcd3f0d32a2c8": {
+      "test": {
+        "gate_type": "test",
+        "command": "GOWORK=off go test $(go list ./... | grep -v '/test$')",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "PASS\nok  \tgithub.com/blackwell-systems/lsp-mcp-go\t2.794s\n",
+        "stderr": "pattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies\n",
+        "from_cache": true,
+        "cached_at": "2026-04-06T12:29:31.804119-07:00"
+      }
+    },
+    "c360831e551d62c39805e1fb44a15652": {
+      "build": {
+        "gate_type": "build",
+        "command": "GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T12:29:28.262513-07:00"
+      }
+    },
     "c7f85dacdecd88c0ea115825a7723927": {
       "test": {
         "gate_type": "test",
@@ -418,6 +442,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T09:58:16.327577-07:00"
+      }
+    },
+    "e2052682910c7fe312218e359273b9a2": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "GOWORK=off go vet ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T12:29:28.669527-07:00"
       }
     },
     "e2d2f027ed28ee6e78ac6cd11370ca9f": {
