@@ -24,7 +24,7 @@ func HandleGetDiagnostics(ctx context.Context, client *lsp.LSPClient, args map[s
 		if err := client.ReopenDocument(ctx, fileURI); err != nil {
 			return types.ErrorResult(fmt.Sprintf("failed to reopen document: %s", err)), nil
 		}
-		if err := lsp.WaitForDiagnostics(ctx, client, []string{fileURI}, 10000); err != nil {
+		if err := lsp.WaitForDiagnostics(ctx, client, []string{fileURI}, 25000); err != nil {
 			return types.ErrorResult(fmt.Sprintf("waiting for diagnostics: %s", err)), nil
 		}
 		diags := client.GetDiagnostics(fileURI)
@@ -34,7 +34,7 @@ func HandleGetDiagnostics(ctx context.Context, client *lsp.LSPClient, args map[s
 			return types.ErrorResult(fmt.Sprintf("failed to reopen documents: %s", err)), nil
 		}
 		openURIs := client.GetOpenDocuments()
-		if err := lsp.WaitForDiagnostics(ctx, client, openURIs, 10000); err != nil {
+		if err := lsp.WaitForDiagnostics(ctx, client, openURIs, 25000); err != nil {
 			return types.ErrorResult(fmt.Sprintf("waiting for diagnostics: %s", err)), nil
 		}
 		all := client.GetAllDiagnostics()

@@ -28,8 +28,8 @@ func HandleDidChangeWatchedFiles(ctx context.Context, client *lsp.LSPClient, arg
 	}
 
 	rawChanges, ok := args["changes"].([]interface{})
-	if !ok || len(rawChanges) == 0 {
-		return types.ErrorResult("changes is required and must be a non-empty array"), nil
+	if !ok {
+		return types.ErrorResult("changes must be an array"), nil
 	}
 
 	changes := make([]types.FileChangeEvent, 0, len(rawChanges))
