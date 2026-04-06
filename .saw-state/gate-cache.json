@@ -660,6 +660,18 @@
         "cached_at": "2026-04-06T10:51:59.208897-07:00"
       }
     },
+    "9858de24be8dc86888d73f50866509c5": {
+      "build": {
+        "gate_type": "build",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 go build ./...",
+        "passed": false,
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "pattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies\n",
+        "from_cache": true,
+        "cached_at": "2026-04-06T16:16:42.690551-07:00"
+      }
+    },
     "99532a48ecd511afbedd768a24574b2c": {
       "lint": {
         "gate_type": "lint",
@@ -706,6 +718,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T12:57:59.637868-07:00"
+      }
+    },
+    "a0d36671f0e620606ef93366ae93b666": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 go vet ./...",
+        "passed": false,
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "pattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies\n",
+        "from_cache": true,
+        "cached_at": "2026-04-06T16:16:42.826256-07:00"
       }
     },
     "a9ab31cc3ff6525dc8a09afd20516cc7": {
@@ -814,6 +838,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T12:55:33.247913-07:00"
+      }
+    },
+    "c28a4d91ac14d7104b1d6dabb2ebbb42": {
+      "test": {
+        "gate_type": "test",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 go test ./...",
+        "passed": false,
+        "exit_code": 1,
+        "stdout": "FAIL\t./... [setup failed]\nFAIL\n",
+        "stderr": "# ./...\npattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies\n",
+        "from_cache": true,
+        "cached_at": "2026-04-06T16:16:42.939615-07:00"
       }
     },
     "c360831e551d62c39805e1fb44a15652": {
