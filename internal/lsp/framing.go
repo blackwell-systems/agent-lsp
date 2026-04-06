@@ -59,7 +59,6 @@ func (fr *FrameReader) ReadMessage() ([]byte, error) {
 // tryParse attempts to parse one complete Content-Length framed message from buf.
 // Returns (body, remaining, ok).
 func tryParse(buf []byte) ([]byte, []byte, bool) {
-	sep := []byte("\r\n\r\n")
 	idx := -1
 	for i := 0; i < len(buf)-3; i++ {
 		if buf[i] == '\r' && buf[i+1] == '\n' && buf[i+2] == '\r' && buf[i+3] == '\n' {
@@ -71,7 +70,6 @@ func tryParse(buf []byte) ([]byte, []byte, bool) {
 		return nil, buf, false
 	}
 
-	_ = sep
 	header := string(buf[:idx])
 	bodyStart := idx + 4
 
