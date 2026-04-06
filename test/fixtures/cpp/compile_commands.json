@@ -1,0 +1,12 @@
+[
+  {
+    "directory": "/Users/dayna.blackwell/code/LSP-MCP-GO/test/fixtures/cpp",
+    "command": "c++ -std=c++11 person.cpp greeter.cpp -o person",
+    "file": "person.cpp"
+  },
+  {
+    "directory": "/Users/dayna.blackwell/code/LSP-MCP-GO/test/fixtures/cpp",
+    "command": "c++ -std=c++11 person.cpp greeter.cpp -o person",
+    "file": "greeter.cpp"
+  }
+]
