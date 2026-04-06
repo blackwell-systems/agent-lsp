@@ -70,6 +70,41 @@ func ErrorResult(msg string) ToolResult {
 	}
 }
 
+// SymbolKind is the LSP SymbolKind enumeration (integer codes 1–26).
+type SymbolKind int
+
+// SymbolTag is an optional modifier tag on a symbol or hierarchy item.
+type SymbolTag int
+
+// CallHierarchyItem represents a single node in a call hierarchy graph.
+// See LSP 3.16 § CallHierarchyItem.
+type CallHierarchyItem struct {
+	Name           string      `json:"name"`
+	Kind           SymbolKind  `json:"kind"`
+	Tags           []SymbolTag `json:"tags,omitempty"`
+	Detail         *string     `json:"detail,omitempty"`
+	URI            string      `json:"uri"`
+	Range          Range       `json:"range"`
+	SelectionRange Range       `json:"selectionRange"`
+	Data           interface{} `json:"data,omitempty"`
+}
+
+// CallHierarchyIncomingCall represents a caller of a function in the call hierarchy.
+type CallHierarchyIncomingCall struct {
+	// From is the item that makes the call.
+	From CallHierarchyItem `json:"from"`
+	// FromRanges are the ranges within From at which the call appears.
+	FromRanges []Range `json:"fromRanges"`
+}
+
+// CallHierarchyOutgoingCall represents a callee of a function in the call hierarchy.
+type CallHierarchyOutgoingCall struct {
+	// To is the item that is called.
+	To CallHierarchyItem `json:"to"`
+	// FromRanges are the ranges within the caller at which the call appears.
+	FromRanges []Range `json:"fromRanges"`
+}
+
 // ToolHandler is the function signature for tool handler callbacks registered
 // by extensions. The ctx, client, and args mirror the standard tool handler args.
 type ToolHandler func(ctx interface{}, args map[string]interface{}) (ToolResult, error)
