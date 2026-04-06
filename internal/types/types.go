@@ -105,6 +105,25 @@ type CallHierarchyOutgoingCall struct {
 	FromRanges []Range `json:"fromRanges"`
 }
 
+// TextEdit represents a textual edit on a document (insert, replace, or delete).
+// See LSP 3.16 § TextEdit.
+type TextEdit struct {
+	// Range of text to replace. For insertions, Start == End.
+	Range   Range  `json:"range"`
+	NewText string `json:"newText"`
+}
+
+// SymbolInformation identifies a symbol in a workspace or document.
+// See LSP 3.16 § SymbolInformation.
+type SymbolInformation struct {
+	Name          string      `json:"name"`
+	Kind          SymbolKind  `json:"kind"`
+	Tags          []SymbolTag `json:"tags,omitempty"`
+	Deprecated    *bool       `json:"deprecated,omitempty"`
+	Location      Location    `json:"location"`
+	ContainerName *string     `json:"containerName,omitempty"`
+}
+
 // ToolHandler is the function signature for tool handler callbacks registered
 // by extensions. The ctx, client, and args mirror the standard tool handler args.
 type ToolHandler func(ctx interface{}, args map[string]interface{}) (ToolResult, error)
