@@ -890,7 +890,7 @@ scaffolds:
         var _ = context.Background
         var _ = lsp.NewLSPClient
       import_path: github.com/blackwell-systems/lsp-mcp-go/internal/session
-      status: pending
+      status: committed (5c57099)
 pre_mortem:
     overall_risk: medium
     rows:
