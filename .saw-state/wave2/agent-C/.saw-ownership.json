@@ -1,7 +1,7 @@
 {
   "agent": "C",
   "wave": 2,
-  "impl_doc": "docs/IMPL/IMPL-call-hierarchy-fuzzy-position.yaml",
+  "impl_doc": "docs/IMPL/IMPL-semantic-tokens.yaml",
   "owned_files": [
     "cmd/lsp-mcp-go/server.go"
   ],

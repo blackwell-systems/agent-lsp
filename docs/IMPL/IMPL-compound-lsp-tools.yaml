@@ -1,0 +1,639 @@
+title: Compound LSP Tools for Reduced Round Trips
+feature_slug: compound-lsp-tools
+verdict: SUITABLE_WITH_CAVEATS
+suitability_assessment: |
+    Conservative scope: Adding 2 compound tools (analyze_symbol, explore_file)
+    that bundle proven high-frequency call sequences. Skipping prepare_refactor
+    until concrete evidence of friction emerges from real usage.
+
+    **Validated pain points:**
+    1. analyze_symbol: AI agents commonly call hover → refs → call_hierarchy when
+       investigating a function or type. This 3-call sequence appears in every
+       "explain this function" or "find all uses" workflow.
+    2. explore_file: When opening a file for the first time, agents need both
+       document symbols (structure) and diagnostics (errors). Currently requires
+       2 sequential calls; bundling reduces latency.
+
+    **File decomposition:** 3 new files created (2 handlers + 1 test), 1 file
+    modified (server.go for registration), 1 scaffold file (shared types). Each
+    compound tool handler is self-contained. Server registration is append-only.
+    Fully disjoint ownership across 2 agents.
+
+    **Interface discoverability:** All compound tools compose existing atomic
+    tool handlers (HandleGetInfoOnLocation, HandleGetReferences,
+    HandleCallHierarchy, HandleGetDocumentSymbols, HandleGetDiagnostics). No
+    new LSP protocol calls. Interfaces are fully defined before implementation.
+
+    **Pre-implementation status:** No existing compound tools. This is net-new
+    functionality that augments (not replaces) the atomic tool set.
+
+    **Parallelization value check:**
+    - Build/test cycle length: ~5-8s for Go builds on this codebase (moderate benefit)
+    - Files per agent: Agent A owns 2 files (handler + test), Agent B owns 2
+      files (handler + registration), both can run simultaneously
+    - Agent independence: Fully independent (single wave, no dependencies)
+    - Task complexity: Moderate — new tool handlers + tests + registration,
+      not trivial find-and-replace
+
+    **High parallelization value:** Agents are independent AND tasks involve
+    non-trivial logic (composition, error handling, JSON marshaling).
+
+    **Caveats:**
+    1. This work is speculative — we do not have empirical data on AI agent
+       round-trip frequencies for this specific MCP server. The compound pattern
+       is validated by CodeMCP's experience (60-70% reduction), but lsp-mcp-go
+       is a different domain.
+    2. Atomic tools remain unchanged. Compound tools are convenience shortcuts,
+       not replacements. If agents don't use them, there's no regression.
+    3. No batch operations (batchGet, batchSearch) — those are out of scope per
+       the coordinator's guidance.
+
+    Estimated times:
+    - Scout phase: ~8 min (dependency mapping, interface contracts, IMPL doc)
+    - Agent execution: ~4 min (2 agents × 4 min avg, accounting for parallelism)
+    - Merge & verification: ~2 min
+    Total SAW time: ~14 min
+
+    Sequential baseline: ~12 min (2 agents × 6 min avg sequential time)
+    Time savings: Marginal (~2 min, 17% faster)
+
+    Recommendation: Proceed as SUITABLE WITH CAVEATS. The value is not primarily
+    speed (parallelization savings are marginal) but coordination and audit trail.
+    The IMPL doc serves as a spec for the compound tools and a progress tracker.
+test_command: go build ./... && go test ./internal/tools -short
+lint_command: go vet ./...
+file_ownership:
+    - file: internal/tools/compound.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/tools/compound_test.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/tools/compound_explore.go
+      agent: B
+      wave: 1
+      action: new
+    - file: cmd/lsp-mcp-go/server.go
+      agent: B
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: AnalyzeSymbolArgs
+      description: Input type for analyze_symbol compound tool
+      definition: |
+        type AnalyzeSymbolArgs struct {
+            FilePath   string `json:"file_path"`
+            LanguageID string `json:"language_id,omitempty"`
+            Line       int    `json:"line"`
+            Column     int    `json:"column"`
+            IncludeDeclaration bool `json:"include_declaration,omitempty"`
+            CallHierarchyDirection string `json:"call_hierarchy_direction,omitempty"`
+        }
+      location: internal/tools/compound_types.go
+    - name: AnalyzeSymbolResult
+      description: Output type for analyze_symbol compound tool
+      definition: |
+        type AnalyzeSymbolResult struct {
+            Hover      string                         `json:"hover"`
+            References []types.FormattedLocation      `json:"references"`
+            CallHierarchy *CallHierarchyData          `json:"call_hierarchy,omitempty"`
+        }
+      location: internal/tools/compound_types.go
+    - name: ExploreFileArgs
+      description: Input type for explore_file compound tool
+      definition: |
+        type ExploreFileArgs struct {
+            FilePath   string `json:"file_path"`
+            LanguageID string `json:"language_id,omitempty"`
+        }
+      location: internal/tools/compound_types.go
+    - name: ExploreFileResult
+      description: Output type for explore_file compound tool
+      definition: |
+        type ExploreFileResult struct {
+            Symbols     []interface{}          `json:"symbols"`
+            Diagnostics []types.LSPDiagnostic  `json:"diagnostics"`
+        }
+      location: internal/tools/compound_types.go
+    - name: HandleAnalyzeSymbol
+      description: Handler for analyze_symbol compound tool (hover + refs + call hierarchy)
+      definition: |
+        func HandleAnalyzeSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+      location: internal/tools/compound.go
+    - name: HandleExploreFile
+      description: Handler for explore_file compound tool (symbols + diagnostics)
+      definition: |
+        func HandleExploreFile(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+      location: internal/tools/compound_explore.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Context
+            Repository: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Files: internal/tools/compound.go (new), internal/tools/compound_test.go (new)
+            Shared types: internal/tools/compound_types.go (scaffold, already exists)
+
+            ## What to implement
+
+            Create the `analyze_symbol` compound tool handler and tests. The shared types
+            (AnalyzeSymbolArgs, AnalyzeSymbolResult, etc.) are already defined in
+            compound_types.go via scaffold — do not create or modify that file.
+
+            ### Step 1: Create compound.go with HandleAnalyzeSymbol
+
+            Create `internal/tools/compound.go` with the `HandleAnalyzeSymbol` function.
+
+            Required imports:
+            ```go
+            import (
+                "context"
+                "encoding/json"
+                "fmt"
+
+                "github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/types"
+            )
+            ```
+
+            Implementation guidance:
+
+            1. **Extract position from args** using the existing `extractPosition` helper
+            2. **Call HandleGetInfoOnLocation** internally to get hover text
+            3. **Call HandleGetReferences** internally to get all references
+            4. **Call HandleCallHierarchy** internally to get call hierarchy
+            5. **Compose results** into AnalyzeSymbolResult
+            6. **Handle errors gracefully**: if hover fails, set empty string; if refs fail,
+               set empty array; if call hierarchy fails, set nil (don't fail entire request)
+            7. **Marshal to JSON** and return as types.TextResult
+
+            Function signature:
+            ```go
+            func HandleAnalyzeSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            ```
+
+            Pattern to follow (compose existing handlers, not raw LSP calls):
+
+            ```go
+            func HandleAnalyzeSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+                if err := CheckInitialized(client); err != nil {
+                    return types.ErrorResult(err.Error()), nil
+                }
+
+                // Extract common fields
+                filePath, ok := args["file_path"].(string)
+                if !ok || filePath == "" {
+                    return types.ErrorResult("file_path is required"), nil
+                }
+
+                line, col, err := extractPosition(args)
+                if err != nil {
+                    return types.ErrorResult(err.Error()), nil
+                }
+
+                languageID, _ := args["language_id"].(string)
+                if languageID == "" {
+                    languageID = "plaintext"
+                }
+
+                result := AnalyzeSymbolResult{}
+
+                // 1. Get hover info (graceful failure)
+                hoverResult, _ := HandleGetInfoOnLocation(ctx, client, args)
+                if !hoverResult.IsError && len(hoverResult.Content) > 0 {
+                    if textContent, ok := hoverResult.Content[0].(*types.TextContent); ok {
+                        result.Hover = textContent.Text
+                    }
+                }
+
+                // 2. Get references (graceful failure)
+                refsResult, _ := HandleGetReferences(ctx, client, args)
+                if !refsResult.IsError && len(refsResult.Content) > 0 {
+                    if textContent, ok := refsResult.Content[0].(*types.TextContent); ok {
+                        var refs []types.FormattedLocation
+                        _ = json.Unmarshal([]byte(textContent.Text), &refs)
+                        result.References = refs
+                    }
+                }
+
+                // 3. Get call hierarchy (graceful failure)
+                chArgs := map[string]interface{}{
+                    "file_path":   filePath,
+                    "language_id": languageID,
+                    "line":        line,
+                    "column":      col,
+                }
+                if dir, ok := args["call_hierarchy_direction"].(string); ok && dir != "" {
+                    chArgs["direction"] = dir
+                }
+                chResult, _ := HandleCallHierarchy(ctx, client, chArgs)
+                if !chResult.IsError && len(chResult.Content) > 0 {
+                    if textContent, ok := chResult.Content[0].(*types.TextContent); ok {
+                        var chData CallHierarchyData
+                        _ = json.Unmarshal([]byte(textContent.Text), &chData)
+                        result.CallHierarchy = &chData
+                    }
+                }
+
+                // Marshal and return
+                data, mErr := json.Marshal(result)
+                if mErr != nil {
+                    return types.ErrorResult(fmt.Sprintf("marshaling result: %s", mErr)), nil
+                }
+                return types.TextResult(string(data)), nil
+            }
+            ```
+
+            **Note:** The Content field in ToolResult is `[]types.Content`, which is an interface.
+            Cast to `*types.TextContent` before accessing `.Text`. Handle cast failure gracefully.
+
+            ### Step 2: Create compound_test.go
+
+            Create `internal/tools/compound_test.go` with unit tests for HandleAnalyzeSymbol.
+
+            Required imports:
+            ```go
+            import (
+                "context"
+                "testing"
+            )
+            ```
+
+            Test structure:
+
+            ```go
+            package tools
+
+            import (
+                "context"
+                "testing"
+            )
+
+            func TestHandleAnalyzeSymbol_NilClient(t *testing.T) {
+                args := map[string]interface{}{
+                    "file_path": "/tmp/test.go",
+                    "line":      1,
+                    "column":    1,
+                }
+                result, err := HandleAnalyzeSymbol(context.Background(), nil, args)
+                if err != nil {
+                    t.Fatalf("unexpected error: %v", err)
+                }
+                if !result.IsError {
+                    t.Errorf("expected error result for nil client")
+                }
+            }
+
+            func TestHandleAnalyzeSymbol_MissingFilePath(t *testing.T) {
+                args := map[string]interface{}{
+                    "line":   1,
+                    "column": 1,
+                }
+                result, err := HandleAnalyzeSymbol(context.Background(), nil, args)
+                if err != nil {
+                    t.Fatalf("unexpected error: %v", err)
+                }
+                if !result.IsError {
+                    t.Errorf("expected error result for missing file_path")
+                }
+            }
+
+            func TestHandleExploreFile_NilClient(t *testing.T) {
+                args := map[string]interface{}{
+                    "file_path": "/tmp/test.go",
+                }
+                result, err := HandleExploreFile(context.Background(), nil, args)
+                if err != nil {
+                    t.Fatalf("unexpected error: %v", err)
+                }
+                if !result.IsError {
+                    t.Errorf("expected error result for nil client")
+                }
+            }
+
+            func TestHandleExploreFile_MissingFilePath(t *testing.T) {
+                args := map[string]interface{}{}
+                result, err := HandleExploreFile(context.Background(), nil, args)
+                if err != nil {
+                    t.Fatalf("unexpected error: %v", err)
+                }
+                if !result.IsError {
+                    t.Errorf("expected error result for missing file_path")
+                }
+            }
+            ```
+
+            Do NOT attempt integration tests (those require a real LSP server running).
+            Only test error cases and nil-client behavior.
+
+            ## Interface contracts you must follow
+
+            - `AnalyzeSymbolArgs`, `AnalyzeSymbolResult`, `CallHierarchyData` types from compound_types.go (scaffold)
+            - `HandleAnalyzeSymbol` signature: `func(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)`
+
+            ## Tests required
+
+            4 unit tests in compound_test.go (2 for analyze_symbol, 2 for explore_file).
+            The explore_file tests are stubs — Agent B implements HandleExploreFile but
+            both test sets go in the same file for consistency.
+
+            ## Verification gate (Field 6)
+
+            Run these checks after implementation:
+
+            ```bash
+            # Build passes
+            go build ./...
+
+            # Tests pass
+            go test ./internal/tools -short -run "TestHandleAnalyzeSymbol"
+
+            # Vet passes
+            go vet ./internal/tools
+
+            # Postcondition: analyze_symbol handler exists
+            grep -q "func HandleAnalyzeSymbol" internal/tools/compound.go
+            # Expected: exit 0 (pattern found)
+
+            # Postcondition: handler composes existing tools (not raw LSP calls)
+            grep -c "HandleGetInfoOnLocation\|HandleGetReferences\|HandleCallHierarchy" internal/tools/compound.go
+            # Expected: 3 (calls all three handlers)
+
+            # Postcondition: test file has correct test count
+            grep -c "^func Test" internal/tools/compound_test.go
+            # Expected: 4 (2 per compound tool)
+            ```
+
+            ## Constraints
+
+            - Do NOT create or modify compound_types.go (scaffold already exists)
+            - Do NOT modify existing atomic tool handlers (HandleGetInfoOnLocation, HandleGetReferences, HandleCallHierarchy)
+            - Do NOT add registration code to server.go — Agent B handles that
+            - Graceful degradation: if any sub-call fails, return partial results with that field empty/nil
+            - Cast Content elements to *types.TextContent before accessing .Text field
+          files:
+            - internal/tools/compound.go
+            - internal/tools/compound_test.go
+        - id: B
+          task: |
+            ## Context
+            Repository: /Users/dayna.blackwell/code/LSP-MCP-GO
+            Files: internal/tools/compound_explore.go (new), cmd/lsp-mcp-go/server.go (modify)
+            Shared types: internal/tools/compound_types.go (scaffold, already exists)
+
+            ## What to implement
+
+            Create the `explore_file` compound tool handler and register both compound tools
+            in server.go. The shared types (ExploreFileArgs, ExploreFileResult) are already
+            defined in compound_types.go via scaffold — do not create or modify that file.
+
+            ### Step 1: Create compound_explore.go with HandleExploreFile
+
+            Create `internal/tools/compound_explore.go` with the `HandleExploreFile` function.
+
+            Required imports:
+            ```go
+            import (
+                "context"
+                "encoding/json"
+                "fmt"
+
+                "github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/types"
+            )
+            ```
+
+            Implementation guidance:
+
+            1. **Extract file_path and language_id from args**
+            2. **Call HandleGetDocumentSymbols** internally to get file structure
+            3. **Call HandleGetDiagnostics** internally to get errors/warnings
+            4. **Compose results** into ExploreFileResult
+            5. **Handle errors gracefully**: if symbols fail, set empty array; if diagnostics fail, set empty array
+            6. **Marshal to JSON** and return as types.TextResult
+
+            Function signature:
+            ```go
+            func HandleExploreFile(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            ```
+
+            Pattern to follow:
+
+            ```go
+            func HandleExploreFile(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+                if err := CheckInitialized(client); err != nil {
+                    return types.ErrorResult(err.Error()), nil
+                }
+
+                filePath, ok := args["file_path"].(string)
+                if !ok || filePath == "" {
+                    return types.ErrorResult("file_path is required"), nil
+                }
+
+                result := ExploreFileResult{}
+
+                // 1. Get document symbols (graceful failure)
+                symbolsResult, _ := HandleGetDocumentSymbols(ctx, client, args)
+                if !symbolsResult.IsError && len(symbolsResult.Content) > 0 {
+                    if textContent, ok := symbolsResult.Content[0].(*types.TextContent); ok {
+                        var symbols []interface{}
+                        _ = json.Unmarshal([]byte(textContent.Text), &symbols)
+                        result.Symbols = symbols
+                    }
+                }
+
+                // 2. Get diagnostics (graceful failure)
+                diagResult, _ := HandleGetDiagnostics(ctx, client, args)
+                if !diagResult.IsError && len(diagResult.Content) > 0 {
+                    if textContent, ok := diagResult.Content[0].(*types.TextContent); ok {
+                        var diagMap map[string][]types.LSPDiagnostic
+                        _ = json.Unmarshal([]byte(textContent.Text), &diagMap)
+                        fileURI := CreateFileURI(filePath)
+                        if diags, ok := diagMap[fileURI]; ok {
+                            result.Diagnostics = diags
+                        }
+                    }
+                }
+
+                // Marshal and return
+                data, mErr := json.Marshal(result)
+                if mErr != nil {
+                    return types.ErrorResult(fmt.Sprintf("marshaling result: %s", mErr)), nil
+                }
+                return types.TextResult(string(data)), nil
+            }
+            ```
+
+            ### Step 2: Register both compound tools in server.go
+
+            Read `cmd/lsp-mcp-go/server.go` and find the section where tools are registered.
+            The last tool is `get_semantic_tokens` (line ~450).
+
+            **Insert after the get_semantic_tokens registration** (before the "Register resources" comment):
+
+            Find this exact text:
+
+            ```
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "get_semantic_tokens",
+            		Description: "Get semantic tokens for a range in a file. Returns each token's type (function, variable, keyword, parameter, type, etc.) and modifiers (readonly, static, deprecated, etc.) with 1-based line/character positions. Use this to understand the syntactic role of code elements — distinct from hover which gives documentation. Only available when the language server supports textDocument/semanticTokens.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetSemanticTokensArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleGetSemanticTokens(ctx, cs.get(), toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	// ------- Register resources -------
+            ```
+
+            Insert between the closing `})` of get_semantic_tokens and the resources comment:
+
+            ```go
+
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "analyze_symbol",
+            		Description: "Compound tool: Get hover info, references, and call hierarchy for a symbol in one call. Reduces round trips from 3 sequential calls to 1. Returns partial results if any sub-operation fails (e.g., empty references array if server doesn't support textDocument/references).",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args tools.AnalyzeSymbolArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleAnalyzeSymbol(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "explore_file",
+            		Description: "Compound tool: Get document symbols and diagnostics for a file in one call. Use this when opening a file for the first time to understand its structure and errors. Reduces round trips from 2 sequential calls to 1.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args tools.ExploreFileArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleExploreFile(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+            ```
+
+            Use the Edit tool with exact text anchors from above.
+
+            ## Interface contracts you must follow
+
+            - `ExploreFileArgs`, `ExploreFileResult`, `AnalyzeSymbolArgs` types from compound_types.go (scaffold)
+            - `HandleExploreFile` signature: `func(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)`
+
+            ## Tests required
+
+            No new tests — Agent A already created compound_test.go with stubs for both tools.
+
+            ## Verification gate (Field 6)
+
+            Run these checks after implementation:
+
+            ```bash
+            # Build passes
+            go build ./...
+
+            # Tests pass
+            go test ./internal/tools -short
+
+            # Vet passes
+            go vet ./...
+
+            # Postcondition: explore_file handler exists
+            grep -q "func HandleExploreFile" internal/tools/compound_explore.go
+            # Expected: exit 0 (pattern found)
+
+            # Postcondition: compound tools registered in server.go
+            grep -c "analyze_symbol\|explore_file" cmd/lsp-mcp-go/server.go
+            # Expected: 4 (2 tool names × 2 occurrences each: Name field + description)
+
+            # Postcondition: registrations use correct arg types
+            grep -c "tools.AnalyzeSymbolArgs\|tools.ExploreFileArgs" cmd/lsp-mcp-go/server.go
+            # Expected: 2 (one per tool registration)
+            ```
+
+            ## Constraints
+
+            - Do NOT create or modify compound_types.go (scaffold already exists)
+            - Do NOT modify compound.go or compound_test.go (Agent A owns those)
+            - Insert tool registrations in server.go AFTER get_semantic_tokens, BEFORE resources section
+            - Use exact text anchors when editing server.go (see Step 2 above)
+            - Cast Content elements to *types.TextContent before accessing .Text field
+          files:
+            - internal/tools/compound_explore.go
+            - cmd/lsp-mcp-go/server.go
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: go build ./...
+          required: true
+        - type: test
+          command: go test ./internal/tools -short
+          required: true
+        - type: lint
+          command: go vet ./...
+          required: true
+scaffolds:
+    - file_path: internal/tools/compound_types.go
+      contents: |
+        package tools
+
+        import "github.com/blackwell-systems/lsp-mcp-go/internal/types"
+
+        // AnalyzeSymbolArgs is the input for analyze_symbol compound tool.
+        type AnalyzeSymbolArgs struct {
+            FilePath               string `json:"file_path"`
+            LanguageID             string `json:"language_id,omitempty"`
+            Line                   int    `json:"line"`
+            Column                 int    `json:"column"`
+            IncludeDeclaration     bool   `json:"include_declaration,omitempty"`
+            CallHierarchyDirection string `json:"call_hierarchy_direction,omitempty"` // "incoming", "outgoing", "both" (default)
+        }
+
+        // AnalyzeSymbolResult is the output for analyze_symbol compound tool.
+        type AnalyzeSymbolResult struct {
+            Hover         string                            `json:"hover"`
+            References    []types.FormattedLocation         `json:"references"`
+            CallHierarchy *CallHierarchyData                `json:"call_hierarchy,omitempty"`
+        }
+
+        // CallHierarchyData contains call hierarchy items and calls.
+        type CallHierarchyData struct {
+            Items    []types.CallHierarchyItem         `json:"items"`
+            Incoming []types.CallHierarchyIncomingCall `json:"incoming,omitempty"`
+            Outgoing []types.CallHierarchyOutgoingCall `json:"outgoing,omitempty"`
+        }
+
+        // ExploreFileArgs is the input for explore_file compound tool.
+        type ExploreFileArgs struct {
+            FilePath   string `json:"file_path"`
+            LanguageID string `json:"language_id,omitempty"`
+        }
+
+        // ExploreFileResult is the output for explore_file compound tool.
+        type ExploreFileResult struct {
+            Symbols     []interface{}         `json:"symbols"`
+            Diagnostics []types.LSPDiagnostic `json:"diagnostics"`
+        }
+      status: pending
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: Agent A or B references AnalyzeSymbolResult/ExploreFileResult fields incorrectly (wrong field names, wrong types)
+          likelihood: low
+          impact: medium
+          mitigation: Scaffold file (compound_types.go) defines exact types before Wave 1 launches. Both agents import from the same package and compile against the same types. No room for mismatch.
+        - scenario: Agent B inserts tool registrations at wrong location in server.go, causing syntax error or overwriting existing tools
+          likelihood: medium
+          impact: medium
+          mitigation: Agent B task includes exact 10-line text anchor (get_semantic_tokens closing block + resources comment). Use Edit tool with verbatim context.
+        - scenario: HandleAnalyzeSymbol or HandleExploreFile fail to handle Content array correctly (assumes Content[0] exists when result is error, or doesn't cast to TextContent)
+          likelihood: medium
+          impact: medium
+          mitigation: Both agent tasks warn about type assertion and graceful error handling. Check result.IsError AND len(Content) > 0 before casting to *types.TextContent.
+        - scenario: Tests in compound_test.go fail because HandleExploreFile doesn't exist yet when Agent A writes tests
+          likelihood: high
+          impact: low
+          mitigation: Agent A writes stub tests for both tools (TestHandleExploreFile_NilClient, TestHandleExploreFile_MissingFilePath). These tests only check error cases and don't call the real implementation — they will compile and pass even if HandleExploreFile is not implemented yet.
+        - scenario: go build fails due to missing imports in compound.go or compound_explore.go
+          likelihood: low
+          impact: low
+          mitigation: Both agent tasks list required imports explicitly (context, encoding/json, fmt, internal/lsp, internal/types). Copy-paste from task prompt.
+state: REVIEWED
+injection_method: hook
