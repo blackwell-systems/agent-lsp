@@ -72,6 +72,18 @@
         "cached_at": "2026-04-06T10:47:10.393471-07:00"
       }
     },
+    "256baf8bad56423d261887873b2c6606": {
+      "test": {
+        "gate_type": "test",
+        "command": "GOWORK=off go test -run TestBinary ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "ok  \tgithub.com/blackwell-systems/lsp-mcp-go\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/cmd/lsp-mcp-go\t[no test files]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/extensions/haskell\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/config\t(cached) [no tests to run]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/extensions\t(cached) [no tests to run]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/logging\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/lsp\t(cached) [no tests to run]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/resources\t(cached) [no tests to run]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/tools\t(cached) [no tests to run]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/types\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/test\t(cached) [no tests to run]\n",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T15:35:37.603258-07:00"
+      }
+    },
     "271e5719e4c26afd23cd191fd67b739a": {
       "test": {
         "gate_type": "test",
@@ -420,6 +432,18 @@
         "cached_at": "2026-04-06T12:30:34.505117-07:00"
       }
     },
+    "6f0e8ec526069b6f358756d542c3aed2": {
+      "build": {
+        "gate_type": "build",
+        "command": "GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T15:35:36.755351-07:00"
+      }
+    },
     "746c96e5a49cd1cdb3b2f369275ae187": {
       "build": {
         "gate_type": "build",
@@ -516,6 +540,18 @@
         "cached_at": "2026-04-06T10:51:59.208897-07:00"
       }
     },
+    "99532a48ecd511afbedd768a24574b2c": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "GOWORK=off go vet ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T15:33:27.477339-07:00"
+      }
+    },
     "9962937c2f1d282ecfd67639084645dd": {
       "lint": {
         "gate_type": "lint",
@@ -528,6 +564,18 @@
         "cached_at": "2026-04-06T12:21:27.392614-07:00"
       }
     },
+    "9c00bceba24d28f4a93e9a5e3da56f88": {
+      "test": {
+        "gate_type": "test",
+        "command": "GOWORK=off go test -run TestBinary ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "ok  \tgithub.com/blackwell-systems/lsp-mcp-go\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/cmd/lsp-mcp-go\t[no test files]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/extensions/haskell\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/config\t(cached) [no tests to run]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/extensions\t(cached) [no tests to run]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/logging\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/lsp\t(cached) [no tests to run]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/resources\t(cached) [no tests to run]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/tools\t(cached) [no tests to run]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/types\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/test\t(cached) [no tests to run]\n",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T15:33:27.877653-07:00"
+      }
+    },
     "9ea622a8f3352760980c1c32eae82463": {
       "build": {
         "gate_type": "build",
@@ -538,6 +586,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T12:57:59.637868-07:00"
+      }
+    },
+    "a9ab31cc3ff6525dc8a09afd20516cc7": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "GOWORK=off go vet ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T15:35:37.153021-07:00"
       }
     },
     "ad27ead422b9e6cbe47ed3544f10f448": {
@@ -790,6 +850,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T13:57:14.276212-07:00"
+      }
+    },
+    "eb99ff84a5443c284ff274d471300d94": {
+      "build": {
+        "gate_type": "build",
+        "command": "GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T15:33:27.12148-07:00"
       }
     },
     "ecb11fbfe000a19566ded52b5ae95912": {

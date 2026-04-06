@@ -227,6 +227,7 @@ waves:
               details. Missing a language will break the README's claims.
           files:
             - internal/config/autodetect.go
+      base_commit: ec5c7a799c9d30347dc879ad70880500fbd01481
     - number: 2
       agents:
         - id: B
@@ -249,6 +250,15 @@ quality_gates:
         - type: test
           command: GOWORK=off go test -run TestBinary ./...
           required: true
+completion_reports:
+    A:
+        status: complete
+        branch: saw/autodetect/wave1-agent-A
+        commit: 1c180b5
+        files_created:
+            - internal/config/autodetect.go
+        verification: PASS
+        notes: 'ServerSpec type, knownServers table (15 languages), and AutodetectServers() function implemented. Deterministic iteration via sorted keys. All quality gates pass: build, vet, and test. Pre-commit hooks passed.'
 pre_mortem:
     overall_risk: low
     rows:
@@ -272,5 +282,5 @@ pre_mortem:
           likelihood: low
           impact: medium
           mitigation: Task shows exact before/after code with line number context; verification postcondition checks grep count
-state: "REVIEWED"
+state: REVIEWED
 injection_method: hook
