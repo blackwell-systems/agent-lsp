@@ -785,28 +785,65 @@ func (c *LSPClient) ReopenAllDocuments(ctx context.Context) error {
 	return nil
 }
 
-// WaitForFileIndexed waits until the URI has received at least one diagnostic notification.
+// WaitForFileIndexed waits until the URI has received at least one diagnostic
+// notification, then waits for a 1500ms quiet window with no further
+// notifications. This matches the TypeScript reference: gopls runs a
+// cross-package background load after the first publishDiagnostics, and the
+// stability window lets that finish so cross-file references are available.
 func (c *LSPClient) WaitForFileIndexed(ctx context.Context, uri string, timeoutMs int) error {
-	indexed := make(chan struct{}, 1)
-	var once sync.Once
+	const stabilityMs = 1500
+
+	// stabilize is reset on every matching diagnostic notification.
+	stabilize := make(chan struct{}, 1)
 	cb := func(u string, _ []types.LSPDiagnostic) {
 		if u == uri {
-			once.Do(func() { close(indexed) })
+			select {
+			case stabilize <- struct{}{}:
+			default:
+				// Drain and re-send so the timer always resets to the latest notification.
+				select {
+				case <-stabilize:
+				default:
+				}
+				stabilize <- struct{}{}
+			}
 		}
 	}
 	c.SubscribeToDiagnostics(cb)
 	defer c.UnsubscribeFromDiagnostics(cb)
 
-	timer := time.NewTimer(time.Duration(timeoutMs) * time.Millisecond)
-	defer timer.Stop()
+	timeout := time.NewTimer(time.Duration(timeoutMs) * time.Millisecond)
+	defer timeout.Stop()
 
+	// Wait for the first notification before starting the stability window.
 	select {
-	case <-indexed:
-		return nil
-	case <-timer.C:
+	case <-stabilize:
+	case <-timeout.C:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+
+	// Reset stability timer on every subsequent notification.
+	stability := time.NewTimer(time.Duration(stabilityMs) * time.Millisecond)
+	defer stability.Stop()
+	for {
+		select {
+		case <-stabilize:
+			if !stability.Stop() {
+				select {
+				case <-stability.C:
+				default:
+				}
+			}
+			stability.Reset(time.Duration(stabilityMs) * time.Millisecond)
+		case <-stability.C:
+			return nil
+		case <-timeout.C:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 
@@ -1286,18 +1323,20 @@ func (c *LSPClient) applyEditsToFile(ctx context.Context, uri string, edits []te
 		return fmt.Errorf("applyEdit write %s: %w", path, err)
 	}
 
-	// Send didChange.
+	// Send didChange with the incremented version number.
 	c.mu.Lock()
+	version := 1
 	if meta, ok := c.openDocs[uri]; ok {
 		meta.version++
 		c.openDocs[uri] = meta
+		version = meta.version
 	}
 	c.mu.Unlock()
 
 	return c.sendNotification("textDocument/didChange", map[string]interface{}{
 		"textDocument": map[string]interface{}{
 			"uri":     uri,
-			"version": 1,
+			"version": version,
 		},
 		"contentChanges": []map[string]interface{}{
 			{"text": newContent},
