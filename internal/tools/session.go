@@ -66,6 +66,9 @@ func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[str
 		languageID = "plaintext"
 	}
 
+	// text is an optional Go-specific extension not present in the TypeScript schema.
+	// Callers may provide file content directly to avoid a disk read.
+	// If omitted or empty, the LSP server will read the file from disk on didOpen.
 	text, _ := args["text"].(string)
 	fileURI := CreateFileURI(filePath)
 

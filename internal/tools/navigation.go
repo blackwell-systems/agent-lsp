@@ -58,7 +58,7 @@ func HandleGetReferences(ctx context.Context, client *lsp.LSPClient, args map[st
 		return types.ErrorResult(err.Error()), nil
 	}
 
-	includeDecl := true
+	includeDecl := false
 	if v, ok := args["include_declaration"].(bool); ok {
 		includeDecl = v
 	}

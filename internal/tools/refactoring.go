@@ -97,7 +97,7 @@ func HandleFormatDocument(ctx context.Context, client *lsp.LSPClient, args map[s
 		return types.ErrorResult("file_path is required"), nil
 	}
 
-	tabSize := 4
+	tabSize := 2
 	if v, err := toInt(args, "tab_size"); err == nil {
 		tabSize = v
 	}
@@ -142,7 +142,7 @@ func HandleFormatRange(ctx context.Context, client *lsp.LSPClient, args map[stri
 		return types.ErrorResult(err.Error()), nil
 	}
 
-	tabSize := 4
+	tabSize := 2
 	if v, tErr := toInt(args, "tab_size"); tErr == nil {
 		tabSize = v
 	}
@@ -177,9 +177,9 @@ func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string
 		return types.ErrorResult(err.Error()), nil
 	}
 
-	edit, ok := args["edit"]
+	edit, ok := args["workspace_edit"]
 	if !ok || edit == nil {
-		return types.ErrorResult("edit is required"), nil
+		return types.ErrorResult("workspace_edit is required"), nil
 	}
 
 	if err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
@@ -200,7 +200,7 @@ func HandleExecuteCommand(ctx context.Context, client *lsp.LSPClient, args map[s
 	}
 
 	var cmdArgs []interface{}
-	if v, ok := args["arguments"].([]interface{}); ok {
+	if v, ok := args["args"].([]interface{}); ok {
 		cmdArgs = v
 	}
 
