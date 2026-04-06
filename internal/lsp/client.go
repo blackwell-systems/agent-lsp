@@ -36,6 +36,9 @@ var requestTimeouts = map[string]time.Duration{
 	"workspace/executeCommand":      30 * time.Second,
 	"textDocument/declaration":      30 * time.Second,
 	"textDocument/prepareRename":    30 * time.Second,
+	"textDocument/prepareCallHierarchy": 30 * time.Second,
+	"callHierarchy/incomingCalls":        60 * time.Second,
+	"callHierarchy/outgoingCalls":         60 * time.Second,
 }
 
 const defaultTimeout = 30 * time.Second
@@ -543,6 +546,9 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 					"tagSupport": map[string]interface{}{
 						"valueSet": []int{1, 2},
 					},
+				},
+				"callHierarchy": map[string]interface{}{
+					"dynamicRegistration": true,
 				},
 			},
 			"window": map[string]interface{}{
@@ -1088,6 +1094,66 @@ func (c *LSPClient) GetWorkspaceSymbols(ctx context.Context, query string) ([]in
 		return nil, err
 	}
 	return parseInterfaceArray(result), nil
+}
+
+// PrepareCallHierarchy resolves the call hierarchy item at a position.
+// Returns a typed slice or an empty slice if unsupported.
+func (c *LSPClient) PrepareCallHierarchy(ctx context.Context, uri string, pos types.Position) ([]types.CallHierarchyItem, error) {
+	if !c.hasCapability("callHierarchyProvider") {
+		logging.Log(logging.LevelDebug, "server does not support callHierarchy")
+		return []types.CallHierarchyItem{}, nil
+	}
+	result, err := c.sendRequest(ctx, "textDocument/prepareCallHierarchy", map[string]interface{}{
+		"textDocument": map[string]interface{}{"uri": uri},
+		"position":     pos,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return []types.CallHierarchyItem{}, nil
+	}
+	var items []types.CallHierarchyItem
+	if err := json.Unmarshal(result, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+// GetIncomingCalls returns all callers of the given call hierarchy item.
+func (c *LSPClient) GetIncomingCalls(ctx context.Context, item types.CallHierarchyItem) ([]types.CallHierarchyIncomingCall, error) {
+	result, err := c.sendRequest(ctx, "callHierarchy/incomingCalls", map[string]interface{}{
+		"item": item,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return []types.CallHierarchyIncomingCall{}, nil
+	}
+	var calls []types.CallHierarchyIncomingCall
+	if err := json.Unmarshal(result, &calls); err != nil {
+		return nil, err
+	}
+	return calls, nil
+}
+
+// GetOutgoingCalls returns all functions called by the given call hierarchy item.
+func (c *LSPClient) GetOutgoingCalls(ctx context.Context, item types.CallHierarchyItem) ([]types.CallHierarchyOutgoingCall, error) {
+	result, err := c.sendRequest(ctx, "callHierarchy/outgoingCalls", map[string]interface{}{
+		"item": item,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return []types.CallHierarchyOutgoingCall{}, nil
+	}
+	var calls []types.CallHierarchyOutgoingCall
+	if err := json.Unmarshal(result, &calls); err != nil {
+		return nil, err
+	}
+	return calls, nil
 }
 
 // GetSignatureHelp returns signature help at a position.
