@@ -68,12 +68,21 @@ func HandleGetReferences(ctx context.Context, client *lsp.LSPClient, args map[st
 		languageID = "plaintext"
 	}
 
-	locs, wErr := WithDocument[[]types.Location](ctx, client, filePath, languageID, func(fileURI string) ([]types.Location, error) {
+	fileURI := CreateFileURI(filePath)
+	locs, wErr := WithDocument[[]types.Location](ctx, client, filePath, languageID, func(fURI string) ([]types.Location, error) {
 		pos := types.Position{Line: line - 1, Character: col - 1}
-		return client.GetReferences(ctx, fileURI, pos, includeDecl)
+		return client.GetReferences(ctx, fURI, pos, includeDecl)
 	})
 	if wErr != nil {
 		return types.ErrorResult(fmt.Sprintf("get_references: %s", wErr)), nil
+	}
+	if len(locs) == 0 {
+		locs, wErr = fuzzyPositionFallback(ctx, client, fileURI, line, col, func(pos types.Position) ([]types.Location, error) {
+			return client.GetReferences(ctx, fileURI, pos, includeDecl)
+		})
+		if wErr != nil {
+			return types.ErrorResult(fmt.Sprintf("get_references (fuzzy): %s", wErr)), nil
+		}
 	}
 	return locationsResult(locs)
 }
@@ -99,12 +108,21 @@ func HandleGoToDefinition(ctx context.Context, client *lsp.LSPClient, args map[s
 		languageID = "plaintext"
 	}
 
-	locs, wErr := WithDocument[[]types.Location](ctx, client, filePath, languageID, func(fileURI string) ([]types.Location, error) {
+	fileURI := CreateFileURI(filePath)
+	locs, wErr := WithDocument[[]types.Location](ctx, client, filePath, languageID, func(fURI string) ([]types.Location, error) {
 		pos := types.Position{Line: line - 1, Character: col - 1}
-		return client.GetDefinition(ctx, fileURI, pos)
+		return client.GetDefinition(ctx, fURI, pos)
 	})
 	if wErr != nil {
 		return types.ErrorResult(fmt.Sprintf("go_to_definition: %s", wErr)), nil
+	}
+	if len(locs) == 0 {
+		locs, wErr = fuzzyPositionFallback(ctx, client, fileURI, line, col, func(pos types.Position) ([]types.Location, error) {
+			return client.GetDefinition(ctx, fileURI, pos)
+		})
+		if wErr != nil {
+			return types.ErrorResult(fmt.Sprintf("go_to_definition (fuzzy): %s", wErr)), nil
+		}
 	}
 	return locationsResult(locs)
 }
