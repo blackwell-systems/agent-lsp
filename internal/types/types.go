@@ -29,11 +29,11 @@ type FormattedLocation struct {
 
 // LSPDiagnostic mirrors the LSP publishDiagnostics Diagnostic object.
 type LSPDiagnostic struct {
-	Range    Range  `json:"range"`
-	Severity int    `json:"severity"` // 1=error 2=warning 3=info 4=hint
-	Code     string `json:"code,omitempty"`
-	Source   string `json:"source,omitempty"`
-	Message  string `json:"message"`
+	Range    Range       `json:"range"`
+	Severity int         `json:"severity"` // 1=error 2=warning 3=info 4=hint
+	Code     interface{} `json:"code,omitempty"`
+	Source   string      `json:"source,omitempty"`
+	Message  string      `json:"message"`
 }
 
 // DiagnosticUpdateCallback is called whenever the LSP server publishes diagnostics.
