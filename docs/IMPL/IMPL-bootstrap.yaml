@@ -1,0 +1,1320 @@
+title: LSP-MCP-GO Bootstrap
+feature_slug: bootstrap
+verdict: SUITABLE
+suitability_assessment: |-
+    Full Go port of an existing TypeScript MCP server with 24 tools, 4 resources, logging,
+    and an extension system. Six clearly separable concerns map cleanly to disjoint packages:
+    types (scaffold), lsp client, tools, resources, extensions, and server entry point.
+
+    File decomposition: ~30 files across 6 packages. No single file bottleneck — the Go
+    MCP SDK registration happens in cmd/main.go (Wave 3), which no Wave 1/2 agent touches.
+
+    Interface discoverability: All cross-package contracts are derivable from the TypeScript
+    reference implementation (src/lspClient.ts, src/tools/index.ts, src/resources/index.ts).
+    Signatures can be specified before any implementation begins.
+
+    Parallelization value: High. Build+test cycle for Go is meaningful. Wave 1 has 3 fully
+    independent agents (lsp, tools, resources) each implementing 3-8 files with non-trivial
+    logic. Extensions agent is Wave 1 independent. Wave 2 has a single integration agent.
+
+    Estimated times:
+    - Scout phase: ~20 min (reading TS reference, extracting contracts)
+    - Agent execution: ~45 min (4 agents x 15 min avg, max parallel)
+    - Wave 2 wiring: ~15 min
+    - Merge and verification: ~10 min
+    Total SAW time: ~90 min
+
+    Sequential baseline: ~120 min
+    Time savings: ~30 min (25% faster), plus parallelism quality benefit.
+test_command: go test ./...
+lint_command: go vet ./...
+file_ownership:
+    - file: internal/lsp/client.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/lsp/client_test.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/lsp/diagnostics.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/lsp/diagnostics_test.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/lsp/framing.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/tools/helpers.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/tools/session.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/tools/analysis.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/tools/navigation.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/tools/refactoring.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/tools/utilities.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/tools/tools_test.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/resources/resources.go
+      agent: C
+      wave: 1
+      action: new
+    - file: internal/resources/resources_test.go
+      agent: C
+      wave: 1
+      action: new
+    - file: internal/resources/subscriptions.go
+      agent: C
+      wave: 1
+      action: new
+    - file: internal/extensions/registry.go
+      agent: D
+      wave: 1
+      action: new
+    - file: internal/extensions/registry_test.go
+      agent: D
+      wave: 1
+      action: new
+    - file: extensions/haskell/haskell.go
+      agent: D
+      wave: 1
+      action: new
+    - file: cmd/lsp-mcp-go/main.go
+      agent: E
+      wave: 2
+      action: new
+      depends_on:
+        - A
+        - B
+        - C
+        - D
+    - file: cmd/lsp-mcp-go/server.go
+      agent: E
+      wave: 2
+      action: new
+      depends_on:
+        - A
+        - B
+        - C
+        - D
+    - file: internal/logging/logging_impl.go
+      agent: E
+      wave: 2
+      action: new
+      depends_on:
+        - A
+        - B
+        - C
+        - D
+    - file: integration_test.go
+      agent: E
+      wave: 2
+      action: new
+      depends_on:
+        - A
+        - B
+        - C
+        - D
+interface_contracts:
+    - name: LSPClient
+      description: |-
+        Core LSP subprocess client. Spawns the LSP binary, handles Content-Length framing,
+        request/response correlation, server-initiated requests, and workspace progress tracking.
+      definition: |-
+        type LSPClient struct { /* unexported fields */ }
+
+        func NewLSPClient(serverPath string, serverArgs []string) *LSPClient
+        func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error
+        func (c *LSPClient) Shutdown(ctx context.Context) error
+        func (c *LSPClient) Restart(ctx context.Context, rootDir string) error
+        func (c *LSPClient) OpenDocument(ctx context.Context, uri, text, languageID string) error
+        func (c *LSPClient) CloseDocument(ctx context.Context, uri string) error
+        func (c *LSPClient) IsDocumentOpen(uri string) bool
+        func (c *LSPClient) GetOpenDocuments() []string
+        func (c *LSPClient) GetDiagnostics(uri string) []types.LSPDiagnostic
+        func (c *LSPClient) GetAllDiagnostics() map[string][]types.LSPDiagnostic
+        func (c *LSPClient) SubscribeToDiagnostics(cb types.DiagnosticUpdateCallback)
+        func (c *LSPClient) UnsubscribeFromDiagnostics(cb types.DiagnosticUpdateCallback)
+        func (c *LSPClient) ReopenDocument(ctx context.Context, uri string) error
+        func (c *LSPClient) ReopenAllDocuments(ctx context.Context) error
+        func (c *LSPClient) WaitForFileIndexed(ctx context.Context, uri string, timeoutMs int) error
+        // LSP operations — all return (result, error)
+        func (c *LSPClient) GetInfoOnLocation(ctx context.Context, uri string, pos types.Position) (string, error)
+        func (c *LSPClient) GetCompletion(ctx context.Context, uri string, pos types.Position) ([]interface{}, error)
+        func (c *LSPClient) GetCodeActions(ctx context.Context, uri string, rng types.Range) ([]interface{}, error)
+        func (c *LSPClient) GetDefinition(ctx context.Context, uri string, pos types.Position) ([]types.Location, error)
+        func (c *LSPClient) GetTypeDefinition(ctx context.Context, uri string, pos types.Position) ([]types.Location, error)
+        func (c *LSPClient) GetImplementation(ctx context.Context, uri string, pos types.Position) ([]types.Location, error)
+        func (c *LSPClient) GetDeclaration(ctx context.Context, uri string, pos types.Position) ([]types.Location, error)
+        func (c *LSPClient) GetReferences(ctx context.Context, uri string, pos types.Position, includeDecl bool) ([]types.Location, error)
+        func (c *LSPClient) GetDocumentSymbols(ctx context.Context, uri string) ([]interface{}, error)
+        func (c *LSPClient) GetWorkspaceSymbols(ctx context.Context, query string) ([]interface{}, error)
+        func (c *LSPClient) GetSignatureHelp(ctx context.Context, uri string, pos types.Position) (interface{}, error)
+        func (c *LSPClient) FormatDocument(ctx context.Context, uri string, tabSize int, insertSpaces bool) ([]interface{}, error)
+        func (c *LSPClient) FormatRange(ctx context.Context, uri string, rng types.Range, tabSize int, insertSpaces bool) ([]interface{}, error)
+        func (c *LSPClient) RenameSymbol(ctx context.Context, uri string, pos types.Position, newName string) (interface{}, error)
+        func (c *LSPClient) PrepareRename(ctx context.Context, uri string, pos types.Position) (interface{}, error)
+        func (c *LSPClient) ExecuteCommand(ctx context.Context, command string, args []interface{}) (interface{}, error)
+        func (c *LSPClient) DidChangeWatchedFiles(changes []types.FileChangeEvent) error
+        func (c *LSPClient) ApplyWorkspaceEdit(ctx context.Context, edit interface{}) error
+      location: internal/lsp/client.go
+    - name: withDocument
+      description: |-
+        Generic helper used by 16 of 24 tool handlers. Opens a document on the LSP client,
+        executes the callback, and returns the result. Corresponds to the TypeScript withDocument.
+      definition: |-
+        // WithDocument reads filePath from disk, opens it on the LSP client, then calls cb.
+        // T is the callback return type. On error, returns zero value of T and the error.
+        func WithDocument[T any](
+            ctx context.Context,
+            client *lsp.LSPClient,
+            filePath string,
+            languageID string,
+            cb func(fileURI string) (T, error),
+        ) (T, error)
+      location: internal/tools/helpers.go
+    - name: FileChangeEvent
+      description: A single file change notification for workspace/didChangeWatchedFiles.
+      definition: |-
+        type FileChangeEvent struct {
+            URI  string `json:"uri"`
+            Type int    `json:"type"` // 1=created 2=changed 3=deleted
+        }
+      location: internal/types/types.go
+    - name: WaitForDiagnostics
+      description: |-
+        Waits for diagnostics to stabilise for the given URIs: ignores initial snapshot,
+        requires at least one fresh notification per URI, then waits for a 500ms quiet window.
+      definition: func WaitForDiagnostics(ctx context.Context, client *lsp.LSPClient, uris []string, timeoutMs int) error
+      location: internal/lsp/diagnostics.go
+    - name: Extension
+      description: Interface for per-language extension plugins.
+      definition: |-
+        // Defined in internal/types/types.go scaffold.
+        // Each language extension implements this interface.
+        type Extension interface {
+            ToolHandlers() map[string]ToolHandler
+            ResourceHandlers() map[string]ResourceHandler
+        }
+      location: internal/types/types.go
+    - name: ExtensionRegistry
+      description: Loads and manages per-language extensions. Thread-safe.
+      definition: |-
+        type ExtensionRegistry struct { /* unexported */ }
+        func NewRegistry() *ExtensionRegistry
+        func (r *ExtensionRegistry) Activate(languageID string) error
+        func (r *ExtensionRegistry) Deactivate(languageID string)
+        func (r *ExtensionRegistry) ToolHandlers() map[string]types.ToolHandler
+        func (r *ExtensionRegistry) ResourceHandlers() map[string]types.ResourceHandler
+      location: internal/extensions/registry.go
+    - name: DiagnosticUpdateCallback
+      description: Callback type for diagnostic subscription events.
+      definition: |-
+        // Defined in internal/types/types.go scaffold.
+        type DiagnosticUpdateCallback func(uri string, diagnostics []LSPDiagnostic)
+      location: internal/types/types.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |-
+            ## Role
+            Implement the LSP subprocess client in `internal/lsp/`. This is the core I/O layer
+            that communicates with the language server process over stdin/stdout using the
+            Content-Length framing protocol (JSON-RPC 2.0).
+
+            ## Package
+            `package lsp` in `internal/lsp/`
+            Import path: `github.com/blackwell-systems/lsp-mcp-go/internal/lsp`
+
+            ## Files to Create
+            - `internal/lsp/framing.go` — Content-Length encode/decode
+            - `internal/lsp/client.go` — LSPClient struct and all public methods
+            - `internal/lsp/client_test.go` — unit tests
+            - `internal/lsp/diagnostics.go` — WaitForDiagnostics helper
+            - `internal/lsp/diagnostics_test.go` — diagnostics tests
+
+            ## Imports to Use
+            ```go
+            import (
+                "github.com/blackwell-systems/lsp-mcp-go/internal/types"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/logging"
+            )
+            ```
+
+            ## Interface to Implement (exact signatures — binding contract)
+
+            ### framing.go
+            ```go
+            // EncodeMessage encodes a JSON-RPC message with Content-Length header.
+            // Returns "Content-Length: N\r\n\r\n" + JSON body as bytes.
+            func EncodeMessage(body []byte) []byte
+
+            // FrameReader reads Content-Length-framed messages from an io.Reader.
+            type FrameReader struct { /* unexported */ }
+            func NewFrameReader(r io.Reader) *FrameReader
+            // ReadMessage blocks until a complete message is available.
+            // Returns raw JSON body bytes or error.
+            func (fr *FrameReader) ReadMessage() ([]byte, error)
+            ```
+
+            ### client.go (all methods matching LSPClient interface contract)
+            ```go
+            type LSPClient struct { /* unexported fields */ }
+
+            func NewLSPClient(serverPath string, serverArgs []string) *LSPClient
+            func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error
+            func (c *LSPClient) Shutdown(ctx context.Context) error
+            func (c *LSPClient) Restart(ctx context.Context, rootDir string) error
+            func (c *LSPClient) OpenDocument(ctx context.Context, uri, text, languageID string) error
+            func (c *LSPClient) CloseDocument(ctx context.Context, uri string) error
+            func (c *LSPClient) IsDocumentOpen(uri string) bool
+            func (c *LSPClient) GetOpenDocuments() []string
+            func (c *LSPClient) GetDiagnostics(uri string) []types.LSPDiagnostic
+            func (c *LSPClient) GetAllDiagnostics() map[string][]types.LSPDiagnostic
+            func (c *LSPClient) SubscribeToDiagnostics(cb types.DiagnosticUpdateCallback)
+            func (c *LSPClient) UnsubscribeFromDiagnostics(cb types.DiagnosticUpdateCallback)
+            func (c *LSPClient) ReopenDocument(ctx context.Context, uri string) error
+            func (c *LSPClient) ReopenAllDocuments(ctx context.Context) error
+            func (c *LSPClient) WaitForFileIndexed(ctx context.Context, uri string, timeoutMs int) error
+            func (c *LSPClient) GetInfoOnLocation(ctx context.Context, uri string, pos types.Position) (string, error)
+            func (c *LSPClient) GetCompletion(ctx context.Context, uri string, pos types.Position) ([]interface{}, error)
+            func (c *LSPClient) GetCodeActions(ctx context.Context, uri string, rng types.Range) ([]interface{}, error)
+            func (c *LSPClient) GetDefinition(ctx context.Context, uri string, pos types.Position) ([]types.Location, error)
+            func (c *LSPClient) GetTypeDefinition(ctx context.Context, uri string, pos types.Position) ([]types.Location, error)
+            func (c *LSPClient) GetImplementation(ctx context.Context, uri string, pos types.Position) ([]types.Location, error)
+            func (c *LSPClient) GetDeclaration(ctx context.Context, uri string, pos types.Position) ([]types.Location, error)
+            func (c *LSPClient) GetReferences(ctx context.Context, uri string, pos types.Position, includeDecl bool) ([]types.Location, error)
+            func (c *LSPClient) GetDocumentSymbols(ctx context.Context, uri string) ([]interface{}, error)
+            func (c *LSPClient) GetWorkspaceSymbols(ctx context.Context, query string) ([]interface{}, error)
+            func (c *LSPClient) GetSignatureHelp(ctx context.Context, uri string, pos types.Position) (interface{}, error)
+            func (c *LSPClient) FormatDocument(ctx context.Context, uri string, tabSize int, insertSpaces bool) ([]interface{}, error)
+            func (c *LSPClient) FormatRange(ctx context.Context, uri string, rng types.Range, tabSize int, insertSpaces bool) ([]interface{}, error)
+            func (c *LSPClient) RenameSymbol(ctx context.Context, uri string, pos types.Position, newName string) (interface{}, error)
+            func (c *LSPClient) PrepareRename(ctx context.Context, uri string, pos types.Position) (interface{}, error)
+            func (c *LSPClient) ExecuteCommand(ctx context.Context, command string, args []interface{}) (interface{}, error)
+            func (c *LSPClient) DidChangeWatchedFiles(changes []types.FileChangeEvent) error
+            func (c *LSPClient) ApplyWorkspaceEdit(ctx context.Context, edit interface{}) error
+            ```
+
+            ### diagnostics.go
+            ```go
+            // WaitForDiagnostics waits for diagnostic stabilisation for all uris.
+            // Ignores initial snapshot, requires one fresh notification per URI, then
+            // waits for a 500ms quiet window. Resolves on timeout without error.
+            func WaitForDiagnostics(ctx context.Context, client *LSPClient, uris []string, timeoutMs int) error
+            ```
+
+            ## Behavioral Requirements (from TypeScript reference src/lspClient.ts)
+
+            ### Framing
+            - Buffer must be byte-based (Content-Length is a UTF-8 byte count, not a UTF-16 code unit count)
+            - Max buffer size: 10MB — discard entire buffer on overflow to prevent mid-message parse corruption
+            - Header separator: `\r\n\r\n` (4 bytes)
+            - Parse header as ASCII, body as UTF-8
+
+            ### Request/Response Correlation
+            - Requests use auto-incrementing integer IDs starting at 1
+            - Store pending promises in a map[int]chan; reject all on process close/error
+            - Per-method timeouts (see TypeScript REQUEST_TIMEOUTS map):
+              - initialize: 300s (JVM servers are slow)
+              - textDocument/references: 120s
+              - all others: 30s
+
+            ### Server-Initiated Requests (must be handled before workspace loads)
+            - `window/workDoneProgress/create`: pre-register token in activeProgressTokens, respond null
+            - `workspace/configuration`: respond with array of nulls (one per requested item)
+            - `client/registerCapability`: respond null
+            - Unknown server requests: respond null to unblock gopls
+
+            ### Progress Tracking (workspace readiness)
+            - Track `$/progress` begin/end tokens in a set
+            - `GetReferences` calls `waitForWorkspaceReady()` before the LSP request
+            - `waitForWorkspaceReady` blocks until activeProgressTokens is empty or timeout (60s)
+
+            ### Initialization
+            - Set `initialized = true` BEFORE sending the `initialized` notification (race fix)
+            - Send `initialized` notification immediately after setting the flag
+            - Client capabilities must include: hover, completion, references, definition,
+              implementation, typeDefinition, declaration, codeAction, signatureHelp,
+              documentSymbol, rename, formatting, publishDiagnostics (relatedInformation, tagSupport)
+            - `workspace.configuration: true` (required for gopls)
+            - `window.workDoneProgress: true` (required for progress tracking)
+
+            ### Document Management
+            - Track open documents in a set, versions in a map (start at 1)
+            - If document already open on OpenDocument: send didChange (full update), increment version
+            - Store filePath and languageID per URI for reopening
+            - ReopenDocument: close (didClose without removing metadata), re-read from disk, re-open
+
+            ### ApplyWorkspaceEdit
+            - Supports both `changes` (map<uri, TextEdit[]>) and `documentChanges` (TextDocumentEdit[])
+            - Apply edits in reverse order (bottom-to-top) to preserve character offsets
+            - After writing: send didChange with new content for each modified file
+            - Multi-line edit: split by "\n", splice lines array, rejoin with "\n"
+
+            ### Process Lifecycle
+            - Stderr: buffer last 4KB for crash diagnostics; log at debug level during normal operation
+            - On process close with non-zero code: log last stderr buffer; reject pending promises
+            - On process error event: reject all pending promises with the error
+            - EPIPE prevention: attach error handlers to stdin/stdout/stderr pipes
+
+            ### LocationLink normalization
+            - GetDefinition, GetTypeDefinition, GetImplementation, GetDeclaration:
+              if response item has `targetUri`, return `{uri: loc.targetUri, range: loc.targetRange}`
+              Otherwise use item as-is.
+
+            ### Capability checks
+            - Before each LSP request, check relevant serverCapabilities field
+            - If capability missing, return empty result (not error) and log at debug level
+            - prepareRename additionally checks `renameProvider.prepareProvider` boolean
+
+            ## Tests to Write
+            1. TestFrameReader_SingleMessage — encode then decode a message, verify roundtrip
+            2. TestFrameReader_MultiByteUnicode — body containing multi-byte UTF-8 chars (→, •)
+            3. TestFrameReader_BufferFlush — partial message followed by completion
+            4. TestLSPClient_ServerRequestHandling — mock process that sends window/workDoneProgress/create,
+               verify token pre-registered and null response sent
+            5. TestLSPClient_ProgressTracking — begin/end tokens update activeProgressTokens correctly
+            6. TestWaitForDiagnostics_SettlesAfterQuietWindow — mock LSPClient, fire two callbacks, verify resolves
+            7. TestWaitForDiagnostics_Timeout — fire no callbacks, verify resolves after timeout
+
+            ## Verification Gate
+            ```bash
+            go build ./internal/lsp/...
+            go vet ./internal/lsp/...
+            go test ./internal/lsp/... -v -timeout 60s
+            # Postconditions:
+            grep -c "func NewLSPClient" internal/lsp/client.go  # expected: 1
+            grep -c "func WaitForDiagnostics" internal/lsp/diagnostics.go  # expected: 1
+            grep -c "func EncodeMessage" internal/lsp/framing.go  # expected: 1
+            ```
+
+            ## Constraints
+            - Do NOT define types.LSPDiagnostic, types.Position, types.Range, types.Location,
+              types.DiagnosticUpdateCallback, or types.FileChangeEvent — these are in the scaffold.
+            - Do NOT implement any MCP SDK registration — that is Wave 2's job (Agent E).
+            - Do NOT touch go.mod — it is owned by the Scaffold Agent.
+            - Use `sync.Mutex` for all shared state; the client will be called from multiple goroutines.
+            - Run LSP subprocess with `os/exec.Cmd` + explicit `StdinPipe/StdoutPipe/StderrPipe`.
+            - Do NOT add recovery from panics inside goroutines — that is handled by the server wrapper in Wave 2.
+            - The `initialized` field must be set to `true` BEFORE sending the `initialized` notification.
+          files:
+            - internal/lsp/client.go
+            - internal/lsp/client_test.go
+            - internal/lsp/diagnostics.go
+            - internal/lsp/diagnostics_test.go
+            - internal/lsp/framing.go
+        - id: B
+          task: |-
+            ## Role
+            Implement all 24 MCP tool handlers in `internal/tools/`. Tools are organized by
+            category into separate files. The `WithDocument` generic helper lives in helpers.go
+            and is used by 16 of the 24 handlers.
+
+            ## Package
+            `package tools` in `internal/tools/`
+            Import path: `github.com/blackwell-systems/lsp-mcp-go/internal/tools`
+
+            ## Files to Create
+            - `internal/tools/helpers.go` — WithDocument generic, CreateFileURI, URIToFilePath, CheckInitialized
+            - `internal/tools/session.go` — start_lsp, restart_lsp_server, open_document, close_document
+            - `internal/tools/analysis.go` — get_diagnostics, get_info_on_location, get_completions, get_signature_help, get_code_actions, get_document_symbols, get_workspace_symbols
+            - `internal/tools/navigation.go` — get_references, go_to_definition, go_to_type_definition, go_to_implementation, go_to_declaration
+            - `internal/tools/refactoring.go` — rename_symbol, prepare_rename, format_document, format_range, apply_edit, execute_command
+            - `internal/tools/utilities.go` — did_change_watched_files, set_log_level
+            - `internal/tools/tools_test.go` — unit tests using mock LSPClient
+
+            ## Imports to Use
+            ```go
+            import (
+                "github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/types"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/logging"
+            )
+            ```
+
+            ## Interface to Implement
+
+            ### helpers.go
+            ```go
+            // WithDocument reads filePath from disk, opens it on client, then calls cb.
+            func WithDocument[T any](
+                ctx context.Context,
+                client *lsp.LSPClient,
+                filePath string,
+                languageID string,
+                cb func(fileURI string) (T, error),
+            ) (T, error)
+
+            // CreateFileURI converts an absolute file path to a file:// URI.
+            func CreateFileURI(filePath string) string
+
+            // URIToFilePath converts a file:// URI to an absolute path.
+            func URIToFilePath(uri string) (string, error)
+
+            // CheckInitialized returns an error if client is nil.
+            func CheckInitialized(client *lsp.LSPClient) error
+            ```
+
+            ### Tool Handler Signatures (all tools follow this pattern)
+            Each tool is a function matching:
+            ```go
+            func HandleStartLsp(
+                ctx context.Context,
+                getClient func() *lsp.LSPClient,
+                setClient func(*lsp.LSPClient),
+                serverPath string,
+                serverArgs []string,
+                args map[string]interface{},
+            ) (types.ToolResult, error)
+
+            func HandleRestartLspServer(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleCloseDocument(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleGetDiagnostics(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleGetInfoOnLocation(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleGetCompletions(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleGetSignatureHelp(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleGetCodeActions(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleGetDocumentSymbols(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleGetReferences(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleGoToDefinition(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleGoToTypeDefinition(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleGoToImplementation(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleGoToDeclaration(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandlePrepareRename(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleFormatDocument(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleFormatRange(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleExecuteCommand(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleDidChangeWatchedFiles(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            func HandleSetLogLevel(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            ```
+
+            ## Argument Validation (mirror TypeScript Zod schemas from src/types/index.ts)
+            All position args use 1-indexed line/column (≥1). Validate at handler entry:
+            - Positions: line >= 1, column >= 1
+            - Ranges: start_line >= 1, start_column >= 1, end_line >= 1, end_column >= 1;
+              start must not be after end (same rule as Zod refine in FormatRangeArgsSchema)
+            - Required string fields: reject empty string with descriptive error
+            - Use `types.ErrorResult(msg)` for validation errors (not Go error returns)
+
+            ## Coordinate Conversion (1-indexed → 0-indexed for LSP)
+            ```
+            lsp.Position{Line: line-1, Character: col-1}
+            ```
+            All LSP calls use 0-based positions. All formatted output uses 1-based positions.
+
+            ## Response Formatting
+            - All tools return `{ content: [{ type: "text", text: <JSON string> }] }`
+            - Navigation tools (go_to_definition, go_to_type_definition, go_to_implementation,
+              go_to_declaration, get_references): format locations as types.FormattedLocation
+              (1-indexed, file path not URI — use URIToFilePath)
+            - get_diagnostics: JSON marshal the map[uri][]LSPDiagnostic
+            - get_info_on_location: return raw hover string (not JSON-wrapped)
+
+            ## Tool-Specific Behavioral Requirements
+
+            ### start_lsp
+            - If existing client is non-nil, call Shutdown before creating new one
+            - On error: return types.ErrorResult (isError=true), do NOT return Go error
+            - Required arg: root_dir (string)
+            - On success: setClient(newClient), return success text
+
+            ### get_diagnostics
+            - If file_path provided: call ReopenDocument then WaitForDiagnostics, then GetDiagnostics
+            - If file_path absent: call ReopenAllDocuments, get all open URIs, WaitForDiagnostics for all,
+              then GetAllDiagnostics filtered to only open documents
+            - Import `lsp.WaitForDiagnostics` from the lsp package
+
+            ### get_references
+            - Uses WithDocument — the LSPClient.GetReferences internally calls waitForWorkspaceReady
+              before the LSP request (already in lsp package)
+
+            ### restart_lsp_server
+            - Optional arg: root_dir (string). If absent, restart with same root.
+            - Delegates to client.Restart(ctx, rootDir)
+
+            ### set_log_level
+            - Valid levels: debug, info, notice, warning, error, critical, alert, emergency
+            - Calls logging.SetLevel(level)
+
+            ## Tests to Write
+            1. TestWithDocument_Success — mock client, verify openDocument called with correct URI
+            2. TestHandleGetInfoOnLocation_ValidArgs — valid args produce TextResult
+            3. TestHandleGetInfoOnLocation_InvalidLine — line=0 returns ErrorResult
+            4. TestHandleGetCodeActions_RangeValidation — start_line > end_line returns ErrorResult
+            5. TestHandleGoToDefinition_FormatsLocations — location URI converted to file path, 1-indexed
+            6. TestHandleStartLsp_ShutdownsExistingClient — existing client gets Shutdown called
+            7. TestHandleStartLsp_ErrorReturnsIsError — on Initialize failure, returns ToolResult with IsError=true
+
+            ## Verification Gate
+            ```bash
+            go build ./internal/tools/...
+            go vet ./internal/tools/...
+            go test ./internal/tools/... -v -timeout 60s
+            # Postconditions:
+            grep -c "func HandleStartLsp" internal/tools/session.go   # expected: 1
+            grep -c "func WithDocument\[" internal/tools/helpers.go    # expected: 1
+            # Verify all 24 handlers exist:
+            grep -c "^func Handle" internal/tools/session.go internal/tools/analysis.go internal/tools/navigation.go internal/tools/refactoring.go internal/tools/utilities.go
+            # Expected total: 24
+            ```
+
+            ## Constraints
+            - Do NOT define any types from internal/types — those are scaffold-owned.
+            - Do NOT import directly from cmd/ or internal/extensions/ — tool layer has no knowledge of those.
+            - Do NOT touch go.mod.
+            - Do NOT implement MCP SDK tool registration (mcp.AddTool etc.) — that is Wave 2.
+            - The tools package must compile independently against the scaffold and lsp packages.
+            - Use `errors.New` or `fmt.Errorf` for internal errors; use `types.ErrorResult` for
+              MCP-visible user-facing errors.
+          files:
+            - internal/tools/helpers.go
+            - internal/tools/session.go
+            - internal/tools/analysis.go
+            - internal/tools/navigation.go
+            - internal/tools/refactoring.go
+            - internal/tools/utilities.go
+            - internal/tools/tools_test.go
+        - id: C
+          task: |-
+            ## Role
+            Implement the MCP resource handlers and subscription system in `internal/resources/`.
+            This covers 4 MCP resource types (lsp-diagnostics, lsp-hover, lsp-completions),
+            live subscription support for diagnostics, and the resource list generator.
+
+            ## Package
+            `package resources` in `internal/resources/`
+            Import path: `github.com/blackwell-systems/lsp-mcp-go/internal/resources`
+
+            ## Files to Create
+            - `internal/resources/resources.go` — resource read handlers and resource list generator
+            - `internal/resources/subscriptions.go` — subscription/unsubscription handlers
+            - `internal/resources/resources_test.go` — unit tests
+
+            ## Imports to Use
+            ```go
+            import (
+                "github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/types"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/logging"
+            )
+            ```
+
+            ## Interfaces to Implement
+
+            ### resources.go
+            ```go
+            // ResourceResult is returned by resource read handlers.
+            type ResourceResult struct {
+                URI      string `json:"uri"`
+                MIMEType string `json:"mimeType"`
+                Text     string `json:"text"`
+            }
+
+            // HandleDiagnosticsResource handles lsp-diagnostics:// reads.
+            // If the URI has a non-root path (e.g. lsp-diagnostics:///path/to/file),
+            // returns diagnostics for that file. If path is empty or "/", returns all.
+            func HandleDiagnosticsResource(ctx context.Context, client *lsp.LSPClient, uri string) (ResourceResult, error)
+
+            // HandleHoverResource handles lsp-hover:// reads.
+            // URI format: lsp-hover:///path/to/file?line=N&column=N&language_id=X
+            func HandleHoverResource(ctx context.Context, client *lsp.LSPClient, uri string) (ResourceResult, error)
+
+            // HandleCompletionsResource handles lsp-completions:// reads.
+            // URI format: lsp-completions:///path/to/file?line=N&column=N&language_id=X
+            func HandleCompletionsResource(ctx context.Context, client *lsp.LSPClient, uri string) (ResourceResult, error)
+
+            // GenerateResourceList returns the dynamic list of available resources
+            // based on currently open documents. Returns nil if client is nil.
+            func GenerateResourceList(client *lsp.LSPClient) []ResourceEntry
+
+            // ResourceEntry describes a single available MCP resource.
+            type ResourceEntry struct {
+                URI         string `json:"uri"`
+                Name        string `json:"name"`
+                Description string `json:"description"`
+                Subscribe   bool   `json:"subscribe"`
+                Template    bool   `json:"template,omitempty"`
+            }
+
+            // ResourceTemplates returns the static resource template definitions
+            // for the MCP server's resources/templates/list response.
+            func ResourceTemplates() []ResourceTemplate
+
+            type ResourceTemplate struct {
+                Name        string `json:"name"`
+                URITemplate string `json:"uriTemplate"`
+                Description string `json:"description"`
+            }
+            ```
+
+            ### subscriptions.go
+            ```go
+            // SubscriptionContext holds state for an active resource subscription.
+            type SubscriptionContext struct {
+                Callback types.DiagnosticUpdateCallback
+            }
+
+            // NotifyFunc is called by the subscription handler to send resource update notifications.
+            // The caller (Wave 2 server.go) provides the actual MCP notification function.
+            type NotifyFunc func(uri string)
+
+            // HandleSubscribeDiagnostics sets up a diagnostic subscription.
+            // Returns a SubscriptionContext to pass to HandleUnsubscribeDiagnostics.
+            func HandleSubscribeDiagnostics(
+                ctx context.Context,
+                client *lsp.LSPClient,
+                uri string,
+                notify NotifyFunc,
+            ) (*SubscriptionContext, error)
+
+            // HandleUnsubscribeDiagnostics removes a diagnostic subscription.
+            func HandleUnsubscribeDiagnostics(
+                ctx context.Context,
+                client *lsp.LSPClient,
+                uri string,
+                sub *SubscriptionContext,
+            ) error
+            ```
+
+            ## URI Parsing Requirements (from src/resources/index.ts)
+            - Parse resource URIs with `net/url.Parse`
+            - lsp-diagnostics path: URL.Path — normalize to remove leading slash when path is "/"
+            - For hover and completions: extract `line`, `column`, `language_id` query params
+            - line and column are 1-indexed in URI; convert to 0-based for LSP calls
+            - language_id query param is required for hover and completions
+
+            ## Behavioral Requirements
+
+            ### HandleDiagnosticsResource
+            - If path is non-empty and not "/": reopen that specific file, wait for diagnostics,
+              return JSON of {fileURI: diagnostics[]}
+            - If path is empty or "/": reopen all documents, wait for all open URIs,
+              return JSON of {uri: diagnostics[]} for open documents only
+
+            ### HandleHoverResource
+            - Read file from disk, open document, call client.GetInfoOnLocation
+            - Return the hover text directly (not JSON-wrapped)
+
+            ### HandleCompletionsResource
+            - Read file from disk, open document, call client.GetCompletion
+            - Return JSON.Marshal of completions array
+
+            ### Subscription
+            - Subscribe by calling client.SubscribeToDiagnostics with a callback
+            - Callback calls notify(uri) when a diagnostic update arrives for the subscribed URI
+            - For "all files" subscription (path="/" or empty): call notify for any open file update
+            - Store callback in SubscriptionContext for unsubscription
+
+            ### GenerateResourceList
+            - Returns "lsp-diagnostics://" as a static "all diagnostics" resource
+            - For each open document (URI starting with "file://"):
+              - Convert URI to file path, get base name
+              - Add: lsp-diagnostics:///filePath (subscribe=true)
+              - Add: lsp-hover:///filePath?line={line}&column={column}&language_id={language_id} (template=true)
+              - Add: lsp-completions:///filePath?line={line}&column={column}&language_id={language_id} (template=true)
+
+            ## Tests to Write
+            1. TestHandleDiagnosticsResource_AllFiles — nil path returns all open document diagnostics
+            2. TestHandleDiagnosticsResource_SpecificFile — path returns only that file's diagnostics
+            3. TestGenerateResourceList_EmptyClient — nil client returns nil
+            4. TestGenerateResourceList_WithOpenDocs — one open doc produces 3 resource entries + 1 static
+            5. TestHandleSubscribeDiagnostics_FileSpecific — subscription callback fires for correct URI
+            6. TestHandleUnsubscribeDiagnostics — after unsubscribe, callback not called
+
+            ## Verification Gate
+            ```bash
+            go build ./internal/resources/...
+            go vet ./internal/resources/...
+            go test ./internal/resources/... -v -timeout 30s
+            # Postconditions:
+            grep -c "func HandleDiagnosticsResource" internal/resources/resources.go   # expected: 1
+            grep -c "func HandleSubscribeDiagnostics" internal/resources/subscriptions.go  # expected: 1
+            grep -c "func GenerateResourceList" internal/resources/resources.go  # expected: 1
+            ```
+
+            ## Constraints
+            - Do NOT define types.LSPDiagnostic or types.DiagnosticUpdateCallback — those are scaffold-owned.
+            - Do NOT import from internal/tools — the resources layer is independent.
+            - Do NOT touch go.mod.
+            - Do NOT implement MCP SDK resource registration — that is Wave 2.
+            - All resource reads must be safe to call concurrently.
+          files:
+            - internal/resources/resources.go
+            - internal/resources/subscriptions.go
+            - internal/resources/resources_test.go
+        - id: D
+          task: |-
+            ## Role
+            Implement the extension registry in `internal/extensions/` and the Haskell
+            example extension in `extensions/haskell/`. The registry loads per-language
+            Go plugins at startup, allowing extensions to add tool handlers and resource handlers.
+
+            ## Package
+            - `package extensions` in `internal/extensions/`
+            - `package haskell` in `extensions/haskell/`
+
+            ## Files to Create
+            - `internal/extensions/registry.go` — ExtensionRegistry struct
+            - `internal/extensions/registry_test.go` — unit tests
+            - `extensions/haskell/haskell.go` — Haskell extension (stub, returns nil handlers)
+
+            ## Imports to Use
+            ```go
+            import (
+                "github.com/blackwell-systems/lsp-mcp-go/internal/types"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/logging"
+            )
+            ```
+
+            ## Interface to Implement
+
+            ### registry.go
+            ```go
+            // ExtensionRegistry manages per-language extension plugins.
+            // Thread-safe via sync.RWMutex.
+            type ExtensionRegistry struct {
+                mu         sync.RWMutex
+                extensions map[string]types.Extension
+            }
+
+            // NewRegistry creates an empty ExtensionRegistry.
+            func NewRegistry() *ExtensionRegistry
+
+            // Activate loads and registers an extension for the given language ID.
+            // If no extension exists for the language, returns nil (not an error).
+            // Language IDs are sanitized to alphanumeric + hyphens only.
+            func (r *ExtensionRegistry) Activate(languageID string) error
+
+            // Deactivate removes an extension from the registry.
+            func (r *ExtensionRegistry) Deactivate(languageID string)
+
+            // ToolHandlers returns the merged map of all tool handlers across active extensions.
+            // Keys are prefixed with "<languageID>." to avoid conflicts.
+            func (r *ExtensionRegistry) ToolHandlers() map[string]types.ToolHandler
+
+            // ResourceHandlers returns the merged map of all resource handlers across active extensions.
+            // Keys are prefixed with "<languageID>." to avoid conflicts.
+            func (r *ExtensionRegistry) ResourceHandlers() map[string]types.ResourceHandler
+            ```
+
+            ### Extension Loading Strategy (Go port of TypeScript dynamic import)
+            Since Go does not have runtime dynamic imports, extensions are registered
+            via a compile-time factory map. The registry looks up the language ID in
+            a built-in factory table:
+
+            ```go
+            // In registry.go, define a package-level factory map.
+            // Extensions register themselves by calling RegisterFactory at init() time.
+            var factories = map[string]func() types.Extension{}
+
+            // RegisterFactory registers an extension factory for a language ID.
+            // Called from extension packages' init() functions.
+            func RegisterFactory(languageID string, factory func() types.Extension)
+            ```
+
+            Extensions (e.g., extensions/haskell/haskell.go) call `extensions.RegisterFactory`
+            in their `init()` function. The cmd/main.go (Wave 2) blank-imports all known
+            extension packages to trigger their init() calls.
+
+            ### extensions/haskell/haskell.go
+            ```go
+            package haskell
+
+            import (
+                "github.com/blackwell-systems/lsp-mcp-go/internal/extensions"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/types"
+            )
+
+            func init() {
+                extensions.RegisterFactory("haskell", func() types.Extension { return &HaskellExtension{} })
+            }
+
+            type HaskellExtension struct{}
+
+            func (h *HaskellExtension) ToolHandlers() map[string]types.ToolHandler     { return nil }
+            func (h *HaskellExtension) ResourceHandlers() map[string]types.ResourceHandler { return nil }
+            ```
+
+            ## Tests to Write
+            1. TestNewRegistry_Empty — new registry has no extensions
+            2. TestRegistry_Activate_UnknownLanguage — Activate("cobol") returns nil, no error
+            3. TestRegistry_Activate_KnownLanguage — after RegisterFactory, Activate creates extension
+            4. TestRegistry_ToolHandlers_Prefixed — registered extension handler appears with language prefix
+            5. TestRegistry_Deactivate — after Deactivate, handlers no longer returned
+
+            ## Verification Gate
+            ```bash
+            go build ./internal/extensions/... ./extensions/...
+            go vet ./internal/extensions/... ./extensions/...
+            go test ./internal/extensions/... -v -timeout 30s
+            # Postconditions:
+            grep -c "func NewRegistry" internal/extensions/registry.go  # expected: 1
+            grep -c "func RegisterFactory" internal/extensions/registry.go  # expected: 1
+            grep -c "func init" extensions/haskell/haskell.go  # expected: 1
+            ```
+
+            ## Constraints
+            - Do NOT define types.Extension, types.ToolHandler, or types.ResourceHandler —
+              those are scaffold-owned.
+            - Do NOT import from internal/tools, internal/lsp, or internal/resources — the
+              extensions package only depends on internal/types and internal/logging.
+            - Do NOT touch go.mod.
+            - The haskell.go init() function must import `_ "github.com/blackwell-systems/lsp-mcp-go/internal/extensions"`
+              to trigger its RegisterFactory call — the blank import is intentional.
+            - Factories map must be protected by a sync.RWMutex or initialized at package-init time
+              only (no concurrent writes after startup).
+          files:
+            - internal/extensions/registry.go
+            - internal/extensions/registry_test.go
+            - extensions/haskell/haskell.go
+    - number: 2
+      agents:
+        - id: E
+          task: |-
+            ## Role
+            Wire all packages into the MCP server and compile the binary. This is the
+            integration wave. You depend on all Wave 1 agents completing successfully.
+
+            Before starting, verify all Wave 1 packages compile:
+            ```bash
+            go build ./internal/...
+            ```
+            If any package fails, check the interface contracts in the IMPL doc and fix only
+            compilation errors — do not redesign Wave 1 packages.
+
+            ## Files to Create
+            - `cmd/lsp-mcp-go/main.go` — CLI entry point, argument parsing, signal handling
+            - `cmd/lsp-mcp-go/server.go` — MCP server setup, tool/resource registration
+            - `internal/logging/logging_impl.go` — implement the scaffold stubs in logging.go
+            - `integration_test.go` — binary subprocess integration test
+
+            ## Package
+            - `cmd/lsp-mcp-go/` uses `package main`
+            - `internal/logging/logging_impl.go` uses `package logging`
+
+            ## Imports to Use
+            ```go
+            // main.go
+            import (
+                "github.com/modelcontextprotocol/go-sdk/mcp"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/tools"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/resources"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/extensions"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/logging"
+                "github.com/blackwell-systems/lsp-mcp-go/internal/types"
+                _ "github.com/blackwell-systems/lsp-mcp-go/extensions/haskell"
+            )
+            ```
+
+            ## What to Implement
+
+            ### cmd/lsp-mcp-go/main.go
+            ```go
+            // CLI: lsp-mcp-go <language-id> <lsp-server-binary> [lsp-server-args...]
+            // Validates:
+            //   - At least 2 positional args (language-id and server binary path)
+            //   - LSP server binary exists at the given path (os.Stat check)
+            // On validation failure: print usage to stderr, exit 1
+            //
+            // After validation:
+            //   - Create LSPClient (do NOT call Initialize yet — start_lsp tool does that)
+            //   - Create ExtensionRegistry, call Activate(languageID) if extension exists
+            //   - Call server.Run(ctx, lspClient, registry, serverPath, serverArgs)
+            //
+            // Signal handling:
+            //   - Listen for SIGINT and SIGTERM
+            //   - On signal: call lspClient.Shutdown(ctx), then os.Exit(0)
+            //   - Use context cancellation to propagate shutdown to the server
+            //
+            // Panic recovery:
+            //   - Wrap server.Run in a recover() to catch panics from goroutines
+            //   - Log panic at error level, then initiate graceful shutdown
+            ```
+
+            ### cmd/lsp-mcp-go/server.go
+            ```go
+            // Run creates and starts the MCP server.
+            //
+            // MCP Server setup (github.com/modelcontextprotocol/go-sdk v1.4.1):
+            //   server := mcp.NewServer("lsp-mcp-go", "0.1.0", nil)
+            //   transport := mcp.NewStdioTransport()
+            //
+            // Register all 24 tools via mcp.AddTool.
+            // Each tool wraps its Handle* function into an mcp.ToolHandlerFunc.
+            //
+            // Tool registration pattern:
+            //   mcp.AddTool(server, &mcp.Tool{
+            //       Name:        "start_lsp",
+            //       Description: "<description from TypeScript src/tools/index.ts>",
+            //       InputSchema: buildSchema(StartLspArgs{}),
+            //   }, func(ctx context.Context, ss *mcp.ServerSession, params *mcp.CallToolParamsFor[StartLspArgs]) (*mcp.CallToolResult, error) {
+            //       result, err := tools.HandleStartLsp(ctx, getClient, setClient, serverPath, serverArgs, params.Arguments)
+            //       return mcpResult(result), err
+            //   })
+            //
+            // Register resources (lsp-diagnostics, lsp-hover, lsp-completions) via server resource handlers.
+            // Wire diagnostic subscriptions to send notifications/resources/updated.
+            //
+            // Logging bridge: after server starts, call logging.SetServer and logging.MarkServerInitialized
+            // so that log messages route through MCP logging/message notifications.
+            //
+            // Start server: server.Run(ctx, transport)
+            ```
+
+            ### internal/logging/logging_impl.go
+            The scaffold `internal/logging/logging.go` contains stub function bodies.
+            Implement the full logging logic in `logging_impl.go`:
+            - Thread-safe log level management with sync.RWMutex
+            - LOG_LEVEL_PRIORITY map (debug=0, info=1, notice=2, warning=3, error=4, critical=5, alert=6, emergency=7)
+            - Initialize level from LOG_LEVEL env var (default "info"); validate; fall back to "info"
+            - Log function: format message, send to server via MCP logging/message notification when available
+            - Override console (os.Stderr write) as fallback when server not yet initialized
+
+            NOTE: The scaffold logging.go has empty function bodies. Your logging_impl.go
+            provides the actual implementations in the same package. Do NOT redeclare the
+            function signatures — implement the bodies inline by replacing the scaffold stubs.
+            ALTERNATIVE: If Go does not allow function redeclaration, move the implementations
+            directly into the scaffold file (logging.go) by editing it. The Scaffold Agent
+            leaves the bodies empty for this reason.
+
+            ### integration_test.go (package main_test)
+            ```go
+            // TestBinaryStartsAndExits:
+            //   - Build the binary: exec.Command("go", "build", "-o", binaryPath, "./cmd/lsp-mcp-go")
+            //   - Run it with a fake LSP server binary path that does not exist
+            //   - Expect exit code 1 and usage message on stderr
+            //   - Skip if binary fails to build
+            //
+            // TestBinaryWithMissingArgs:
+            //   - Run binary with no args — expect exit code 1
+            //
+            // NOTE: Live LSP integration tests are deferred to a separate test file.
+            // These tests only verify binary startup and CLI validation.
+            ```
+
+            ## go.mod Update
+            After `go mod tidy`, the go.sum file will be created automatically.
+            Run: `go mod tidy` after implementing all files.
+
+            ## Tool Argument Structs
+            Define one struct per tool for the MCP SDK type-safe handler:
+            ```go
+            type StartLspArgs struct {
+                RootDir string `json:"root_dir"`
+            }
+            type GetInfoOnLocationArgs struct {
+                FilePath   string `json:"file_path"`
+                LanguageID string `json:"language_id"`
+                Line       int    `json:"line"`
+                Column     int    `json:"column"`
+            }
+            // ... one struct per tool, matching field names from TypeScript schemas
+            ```
+            Pass args to Handle* functions as `map[string]interface{}` via JSON roundtrip
+            or cast directly from the typed struct.
+
+            ## Verification Gate
+            ```bash
+            go mod tidy
+            go build ./...
+            go vet ./...
+            go test ./... -v -timeout 120s
+            # Binary smoke test:
+            ./lsp-mcp-go 2>&1 | grep -i "usage\|argument" && echo "CLI validation OK"
+            # Postconditions:
+            grep -c "mcp.NewServer" cmd/lsp-mcp-go/server.go   # expected: 1
+            grep -c "mcp.NewStdioTransport\|mcp.StdioTransport" cmd/lsp-mcp-go/server.go  # expected: 1
+            ls cmd/lsp-mcp-go/main.go cmd/lsp-mcp-go/server.go internal/logging/logging_impl.go integration_test.go
+            ```
+
+            ## Constraints
+            - Do NOT modify files in internal/lsp/, internal/tools/, internal/resources/,
+              internal/extensions/, or extensions/ — those are Wave 1 owned.
+            - The logging implementation: if Go's function redeclaration prevents having
+              stubs in logging.go AND implementations in logging_impl.go, edit logging.go
+              directly (the scaffold stubs are empty and safe to replace in-place).
+            - Tool descriptions must match the TypeScript source verbatim (copy from
+              src/tools/index.ts getToolDefinitions() descriptions).
+            - Binary name is `lsp-mcp-go` (matches module and requirements doc).
+            - Do NOT use plugin (.so) loading — extension registry uses compile-time factory map.
+            - go.sum is auto-generated by `go mod tidy`; do not hand-edit it.
+          files:
+            - cmd/lsp-mcp-go/main.go
+            - cmd/lsp-mcp-go/server.go
+            - internal/logging/logging_impl.go
+            - integration_test.go
+          dependencies:
+            - A
+            - B
+            - C
+            - D
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: go build ./...
+          required: true
+        - type: lint
+          command: go vet ./...
+          required: true
+        - type: test
+          command: go test ./...
+          required: true
+scaffolds:
+    - file_path: go.mod
+      contents: |-
+        module github.com/blackwell-systems/lsp-mcp-go
+
+        go 1.22
+
+        // Dependencies populated by `go mod tidy` after Wave 1 agents run.
+        // Agent E (Wave 2) runs `go mod tidy` to resolve github.com/modelcontextprotocol/go-sdk.
+      status: committed (2e037b4)
+    - file_path: internal/types/types.go
+      contents: |-
+        package types
+
+        // Position is a 0-based line/character position (LSP convention).
+        type Position struct {
+            Line      int `json:"line"`
+            Character int `json:"character"`
+        }
+
+        // Range is a 0-based start/end position pair (LSP convention).
+        type Range struct {
+            Start Position `json:"start"`
+            End   Position `json:"end"`
+        }
+
+        // Location is a URI + range pair returned by definition/reference queries.
+        type Location struct {
+            URI   string `json:"uri"`
+            Range Range  `json:"range"`
+        }
+
+        // FormattedLocation is the 1-indexed, file-path-based form used in tool responses.
+        type FormattedLocation struct {
+            FilePath  string `json:"filePath"`
+            StartLine int    `json:"startLine"`
+            StartCol  int    `json:"startColumn"`
+            EndLine   int    `json:"endLine"`
+            EndCol    int    `json:"endColumn"`
+        }
+
+        // LSPDiagnostic mirrors the LSP publishDiagnostics Diagnostic object.
+        type LSPDiagnostic struct {
+            Range    Range  `json:"range"`
+            Severity int    `json:"severity"` // 1=error 2=warning 3=info 4=hint
+            Code     string `json:"code,omitempty"`
+            Source   string `json:"source,omitempty"`
+            Message  string `json:"message"`
+        }
+
+        // DiagnosticUpdateCallback is called whenever the LSP server publishes diagnostics.
+        type DiagnosticUpdateCallback func(uri string, diagnostics []LSPDiagnostic)
+
+        // FileChangeEvent is a single entry for workspace/didChangeWatchedFiles.
+        type FileChangeEvent struct {
+            URI  string `json:"uri"`
+            Type int    `json:"type"` // 1=created 2=changed 3=deleted
+        }
+
+        // ToolResult is returned by every MCP tool handler.
+        type ToolResult struct {
+            Content []ContentItem `json:"content"`
+            IsError bool          `json:"isError,omitempty"`
+        }
+
+        // ContentItem is a single content block inside a ToolResult.
+        type ContentItem struct {
+            Type string `json:"type"` // always "text" for this server
+            Text string `json:"text"`
+        }
+
+        // TextResult constructs a successful ToolResult with a single text item.
+        func TextResult(text string) ToolResult {
+            return ToolResult{Content: []ContentItem{{Type: "text", Text: text}}}
+        }
+
+        // ErrorResult constructs an error ToolResult (isError=true).
+        func ErrorResult(msg string) ToolResult {
+            return ToolResult{
+                Content: []ContentItem{{Type: "text", Text: msg}},
+                IsError: true,
+            }
+        }
+
+        // ToolHandler is the function signature for tool handler callbacks registered
+        // by extensions. The ctx, client, and args mirror the standard tool handler args.
+        type ToolHandler func(ctx interface{}, args map[string]interface{}) (ToolResult, error)
+
+        // ResourceHandler is the function signature for resource read callbacks registered
+        // by extensions.
+        type ResourceHandler func(ctx interface{}, uri string) (interface{}, error)
+
+        // Extension is implemented by per-language extension packages.
+        type Extension interface {
+            ToolHandlers() map[string]ToolHandler
+            ResourceHandlers() map[string]ResourceHandler
+        }
+      import_path: github.com/blackwell-systems/lsp-mcp-go/internal/types
+      status: committed (2e037b4)
+    - file_path: internal/logging/logging.go
+      contents: |-
+        package logging
+
+        // Level constants matching the MCP logging/message severity levels.
+        const (
+            LevelDebug     = "debug"
+            LevelInfo      = "info"
+            LevelNotice    = "notice"
+            LevelWarning   = "warning"
+            LevelError     = "error"
+            LevelCritical  = "critical"
+            LevelAlert     = "alert"
+            LevelEmergency = "emergency"
+        )
+
+        // Log emits a log message at the given level.
+        // Before the MCP server is initialized, messages go to stderr.
+        // After initialization, messages route through MCP logging/message notifications.
+        // Stub body — implemented in logging_impl.go (Wave 2, Agent E).
+        func Log(level, message string) {}
+
+        // SetLevel changes the minimum log level. Valid values are the Level* constants.
+        // Messages below this level are suppressed.
+        // Stub body — implemented in logging_impl.go (Wave 2, Agent E).
+        func SetLevel(level string) {}
+
+        // SetServer stores a reference to the MCP server notification sender.
+        // Called by server.go (Wave 2) after the server is created.
+        // Stub body — implemented in logging_impl.go (Wave 2, Agent E).
+        func SetServer(sender interface{}) {}
+
+        // MarkServerInitialized signals that the MCP server is ready to receive
+        // logging/message notifications. Called by server.go after server.Run starts.
+        // Stub body — implemented in logging_impl.go (Wave 2, Agent E).
+        func MarkServerInitialized() {}
+      import_path: github.com/blackwell-systems/lsp-mcp-go/internal/logging
+      status: committed (2e037b4)
+pre_mortem:
+    overall_risk: medium
+    rows:
+        - scenario: |-
+            Go MCP SDK API surface unknown — mcp.AddTool, mcp.NewServer, transport setup
+            may differ from what Agent E assumes. The SDK is v1.4.1 and the exact function
+            signatures may require adjustment after `go get`.
+          likelihood: high
+          impact: medium
+          mitigation: |-
+            Agent E must run `go get github.com/modelcontextprotocol/go-sdk@v1.4.1` and
+            then read the SDK package docs (`go doc`) before writing server.go. Tool
+            registration pattern in the task is illustrative — agent should verify
+            actual mcp.AddTool signature from the SDK source.
+        - scenario: |-
+            Logging scaffold stubs conflict with logging_impl.go. Go does not allow
+            duplicate function declarations in the same package, even across files.
+          likelihood: high
+          impact: medium
+          mitigation: |-
+            Agent E is explicitly told: if function redeclaration fails, edit logging.go
+            directly. Scaffold stubs have empty bodies so they are safe to replace.
+            Alternatively, the logging.go scaffold can be changed to declare only the
+            type and constants (not function stubs) and let logging_impl.go declare the
+            functions entirely.
+        - scenario: |-
+            LSP subprocess framing bug: Content-Length byte count vs UTF-16 code units.
+            The TypeScript reference specifically calls out this bug fix.
+          likelihood: medium
+          impact: high
+          mitigation: |-
+            Agent A's constraints explicitly state byte-based buffer (Buffer in Go =
+            []byte). The framing.go FrameReader must use len(body) for Content-Length,
+            not len(string(body)). TestFrameReader_MultiByteUnicode test catches this.
+        - scenario: |-
+            Race condition on `initialized` flag: setting it AFTER sending `initialized`
+            notification (reversed from TypeScript fix).
+          likelihood: medium
+          impact: medium
+          mitigation: |-
+            Agent A's behavioral requirements explicitly state: "Set initialized = true
+            BEFORE sending the initialized notification." This mirrors the TypeScript
+            race fix from src/lspClient.ts line 566.
+        - scenario: |-
+            Types package circular import: internal/logging imports internal/types,
+            but internal/types might need to import logging for error formatting.
+          likelihood: low
+          impact: high
+          mitigation: |-
+            The scaffold types.go contains no logging references. All logging calls
+            flow through internal/logging only. types package must never import logging.
+        - scenario: |-
+            Extension factory map concurrent write: RegisterFactory called at init() from
+            multiple goroutines if extensions are in separate goroutines.
+          likelihood: low
+          impact: low
+          mitigation: |-
+            init() functions in Go run sequentially (not concurrently). Factory map
+            writes during init() are safe without locks. Reads during runtime are read-only
+            after init() completes. Agent D's constraints document this.
+        - scenario: |-
+            withDocument in tools package needs to import from lsp package, creating
+            a potential import cycle if lsp imports tools.
+          likelihood: low
+          impact: high
+          mitigation: |-
+            Dependency direction is strictly: cmd -> tools -> lsp -> types <- logging.
+            tools imports lsp; lsp does NOT import tools. resources also imports lsp.
+            No cycles are possible given this directed graph.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+        E:
+            agent_id: E
+            verdict: PASS
+    summary: 'All three previous errors are resolved by the scaffolds section added to the IMPL. The scaffold definitions for go.mod, internal/types/types.go, and internal/logging/logging.go supply all symbols required by Wave 1 agents (types.LSPDiagnostic, types.Position, types.Range, types.Location, types.FormattedLocation, types.FileChangeEvent, types.DiagnosticUpdateCallback, types.ToolResult, types.ErrorResult, types.TextResult, types.ToolHandler, types.ResourceHandler, types.Extension) and by Agent E (logging.SetServer, logging.MarkServerInitialized, logging.SetLevel, logging.Log). The two previous warnings are also resolved: DidChangeWatchedFiles now correctly shows types.FileChangeEvent in both the interface contract and Agent A brief; WaitForDiagnostics parameter name is consistently ''uris'' in both the interface contract and Agent A brief. All file_ownership entries have action:new and the repo contains no source files, so file_existence passes. No i1_disjoint_ownership violations found. All complexity_balance thresholds pass. No remaining errors or warnings detected.'
+    reviewed_at: "2026-04-06T16:10:40Z"
+    issue_count: 0
+state: SCOUT_PENDING
+injection_method: hook
