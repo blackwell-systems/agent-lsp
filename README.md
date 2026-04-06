@@ -21,11 +21,69 @@ Language servers are the intelligence layer behind IDE features — go-to-defini
 
 ## Installation
 
+**Requires Go 1.21+** — [install Go](https://go.dev/dl/) if needed.
+
 ```bash
 go install github.com/blackwell-systems/lsp-mcp-go@latest
 ```
 
-This installs the `lsp-mcp-go` binary to `$GOPATH/bin` (typically `~/go/bin`). Make sure that directory is on your `PATH`.
+If `lsp-mcp-go` isn't found after install, add Go's bin directory to your PATH:
+
+```bash
+export PATH="$PATH:$(go env GOPATH)/bin"   # add to ~/.zshrc or ~/.bashrc to persist
+```
+
+## Setup
+
+### Step 1 — Install language servers for your stack
+
+lsp-mcp-go is a bridge — it needs language servers already installed on your machine.
+
+| Language | Server | Install |
+|----------|--------|---------|
+| TypeScript / JavaScript | `typescript-language-server` | `npm i -g typescript-language-server typescript` |
+| Python | `pyright-langserver` | `npm i -g pyright` |
+| Go | `gopls` | `go install golang.org/x/tools/gopls@latest` |
+| Rust | `rust-analyzer` | `rustup component add rust-analyzer` |
+| C / C++ | `clangd` | `apt install clangd` / `brew install llvm` |
+| Ruby | `solargraph` | `gem install solargraph` |
+| PHP | `intelephense` | `npm i -g intelephense` |
+| Java | `jdtls` | [eclipse.jdt.ls snapshots](https://download.eclipse.org/jdtls/snapshots/) |
+| YAML | `yaml-language-server` | `npm i -g yaml-language-server` |
+| JSON | `vscode-json-language-server` | `npm i -g vscode-json-language-server` |
+| Dockerfile | `docker-langserver` | `npm i -g dockerfile-language-server-nodejs` |
+
+### Step 2 — Add to your AI config
+
+Add to `.mcp.json` (project) or your AI tool's global MCP config. List only the languages you use:
+
+```json
+{
+  "mcpServers": {
+    "lsp": {
+      "type": "stdio",
+      "command": "lsp-mcp-go",
+      "args": [
+        "go:gopls",
+        "typescript:typescript-language-server,--stdio",
+        "python:pyright-langserver,--stdio"
+      ]
+    }
+  }
+}
+```
+
+Each arg is `language:server-binary` (comma-separate server args). Single language? Use `"args": ["go", "gopls"]`. Complex setup with many servers or per-server options? Use `"args": ["--config", "/path/to/lsp-mcp.json"]`.
+
+### Step 3 — Start working
+
+Once your AI session opens, call `start_lsp` with your project root to initialize:
+
+```
+start_lsp(root_dir="/your/project")
+```
+
+Then use any of the 26 tools. The session persists — no need to restart when switching files.
 
 ## Why lsp-mcp-go
 
@@ -52,60 +110,6 @@ This installs the `lsp-mcp-go` binary to `$GOPATH/bin` (typically `~/go/bin`). M
 - **Code migration** — refactor across repos (e.g., extracting a Go library used by 3 services)
 - **CI pipelines** — validate against real language server behavior
 
-## The One-Config Workflow
-
-Configure lsp-mcp-go once with all the languages you use:
-
-```json
-{
-  "mcpServers": {
-    "lsp": {
-      "command": "lsp-mcp-go",
-      "args": [
-        "go:gopls",
-        "typescript:typescript-language-server,--stdio",
-        "python:pyright-langserver,--stdio"
-      ]
-    }
-  }
-}
-```
-
-Now work across your entire code directory:
-- Jump from your Go API to your TypeScript frontend
-- Fix a Python script, then back to Go
-- Your AI navigates seamlessly — lsp-mcp-go routes by file extension
-
-**No per-project MCP configs. No server restarts. Just code.**
-
-## Quick Start
-
-**Multi-language setup** (one server handles the whole codebase):
-```json
-{
-  "mcpServers": {
-    "lsp": {
-      "type": "stdio",
-      "command": "lsp-mcp-go",
-      "args": ["go:gopls", "typescript:typescript-language-server,--stdio"]
-    }
-  }
-}
-```
-
-Routes by file extension automatically — `.go` files go to gopls, `.ts`/`.tsx` files go to typescript-language-server.
-
-**Single language:**
-```json
-{ "args": ["typescript", "typescript-language-server", "--stdio"] }
-{ "args": ["go", "gopls"] }
-{ "args": ["rust", "rust-analyzer"] }
-```
-
-**Config file** (for complex setups with many servers or per-server options):
-```json
-{ "args": ["--config", "/path/to/lsp-mcp.json"] }
-```
 
 ## Multi-Language Support
 
@@ -130,22 +134,6 @@ Tier 2 results per language from the latest CI run:
 | Dockerfile | pass | — | — | — | pass | pass | — |
 
 Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout (a known jdtls cold-start characteristic, not a tool bug).
-
-Language server install commands:
-
-| Language | Server | Install |
-|----------|--------|---------|
-| TypeScript / JavaScript | `typescript-language-server` | `npm i -g typescript-language-server typescript` |
-| Python | `pyright-langserver` | `npm i -g pyright` |
-| Go | `gopls` | `go install golang.org/x/tools/gopls@latest` |
-| Rust | `rust-analyzer` | `rustup component add rust-analyzer` |
-| Java | `jdtls` | [eclipse.jdt.ls snapshots](https://download.eclipse.org/jdtls/snapshots/) |
-| C / C++ | `clangd` | `apt install clangd` / `brew install llvm` |
-| PHP | `intelephense` | `npm i -g intelephense` |
-| Ruby | `solargraph` | `gem install solargraph` |
-| YAML | `yaml-language-server` | `npm i -g yaml-language-server` |
-| JSON | `vscode-json-language-server` | `npm i -g vscode-json-language-server` |
-| Dockerfile | `docker-langserver` | `npm i -g dockerfile-language-server-nodejs` |
 
 ## Tools
 
