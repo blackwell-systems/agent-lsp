@@ -4,14 +4,14 @@
 [![CI](https://github.com/blackwell-systems/lsp-mcp-go/actions/workflows/ci.yml/badge.svg)](https://github.com/blackwell-systems/lsp-mcp-go/actions)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 [![Languages](https://img.shields.io/badge/languages-7_verified-green.svg)](#multi-language-support)
-[![Tools](https://img.shields.io/badge/tools-24-blue.svg)](#tools)
+[![Tools](https://img.shields.io/badge/tools-25-blue.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Language servers are the intelligence layer behind IDE features — autocompletion, go-to-definition, inline errors, find-all-references. They run as background processes and understand code at a semantic level: types, symbols, scope, and cross-file relationships. Every major editor uses them silently. lsp-mcp-go exposes that same intelligence to agents through the MCP protocol.
 
 lsp-mcp-go turns language servers into queryable infrastructure for agents.
 
-The most complete MCP server for language intelligence — built for agents, not just protocol passthrough. **24 tools** spanning navigation, diagnostics, refactoring, and formatting. CI-verified across **7 languages**. Built directly against the [LSP 3.17 specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+The most complete MCP server for language intelligence — built for agents, not just protocol passthrough. **25 tools** spanning navigation, diagnostics, refactoring, and formatting. CI-verified across **7 languages** with real language servers and real fixture codebases. Built directly against the [LSP 3.17 specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
 Unlike typical MCP-LSP bridges, lsp-mcp-go maintains a **persistent language server session** — agents operate on a fully indexed, stateful workspace with real-time diagnostics and cross-file reasoning, not a cold-started stub that forgets context between calls.
 
@@ -33,13 +33,16 @@ This installs the `lsp-mcp-go` binary to `$GOPATH/bin` (typically `~/go/bin`). M
 
 | | lsp-mcp-go | other MCP-LSP implementations |
 |--|---------|---------------------|
-| Languages (CI-verified) | **7** | 1–2 |
-| Tools | **24** | 3–5 |
+| Languages (CI-verified) | **7** (integration-tested) | config-listed, untested |
+| Tools | **25** | 3–18 |
 | LSP spec compliance | **3.17, built to spec** | ad hoc |
 | Connection model | **persistent** | per-request |
 | Cross-file references | **✓** | rarely |
 | Real-time diagnostic subscriptions | **✓** | ✗ |
-| Distribution | **single Go binary** | Node.js runtime required |
+| Call hierarchy | **✓** (single tool, direction param) | ✗ or 3 separate tools |
+| Fuzzy position fallback | **✓** | ✗ or partial |
+| Path traversal prevention | **✓** | ✗ |
+| Distribution | **single Go binary** | Node.js or Bun runtime required |
 
 ## Use Cases
 
@@ -79,7 +82,23 @@ This installs the `lsp-mcp-go` binary to `$GOPATH/bin` (typically `~/go/bin`). M
 
 ## Multi-Language Support
 
-Every language below is integration-tested on every CI run — `start_lsp`, `open_document`, `get_diagnostics`, and `get_info_on_location` all verified against the real language server binary:
+Every language below is integration-tested on every CI run with a real language server binary and a real fixture codebase. The test harness verifies **Tier 1** (`start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`) and **Tier 2** (`get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`) for each language. No other MCP-LSP implementation has an equivalent test matrix — competitors list supported languages in config examples but do not run integration tests against them.
+
+Tier 2 results per language from the latest CI run:
+
+| Language | Tier 1 | symbols | definition | references | completions | workspace | format |
+|----------|--------|---------|------------|------------|-------------|-----------|--------|
+| TypeScript | pass | pass | pass | pass | pass | pass | pass |
+| Python | pass | pass | pass | pass | pass | pass | — |
+| Go | pass | pass | pass | pass | pass | pass | pass |
+| Rust | pass | pass | pass | pass | pass | pass | pass |
+| Java | pass | — | — | — | — | — | — |
+| C | pass | pass | pass | pass | pass | pass | pass |
+| PHP | pass | pass | pass | pass | pass | pass | — |
+
+Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout (a known jdtls cold-start characteristic, not a tool bug).
+
+Language server install commands:
 
 | Language | Server | Install |
 |----------|--------|---------|
@@ -118,10 +137,11 @@ All tools require `start_lsp` to be called first.
 | Tool | Description |
 |------|-------------|
 | `get_references` | All references to a symbol across the workspace |
-| `go_to_definition` | Jump to where a symbol is defined |
+| `go_to_definition` | Jump to where a symbol is defined (with fuzzy position fallback) |
 | `go_to_type_definition` | Jump to the type definition of a symbol |
 | `go_to_implementation` | Jump to all implementations of an interface or abstract method |
 | `go_to_declaration` | Jump to the declaration of a symbol (distinct from definition — e.g. C/C++ headers) |
+| `call_hierarchy` | Callers and/or callees of a function — `direction: "incoming"`, `"outgoing"`, or `"both"` (default) |
 
 ### Refactoring
 | Tool | Description |
