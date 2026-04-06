@@ -14,6 +14,12 @@ var sanitizeRE = regexp.MustCompile(`[^a-zA-Z0-9-]`)
 // factories is the compile-time registry of extension constructors.
 // Extensions register themselves by calling RegisterFactory in their init()
 // functions. No concurrent writes occur after package initialisation.
+//
+// Design note: unlike the TypeScript implementation which supports runtime
+// extension loading, Go uses compile-time factory registration via init().
+// This is a deliberate architectural choice: it eliminates dynamic plugin
+// loading complexity and leverages Go's type system for safety. The trade-off
+// is that adding a new extension requires recompilation and a new binary.
 var (
 	factoriesMu sync.RWMutex
 	factories   = map[string]func() types.Extension{}
@@ -101,6 +107,36 @@ func (r *ExtensionRegistry) ResourceHandlers() map[string]types.ResourceHandler 
 	result := map[string]types.ResourceHandler{}
 	for langID, ext := range r.extensions {
 		for name, handler := range ext.ResourceHandlers() {
+			result[langID+"."+name] = handler
+		}
+	}
+	return result
+}
+
+// SubscriptionHandlers returns the merged map of all subscription resource handlers
+// across active extensions. Keys are prefixed with "<languageID>." to avoid conflicts.
+func (r *ExtensionRegistry) SubscriptionHandlers() map[string]types.ResourceHandler {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := map[string]types.ResourceHandler{}
+	for langID, ext := range r.extensions {
+		for name, handler := range ext.SubscriptionHandlers() {
+			result[langID+"."+name] = handler
+		}
+	}
+	return result
+}
+
+// PromptHandlers returns the merged map of all prompt handlers across active extensions.
+// Keys are prefixed with "<languageID>." to avoid conflicts.
+func (r *ExtensionRegistry) PromptHandlers() map[string]interface{} {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := map[string]interface{}{}
+	for langID, ext := range r.extensions {
+		for name, handler := range ext.PromptHandlers() {
 			result[langID+"."+name] = handler
 		}
 	}
