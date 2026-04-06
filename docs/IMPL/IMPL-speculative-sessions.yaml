@@ -35,7 +35,6 @@ suitability_assessment: |
     Recommendation: Clear speedup. Proceed.
 test_command: GOWORK=off go test ./...
 lint_command: GOWORK=off go vet ./...
-build_command: GOWORK=off go build ./...
 file_ownership:
     - file: internal/session/types.go
       agent: A
@@ -951,5 +950,5 @@ critic_report:
     summary: Skipped by operator
     reviewed_at: "2026-04-06T22:23:00Z"
     issue_count: 0
-state: SCOUT_PENDING
+state: "REVIEWED"
 injection_method: hook
