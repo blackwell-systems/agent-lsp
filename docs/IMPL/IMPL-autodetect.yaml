@@ -238,7 +238,7 @@ waves:
             - cmd/lsp-mcp-go/main.go
           dependencies:
             - A
-      base_commit: ef2c2b461b419f62b769eb350c1519823a0613ec
+      base_commit: 96d7bd216e25dd43de1a6fab2285fe04110922e1
 quality_gates:
     level: standard
     gates:
@@ -272,7 +272,7 @@ completion_reports:
             - TestParseArgs_AutoEmpty
             - TestParseArgs_AutoFlag
         verification: PASS
-        notes: Auto-detect mode integrated into ParseArgs. Empty args and --auto flag both trigger AutodetectServers(). Usage text updated in main.go. All tests pass with 9 language servers detected on local PATH.
+        notes: Auto-detection integration complete. ParseArgs now calls AutodetectServers() when args are empty or --auto flag is present. All tests passing (4 existing + 2 new).
 pre_mortem:
     overall_risk: low
     rows:

@@ -11,7 +11,7 @@
     {
       "agent": "B",
       "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/autodetect/wave2-agent-B/.saw-agent-brief.md",
-      "brief_length": 7883,
+      "brief_length": 7922,
       "journal_dir": ".saw-state/wave2/agent-B",
       "files_owned": 3
     }
@@ -75,7 +75,7 @@
     {
       "step": "commit_baseline",
       "status": "success",
-      "detail": "committed 5 file(s)"
+      "detail": "committed 4 file(s)"
     },
     {
       "step": "baseline_gates",
