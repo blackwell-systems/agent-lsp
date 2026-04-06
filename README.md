@@ -4,22 +4,18 @@
 [![CI](https://github.com/blackwell-systems/lsp-mcp-go/actions/workflows/ci.yml/badge.svg)](https://github.com/blackwell-systems/lsp-mcp-go/actions)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 [![Languages](https://img.shields.io/badge/languages-7_verified-green.svg)](#multi-language-support)
-[![Tools](https://img.shields.io/badge/tools-25-blue.svg)](#tools)
+[![Tools](https://img.shields.io/badge/tools-26-blue.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Language servers are the intelligence layer behind IDE features — autocompletion, go-to-definition, inline errors, find-all-references. They run as background processes and understand code at a semantic level: types, symbols, scope, and cross-file relationships. Every major editor uses them silently. lsp-mcp-go exposes that same intelligence to agents through the MCP protocol.
+Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships. lsp-mcp-go exposes that intelligence to agents through MCP.
 
-lsp-mcp-go turns language servers into queryable infrastructure for agents.
+**26 tools** across navigation, analysis, refactoring, and formatting. Multi-server routing: one process handles an entire multi-language codebase. CI-verified against real language servers across **7 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
-The most complete MCP server for language intelligence — built for agents, not just protocol passthrough. **25 tools** spanning navigation, diagnostics, refactoring, and formatting. CI-verified across **7 languages** with real language servers and real fixture codebases. Built directly against the [LSP 3.17 specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+**Persistent session, warm index.** Unlike per-request bridges, lsp-mcp-go maintains a live language server session. `start_lsp` indexes the workspace once; every subsequent call hits the warm index. `get_references` returns all 12 call sites without loading files into context. `get_diagnostics` returns only the errors. `get_info_on_location` returns the type signature at one position without loading the module. The index stays fresh via `did_change_watched_files` — no restart needed after edits.
 
-Unlike typical MCP-LSP bridges, lsp-mcp-go maintains a **persistent language server session** — agents operate on a fully indexed, stateful workspace with real-time diagnostics and cross-file reasoning, not a cold-started stub that forgets context between calls.
+**Fuzzy position fallback.** When an AI assistant gets a line/column slightly wrong, `go_to_definition` and `get_references` fall back to workspace symbol search by hover name and retry — returning results instead of silently returning empty.
 
-Designed for agentic workflows where correctness, persistence, and cross-language reliability are required.
-
-The LSP layer built for long-running agentic workflows.
-
-**Token efficiency (critical for LLM agents):** Language servers maintain a pre-built index of the entire workspace. Instead of loading files into context to find usages, trace types, or locate definitions, agents query the index directly — `get_references` returns the 12 call sites without pasting 5 files, `get_info_on_location` returns the type signature at one position without loading the module, `get_diagnostics` returns only the errors without reading every file. The persistent session means indexing happens once on `start_lsp`; every subsequent query hits the warm index.
+**Semantic token classification.** `get_semantic_tokens` classifies every token in a range as `function`, `parameter`, `variable`, `type`, `keyword`, etc. — the same data an IDE uses to colorize code. No other MCP-LSP server exposes this.
 
 ## Installation
 
@@ -33,12 +29,14 @@ This installs the `lsp-mcp-go` binary to `$GOPATH/bin` (typically `~/go/bin`). M
 
 | | lsp-mcp-go | other MCP-LSP implementations |
 |--|---------|---------------------|
-| Languages (CI-verified) | **7** (integration-tested) | config-listed, untested |
-| Tools | **25** | 3–18 |
+| Languages (CI-verified) | **7** (end-to-end integration tests) | config-listed, untested |
+| Tools | **26** | 3–18 |
+| Multi-server routing | **✓** (one process, many languages) | varies |
 | LSP spec compliance | **3.17, built to spec** | ad hoc |
-| Connection model | **persistent** | per-request |
+| Connection model | **persistent** (warm index) | per-request or cold-start |
 | Cross-file references | **✓** | rarely |
 | Real-time diagnostic subscriptions | **✓** | ✗ |
+| Semantic token classification | **✓** | ✗ (only one competitor) |
 | Call hierarchy | **✓** (single tool, direction param) | ✗ or 3 separate tools |
 | Fuzzy position fallback | **✓** | ✗ or partial |
 | Path traversal prevention | **✓** | ✗ |
@@ -53,31 +51,31 @@ This installs the `lsp-mcp-go` binary to `$GOPATH/bin` (typically `~/go/bin`). M
 
 ## Quick Start
 
+**Multi-language project** (one server handles the whole codebase):
 ```json
 {
   "mcpServers": {
     "lsp": {
       "type": "stdio",
       "command": "lsp-mcp-go",
-      "args": ["<language-id>", "<path-to-lsp-binary>", "<lsp-args>"]
+      "args": ["go:gopls", "typescript:typescript-language-server,--stdio"]
     }
   }
 }
 ```
 
-**TypeScript:**
+Routes by file extension automatically — `.go` files go to gopls, `.ts`/`.tsx` files go to typescript-language-server.
+
+**Single language:**
 ```json
 { "args": ["typescript", "typescript-language-server", "--stdio"] }
-```
-
-**Go:**
-```json
 { "args": ["go", "gopls"] }
+{ "args": ["rust", "rust-analyzer"] }
 ```
 
-**Rust:**
+**Config file** (for complex setups with many servers or per-server options):
 ```json
-{ "args": ["rust", "rust-analyzer"] }
+{ "args": ["--config", "/path/to/lsp-mcp.json"] }
 ```
 
 ## Multi-Language Support
@@ -132,6 +130,7 @@ All tools require `start_lsp` to be called first.
 | `get_code_actions` | Quick fixes and refactors for a range |
 | `get_document_symbols` | All symbols in a file (functions, classes, variables) |
 | `get_workspace_symbols` | Search symbols by name across the workspace |
+| `get_semantic_tokens` | Classify tokens in a range as function/parameter/variable/type/keyword/etc — same data IDEs use for syntax highlighting |
 
 ### Navigation
 | Tool | Description |
