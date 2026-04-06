@@ -20,11 +20,11 @@ type Location struct {
 
 // FormattedLocation is the 1-indexed, file-path-based form used in tool responses.
 type FormattedLocation struct {
-	FilePath  string `json:"filePath"`
-	StartLine int    `json:"startLine"`
-	StartCol  int    `json:"startColumn"`
-	EndLine   int    `json:"endLine"`
-	EndCol    int    `json:"endColumn"`
+	FilePath  string `json:"file"`
+	StartLine int    `json:"line"`
+	StartCol  int    `json:"column"`
+	EndLine   int    `json:"end_line"`
+	EndCol    int    `json:"end_column"`
 }
 
 // LSPDiagnostic mirrors the LSP publishDiagnostics Diagnostic object.
@@ -82,4 +82,6 @@ type ResourceHandler func(ctx interface{}, uri string) (interface{}, error)
 type Extension interface {
 	ToolHandlers() map[string]ToolHandler
 	ResourceHandlers() map[string]ResourceHandler
+	SubscriptionHandlers() map[string]ResourceHandler
+	PromptHandlers() map[string]interface{}
 }

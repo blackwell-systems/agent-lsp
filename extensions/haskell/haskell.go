@@ -16,3 +16,5 @@ type HaskellExtension struct{}
 
 func (h *HaskellExtension) ToolHandlers() map[string]types.ToolHandler         { return nil }
 func (h *HaskellExtension) ResourceHandlers() map[string]types.ResourceHandler { return nil }
+func (h *HaskellExtension) SubscriptionHandlers() map[string]types.ResourceHandler { return nil }
+func (h *HaskellExtension) PromptHandlers() map[string]interface{}              { return nil }
