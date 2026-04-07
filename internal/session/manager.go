@@ -5,8 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"os"
+	"maps"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -331,10 +332,8 @@ func (m *SessionManager) Commit(ctx context.Context, sessionID, target string, a
 	}
 
 	// Build workspace edit patch.
-	patch := make(map[string]string)
-	for uri, content := range session.Contents {
-		patch[uri] = content
-	}
+	patch := make(map[string]string, len(session.Contents))
+	maps.Copy(patch, session.Contents)
 
 	filesWritten := 0
 
