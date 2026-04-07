@@ -92,7 +92,7 @@ func TestApplyRangeEdit_MultiLine(t *testing.T) {
 		Start: types.Position{Line: 0, Character: 5},
 		End:   types.Position{Line: 2, Character: 4},
 	}
-	newText := " replaced"
+	newText := "replaced"
 
 	result := applyRangeEdit(content, rng, newText)
 	expected := "line replaced 3"
