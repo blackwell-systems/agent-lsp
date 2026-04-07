@@ -5,6 +5,12 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- Tests for `Destroy` (session removal + not-found error), `ApplyEdit` terminal and dirty guards, and `languageToExtension` (all 10 named cases + default fallback) — previously only the `"go"` case was exercised
+
+### Changed
+- `Commit` uses `maps.Copy` instead of a manual loop to build the workspace edit patch
+
 ### Fixed
 - `logging.Log` data race on `initWarning` eliminated — read and write now hold `mu.Lock()` before accessing the field; previously two concurrent `Log()` calls could both observe the non-empty warning and race to zero it
 - `ServerManager.StartAll` now shuts down all previously-initialized clients before returning on failure — previously leaked LSP subprocesses and open pipes when any server in a multi-server config failed to initialize
