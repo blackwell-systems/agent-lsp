@@ -272,7 +272,9 @@ func (c *LSPClient) dispatch(raw []byte) {
 			var p struct {
 				Items []interface{} `json:"items"`
 			}
-			_ = json.Unmarshal(msg.Params, &p)
+			if err := json.Unmarshal(msg.Params, &p); err != nil {
+				logging.Log(logging.LevelDebug, fmt.Sprintf("workspace/configuration: unmarshal params: %v", err))
+			}
 			nulls := make([]interface{}, len(p.Items))
 			c.sendResponse(*msg.ID, nulls)
 		}
@@ -478,7 +480,6 @@ func (c *LSPClient) sendNotification(method string, params interface{}) error {
 	return c.writeRaw(body)
 }
 
-// Initialize starts the LSP process and performs the LSP handshake.
 // RootDir returns the workspace root directory set during Initialize.
 func (c *LSPClient) RootDir() string {
 	return c.rootDir
@@ -1409,7 +1410,10 @@ func (c *LSPClient) applyDocumentChanges(ctx context.Context, dc interface{}) er
 		var disc struct {
 			Kind string `json:"kind"`
 		}
-		_ = json.Unmarshal(entry, &disc)
+		if err := json.Unmarshal(entry, &disc); err != nil {
+			logging.Log(logging.LevelDebug, fmt.Sprintf("applyDocumentChanges: unmarshal discriminator: %v", err))
+			continue
+		}
 		switch disc.Kind {
 		case "create":
 			var op struct {
