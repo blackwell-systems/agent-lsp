@@ -696,6 +696,18 @@
         "cached_at": "2026-04-06T15:35:36.755351-07:00"
       }
     },
+    "716df8d175a9cf0e2e3ea4fe4159ee88": {
+      "build": {
+        "gate_type": "build",
+        "command": "GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T21:19:21.155533-07:00"
+      }
+    },
     "746c96e5a49cd1cdb3b2f369275ae187": {
       "build": {
         "gate_type": "build",
@@ -828,6 +840,18 @@
         "cached_at": "2026-04-06T15:47:21.049624-07:00"
       }
     },
+    "92504b8e92a132131be02c222514f745": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "GOWORK=off go vet ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T21:19:21.53749-07:00"
+      }
+    },
     "93c506da3963ad1a1e35ebdef0d9a3f2": {
       "test": {
         "gate_type": "test",
@@ -898,6 +922,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T12:21:27.392614-07:00"
+      }
+    },
+    "9b4ae8ac77d5949203366e695c97b60e": {
+      "test": {
+        "gate_type": "test",
+        "command": "GOWORK=off go test ./...",
+        "passed": false,
+        "exit_code": 1,
+        "stdout": "ok  \tgithub.com/blackwell-systems/lsp-mcp-go\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/cmd/lsp-mcp-go\t[no test files]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/extensions/haskell\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/config\t(cached)\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/extensions\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/logging\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/lsp\t(cached)\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/resources\t(cached)\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/session\t(cached)\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/tools\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/types\t[no test files]\n--- FAIL: TestMultiLanguage (215.45s)\n    --- FAIL: TestMultiLanguage/TypeScript (8.41s)\n        multi_lang_test.go:971: [TypeScript] start_lsp result: LSP server started successfully\n        multi_lang_test.go:971: [TypeScript] open_document returned IsError=true: failed to open document: LSP client not started\n    --- FAIL: TestMultiLanguage/Python (8.04s)\n        multi_lang_test.go:971: [Python] start_lsp result: LSP server started successfully\n        multi_lang_test.go:971: [Python] open_document returned IsError=true: failed to open document: LSP client not started\n    --- FAIL: TestMultiLanguage/Go (8.04s)\n        multi_lang_test.go:971: [Go] start_lsp result: LSP server started successfully\n        multi_lang_test.go:971: [Go] open_document returned IsError=true: failed to open document: LSP client not started\n    --- FAIL: TestMultiLanguage/Rust (8.05s)\n        multi_lang_test.go:971: [Rust] start_lsp result: LSP server started successfully\n        multi_lang_test.go:971: [Rust] open_document returned IsError=true: failed to open document: LSP client not started\n    --- FAIL: TestMultiLanguage/Java (150.04s)\n        multi_lang_test.go:971: [Java] start_lsp result: LSP server started successfully\n        multi_lang_test.go:971: [Java] open_document returned IsError=true: failed to open document: LSP client not started\n    --- FAIL: TestMultiLanguage/C (8.06s)\n        multi_lang_test.go:971: [C] start_lsp result: LSP server started successfully\n        multi_lang_test.go:971: [C] open_document returned IsError=true: failed to open document: LSP client not started\n    --- FAIL: TestMultiLanguage/PHP (8.05s)\n        multi_lang_test.go:971: [PHP] start_lsp result: LSP server started successfully\n        multi_lang_test.go:971: [PHP] open_document returned IsError=true: failed to open document: LSP client not started\n    --- FAIL: TestMultiLanguage/C++ (8.04s)\n        multi_lang_test.go:971: [C++] start_lsp result: LSP server started successfully\n        multi_lang_test.go:971: [C++] open_document returned IsError=true: failed to open document: LSP client not started\n    --- FAIL: TestMultiLanguage/JavaScript (8.05s)\n        multi_lang_test.go:971: [JavaScript] start_lsp result: LSP server started successfully\n        multi_lang_test.go:971: [JavaScript] open_document returned IsError=true: failed to open document: LSP client not started\n    multi_lang_test.go:980: \n        Language       | T1 | symbols  | definition  | references  | completions  | workspace  | format | declaration \n        --------------------------------------------------------------------------------------------------------------\n    multi_lang_test.go:980: TypeScript     | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:980: Python         | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:980: Go             | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:980: Rust           | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:980: Java           | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:980: C              | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:980: PHP            | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:980: C++            | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:980: JavaScript     | ✗  |          |             |             |              |            |        |             \n    multi_lang_test.go:980: --------------------------------------------------------------------------------------------------------------\nFAIL\nFAIL\tgithub.com/blackwell-systems/lsp-mcp-go/test\t215.642s\nFAIL\n",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T21:22:57.697539-07:00"
       }
     },
     "9c00bceba24d28f4a93e9a5e3da56f88": {
