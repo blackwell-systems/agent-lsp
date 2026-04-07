@@ -21,15 +21,6 @@ type ResourceResult struct {
 	Text     string `json:"text"`
 }
 
-// ResourceEntry describes a single available MCP resource.
-type ResourceEntry struct {
-	URI         string `json:"uri"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Subscribe   bool   `json:"subscribe"`
-	Template    bool   `json:"template,omitempty"`
-}
-
 // ResourceTemplate describes a URI template for dynamic resource access.
 type ResourceTemplate struct {
 	Name        string `json:"name"`

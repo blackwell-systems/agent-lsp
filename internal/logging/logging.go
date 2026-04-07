@@ -91,14 +91,18 @@ func SetLevel(level string) {
 // Before the MCP server is initialized, messages go to stderr.
 // After initialization, messages route through MCP logging/message notifications.
 func Log(level, message string) {
+	mu.Lock()
+	w := initWarning
+	initWarning = ""
+	mu.Unlock()
+
 	mu.RLock()
 	minLevel := currentLevel
 	initialized := serverInitialized
 	sender := mcpServer
 	mu.RUnlock()
 
-	if w := initWarning; w != "" {
-		initWarning = ""
+	if w != "" {
 		fmt.Fprint(os.Stderr, w)
 	}
 

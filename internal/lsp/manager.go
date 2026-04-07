@@ -80,6 +80,7 @@ func (m *ServerManager) StartAll(ctx context.Context, rootDir string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	var started []*LSPClient
 	for _, e := range m.entries {
 		if len(e.command) == 0 {
 			continue
@@ -87,9 +88,13 @@ func (m *ServerManager) StartAll(ctx context.Context, rootDir string) error {
 		client := NewLSPClient(e.command[0], e.command[1:])
 		logging.Log(logging.LevelDebug, fmt.Sprintf("ServerManager.StartAll: starting %s", e.command[0]))
 		if err := client.Initialize(ctx, rootDir); err != nil {
+			for _, c := range started {
+				_ = c.Shutdown(context.Background())
+			}
 			return fmt.Errorf("initialize server %s: %w", e.command[0], err)
 		}
 		e.client = client
+		started = append(started, client)
 	}
 	return nil
 }
