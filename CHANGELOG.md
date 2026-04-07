@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Fixed
+- `logging.Log` data race on `initWarning` eliminated — read and write now hold `mu.Lock()` before accessing the field; previously two concurrent `Log()` calls could both observe the non-empty warning and race to zero it
+- `ServerManager.StartAll` now shuts down all previously-initialized clients before returning on failure — previously leaked LSP subprocesses and open pipes when any server in a multi-server config failed to initialize
+- `resources.ResourceEntry` type deleted — had zero production callers
+- `mcp__lsp__*` tool routing fixed: `settings.json` now passes explicit `go:gopls` args so gopls is always the default client and entry[0]; previously alphabetical ordering made clangd the default, causing all `.go` file queries to be answered by clangd with invalid AST errors
 - `Evaluate` no longer permanently breaks a session when context cancellation races the semaphore acquire — `SetStatus(StatusEvaluating)` is now set only after `Acquire` succeeds, so a cancelled acquire leaves the session in `StatusMutated` and allows retry
 - `session.Status` reads in `Evaluate` and `Commit` now hold `session.mu` before comparison, eliminating a data race with concurrent `SetStatus` writes detected by the Go race detector
 - `HandleSimulateEditAtomic` now calls `mgr.Discard` before returning early on `Evaluate` failure — previously the LSP client retained stale in-memory document content until the next `open_document` call
