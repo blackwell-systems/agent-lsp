@@ -4,13 +4,26 @@ import (
 	"context"
 	"testing"
 
+	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
 	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
 )
 
 // mockResolver is a test resolver that returns nil client.
 type mockResolver struct{}
 
-func (m *mockResolver) DefaultClient() interface{} {
+func (m *mockResolver) ClientForFile(filePath string) *lsp.LSPClient {
+	return nil
+}
+
+func (m *mockResolver) DefaultClient() *lsp.LSPClient {
+	return nil
+}
+
+func (m *mockResolver) AllClients() []*lsp.LSPClient {
+	return nil
+}
+
+func (m *mockResolver) Shutdown(ctx context.Context) error {
 	return nil
 }
 
