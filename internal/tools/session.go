@@ -65,6 +65,11 @@ func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[str
 		return types.ErrorResult("file_path is required"), nil
 	}
 
+	// Validate path to prevent traversal attacks, consistent with WithDocument.
+	if _, err := ValidateFilePath(filePath, client.RootDir()); err != nil {
+		return types.ErrorResult(fmt.Sprintf("invalid file_path: %s", err)), nil
+	}
+
 	languageID, _ := args["language_id"].(string)
 	if languageID == "" {
 		languageID = "plaintext"
