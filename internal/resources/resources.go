@@ -88,7 +88,7 @@ func HandleDiagnosticsResource(ctx context.Context, client *lsp.LSPClient, uri s
 	}
 
 	// Specific file path.
-	fileURI := "file://" + path
+	fileURI := (&url.URL{Scheme: "file", Path: path}).String()
 	if err := client.ReopenDocument(ctx, fileURI); err != nil {
 		return ResourceResult{}, fmt.Errorf("reopen document %q: %w", fileURI, err)
 	}
@@ -113,43 +113,54 @@ func HandleDiagnosticsResource(ctx context.Context, client *lsp.LSPClient, uri s
 	}, nil
 }
 
-// HandleHoverResource handles lsp-hover:// reads.
-// URI format: lsp-hover:///path/to/file?line=N&column=N&language_id=X
-func HandleHoverResource(ctx context.Context, client *lsp.LSPClient, uri string) (ResourceResult, error) {
-	parsed, err := url.Parse(uri)
-	if err != nil {
-		return ResourceResult{}, fmt.Errorf("invalid URI %q: %w", uri, err)
+// parseResourceQueryParams parses the file path, position, and language ID
+// from an lsp-hover:// or lsp-completions:// URI.
+// Returns an error if required query params are missing or invalid.
+func parseResourceQueryParams(uri string) (filePath string, pos types.Position, languageID string, err error) {
+	parsed, pErr := url.Parse(uri)
+	if pErr != nil {
+		return "", types.Position{}, "", fmt.Errorf("invalid URI %q: %w", uri, pErr)
 	}
 
-	filePath := parsed.Path
+	filePath = parsed.Path
 	q := parsed.Query()
 
 	lineStr := q.Get("line")
 	colStr := q.Get("column")
-	languageID := q.Get("language_id")
+	languageID = q.Get("language_id")
 
 	if lineStr == "" || colStr == "" || languageID == "" {
-		return ResourceResult{}, fmt.Errorf("hover URI missing required query params (line, column, language_id)")
+		return "", types.Position{}, "", fmt.Errorf("URI missing required query params (line, column, language_id)")
 	}
 
-	line, err := strconv.Atoi(lineStr)
-	if err != nil {
-		return ResourceResult{}, fmt.Errorf("invalid line %q: %w", lineStr, err)
+	line, lErr := strconv.Atoi(lineStr)
+	if lErr != nil {
+		return "", types.Position{}, "", fmt.Errorf("invalid line %q: %w", lineStr, lErr)
 	}
-	col, err := strconv.Atoi(colStr)
-	if err != nil {
-		return ResourceResult{}, fmt.Errorf("invalid column %q: %w", colStr, err)
+	col, cErr := strconv.Atoi(colStr)
+	if cErr != nil {
+		return "", types.Position{}, "", fmt.Errorf("invalid column %q: %w", colStr, cErr)
 	}
 
 	// URI params are 1-indexed; LSP is 0-indexed.
-	pos := types.Position{Line: line - 1, Character: col - 1}
+	pos = types.Position{Line: line - 1, Character: col - 1}
+	return filePath, pos, languageID, nil
+}
+
+// HandleHoverResource handles lsp-hover:// reads.
+// URI format: lsp-hover:///path/to/file?line=N&column=N&language_id=X
+func HandleHoverResource(ctx context.Context, client *lsp.LSPClient, uri string) (ResourceResult, error) {
+	filePath, pos, languageID, err := parseResourceQueryParams(uri)
+	if err != nil {
+		return ResourceResult{}, fmt.Errorf("hover resource: %w", err)
+	}
 
 	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
 		return ResourceResult{}, fmt.Errorf("read file %q: %w", filePath, err)
 	}
 
-	fileURI := "file://" + filePath
+	fileURI := (&url.URL{Scheme: "file", Path: filePath}).String()
 	if err := client.OpenDocument(ctx, fileURI, string(fileContent), languageID); err != nil {
 		return ResourceResult{}, fmt.Errorf("open document %q: %w", fileURI, err)
 	}
@@ -169,40 +180,17 @@ func HandleHoverResource(ctx context.Context, client *lsp.LSPClient, uri string)
 // HandleCompletionsResource handles lsp-completions:// reads.
 // URI format: lsp-completions:///path/to/file?line=N&column=N&language_id=X
 func HandleCompletionsResource(ctx context.Context, client *lsp.LSPClient, uri string) (ResourceResult, error) {
-	parsed, err := url.Parse(uri)
+	filePath, pos, languageID, err := parseResourceQueryParams(uri)
 	if err != nil {
-		return ResourceResult{}, fmt.Errorf("invalid URI %q: %w", uri, err)
+		return ResourceResult{}, fmt.Errorf("completions resource: %w", err)
 	}
-
-	filePath := parsed.Path
-	q := parsed.Query()
-
-	lineStr := q.Get("line")
-	colStr := q.Get("column")
-	languageID := q.Get("language_id")
-
-	if lineStr == "" || colStr == "" || languageID == "" {
-		return ResourceResult{}, fmt.Errorf("completions URI missing required query params (line, column, language_id)")
-	}
-
-	line, err := strconv.Atoi(lineStr)
-	if err != nil {
-		return ResourceResult{}, fmt.Errorf("invalid line %q: %w", lineStr, err)
-	}
-	col, err := strconv.Atoi(colStr)
-	if err != nil {
-		return ResourceResult{}, fmt.Errorf("invalid column %q: %w", colStr, err)
-	}
-
-	// URI params are 1-indexed; LSP is 0-indexed.
-	pos := types.Position{Line: line - 1, Character: col - 1}
 
 	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
 		return ResourceResult{}, fmt.Errorf("read file %q: %w", filePath, err)
 	}
 
-	fileURI := "file://" + filePath
+	fileURI := (&url.URL{Scheme: "file", Path: filePath}).String()
 	if err := client.OpenDocument(ctx, fileURI, string(fileContent), languageID); err != nil {
 		return ResourceResult{}, fmt.Errorf("open document %q: %w", fileURI, err)
 	}

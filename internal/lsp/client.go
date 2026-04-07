@@ -278,14 +278,20 @@ func (c *LSPClient) dispatch(raw []byte) {
 		}
 	case "workspace/applyEdit":
 		// Apply the workspace edit and respond with ApplyWorkspaceEditResult.
+		// Per LSP spec: respond applied=false with failureReason on error.
 		if msg.ID != nil {
 			var p struct {
 				Edit interface{} `json:"edit"`
 			}
+			var applyErr error
 			if err := json.Unmarshal(msg.Params, &p); err == nil && p.Edit != nil {
-				_ = c.ApplyWorkspaceEdit(context.Background(), p.Edit)
+				applyErr = c.ApplyWorkspaceEdit(context.Background(), p.Edit)
 			}
-			c.sendResponse(*msg.ID, map[string]interface{}{"applied": true})
+			result := map[string]interface{}{"applied": applyErr == nil}
+			if applyErr != nil {
+				result["failureReason"] = applyErr.Error()
+			}
+			c.sendResponse(*msg.ID, result)
 		}
 	case "client/registerCapability":
 		if msg.ID != nil {
@@ -485,7 +491,7 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	}
 
 	c.rootDir = rootDir
-	rootURI := "file://" + rootDir
+	rootURI := (&url.URL{Scheme: "file", Path: rootDir}).String()
 
 	initParams := map[string]interface{}{
 		"processId": os.Getpid(),
@@ -1390,6 +1396,64 @@ func (c *LSPClient) DidChangeWatchedFiles(changes []types.FileChangeEvent) error
 	})
 }
 
+// applyDocumentChanges handles the documentChanges branch of a WorkspaceEdit.
+// documentChanges is (TextDocumentEdit | CreateFile | RenameFile | DeleteFile)[].
+// Each entry is discriminated by the presence of a "kind" field.
+func (c *LSPClient) applyDocumentChanges(ctx context.Context, dc interface{}) error {
+	b, _ := json.Marshal(dc)
+	var raw []json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return nil // not an array; ignore
+	}
+	for _, entry := range raw {
+		var disc struct {
+			Kind string `json:"kind"`
+		}
+		_ = json.Unmarshal(entry, &disc)
+		switch disc.Kind {
+		case "create":
+			var op struct {
+				URI string `json:"uri"`
+			}
+			if err := json.Unmarshal(entry, &op); err == nil && op.URI != "" {
+				path := uriToPath(op.URI)
+				if _, err := os.Stat(path); os.IsNotExist(err) {
+					_ = os.WriteFile(path, []byte{}, 0644)
+				}
+			}
+		case "rename":
+			var op struct {
+				OldURI string `json:"oldUri"`
+				NewURI string `json:"newUri"`
+			}
+			if err := json.Unmarshal(entry, &op); err == nil {
+				_ = os.Rename(uriToPath(op.OldURI), uriToPath(op.NewURI))
+			}
+		case "delete":
+			var op struct {
+				URI string `json:"uri"`
+			}
+			if err := json.Unmarshal(entry, &op); err == nil && op.URI != "" {
+				_ = os.Remove(uriToPath(op.URI))
+			}
+		default:
+			// TextDocumentEdit (no kind field).
+			var te struct {
+				TextDocument struct {
+					URI string `json:"uri"`
+				} `json:"textDocument"`
+				Edits []textEdit `json:"edits"`
+			}
+			if err := json.Unmarshal(entry, &te); err == nil && te.TextDocument.URI != "" {
+				if err := c.applyEditsToFile(ctx, te.TextDocument.URI, te.Edits); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // ApplyWorkspaceEdit applies a workspace edit received from the server or a tool.
 // Supports both changes (map<uri, TextEdit[]>) and documentChanges (TextDocumentEdit[]).
 func (c *LSPClient) ApplyWorkspaceEdit(ctx context.Context, edit interface{}) error {
@@ -1407,59 +1471,7 @@ func (c *LSPClient) ApplyWorkspaceEdit(ctx context.Context, edit interface{}) er
 
 	// Process documentChanges first if present.
 	if dc, ok := editMap["documentChanges"]; ok {
-		b, _ := json.Marshal(dc)
-		// documentChanges is (TextDocumentEdit | CreateFile | RenameFile | DeleteFile)[].
-		// Each entry is discriminated by the presence of a "kind" field.
-		var raw []json.RawMessage
-		if err := json.Unmarshal(b, &raw); err == nil {
-			for _, entry := range raw {
-				var disc struct {
-					Kind string `json:"kind"`
-				}
-				_ = json.Unmarshal(entry, &disc)
-				switch disc.Kind {
-				case "create":
-					var op struct {
-						URI string `json:"uri"`
-					}
-					if err := json.Unmarshal(entry, &op); err == nil && op.URI != "" {
-						path := uriToPath(op.URI)
-						if _, err := os.Stat(path); os.IsNotExist(err) {
-							_ = os.WriteFile(path, []byte{}, 0644)
-						}
-					}
-				case "rename":
-					var op struct {
-						OldURI string `json:"oldUri"`
-						NewURI string `json:"newUri"`
-					}
-					if err := json.Unmarshal(entry, &op); err == nil {
-						_ = os.Rename(uriToPath(op.OldURI), uriToPath(op.NewURI))
-					}
-				case "delete":
-					var op struct {
-						URI string `json:"uri"`
-					}
-					if err := json.Unmarshal(entry, &op); err == nil && op.URI != "" {
-						_ = os.Remove(uriToPath(op.URI))
-					}
-				default:
-					// TextDocumentEdit (no kind field).
-					var te struct {
-						TextDocument struct {
-							URI string `json:"uri"`
-						} `json:"textDocument"`
-						Edits []textEdit `json:"edits"`
-					}
-					if err := json.Unmarshal(entry, &te); err == nil && te.TextDocument.URI != "" {
-						if err := c.applyEditsToFile(ctx, te.TextDocument.URI, te.Edits); err != nil {
-							return err
-						}
-					}
-				}
-			}
-			return nil
-		}
+		return c.applyDocumentChanges(ctx, dc)
 	}
 
 	// Fallback to changes map.
