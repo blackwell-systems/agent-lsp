@@ -12,7 +12,7 @@ internal/lsp/                      ← LSP subprocess wrapper
   client.go                        ← LSPClient struct
   framing.go                       ← Content-Length framing
   diagnostics.go                   ← WaitForDiagnostics
-internal/tools/                    ← 24 MCP tool handlers
+internal/tools/                    ← 34 MCP tool handlers
   helpers.go                       ← WithDocument[T], shared utilities
   session.go, analysis.go, navigation.go, refactoring.go, utilities.go
 internal/resources/                ← Resource + subscription handlers
@@ -169,12 +169,11 @@ An extension can implement any subset of the extension interface:
 ```go
 type Extension interface {
     ToolHandlers() map[string]ToolHandler
-    ToolDefinitions() []mcp.Tool
     ResourceHandlers() map[string]ResourceHandler
-    SubscriptionHandlers() map[string]SubscriptionHandler
-    UnsubscriptionHandlers() map[string]UnsubscriptionHandler
-    PromptDefinitions() []mcp.Prompt
-    PromptHandlers() map[string]PromptHandler
+    SubscriptionHandlers() map[string]ResourceHandler
+    PromptHandlers() map[string]interface{}
+    // Note: ToolDefinitions, UnsubscriptionHandlers, PromptDefinitions are
+    // deferred features not yet implemented.
 }
 ```
 
