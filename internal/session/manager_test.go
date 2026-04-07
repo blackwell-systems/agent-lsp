@@ -372,6 +372,56 @@ func TestSetStatus_IsThreadSafe(t *testing.T) {
 	// No assertion needed — race detector will catch unsynchronized access.
 }
 
+// TestEvaluate_CancelledContextLeavesStatusRetryable verifies Finding 1:
+// if Acquire fails because the context is already cancelled, the session status
+// must remain StatusMutated (retryable), not StatusEvaluating (permanently stuck).
+// Regression note: run with go test -race to catch unsynchronized status reads.
+func TestEvaluate_CancelledContextLeavesStatusRetryable(t *testing.T) {
+	mgr := NewSessionManager(&mockResolver{})
+
+	sess := &SimulationSession{
+		ID:               "eval-cancelled",
+		Status:           StatusMutated,
+		Baselines:        make(map[string]DiagnosticsSnapshot),
+		Versions:         make(map[string]int),
+		Contents:         make(map[string]string),
+		OriginalContents: make(map[string]string),
+	}
+	mgr.mu.Lock()
+	mgr.sessions[sess.ID] = sess
+	mgr.mu.Unlock()
+
+	// Pre-fill the executor semaphore so that Acquire must block, then cancel
+	// the context to force Acquire to return ctx.Err(). This is more reliable
+	// than a bare pre-cancelled context because Go's select is non-deterministic
+	// when both cases are ready simultaneously.
+	executor := mgr.executor.(*SerializedExecutor)
+	executor.sem <- struct{}{} // occupy the single semaphore slot
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled — Acquire will return immediately via ctx.Done()
+
+	_, err := mgr.Evaluate(ctx, sess.ID, "file", 0)
+	if err == nil {
+		t.Fatal("expected error from cancelled context, got nil")
+	}
+
+	// Drain the semaphore so the executor is left in a clean state.
+	<-executor.sem
+
+	// The status must NOT be StatusEvaluating — that would permanently block
+	// the session. It must remain StatusMutated so the caller can retry.
+	sess.mu.Lock()
+	status := sess.Status
+	sess.mu.Unlock()
+	if status == StatusEvaluating {
+		t.Errorf("session stuck in StatusEvaluating after failed Acquire — session is now permanently unusable")
+	}
+	if status != StatusMutated {
+		t.Errorf("expected session status %s after failed Acquire, got %s", StatusMutated, status)
+	}
+}
+
 // TestUriToPath_PercentDecoded verifies that uriToPath correctly decodes
 // percent-encoded characters in file URIs.
 func TestUriToPath_PercentDecoded(t *testing.T) {

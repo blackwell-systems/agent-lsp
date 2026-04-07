@@ -195,19 +195,25 @@ func (m *SessionManager) Evaluate(ctx context.Context, sessionID, scope string, 
 		}
 	}
 
-	// Verify status is valid for evaluation.
-	if session.Status != StatusMutated && session.Status != StatusEvaluated {
-		return nil, fmt.Errorf("session %s cannot be evaluated in state %s", sessionID, session.Status)
+	// Verify status is valid for evaluation — read under lock to avoid data race.
+	// Use go test -race to catch regressions if this guard is changed.
+	session.mu.Lock()
+	currentStatus := session.Status
+	session.mu.Unlock()
+	if currentStatus != StatusMutated && currentStatus != StatusEvaluated {
+		return nil, fmt.Errorf("session %s cannot be evaluated in state %s", sessionID, currentStatus)
 	}
 
-	// Update status to evaluating.
-	session.SetStatus(StatusEvaluating)
-
-	// Acquire executor lock.
+	// Acquire executor lock before marking evaluating — a failed acquire must
+	// leave the session retryable (StatusMutated or StatusEvaluated), not
+	// permanently stuck in StatusEvaluating.
 	if err := m.executor.Acquire(ctx, session); err != nil {
 		return nil, fmt.Errorf("acquiring executor: %w", err)
 	}
 	defer m.executor.Release(session)
+
+	// Update status to evaluating only after acquisition succeeds.
+	session.SetStatus(StatusEvaluating)
 
 	start := time.Now()
 	var allIntroduced, allResolved []DiagnosticEntry
@@ -315,9 +321,13 @@ func (m *SessionManager) Commit(ctx context.Context, sessionID, target string, a
 		return nil, err
 	}
 
-	// Verify status is valid for commit.
-	if session.Status != StatusMutated && session.Status != StatusEvaluated {
-		return nil, fmt.Errorf("session %s cannot be committed in state %s", sessionID, session.Status)
+	// Verify status is valid for commit — read under lock to avoid data race.
+	// Use go test -race to catch regressions if this guard is changed.
+	session.mu.Lock()
+	currentStatus := session.Status
+	session.mu.Unlock()
+	if currentStatus != StatusMutated && currentStatus != StatusEvaluated {
+		return nil, fmt.Errorf("session %s cannot be committed in state %s", sessionID, currentStatus)
 	}
 
 	// Build workspace edit patch.
