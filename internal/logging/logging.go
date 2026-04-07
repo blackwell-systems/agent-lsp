@@ -38,6 +38,11 @@ var (
 	serverInitialized bool
 )
 
+// initWarning holds a warning message generated during init() that could not
+// be emitted to stderr at that time (e.g., invalid LOG_LEVEL). It is flushed
+// to stderr on the first Log() call, before the message filter is applied.
+var initWarning string
+
 // serverSender is an interface satisfied by *mcp.ServerSession for Log calls.
 // We use interface{} to avoid a hard dependency on the mcp package here.
 type logSender interface {
@@ -50,7 +55,7 @@ func init() {
 		if _, ok := logLevelPriority[envLevel]; ok {
 			currentLevel = envLevel
 		} else {
-			fmt.Fprintf(os.Stderr, "lsp-mcp-go: invalid LOG_LEVEL %q, defaulting to \"info\"\n", envLevel)
+			initWarning = fmt.Sprintf("lsp-mcp-go: invalid LOG_LEVEL %q, defaulting to \"info\"\n", envLevel)
 		}
 	}
 }
@@ -91,6 +96,11 @@ func Log(level, message string) {
 	initialized := serverInitialized
 	sender := mcpServer
 	mu.RUnlock()
+
+	if w := initWarning; w != "" {
+		initWarning = ""
+		fmt.Fprint(os.Stderr, w)
+	}
 
 	// Filter by level.
 	msgPriority, ok := logLevelPriority[level]

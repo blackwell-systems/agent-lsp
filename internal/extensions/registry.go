@@ -72,8 +72,8 @@ func (r *ExtensionRegistry) Activate(languageID string) error {
 	return nil
 }
 
-// Deactivate removes an extension from the registry.
-func (r *ExtensionRegistry) Deactivate(languageID string) {
+// deactivate removes an extension from the registry.
+func (r *ExtensionRegistry) deactivate(languageID string) {
 	safe := sanitizeRE.ReplaceAllString(languageID, "")
 
 	r.mu.Lock()
