@@ -37,7 +37,10 @@ func HandleCreateSimulationSession(ctx context.Context, mgr *session.SessionMana
 		"session_id": sessionID,
 		"status":     "created",
 	}
-	data, _ := json.Marshal(result)
+	data, mErr := json.Marshal(result)
+	if mErr != nil {
+		return types.ErrorResult(fmt.Sprintf("marshaling result: %s", mErr)), nil
+	}
 	return types.TextResult(string(data)), nil
 }
 
@@ -73,7 +76,10 @@ func HandleSimulateEdit(ctx context.Context, mgr *session.SessionManager, args m
 		return types.ErrorResult(fmt.Sprintf("simulate_edit failed: %s", err)), nil
 	}
 
-	data, _ := json.Marshal(editResult)
+	data, mErr := json.Marshal(editResult)
+	if mErr != nil {
+		return types.ErrorResult(fmt.Sprintf("marshaling result: %s", mErr)), nil
+	}
 	return types.TextResult(string(data)), nil
 }
 
@@ -102,7 +108,10 @@ func HandleEvaluateSession(ctx context.Context, mgr *session.SessionManager, arg
 		return types.ErrorResult(fmt.Sprintf("evaluate_session failed: %s", err)), nil
 	}
 
-	data, _ := json.Marshal(evalResult)
+	data, mErr := json.Marshal(evalResult)
+	if mErr != nil {
+		return types.ErrorResult(fmt.Sprintf("marshaling result: %s", mErr)), nil
+	}
 	return types.TextResult(string(data)), nil
 }
 
@@ -162,7 +171,10 @@ func HandleSimulateChain(ctx context.Context, mgr *session.SessionManager, args 
 		return types.ErrorResult(fmt.Sprintf("simulate_chain failed: %s", err)), nil
 	}
 
-	data, _ := json.Marshal(chainResult)
+	data, mErr := json.Marshal(chainResult)
+	if mErr != nil {
+		return types.ErrorResult(fmt.Sprintf("marshaling result: %s", mErr)), nil
+	}
 	return types.TextResult(string(data)), nil
 }
 
@@ -189,7 +201,10 @@ func HandleCommitSession(ctx context.Context, mgr *session.SessionManager, args 
 		return types.ErrorResult(fmt.Sprintf("commit_session failed: %s", err)), nil
 	}
 
-	data, _ := json.Marshal(commitResult)
+	data, mErr := json.Marshal(commitResult)
+	if mErr != nil {
+		return types.ErrorResult(fmt.Sprintf("marshaling result: %s", mErr)), nil
+	}
 	return types.TextResult(string(data)), nil
 }
 
@@ -210,7 +225,10 @@ func HandleDiscardSession(ctx context.Context, mgr *session.SessionManager, args
 		"session_id": sessionID,
 		"status":     "discarded",
 	}
-	data, _ := json.Marshal(result)
+	data, mErr := json.Marshal(result)
+	if mErr != nil {
+		return types.ErrorResult(fmt.Sprintf("marshaling result: %s", mErr)), nil
+	}
 	return types.TextResult(string(data)), nil
 }
 
@@ -231,7 +249,10 @@ func HandleDestroySession(ctx context.Context, mgr *session.SessionManager, args
 		"session_id": sessionID,
 		"status":     "destroyed",
 	}
-	data, _ := json.Marshal(result)
+	data, mErr := json.Marshal(result)
+	if mErr != nil {
+		return types.ErrorResult(fmt.Sprintf("marshaling result: %s", mErr)), nil
+	}
 	return types.TextResult(string(data)), nil
 }
 
@@ -310,6 +331,9 @@ func HandleSimulateEditAtomic(ctx context.Context, mgr *session.SessionManager, 
 	// file content for subsequent calls, not the modified in-memory version.
 	_ = mgr.Discard(ctx, sessionID)
 
-	data, _ := json.Marshal(evalResult)
+	data, mErr := json.Marshal(evalResult)
+	if mErr != nil {
+		return types.ErrorResult(fmt.Sprintf("marshaling result: %s", mErr)), nil
+	}
 	return types.TextResult(string(data)), nil
 }
