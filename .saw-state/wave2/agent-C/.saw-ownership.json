@@ -1,9 +1,0 @@
-{
-  "agent": "C",
-  "wave": 2,
-  "impl_doc": "docs/IMPL/IMPL-semantic-tokens.yaml",
-  "owned_files": [
-    "cmd/lsp-mcp-go/server.go"
-  ],
-  "repo_root": "/Users/dayna.blackwell/code/LSP-MCP-GO"
-}
