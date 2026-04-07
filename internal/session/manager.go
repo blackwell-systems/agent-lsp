@@ -42,15 +42,13 @@ func (m *SessionManager) CreateSession(ctx context.Context, workspaceRoot, langu
 	}
 	id := hex.EncodeToString(b)
 
-	// Resolve LSP client by language so multi-server mode routes correctly
-	// (e.g. gopls for Go, clangd for C/C++).
-	ext := languageToExtension(language)
-	client := m.resolver.ClientForFile(workspaceRoot + "/dummy" + ext)
+	// Resolve LSP client. DefaultClient() in csResolver returns the client
+	// initialized by start_lsp (cs.get()), falling back to the delegate only
+	// if cs is nil. ClientForFile is not used here because delegate clients
+	// in multi-server auto-detect mode are uninitialized until start_lsp runs.
+	client := m.resolver.DefaultClient()
 	if client == nil {
-		client = m.resolver.DefaultClient()
-	}
-	if client == nil {
-		return "", fmt.Errorf("no LSP client available")
+		return "", fmt.Errorf("no LSP client available — call start_lsp first")
 	}
 
 	// Create new session.

@@ -50,6 +50,11 @@ func (r *csResolver) DefaultClient() *lsp.LSPClient {
 	return r.delegate.DefaultClient()
 }
 func (r *csResolver) ClientForFile(path string) *lsp.LSPClient {
+	// Prefer the initialized cs client (set by start_lsp) over delegate routing,
+	// since delegate clients in auto-detect mode are not yet initialized.
+	if c := r.cs.get(); c != nil {
+		return c
+	}
 	return r.delegate.ClientForFile(path)
 }
 func (r *csResolver) AllClients() []*lsp.LSPClient  { return r.delegate.AllClients() }
