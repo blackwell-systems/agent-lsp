@@ -6,6 +6,12 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Fixed
+- `Evaluate` no longer permanently breaks a session when context cancellation races the semaphore acquire — `SetStatus(StatusEvaluating)` is now set only after `Acquire` succeeds, so a cancelled acquire leaves the session in `StatusMutated` and allows retry
+- `session.Status` reads in `Evaluate` and `Commit` now hold `session.mu` before comparison, eliminating a data race with concurrent `SetStatus` writes detected by the Go race detector
+- `HandleSimulateEditAtomic` now calls `mgr.Discard` before returning early on `Evaluate` failure — previously the LSP client retained stale in-memory document content until the next `open_document` call
+- `workspace/applyEdit` dispatch now uses `context.WithTimeout(context.Background(), defaultTimeout)` instead of a plain `context.Background()` — prevents indefinite blocking on large workspace edits in the read loop
+- `ReopenDocument` untracked-URI fallback now infers language ID from file extension via `languageIDFromURI` instead of hardcoding `"plaintext"` — gopls previously ignored these files silently, returning zero diagnostics
+- `deactivate` method and `TestRegistry_Deactivate` deleted from `internal/extensions` — method had no production callers after being unexported in audit-2
 - `SerializedExecutor.Acquire` now respects context cancellation — replaced `sync.Mutex` with a buffered-channel semaphore; callers that pass a cancelled or deadline-exceeded context to `ApplyEdit`, `Evaluate`, or `Discard` now receive `ctx.Err()` instead of blocking indefinitely
 - `generateResourceList` dead function removed; `resourceTemplates` exported as `ResourceTemplates` and wired into `server.go` via `AddResourceTemplate` — MCP clients can now discover per-file `lsp-diagnostics://`, `lsp-hover://`, and `lsp-completions://` URIs via `resources/list`
 - `ExtensionRegistry.Deactivate` unexported to `deactivate` — method had no external callers; was test-only
