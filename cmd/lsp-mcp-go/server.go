@@ -50,11 +50,8 @@ func (r *csResolver) DefaultClient() *lsp.LSPClient {
 	return r.delegate.DefaultClient()
 }
 func (r *csResolver) ClientForFile(path string) *lsp.LSPClient {
-	// Prefer the initialized cs client (set by start_lsp) over delegate routing,
-	// since delegate clients in auto-detect mode are not yet initialized.
-	if c := r.cs.get(); c != nil {
-		return c
-	}
+	// Delegate to the real resolver for file-based routing (gopls for .go, etc).
+	// After start_lsp calls StartAll, all delegate clients are initialized.
 	return r.delegate.ClientForFile(path)
 }
 func (r *csResolver) AllClients() []*lsp.LSPClient  { return r.delegate.AllClients() }
@@ -318,6 +315,19 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "start_lsp",
 		Description: "Initialize or reinitialize the LSP server with a specific project root directory. Call this before using get_references, get_info_on_location, or get_diagnostics when working in a project different from the one the server was started with. The root_dir should be the workspace root (directory containing go.work, go.mod, package.json, etc.).",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args StartLspArgs) (*mcp.CallToolResult, any, error) {
+		// In multi-server mode (no serverPath), call StartAll on the manager
+		// so all language server clients are initialized and available for routing.
+		if serverPath == "" {
+			if sm, ok := resolver.(*lsp.ServerManager); ok {
+				if err := sm.StartAll(ctx, args.RootDir); err != nil {
+					return makeCallToolResult(types.ErrorResult(err.Error())), nil, nil
+				}
+				if c := resolver.DefaultClient(); c != nil {
+					cs.set(c)
+				}
+				return makeCallToolResult(types.TextResult("LSP server started successfully")), nil, nil
+			}
+		}
 		r, err := tools.HandleStartLsp(ctx, cs.get, cs.set, serverPath, serverArgs, toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
