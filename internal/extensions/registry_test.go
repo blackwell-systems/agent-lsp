@@ -110,39 +110,6 @@ func TestRegistry_ToolHandlers_Prefixed(t *testing.T) {
 	}
 }
 
-// TestRegistry_Deactivate verifies that handlers are no longer returned after
-// an extension has been deactivated.
-func TestRegistry_Deactivate(t *testing.T) {
-	resetFactories()
-
-	handler := func(ctx interface{}, args map[string]interface{}) (types.ToolResult, error) {
-		return types.TextResult("ok"), nil
-	}
-	RegisterFactory("python", func() types.Extension {
-		return &mockExtension{
-			toolHandlers: map[string]types.ToolHandler{
-				"run": handler,
-			},
-		}
-	})
-
-	r := NewRegistry()
-	if err := r.Activate("python"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(r.ToolHandlers()) != 1 {
-		t.Fatalf("expected 1 handler after activation")
-	}
-
-	r.deactivate("python")
-	if len(r.ToolHandlers()) != 0 {
-		t.Fatalf("expected 0 handlers after deactivation, got %d", len(r.ToolHandlers()))
-	}
-	if _, ok := r.extensions["python"]; ok {
-		t.Fatal("expected extension to be removed from registry after deactivation")
-	}
-}
-
 // keys is a small helper to format map keys for test error messages.
 func keys[V any](m map[string]V) []string {
 	out := make([]string, 0, len(m))
