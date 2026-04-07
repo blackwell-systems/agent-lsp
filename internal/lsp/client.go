@@ -287,7 +287,9 @@ func (c *LSPClient) dispatch(raw []byte) {
 			}
 			var applyErr error
 			if err := json.Unmarshal(msg.Params, &p); err == nil && p.Edit != nil {
-				applyErr = c.ApplyWorkspaceEdit(context.Background(), p.Edit)
+				applyCtx, applyCancel := context.WithTimeout(context.Background(), defaultTimeout)
+			applyErr = c.ApplyWorkspaceEdit(applyCtx, p.Edit)
+			applyCancel()
 			}
 			result := map[string]interface{}{"applied": applyErr == nil}
 			if applyErr != nil {
@@ -818,6 +820,51 @@ func (c *LSPClient) UnsubscribeFromDiagnostics(cb types.DiagnosticUpdateCallback
 	c.diagSubs = subs
 }
 
+// languageIDFromURI infers a language ID from a file:// URI by extension.
+// Mirrors the extension→language mapping in internal/lsp/manager.go inferLanguageID.
+// Falls back to "plaintext" for unknown extensions.
+func languageIDFromURI(uri string) string {
+	// Strip query/fragment and extract path.
+	lower := strings.ToLower(uri)
+	// Find last dot after the last slash.
+	if idx := strings.LastIndex(lower, "."); idx >= 0 {
+		ext := lower[idx+1:]
+		// Strip any fragment or query suffix.
+		if end := strings.IndexAny(ext, "?#"); end >= 0 {
+			ext = ext[:end]
+		}
+		switch ext {
+		case "go":
+			return "go"
+		case "ts", "tsx":
+			return "typescript"
+		case "js", "jsx":
+			return "javascript"
+		case "py":
+			return "python"
+		case "rs":
+			return "rust"
+		case "hs", "lhs":
+			return "haskell"
+		case "rb":
+			return "ruby"
+		case "cs":
+			return "csharp"
+		case "kt", "kts":
+			return "kotlin"
+		case "ml", "mli":
+			return "ocaml"
+		case "c":
+			return "c"
+		case "cpp", "cc", "cxx":
+			return "cpp"
+		case "java":
+			return "java"
+		}
+	}
+	return "plaintext"
+}
+
 // ReopenDocument closes (didClose without removing metadata), re-reads from disk, re-opens.
 func (c *LSPClient) ReopenDocument(ctx context.Context, uri string) error {
 	c.mu.Lock()
@@ -831,7 +878,7 @@ func (c *LSPClient) ReopenDocument(ctx context.Context, uri string) error {
 		if readErr != nil {
 			return fmt.Errorf("ReopenDocument: URI not tracked and disk read failed for %s: %w", uri, readErr)
 		}
-		return c.OpenDocument(ctx, uri, string(data), "plaintext")
+		return c.OpenDocument(ctx, uri, string(data), languageIDFromURI(uri))
 	}
 
 	// didClose without removing metadata.
