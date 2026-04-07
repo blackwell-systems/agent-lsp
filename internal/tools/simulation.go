@@ -324,6 +324,9 @@ func HandleSimulateEditAtomic(ctx context.Context, mgr *session.SessionManager, 
 	// Evaluate
 	evalResult, err := mgr.Evaluate(ctx, sessionID, scope, timeoutMs)
 	if err != nil {
+		// Discard before returning to revert LSP in-memory state; Destroy
+		// (registered as defer above) does not revert LSP document content.
+		_ = mgr.Discard(ctx, sessionID)
 		return types.ErrorResult(fmt.Sprintf("evaluate failed: %s", err)), nil
 	}
 
