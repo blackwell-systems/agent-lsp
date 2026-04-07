@@ -103,9 +103,15 @@ func makeCallToolResult(r interface{}) *mcp.CallToolResult {
 }
 
 // clientForFile returns the LSP client for the given file path.
-// Always uses cs.get() which is updated by start_lsp.
-// TODO: Multi-server routing should update both cs and resolver when servers start.
+// Delegates to resolver.ClientForFile for extension-based routing (gopls for .go,
+// clangd for .c, etc.). Falls back to cs.get() when filePath is empty or the
+// resolver returns nil (single-server mode or server not yet started).
 func clientForFile(resolver lsp.ClientResolver, cs *clientState, filePath string) *lsp.LSPClient {
+	if filePath != "" {
+		if c := resolver.ClientForFile(filePath); c != nil {
+			return c
+		}
+	}
 	return cs.get()
 }
 
