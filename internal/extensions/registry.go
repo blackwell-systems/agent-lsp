@@ -72,17 +72,6 @@ func (r *ExtensionRegistry) Activate(languageID string) error {
 	return nil
 }
 
-// deactivate removes an extension from the registry.
-func (r *ExtensionRegistry) deactivate(languageID string) {
-	safe := sanitizeRE.ReplaceAllString(languageID, "")
-
-	r.mu.Lock()
-	delete(r.extensions, safe)
-	r.mu.Unlock()
-
-	logging.Log(logging.LevelInfo, "deactivated extension for language: "+safe)
-}
-
 // ToolHandlers returns the merged map of all tool handlers across active extensions.
 // Keys are prefixed with "<languageID>." to avoid conflicts.
 func (r *ExtensionRegistry) ToolHandlers() map[string]types.ToolHandler {
