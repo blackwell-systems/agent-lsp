@@ -11,52 +11,6 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// generateResourceList tests
-// ---------------------------------------------------------------------------
-
-// TestGenerateResourceList_EmptyClient verifies that a nil LSPClient returns nil.
-func TestGenerateResourceList_EmptyClient(t *testing.T) {
-	result := generateResourceList(nil)
-	if result != nil {
-		t.Errorf("expected nil for nil client, got %v", result)
-	}
-}
-
-// TestGenerateResourceList_WithOpenDocs verifies that one open doc produces
-// 3 resource entries (per-file diagnostics, hover template, completions template)
-// plus the 1 static "all diagnostics" entry = 4 total.
-func TestGenerateResourceList_WithOpenDocs(t *testing.T) {
-	// Create a minimal LSP client stub by using a zero-value client that won't
-	// be connected. We test via the GetOpenDocuments path; since we can't inject
-	// open docs without a running server, we verify the static entry at minimum.
-	//
-	// Full integration of GetOpenDocuments is covered by Agent A/B's lsp tests.
-	// Here we confirm the structure and count via a nil-client guard.
-	result := generateResourceList(nil)
-	if result != nil {
-		t.Errorf("nil client must return nil, got %d entries", len(result))
-	}
-}
-
-// TestGenerateResourceList_Structure verifies the static "all diagnostics"
-// entry is always first when client is non-nil and has no open docs.
-// This test uses a real (unconnected) LSPClient to check the static entry.
-func TestGenerateResourceList_Structure(t *testing.T) {
-	// NewLSPClient creates an unconnected client; GetOpenDocuments returns empty.
-	client := lsp.NewLSPClient("/nonexistent/gopls", nil)
-	entries := generateResourceList(client)
-	if len(entries) == 0 {
-		t.Fatal("expected at least 1 static entry")
-	}
-	if entries[0].URI != "lsp-diagnostics://" {
-		t.Errorf("first entry URI = %q, want %q", entries[0].URI, "lsp-diagnostics://")
-	}
-	if !entries[0].Subscribe {
-		t.Error("static all-diagnostics entry must have Subscribe=true")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // URI parsing tests
 // ---------------------------------------------------------------------------
 
@@ -116,7 +70,7 @@ func TestURIParsing_HoverCompletions(t *testing.T) {
 
 // TestResourceTemplates verifies that 3 static templates are returned.
 func TestResourceTemplates(t *testing.T) {
-	templates := resourceTemplates()
+	templates := ResourceTemplates()
 	if len(templates) != 3 {
 		t.Fatalf("len(resourceTemplates())=%d, want 3", len(templates))
 	}

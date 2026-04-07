@@ -686,6 +686,18 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		}, nil
 	})
 
+	// Register URI templates for dynamic resource discovery.
+	for _, tmpl := range resources.ResourceTemplates() {
+		t := tmpl // capture loop variable
+		server.AddResourceTemplate(&mcp.ResourceTemplate{
+			Name:        t.Name,
+			URITemplate: t.URITemplate,
+			Description: t.Description,
+		}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		})
+	}
+
 	// Subscribe to diagnostic updates for logging purposes (all managed clients).
 	for _, c := range resolver.AllClients() {
 		if c != nil {
