@@ -34,14 +34,26 @@ func (s *clientState) set(c *lsp.LSPClient) {
 	s.client = c
 }
 
-// csResolver wraps clientState to implement lsp.ClientResolver.
-// The SessionManager uses this so it always sees the client updated by start_lsp.
-type csResolver struct{ cs *clientState }
+// csResolver wraps clientState + the original resolver to implement lsp.ClientResolver.
+// DefaultClient falls back to cs.get() so start_lsp updates are visible.
+// ClientForFile delegates to the real resolver for correct multi-server routing
+// (e.g. gopls for .go files, clangd for .c files).
+type csResolver struct {
+	cs       *clientState
+	delegate lsp.ClientResolver
+}
 
-func (r *csResolver) DefaultClient() *lsp.LSPClient          { return r.cs.get() }
-func (r *csResolver) ClientForFile(_ string) *lsp.LSPClient  { return r.cs.get() }
-func (r *csResolver) AllClients() []*lsp.LSPClient           { return []*lsp.LSPClient{r.cs.get()} }
-func (r *csResolver) Shutdown(ctx context.Context) error     { return nil }
+func (r *csResolver) DefaultClient() *lsp.LSPClient {
+	if c := r.cs.get(); c != nil {
+		return c
+	}
+	return r.delegate.DefaultClient()
+}
+func (r *csResolver) ClientForFile(path string) *lsp.LSPClient {
+	return r.delegate.ClientForFile(path)
+}
+func (r *csResolver) AllClients() []*lsp.LSPClient  { return r.delegate.AllClients() }
+func (r *csResolver) Shutdown(ctx context.Context) error { return r.delegate.Shutdown(ctx) }
 
 // toolArgsToMap converts a typed args struct to map[string]interface{} via JSON round-trip.
 func toolArgsToMap(v interface{}) map[string]interface{} {
@@ -98,7 +110,7 @@ func clientForFile(resolver lsp.ClientResolver, cs *clientState, filePath string
 // Run creates and starts the MCP server.
 func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string) error {
 	cs := &clientState{client: resolver.DefaultClient()}
-	sessionMgr := session.NewSessionManager(&csResolver{cs})
+	sessionMgr := session.NewSessionManager(&csResolver{cs: cs, delegate: resolver})
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "lsp-mcp-go",
