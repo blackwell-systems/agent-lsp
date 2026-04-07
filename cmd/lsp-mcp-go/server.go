@@ -541,7 +541,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "simulate_edit",
-		Description: "Apply a range edit to a file within a simulation session. Changes are held in-memory only. The session captures baseline diagnostics on first edit to each file, then tracks versions for subsequent edits. Returns the new version number after the edit.",
+		Description: "Apply a range edit to a file within a simulation session. Changes are held in-memory only. The session captures baseline diagnostics on first edit to each file, then tracks versions for subsequent edits. Returns the new version number after the edit. All line/column positions are 1-indexed (matching editor line numbers).",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args SimulateEditArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleSimulateEdit(ctx, sessionMgr, toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
@@ -557,7 +557,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "simulate_chain",
-		Description: "Apply a sequence of edits and evaluate after each step. Returns per-step diagnostics and identifies the safe-to-apply-through step (last step with net delta == 0). Use this to find the safest partial application of a multi-step change.",
+		Description: "Apply a sequence of edits and evaluate after each step. Returns per-step diagnostics and identifies the safe-to-apply-through step (last step with net delta == 0). Use this to find the safest partial application of a multi-step change. All line/column positions in each edit are 1-indexed.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args SimulateChainArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleSimulateChain(ctx, sessionMgr, toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
@@ -589,7 +589,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "simulate_edit_atomic",
-		Description: "One-shot atomic operation: create session, apply edit, evaluate, and destroy. Returns evaluation result. Use for quick what-if checks without managing session lifecycle manually.",
+		Description: "One-shot atomic operation: create session, apply edit, evaluate, and destroy. Returns evaluation result. Use for quick what-if checks without managing session lifecycle manually. Requires start_lsp to be called first. All line/column positions are 1-indexed. net_delta: 0 means the edit is safe to apply.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args SimulateEditAtomicArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleSimulateEditAtomic(ctx, sessionMgr, toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
