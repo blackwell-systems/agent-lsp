@@ -3,17 +3,41 @@
   "worktrees": [
     {
       "agent": "A",
-      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/autodetect/wave1-agent-A",
-      "branch": "saw/autodetect/wave1-agent-A"
+      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/speculative-sessions/wave1-agent-A",
+      "branch": "saw/speculative-sessions/wave1-agent-A"
+    },
+    {
+      "agent": "B",
+      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/speculative-sessions/wave1-agent-B",
+      "branch": "saw/speculative-sessions/wave1-agent-B"
+    },
+    {
+      "agent": "C",
+      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/speculative-sessions/wave1-agent-C",
+      "branch": "saw/speculative-sessions/wave1-agent-C"
     }
   ],
   "agent_briefs": [
     {
       "agent": "A",
-      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/autodetect/wave1-agent-A/.saw-agent-brief.md",
-      "brief_length": 7529,
+      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/speculative-sessions/wave1-agent-A/.saw-agent-brief.md",
+      "brief_length": 8384,
       "journal_dir": ".saw-state/wave1/agent-A",
-      "files_owned": 1
+      "files_owned": 4
+    },
+    {
+      "agent": "B",
+      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/speculative-sessions/wave1-agent-B/.saw-agent-brief.md",
+      "brief_length": 11273,
+      "journal_dir": ".saw-state/wave1/agent-B",
+      "files_owned": 2
+    },
+    {
+      "agent": "C",
+      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/speculative-sessions/wave1-agent-C/.saw-agent-brief.md",
+      "brief_length": 9158,
+      "journal_dir": ".saw-state/wave1/agent-C",
+      "files_owned": 2
     }
   ],
   "steps": [
@@ -39,8 +63,8 @@
     },
     {
       "step": "critic_verdict",
-      "status": "skipped",
-      "detail": "threshold not met — critic review not required"
+      "status": "success",
+      "detail": "critic review passed"
     },
     {
       "step": "stale_cleanup",
@@ -58,9 +82,9 @@
       "detail": "all files validated"
     },
     {
-      "step": "commit_baseline",
+      "step": "commit_state",
       "status": "success",
-      "detail": "committed 9 file(s)"
+      "detail": "committed 2 SAW state file(s)"
     },
     {
       "step": "baseline_gates",
@@ -105,7 +129,7 @@
     {
       "step": "create_worktrees",
       "status": "success",
-      "detail": "created 1 worktree(s)"
+      "detail": "created 3 worktree(s)"
     },
     {
       "step": "workspace_setup",
@@ -120,7 +144,7 @@
     {
       "step": "extract_briefs",
       "status": "success",
-      "detail": "prepared 1 agent(s)"
+      "detail": "prepared 3 agent(s)"
     }
   ],
   "success": false

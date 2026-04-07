@@ -12,6 +12,18 @@
         "cached_at": "2026-04-06T09:13:14.324717-07:00"
       }
     },
+    "027e5115b6df43d642503777f4d80627": {
+      "test": {
+        "gate_type": "test",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 GOWORK=off go test ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "ok  \tgithub.com/blackwell-systems/lsp-mcp-go\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/cmd/lsp-mcp-go\t[no test files]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/extensions/haskell\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/config\t(cached)\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/extensions\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/logging\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/lsp\t(cached)\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/resources\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/session\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/tools\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/types\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/test\t(cached)\n",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T17:08:17.839586-07:00"
+      }
+    },
     "04dde1c631ddf44db8aaa6d7713173f1": {
       "test": {
         "gate_type": "test",
@@ -22,6 +34,30 @@
         "stderr": "# ./...\npattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies\n",
         "from_cache": true,
         "cached_at": "2026-04-06T16:17:36.789472-07:00"
+      }
+    },
+    "080d5fb04cad91ec53a5f1230629ed82": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 GOWORK=off go vet ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T17:06:57.830765-07:00"
+      }
+    },
+    "09b750b5a395e37b83c8ec7c502619aa": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 GOWORK=off go vet ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T17:08:17.454616-07:00"
       }
     },
     "0bd8cd6f794d63f2b90569c872ff2d3d": {
@@ -46,6 +82,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T09:21:23.503691-07:00"
+      }
+    },
+    "165d6c9317c9c798e7e6d9caa4f07461": {
+      "build": {
+        "gate_type": "build",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T17:06:57.483946-07:00"
       }
     },
     "175fa955b7e9ff141f5aaed739e4db37": {
@@ -480,6 +528,18 @@
         "cached_at": "2026-04-06T12:55:32.899149-07:00"
       }
     },
+    "535e4472f524afa1207a36c9a841223b": {
+      "test": {
+        "gate_type": "test",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 GOWORK=off go test ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "ok  \tgithub.com/blackwell-systems/lsp-mcp-go\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/cmd/lsp-mcp-go\t[no test files]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/extensions/haskell\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/config\t(cached)\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/extensions\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/logging\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/lsp\t(cached)\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/resources\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/session\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/tools\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/types\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/test\t(cached)\n",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T17:06:58.258525-07:00"
+      }
+    },
     "5422f83f53f55c73a440de33349e20c0": {
       "lint": {
         "gate_type": "lint",
@@ -648,6 +708,18 @@
         "cached_at": "2026-04-06T16:16:53.274563-07:00"
       }
     },
+    "7f2493eb95ac16141e3b64ed8068b563": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 GOWORK=off go vet ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T16:58:03.13189-07:00"
+      }
+    },
     "8813b15b092525231ceb7cf5826cb197": {
       "build": {
         "gate_type": "build",
@@ -658,6 +730,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T09:58:15.646321-07:00"
+      }
+    },
+    "8891f43f1d3fa71f9db12792993cdf94": {
+      "build": {
+        "gate_type": "build",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T17:08:17.067438-07:00"
       }
     },
     "8c2293b3e59e35ba0b3baa739b2e4904": {
@@ -706,6 +790,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T15:47:21.049624-07:00"
+      }
+    },
+    "93c506da3963ad1a1e35ebdef0d9a3f2": {
+      "test": {
+        "gate_type": "test",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 GOWORK=off go test ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "ok  \tgithub.com/blackwell-systems/lsp-mcp-go\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/cmd/lsp-mcp-go\t[no test files]\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/extensions/haskell\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/config\t(cached)\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/extensions\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/logging\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/lsp\t(cached)\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/resources\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/session\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/internal/tools\t(cached)\n?   \tgithub.com/blackwell-systems/lsp-mcp-go/internal/types\t[no test files]\nok  \tgithub.com/blackwell-systems/lsp-mcp-go/test\t(cached)\n",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T16:58:03.530909-07:00"
       }
     },
     "951a9b0f25cb03ed0a9a072e465257ba": {
@@ -1174,6 +1270,18 @@
         "stderr": "# ./...\npattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies\n",
         "from_cache": true,
         "cached_at": "2026-04-06T09:13:20.443563-07:00"
+      }
+    },
+    "e2d53cfdd0c634e82242f7ed56b2058a": {
+      "build": {
+        "gate_type": "build",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T16:58:02.782056-07:00"
       }
     },
     "e714d4c1aa387a785a206310fac34378": {

@@ -731,6 +731,12 @@ quality_gates:
         - type: test
           command: cd /Users/dayna.blackwell/code/LSP-MCP-GO && GOWORK=off go test ./...
           required: true
+post_merge_checklist:
+    groups:
+        - title: Background Service Initialization
+          items:
+            - description: Verify if manager_test.go needs initialization in Server constructor
+            - description: Verify if simulation_test.go needs initialization in Server constructor
 scaffolds:
     - file_path: internal/session/types.go
       contents: |
