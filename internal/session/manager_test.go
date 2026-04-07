@@ -422,6 +422,126 @@ func TestEvaluate_CancelledContextLeavesStatusRetryable(t *testing.T) {
 	}
 }
 
+// TestDestroy_RemovesSession verifies that Destroy removes the session from the
+// manager and that GetSession returns an error afterward.
+func TestDestroy_RemovesSession(t *testing.T) {
+	mgr := NewSessionManager(&mockResolver{})
+	ctx := context.Background()
+
+	sess := &SimulationSession{
+		ID:        "destroy-me",
+		Status:    StatusMutated,
+		Baselines: make(map[string]DiagnosticsSnapshot),
+		Versions:  make(map[string]int),
+		Contents:  make(map[string]string),
+	}
+	mgr.mu.Lock()
+	mgr.sessions[sess.ID] = sess
+	mgr.mu.Unlock()
+
+	if err := mgr.Destroy(ctx, sess.ID); err != nil {
+		t.Fatalf("unexpected error from Destroy: %v", err)
+	}
+
+	_, err := mgr.GetSession(sess.ID)
+	if err == nil {
+		t.Fatal("expected GetSession to return error after Destroy, got nil")
+	}
+}
+
+// TestDestroy_SessionNotFound verifies that Destroy returns an error when the
+// session ID does not exist.
+func TestDestroy_SessionNotFound(t *testing.T) {
+	mgr := NewSessionManager(&mockResolver{})
+	ctx := context.Background()
+
+	err := mgr.Destroy(ctx, "no-such-session")
+	if err == nil {
+		t.Fatal("expected error for non-existent session, got nil")
+	}
+}
+
+// TestApplyEdit_TerminalSession verifies that ApplyEdit fails when the session
+// is already in a terminal state.
+func TestApplyEdit_TerminalSession(t *testing.T) {
+	mgr := NewSessionManager(&mockResolver{})
+	ctx := context.Background()
+
+	for _, status := range []SessionStatus{StatusCommitted, StatusDiscarded, StatusDestroyed} {
+		t.Run(string(status), func(t *testing.T) {
+			sess := &SimulationSession{
+				ID:        "apply-terminal-" + string(status),
+				Status:    status,
+				Baselines: make(map[string]DiagnosticsSnapshot),
+				Versions:  make(map[string]int),
+				Contents:  make(map[string]string),
+			}
+			mgr.mu.Lock()
+			mgr.sessions[sess.ID] = sess
+			mgr.mu.Unlock()
+
+			_, err := mgr.ApplyEdit(ctx, sess.ID, "file:///tmp/test.go", types.Range{}, "new text")
+			if err == nil {
+				t.Errorf("expected error for terminal status %s, got nil", status)
+			}
+		})
+	}
+}
+
+// TestApplyEdit_DirtySession verifies that ApplyEdit fails when the session is
+// in dirty state.
+func TestApplyEdit_DirtySession(t *testing.T) {
+	mgr := NewSessionManager(&mockResolver{})
+	ctx := context.Background()
+
+	sess := &SimulationSession{
+		ID:        "apply-dirty",
+		Status:    StatusDirty,
+		DirtyErr:  fmt.Errorf("prior write failed"),
+		Baselines: make(map[string]DiagnosticsSnapshot),
+		Versions:  make(map[string]int),
+		Contents:  make(map[string]string),
+	}
+	mgr.mu.Lock()
+	mgr.sessions[sess.ID] = sess
+	mgr.mu.Unlock()
+
+	_, err := mgr.ApplyEdit(ctx, sess.ID, "file:///tmp/test.go", types.Range{}, "new text")
+	if err == nil {
+		t.Fatal("expected error for dirty session, got nil")
+	}
+}
+
+// TestLanguageToExtension verifies all named cases and the default fallback.
+func TestLanguageToExtension(t *testing.T) {
+	cases := []struct {
+		language string
+		expected string
+	}{
+		{"go", ".go"},
+		{"python", ".py"},
+		{"typescript", ".ts"},
+		{"javascript", ".js"},
+		{"rust", ".rs"},
+		{"c", ".c"},
+		{"cpp", ".cpp"},
+		{"c++", ".cpp"},
+		{"java", ".java"},
+		{"ruby", ".rb"},
+		{"cobol", ".cobol"},
+		{"unknown-lang", ".unknown-lang"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.language, func(t *testing.T) {
+			got := languageToExtension(tc.language)
+			if got != tc.expected {
+				t.Errorf("languageToExtension(%q) = %q, want %q", tc.language, got, tc.expected)
+			}
+		})
+	}
+}
+
 // TestUriToPath_PercentDecoded verifies that uriToPath correctly decodes
 // percent-encoded characters in file URIs.
 func TestUriToPath_PercentDecoded(t *testing.T) {
