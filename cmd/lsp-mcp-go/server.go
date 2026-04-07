@@ -212,7 +212,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		InsertSpaces *bool `json:"insert_spaces,omitempty"`
 	}
 	type ApplyEditArgs struct {
-		Edit interface{} `json:"workspace_edit"`
+		Edit map[string]interface{} `json:"workspace_edit"`
 	}
 	type ExecuteCommandArgs struct {
 		Command   string        `json:"command"`
