@@ -6,6 +6,16 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Fixed
+- `SerializedExecutor.Acquire` now respects context cancellation — replaced `sync.Mutex` with a buffered-channel semaphore; callers that pass a cancelled or deadline-exceeded context to `ApplyEdit`, `Evaluate`, or `Discard` now receive `ctx.Err()` instead of blocking indefinitely
+- `generateResourceList` dead function removed; `resourceTemplates` exported as `ResourceTemplates` and wired into `server.go` via `AddResourceTemplate` — MCP clients can now discover per-file `lsp-diagnostics://`, `lsp-hover://`, and `lsp-completions://` URIs via `resources/list`
+- `ExtensionRegistry.Deactivate` unexported to `deactivate` — method had no external callers; was test-only
+- `applyRangeEdit` cross-reference comment updated to point to `LSPClient.applyEditsToFile` to prevent independent bug-fix divergence
+- `RootDir()` doc comment corrected — previously carried the `Initialize` doc comment verbatim due to copy-paste
+- `workspace/configuration` params unmarshal error now logged at debug level instead of silently discarded with `_ =`; fallback empty-array response preserved
+- `applyDocumentChanges` discriminator unmarshal failure now logs at debug level and skips the malformed entry instead of falling through to the `TextDocumentEdit` branch
+- `init()` in `internal/logging` no longer writes to stderr at import time — invalid `LOG_LEVEL` value is stored and flushed on the first `Log()` call instead
+
+
 - `ApplyEditArgs.Edit` type changed from `interface{}` to `map[string]interface{}` — Claude Code's MCP schema validator rejected the empty schema produced by `interface{}` and silently dropped all 34 tools silently; `map[string]interface{}` produces a valid `"type": "object"` schema
 - `simulate_edit_atomic` now calls `Discard` before `Destroy` — without Discard, gopls retained the modified document between atomic calls; the next call's baseline captured stale (modified) diagnostics, producing incorrect `net_delta` values
 - `start_lsp` in multi-server/auto-detect mode now calls `ServerManager.StartAll` — previously only restarted the first detected server (clangd), leaving gopls and other language servers uninitialized; simulation sessions for Go files now correctly use gopls
