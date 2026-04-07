@@ -134,7 +134,7 @@ func TestRegistry_Deactivate(t *testing.T) {
 		t.Fatalf("expected 1 handler after activation")
 	}
 
-	r.Deactivate("python")
+	r.deactivate("python")
 	if len(r.ToolHandlers()) != 0 {
 		t.Fatalf("expected 0 handlers after deactivation, got %d", len(r.ToolHandlers()))
 	}

@@ -421,7 +421,8 @@ func (m *SessionManager) Destroy(ctx context.Context, sessionID string) error {
 }
 
 // applyRangeEdit applies a range edit to content in-memory and returns the new content.
-// This is adapted from LSPClient.applyEditsToFile for a single edit.
+// Algorithm mirrors LSPClient.applyEditsToFile in internal/lsp/client.go.
+// SYNC: if applyEditsToFile changes its line-splice logic, update this function too.
 func applyRangeEdit(content string, rng types.Range, newText string) string {
 	lines := strings.Split(content, "\n")
 
