@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -145,15 +146,15 @@ func (m *ServerManager) Shutdown(ctx context.Context) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	var lastErr error
+	var errs []error
 	for _, e := range m.entries {
 		if e.client != nil {
 			if err := e.client.Shutdown(ctx); err != nil {
-				lastErr = err
+				errs = append(errs, err)
 			}
 		}
 	}
-	return lastErr
+	return errors.Join(errs...)
 }
 
 // inferLanguageID returns a reasonable language ID from the server entry.
