@@ -6,9 +6,12 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Fixed
-- `ApplyEditArgs.Edit` type changed from `interface{}` to `map[string]interface{}` — Claude Code's MCP schema validator rejected the empty schema produced by `interface{}` and silently dropped all 34 tools; `map[string]interface{}` produces a valid `"type": "object"` schema
-- `SessionManager` now uses `ClientForFile` (routing by language extension) instead of `DefaultClient` for session creation — in multi-server auto-detect mode `DefaultClient()` returned clangd (first detected), causing Go simulation sessions to get C diagnostics; language routing now correctly picks gopls for `.go`, clangd for `.c`, etc.
+- `ApplyEditArgs.Edit` type changed from `interface{}` to `map[string]interface{}` — Claude Code's MCP schema validator rejected the empty schema produced by `interface{}` and silently dropped all 34 tools silently; `map[string]interface{}` produces a valid `"type": "object"` schema
+- `simulate_edit_atomic` now calls `Discard` before `Destroy` — without Discard, gopls retained the modified document between atomic calls; the next call's baseline captured stale (modified) diagnostics, producing incorrect `net_delta` values
+- `start_lsp` in multi-server/auto-detect mode now calls `ServerManager.StartAll` — previously only restarted the first detected server (clangd), leaving gopls and other language servers uninitialized; simulation sessions for Go files now correctly use gopls
 - `csResolver` wrapper added to `server.go` so `SessionManager` sees clients set by `start_lsp` at runtime; previously the original resolver held a nil client until `start_lsp` was called, causing "no LSP client available" errors
+- `SessionManager.CreateSession` routes by language extension via `ClientForFile` — in multi-server mode `DefaultClient()` returned clangd; routing by `.go`/`.py`/`.ts` extension now picks the correct language server per session
+- `languageToExtension` helper added to `internal/session/manager.go` — maps language IDs (`go`, `python`, `typescript`, `javascript`, `rust`, `c`, `cpp`, `java`, `ruby`) to file extensions for client routing
 
 ### Added
 - **Speculative code sessions** — simulate edits without committing to disk; create sessions with baseline diagnostics, apply edits in-memory, evaluate diagnostic changes (errors introduced/resolved), and commit or discard atomically; implemented via `internal/session` package with SessionManager (lifecycle), SerializedExecutor (LSP access serialization), and diagnostic differ (baseline vs current comparison); 8 new MCP tools: `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`; tool count 26 → 34; enables safe what-if analysis and multi-step edit planning before execution; useful for AI assistants to verify edits won't introduce errors before applying
