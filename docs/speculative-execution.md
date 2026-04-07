@@ -1,7 +1,50 @@
 # Speculative Execution for Code
 
-**Status:** Planning
-**Feature:** Speculative code sessions — `create_simulation_session`, `simulate_edit`, `evaluate_session`, `commit_session`, `discard_session`
+**Status:** Shipped (v0.x)
+**Feature:** Speculative code sessions — `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`
+
+---
+
+## Prerequisites
+
+Call `start_lsp` with `root_dir` set to your workspace before using any simulation tools. The language server must be initialized and pointing at the correct workspace root for diagnostics to be meaningful.
+
+```json
+{ "root_dir": "/your/workspace" }
+```
+
+Simulation tools create sessions on the currently-running language server. If `start_lsp` has not been called (or was called with a different workspace), session results will be empty or incorrect.
+
+---
+
+## Position convention
+
+All `start_line`, `start_column`, `end_line`, and `end_column` parameters are **1-indexed** — the same as line numbers shown by `cat -n` and most editors. The `extractRange` helper in the codebase converts these to the 0-indexed values the LSP protocol requires. Do not subtract 1 before passing positions to simulation tools.
+
+---
+
+## Quick start
+
+The simplest path: use `simulate_edit_atomic` for a single speculative edit. It handles the full session lifecycle internally — no session ID to track, file on disk is never modified.
+
+```
+start_lsp(root_dir="/your/workspace")
+
+simulate_edit_atomic(
+  workspace_root="/your/workspace",
+  language="go",
+  file_path="/your/workspace/pkg/handler.go",
+  start_line=42, start_column=1,
+  end_line=42,   end_column=20,
+  new_text="replacement text",
+  scope="file",
+  timeout_ms=5000
+)
+
+→ {"errors_introduced": null, "errors_resolved": null, "net_delta": 0, "confidence": "high"}
+```
+
+`net_delta: 0` means no new errors were introduced — safe to apply. A positive `net_delta` means the edit would break things; inspect `errors_introduced` for details.
 
 ---
 

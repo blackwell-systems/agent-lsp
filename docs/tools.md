@@ -1261,6 +1261,371 @@ Log level set to: warning
 
 ---
 
+## Simulation tools
+
+Speculative code sessions let you apply hypothetical edits, evaluate their diagnostic impact, then commit or discard — without touching files on disk. See `docs/speculative-execution.md` for the full design.
+
+**Call `start_lsp` before using any simulation tool.** All simulation tools operate against the currently-running language server.
+
+**Position convention:** all `start_line`, `start_column`, `end_line`, `end_column` parameters are **1-indexed** (same as editor line numbers). The server converts to 0-indexed internally.
+
+---
+
+### `create_simulation_session`
+
+Create an isolated speculative session rooted at the current workspace state. The session accumulates in-memory edits without modifying files on disk.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `workspace_root` | string | yes | Absolute path to the workspace root |
+| `language` | string | yes | Language identifier (`go`, `typescript`, etc.) |
+
+**Example call**
+
+```json
+{
+  "workspace_root": "/Users/dayna.blackwell/code/myproject",
+  "language": "go"
+}
+```
+
+**Actual output**
+
+```json
+{
+  "session_id": "a3f2-4b91-...",
+  "status": "created"
+}
+```
+
+**Notes**
+
+- Call `start_lsp` first; the session is attached to the running language server.
+- The session must be destroyed when done — call `destroy_session` to release resources.
+- Multiple sessions may exist simultaneously with independent state.
+
+---
+
+### `simulate_edit`
+
+Apply an in-memory edit to an existing session. Does not modify files on disk. Multiple edits accumulate within the session.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `session_id` | string | yes | Session ID from `create_simulation_session` |
+| `file_path` | string | yes | Absolute path to the file to edit |
+| `start_line` | int | yes | Start line of the edit range (1-indexed) |
+| `start_column` | int | yes | Start column (1-indexed) |
+| `end_line` | int | yes | End line of the edit range (1-indexed) |
+| `end_column` | int | yes | End column (1-indexed) |
+| `new_text` | string | yes | Replacement text for the specified range |
+
+**Example call**
+
+```json
+{
+  "session_id": "a3f2-4b91-...",
+  "file_path": "/Users/dayna.blackwell/code/myproject/pkg/handler.go",
+  "start_line": 42,
+  "start_column": 1,
+  "end_line": 42,
+  "end_column": 20,
+  "new_text": "replacement text"
+}
+```
+
+**Actual output**
+
+```json
+{
+  "session_id": "a3f2-4b91-...",
+  "edit_applied": true,
+  "version_after": 1
+}
+```
+
+**Notes**
+
+- Multiple `simulate_edit` calls may be made before calling `evaluate_session`; evaluation reflects the cumulative state.
+- Does not evaluate diagnostics — call `evaluate_session` separately to observe impact.
+
+---
+
+### `evaluate_session`
+
+Compare the session's current diagnostic state against the baseline. Returns which errors were introduced and which were resolved by the accumulated edits.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `session_id` | string | yes | Session ID |
+| `scope` | string | no | `"file"` (default) or `"workspace"`. File scope is faster and returns `confidence: "high"`. |
+| `timeout_ms` | int | no | Milliseconds to wait for diagnostics to settle. Default: 3000ms (file), 8000ms (workspace). |
+
+**Example call**
+
+```json
+{
+  "session_id": "a3f2-4b91-...",
+  "scope": "file",
+  "timeout_ms": 5000
+}
+```
+
+**Actual output**
+
+```json
+{
+  "session_id": "a3f2-4b91-...",
+  "errors_introduced": null,
+  "errors_resolved": null,
+  "net_delta": 0,
+  "scope": "file",
+  "confidence": "high",
+  "timeout": false,
+  "duration_ms": 412
+}
+```
+
+**Notes**
+
+- `net_delta: 0` means no new errors were introduced — safe to apply.
+- `confidence` values: `"high"` (file scope, settled within timeout), `"partial"` (timed out), `"stale"` (concurrent mutation detected), `"eventual"` (workspace scope, cross-file propagation may be incomplete).
+- Does not mutate session state.
+
+---
+
+### `simulate_chain`
+
+Apply a sequence of edits within a session and evaluate diagnostics after each step. Returns per-step results and identifies the last step that is safe to apply.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `session_id` | string | yes | Session ID |
+| `edits` | array | yes | Ordered list of edit objects, each with `file_path`, `start_line`, `start_column`, `end_line`, `end_column`, `new_text` |
+| `timeout_ms` | int | no | Timeout per evaluation step |
+
+**Example call**
+
+```json
+{
+  "session_id": "a3f2-4b91-...",
+  "edits": [
+    {
+      "file_path": "/Users/dayna.blackwell/code/myproject/pkg/handler.go",
+      "start_line": 10, "start_column": 1,
+      "end_line": 10,   "end_column": 30,
+      "new_text": "first change"
+    },
+    {
+      "file_path": "/Users/dayna.blackwell/code/myproject/pkg/handler.go",
+      "start_line": 20, "start_column": 1,
+      "end_line": 20,   "end_column": 30,
+      "new_text": "second change"
+    }
+  ]
+}
+```
+
+**Actual output**
+
+```json
+{
+  "steps": [
+    { "step": 1, "net_delta": 0, "errors_introduced": [] },
+    { "step": 2, "net_delta": 3, "errors_introduced": ["..."] }
+  ],
+  "safe_to_apply_through_step": 1,
+  "cumulative_delta": 3
+}
+```
+
+**Notes**
+
+- Each step builds on the previous in-memory state within the session.
+- `safe_to_apply_through_step` is the last step index with `net_delta: 0`.
+
+---
+
+### `commit_session`
+
+Materialize the session's accumulated speculative state. By default returns a patch without writing to disk (functional mode). Pass `apply: true` to write files to disk.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `session_id` | string | yes | Session ID |
+| `target` | string | no | Target path override for writing files |
+| `apply` | boolean | no | If `true`, write changes to disk. Default `false`. |
+
+**Example call — patch only (default)**
+
+```json
+{
+  "session_id": "a3f2-4b91-..."
+}
+```
+
+**Example call — write to disk**
+
+```json
+{
+  "session_id": "a3f2-4b91-...",
+  "apply": true
+}
+```
+
+**Actual output**
+
+```json
+{
+  "session_id": "a3f2-4b91-...",
+  "files_written": [],
+  "patch": { "changes": { "file:///path/to/file.go": [ { "...": "..." } ] } }
+}
+```
+
+**Notes**
+
+- Default is functional (patch only, no disk writes). Callers opt into disk writes explicitly with `apply: true`.
+- Commit is only allowed from a session in `evaluated` or `mutated` state; prohibited on `dirty` or `created` sessions.
+- Call `destroy_session` after committing to release resources.
+
+---
+
+### `discard_session`
+
+Revert all in-memory edits accumulated in the session. The session is reset to baseline state. Nothing is written to disk.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `session_id` | string | yes | Session ID |
+
+**Example call**
+
+```json
+{
+  "session_id": "a3f2-4b91-..."
+}
+```
+
+**Actual output**
+
+```json
+{
+  "session_id": "a3f2-4b91-...",
+  "status": "discarded"
+}
+```
+
+**Notes**
+
+- Equivalent to rolling back a transaction — no side effects.
+- Call `destroy_session` after discarding to release resources.
+
+---
+
+### `destroy_session`
+
+Clean up all resources associated with a session. Must be called after committing or discarding to prevent resource leaks.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `session_id` | string | yes | Session ID |
+
+**Example call**
+
+```json
+{
+  "session_id": "a3f2-4b91-..."
+}
+```
+
+**Actual output**
+
+```json
+{
+  "session_id": "a3f2-4b91-...",
+  "status": "destroyed"
+}
+```
+
+**Notes**
+
+- Must be called even on dirty sessions — this is the only valid cleanup path for a session in `dirty` state.
+- Sessions are in-memory only; session IDs become invalid on MCP server restart.
+
+---
+
+### `simulate_edit_atomic`
+
+One-shot convenience wrapper: creates a session, applies a single edit, evaluates diagnostics, then discards and destroys the session automatically. The file on disk is never modified.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `workspace_root` | string | yes | Absolute path to the workspace root |
+| `language` | string | yes | Language identifier |
+| `file_path` | string | yes | Absolute path to the file to edit |
+| `start_line` | int | yes | Start line (1-indexed) |
+| `start_column` | int | yes | Start column (1-indexed) |
+| `end_line` | int | yes | End line (1-indexed) |
+| `end_column` | int | yes | End column (1-indexed) |
+| `new_text` | string | yes | Replacement text |
+| `scope` | string | no | `"file"` (default) or `"workspace"` |
+| `timeout_ms` | int | no | Timeout for diagnostic evaluation |
+
+**Example call**
+
+```json
+{
+  "workspace_root": "/Users/dayna.blackwell/code/myproject",
+  "language": "go",
+  "file_path": "/Users/dayna.blackwell/code/myproject/pkg/handler.go",
+  "start_line": 42,
+  "start_column": 1,
+  "end_line": 42,
+  "end_column": 20,
+  "new_text": "replacement text",
+  "scope": "file",
+  "timeout_ms": 5000
+}
+```
+
+**Actual output**
+
+```json
+{
+  "errors_introduced": null,
+  "errors_resolved": null,
+  "net_delta": 0,
+  "confidence": "high"
+}
+```
+
+**Notes**
+
+- Easiest way to test a single edit — no session lifecycle management required.
+- Call `start_lsp` first.
+- `net_delta: 0` means the edit is safe to apply (no new errors introduced).
+- Automatically discards and destroys the session; the file on disk is never modified.
+- Backed by the same session infrastructure as the full lifecycle tools — not a separate code path.
+
+---
+
 ## Startup and warm-up notes
 
 The tsserver (and some other language servers) perform asynchronous workspace
