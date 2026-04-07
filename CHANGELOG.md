@@ -6,6 +6,11 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- Auto-infer workspace root from file path — all per-file `mcp__lsp__*` tools now automatically walk up from the file path to find a workspace root marker (`go.mod`, `package.json`, `Cargo.toml`, `pyproject.toml`, `setup.py`, `.git`) and initialize the correct LSP client if none is active; `start_lsp` is no longer required before first use
+  - `internal/config.InferWorkspaceRoot(filePath)` — exported helper, walks directory tree upward checking markers in priority order
+  - `cmd/lsp-mcp-go/server.go` — all 17 per-file tool handlers wrapped with `clientForFileWithAutoInit`; double-checked locking ensures thread-safe single initialization per workspace root
+
+
 - Tests for `Destroy` (session removal + not-found error), `ApplyEdit` terminal and dirty guards, and `languageToExtension` (all 10 named cases + default fallback) — previously only the `"go"` case was exercised
 
 ### Changed
