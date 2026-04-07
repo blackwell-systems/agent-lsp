@@ -17,6 +17,12 @@ import (
 // Returns ("", "", nil) when no marker is found at or above the file's directory.
 // Returns (root, languageID, nil) on success.
 // Returns ("", "", err) only for unexpected os.Stat or os.Getwd errors.
+// InferWorkspaceRoot is the exported entry point for inferWorkspaceRoot.
+// See inferWorkspaceRoot for full documentation.
+func InferWorkspaceRoot(filePath string) (root, languageID string, err error) {
+	return inferWorkspaceRoot(filePath)
+}
+
 func inferWorkspaceRoot(filePath string) (root, languageID string, err error) {
 	// Determine the starting directory.
 	info, statErr := os.Stat(filePath)
