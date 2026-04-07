@@ -34,6 +34,15 @@ func (s *clientState) set(c *lsp.LSPClient) {
 	s.client = c
 }
 
+// csResolver wraps clientState to implement lsp.ClientResolver.
+// The SessionManager uses this so it always sees the client updated by start_lsp.
+type csResolver struct{ cs *clientState }
+
+func (r *csResolver) DefaultClient() *lsp.LSPClient          { return r.cs.get() }
+func (r *csResolver) ClientForFile(_ string) *lsp.LSPClient  { return r.cs.get() }
+func (r *csResolver) AllClients() []*lsp.LSPClient           { return []*lsp.LSPClient{r.cs.get()} }
+func (r *csResolver) Shutdown(ctx context.Context) error     { return nil }
+
 // toolArgsToMap converts a typed args struct to map[string]interface{} via JSON round-trip.
 func toolArgsToMap(v interface{}) map[string]interface{} {
 	data, err := json.Marshal(v)
@@ -89,7 +98,7 @@ func clientForFile(resolver lsp.ClientResolver, cs *clientState, filePath string
 // Run creates and starts the MCP server.
 func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string) error {
 	cs := &clientState{client: resolver.DefaultClient()}
-	sessionMgr := session.NewSessionManager(resolver)
+	sessionMgr := session.NewSessionManager(&csResolver{cs})
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "lsp-mcp-go",
