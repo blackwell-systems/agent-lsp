@@ -465,24 +465,3 @@ func uriToPath(uri string) string {
 	// For production, use proper URI decoding.
 	return strings.TrimPrefix(uri, "file://")
 }
-
-// SerializedExecutor provides serialized access to a single LSP server.
-type SerializedExecutor struct {
-	mu sync.Mutex
-}
-
-// NewSerializedExecutor creates a new SerializedExecutor.
-func NewSerializedExecutor() *SerializedExecutor {
-	return &SerializedExecutor{}
-}
-
-// Acquire acquires the executor lock for a session.
-func (e *SerializedExecutor) Acquire(ctx context.Context, s *SimulationSession) error {
-	e.mu.Lock()
-	return nil
-}
-
-// Release releases the executor lock for a session.
-func (e *SerializedExecutor) Release(s *SimulationSession) {
-	e.mu.Unlock()
-}
