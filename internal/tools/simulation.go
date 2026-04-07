@@ -306,6 +306,10 @@ func HandleSimulateEditAtomic(ctx context.Context, mgr *session.SessionManager, 
 		return types.ErrorResult(fmt.Sprintf("evaluate failed: %s", err)), nil
 	}
 
+	// Discard to revert LSP state before Destroy — ensures gopls sees clean
+	// file content for subsequent calls, not the modified in-memory version.
+	_ = mgr.Discard(ctx, sessionID)
+
 	data, _ := json.Marshal(evalResult)
 	return types.TextResult(string(data)), nil
 }
