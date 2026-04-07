@@ -50,7 +50,7 @@ func TestCreateSession_ReturnsID(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when client is nil, got nil")
 	}
-	if err.Error() != "no LSP client available" {
+	if err.Error() != "no LSP client available — call start_lsp first" {
 		t.Errorf("unexpected error message: %s", err.Error())
 	}
 }
