@@ -15,3 +15,5 @@ go.work
 go.work.sum
 .mcp.json
 .saw-state/
+lsp-mcp-go
+lsp-mcp-go-test
