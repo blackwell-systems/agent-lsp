@@ -143,6 +143,10 @@ type ToolHandler func(ctx interface{}, args map[string]interface{}) (ToolResult,
 type ResourceHandler func(ctx interface{}, uri string) (interface{}, error)
 
 // Extension is implemented by per-language extension packages.
+// The current interface covers the four methods used by the extension
+// registry. ToolDefinitions, UnsubscriptionHandlers, and PromptDefinitions
+// (documented in docs/architecture.md) are deferred pending MCP SDK
+// maturation and are not included here.
 type Extension interface {
 	ToolHandlers() map[string]ToolHandler
 	ResourceHandlers() map[string]ResourceHandler
