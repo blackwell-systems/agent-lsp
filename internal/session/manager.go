@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -53,15 +54,16 @@ func (m *SessionManager) CreateSession(ctx context.Context, workspaceRoot, langu
 
 	// Create new session.
 	session := &SimulationSession{
-		ID:        id,
-		Status:    StatusCreated,
-		Client:    client,
-		Edits:     []AppliedEdit{},
-		Baselines: make(map[string]DiagnosticsSnapshot),
-		Versions:  make(map[string]int),
-		Contents:  make(map[string]string),
-		Workspace: workspaceRoot,
-		Language:  language,
+		ID:               id,
+		Status:           StatusCreated,
+		Client:           client,
+		Edits:            []AppliedEdit{},
+		Baselines:        make(map[string]DiagnosticsSnapshot),
+		Versions:         make(map[string]int),
+		Contents:         make(map[string]string),
+		OriginalContents: make(map[string]string),
+		Workspace:        workspaceRoot,
+		Language:         language,
 	}
 
 	// Store in sessions map under write lock.
@@ -130,6 +132,11 @@ func (m *SessionManager) ApplyEdit(ctx context.Context, sessionID, fileURI strin
 		}
 		session.Contents[fileURI] = string(content)
 
+		// Snapshot original content for Discard revert (only on first edit per file).
+		if _, alreadySnapped := session.OriginalContents[fileURI]; !alreadySnapped {
+			session.OriginalContents[fileURI] = string(content)
+		}
+
 		// Open the document in LSP.
 		if err := session.Client.OpenDocument(ctx, fileURI, session.Contents[fileURI], session.Language); err != nil {
 			session.MarkDirty(fmt.Errorf("opening document %s: %w", fileURI, err))
@@ -158,7 +165,7 @@ func (m *SessionManager) ApplyEdit(ctx context.Context, sessionID, fileURI strin
 	})
 
 	// Update status.
-	session.Status = StatusMutated
+	session.SetStatus(StatusMutated)
 
 	logging.Log(logging.LevelDebug, fmt.Sprintf("session.edit_applied: %s file=%s version=%d", sessionID, fileURI, session.Versions[fileURI]))
 
@@ -194,7 +201,7 @@ func (m *SessionManager) Evaluate(ctx context.Context, sessionID, scope string, 
 	}
 
 	// Update status to evaluating.
-	session.Status = StatusEvaluating
+	session.SetStatus(StatusEvaluating)
 
 	// Acquire executor lock.
 	if err := m.executor.Acquire(ctx, session); err != nil {
@@ -238,7 +245,7 @@ func (m *SessionManager) Evaluate(ctx context.Context, sessionID, scope string, 
 	}
 
 	// Update status.
-	session.Status = StatusEvaluated
+	session.SetStatus(StatusEvaluated)
 
 	logging.Log(logging.LevelDebug, fmt.Sprintf("session.evaluate_complete: %s scope=%s netDelta=%d", sessionID, scope, netDelta))
 
@@ -332,14 +339,17 @@ func (m *SessionManager) Commit(ctx context.Context, sessionID, target string, a
 			filesWritten++
 
 			// Notify LSP of the change by sending didChange.
+			// If notification fails, mark session dirty — LSP state is now stale
+			// relative to disk content and callers must be informed.
 			if err := session.Client.OpenDocument(ctx, uri, content, session.Language); err != nil {
+				session.MarkDirty(fmt.Errorf("LSP notification failed after commit for %s: %w", uri, err))
 				logging.Log(logging.LevelWarning, fmt.Sprintf("notifying LSP of committed change for %s: %v", uri, err))
 			}
 		}
 	}
 
 	// Update status.
-	session.Status = StatusCommitted
+	session.SetStatus(StatusCommitted)
 
 	logging.Log(logging.LevelDebug, fmt.Sprintf("session.committed: %s apply=%v files=%d", sessionID, apply, filesWritten))
 
@@ -370,22 +380,22 @@ func (m *SessionManager) Discard(ctx context.Context, sessionID string) error {
 
 	// Revert each file to original content.
 	for uri := range session.Contents {
-		path := uriToPath(uri)
-		originalContent, err := os.ReadFile(path)
-		if err != nil {
-			session.MarkDirty(fmt.Errorf("reading original content for %s: %w", path, err))
-			return fmt.Errorf("reading original content for %s: %w", path, err)
+		originalContent, ok := session.OriginalContents[uri]
+		if !ok {
+			// Fallback: if no snapshot exists (session created but no edit applied),
+			// nothing to revert for this URI.
+			continue
 		}
 
 		// Send original content back to LSP.
-		if err := session.Client.OpenDocument(ctx, uri, string(originalContent), session.Language); err != nil {
+		if err := session.Client.OpenDocument(ctx, uri, originalContent, session.Language); err != nil {
 			session.MarkDirty(fmt.Errorf("reverting document %s: %w", uri, err))
 			return fmt.Errorf("reverting document %s: %w", uri, err)
 		}
 	}
 
 	// Update status.
-	session.Status = StatusDiscarded
+	session.SetStatus(StatusDiscarded)
 
 	logging.Log(logging.LevelDebug, "session.discarded: "+sessionID)
 	return nil
@@ -403,7 +413,7 @@ func (m *SessionManager) Destroy(ctx context.Context, sessionID string) error {
 	defer m.mu.Unlock()
 
 	// Update status and remove from map.
-	session.Status = StatusDestroyed
+	session.SetStatus(StatusDestroyed)
 	delete(m.sessions, sessionID)
 
 	logging.Log(logging.LevelDebug, "session.destroyed: "+sessionID)
@@ -462,11 +472,16 @@ func applyRangeEdit(content string, rng types.Range, newText string) string {
 	return strings.Join(result, "\n")
 }
 
-// uriToPath converts a file:// URI to a filesystem path.
+// uriToPath converts a file:// URI to a filesystem path,
+// correctly decoding percent-encoded characters per RFC 3986.
 func uriToPath(uri string) string {
-	// Simple conversion: strip "file://" prefix.
-	// For production, use proper URI decoding.
-	return strings.TrimPrefix(uri, "file://")
+	if u, err := url.Parse(uri); err == nil && u.Path != "" {
+		return u.Path
+	}
+	if strings.HasPrefix(uri, "file://") {
+		return uri[len("file://"):]
+	}
+	return uri
 }
 
 // languageToExtension maps a language ID to a file extension for ClientForFile routing.
