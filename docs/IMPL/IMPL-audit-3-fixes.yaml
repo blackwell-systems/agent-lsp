@@ -594,5 +594,5 @@ critic_report:
     summary: 'All four agent briefs verified against the actual codebase. Agent A: line numbers 199, 204, 207, 319 match exactly; mu field confirmed unexported sync.Mutex on SimulationSession accessible within package session; SetStatus confirmed to acquire mu internally; manager_test.go exists. Agent B: bug confirmed — Discard at line 332 only fires on the success path, early return at line 327 skips it; fix is accurate. Agent C: both bugs confirmed at exact lines stated — context.Background() at line 290 in workspace/applyEdit dispatch, plaintext hardcode at line 834 in ReopenDocument untracked-URI path; defaultTimeout confirmed as 30s; context and strings both already imported; ApplyWorkspaceEdit signature matches (ctx, edit interface{}). Agent D: deactivate method at lines 75-84 and TestRegistry_Deactivate test at lines 113-144 both match the exact text in the brief; logging import remains used by Activate. No disjoint ownership violations, no complexity threshold violations, no missed callers, no new files requiring registration.'
     reviewed_at: "2026-04-07T13:57:50Z"
     issue_count: 0
-state: SCOUT_PENDING
+state: "REVIEWED"
 injection_method: hook
