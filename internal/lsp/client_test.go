@@ -418,3 +418,22 @@ func TestLSPClient_GetOpenDocuments(t *testing.T) {
 		t.Errorf("expected %d open docs, got %d", len(uris), len(open))
 	}
 }
+
+func TestLanguageIDFromURI(t *testing.T) {
+	tests := []struct {
+		uri  string
+		want string
+	}{
+		{"file:///foo/bar.go", "go"},
+		{"file:///foo/bar.ts", "typescript"},
+		{"file:///foo/bar.py", "python"},
+		{"file:///foo/bar.unknown", "plaintext"},
+		{"file:///foo/Makefile", "plaintext"},
+	}
+	for _, tt := range tests {
+		got := languageIDFromURI(tt.uri)
+		if got != tt.want {
+			t.Errorf("languageIDFromURI(%q) = %q, want %q", tt.uri, got, tt.want)
+		}
+	}
+}
