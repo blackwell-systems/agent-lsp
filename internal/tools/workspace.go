@@ -204,7 +204,7 @@ func HandleExecuteCommand(ctx context.Context, client *lsp.LSPClient, args map[s
 	}
 
 	var cmdArgs []interface{}
-	if v, ok := args["args"].([]interface{}); ok {
+	if v, ok := args["arguments"].([]interface{}); ok {
 		cmdArgs = v
 	}
 
