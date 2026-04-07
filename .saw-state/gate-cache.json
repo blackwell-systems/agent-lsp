@@ -564,6 +564,18 @@
         "cached_at": "2026-04-06T13:43:48.186061-07:00"
       }
     },
+    "5b343e43be536937af1d6e8cc2836ea3": {
+      "build": {
+        "gate_type": "build",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T17:31:59.681817-07:00"
+      }
+    },
     "5fbac0d019f2e158e1f5619ae45c2e0f": {
       "lint": {
         "gate_type": "lint",
@@ -982,6 +994,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T14:00:31.3591-07:00"
+      }
+    },
+    "bf1576716241d3d380e5856b876c2333": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 GOWORK=off go vet ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T17:32:00.146678-07:00"
       }
     },
     "bfb80430ee564248efde532e3c2225b9": {
