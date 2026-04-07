@@ -921,7 +921,7 @@ completion_reports:
     B:
         status: complete
         branch: saw/speculative-sessions/wave1-agent-B
-        commit: 1b4a85d
+        commit: 7e566db
         files_created:
             - internal/session/manager.go
             - internal/session/manager_test.go
