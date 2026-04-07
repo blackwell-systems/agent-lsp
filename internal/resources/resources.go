@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -212,58 +211,9 @@ func HandleCompletionsResource(ctx context.Context, client *lsp.LSPClient, uri s
 	}, nil
 }
 
-// generateResourceList returns the dynamic list of available resources
-// based on currently open documents. Returns nil if client is nil.
-func generateResourceList(client *lsp.LSPClient) []ResourceEntry {
-	if client == nil {
-		return nil
-	}
-
-	entries := []ResourceEntry{
-		{
-			URI:         "lsp-diagnostics://",
-			Name:        "All Diagnostics",
-			Description: "LSP diagnostics for all open documents",
-			Subscribe:   true,
-		},
-	}
-
-	for _, docURI := range client.GetOpenDocuments() {
-		if !strings.HasPrefix(docURI, "file://") {
-			continue
-		}
-		// Strip the file:// prefix to get the absolute path.
-		filePath := strings.TrimPrefix(docURI, "file://")
-		baseName := filepath.Base(filePath)
-
-		entries = append(entries,
-			ResourceEntry{
-				URI:         "lsp-diagnostics://" + filePath,
-				Name:        "Diagnostics: " + baseName,
-				Description: "LSP diagnostics for " + filePath,
-				Subscribe:   true,
-			},
-			ResourceEntry{
-				URI:         fmt.Sprintf("lsp-hover://%s?line={line}&column={column}&language_id={language_id}", filePath),
-				Name:        "Hover: " + baseName,
-				Description: "LSP hover information for " + filePath,
-				Template:    true,
-			},
-			ResourceEntry{
-				URI:         fmt.Sprintf("lsp-completions://%s?line={line}&column={column}&language_id={language_id}", filePath),
-				Name:        "Completions: " + baseName,
-				Description: "LSP completions for " + filePath,
-				Template:    true,
-			},
-		)
-	}
-
-	return entries
-}
-
-// resourceTemplates returns the static resource template definitions
+// ResourceTemplates returns the static resource template definitions
 // for the MCP server's resources/templates/list response.
-func resourceTemplates() []ResourceTemplate {
+func ResourceTemplates() []ResourceTemplate {
 	return []ResourceTemplate{
 		{
 			Name:        "lsp-diagnostics",
