@@ -3,52 +3,16 @@
   "worktrees": [
     {
       "agent": "A",
-      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/audit-3-fixes/wave1-agent-A",
-      "branch": "saw/audit-3-fixes/wave1-agent-A"
-    },
-    {
-      "agent": "B",
-      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/audit-3-fixes/wave1-agent-B",
-      "branch": "saw/audit-3-fixes/wave1-agent-B"
-    },
-    {
-      "agent": "C",
-      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/audit-3-fixes/wave1-agent-C",
-      "branch": "saw/audit-3-fixes/wave1-agent-C"
-    },
-    {
-      "agent": "D",
-      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/audit-3-fixes/wave1-agent-D",
-      "branch": "saw/audit-3-fixes/wave1-agent-D"
+      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-auto-infer-workspace/wave1-agent-A",
+      "branch": "saw/lsp-auto-infer-workspace/wave1-agent-A"
     }
   ],
   "agent_briefs": [
     {
       "agent": "A",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/audit-3-fixes/wave1-agent-A/.saw-agent-brief.md",
-      "brief_length": 6026,
+      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-auto-infer-workspace/wave1-agent-A/.saw-agent-brief.md",
+      "brief_length": 7425,
       "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave1/agent-A",
-      "files_owned": 1
-    },
-    {
-      "agent": "B",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/audit-3-fixes/wave1-agent-B/.saw-agent-brief.md",
-      "brief_length": 3559,
-      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave1/agent-B",
-      "files_owned": 1
-    },
-    {
-      "agent": "C",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/audit-3-fixes/wave1-agent-C/.saw-agent-brief.md",
-      "brief_length": 5716,
-      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave1/agent-C",
-      "files_owned": 1
-    },
-    {
-      "agent": "D",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/audit-3-fixes/wave1-agent-D/.saw-agent-brief.md",
-      "brief_length": 4341,
-      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave1/agent-D",
       "files_owned": 2
     }
   ],
@@ -75,8 +39,8 @@
     },
     {
       "step": "critic_verdict",
-      "status": "success",
-      "detail": "critic review passed"
+      "status": "skipped",
+      "detail": "threshold not met — critic review not required"
     },
     {
       "step": "stale_cleanup",
@@ -90,8 +54,8 @@
     },
     {
       "step": "file_existence",
-      "status": "success",
-      "detail": "all files validated"
+      "status": "warning",
+      "detail": "file 'internal/config/infer.go' marked action=modify but does not exist in repo 'LSP-MCP-GO'"
     },
     {
       "step": "working_dir_check",
@@ -146,7 +110,7 @@
     {
       "step": "create_worktrees",
       "status": "success",
-      "detail": "created 4 worktree(s)"
+      "detail": "created 1 worktree(s)"
     },
     {
       "step": "workspace_setup",
@@ -161,7 +125,7 @@
     {
       "step": "extract_briefs",
       "status": "success",
-      "detail": "prepared 4 agent(s)"
+      "detail": "prepared 1 agent(s)"
     }
   ],
   "success": false
