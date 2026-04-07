@@ -1,0 +1,5 @@
+{
+  "testCommand": "env GOWORK=off go test ./internal/... ./cmd/... ./extensions/... .",
+  "lintCommand": "env GOWORK=off go vet ./...",
+  "buildCommand": "env GOWORK=off go build ./..."
+}
