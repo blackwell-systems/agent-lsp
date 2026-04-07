@@ -21,7 +21,6 @@ const (
 	StatusDiscarded  SessionStatus = "discarded"
 	StatusDirty      SessionStatus = "dirty"
 	StatusDestroyed  SessionStatus = "destroyed"
-	StatusTimedOut   SessionStatus = "timed_out"
 )
 
 // Confidence indicates diagnostic reliability.
@@ -30,7 +29,6 @@ type Confidence string
 const (
 	ConfidenceHigh     Confidence = "high"
 	ConfidencePartial  Confidence = "partial"
-	ConfidenceStale    Confidence = "stale"
 	ConfidenceEventual Confidence = "eventual"
 )
 
@@ -120,7 +118,8 @@ type SimulationSession struct {
 	Edits     []AppliedEdit
 	Baselines map[string]DiagnosticsSnapshot
 	Versions  map[string]int
-	Contents  map[string]string // per-file current content (in-memory)
+	Contents         map[string]string // per-file current content (in-memory)
+	OriginalContents map[string]string // per-file content at baseline time (for Discard)
 	Workspace string
 	Language  string
 	DirtyErr  error
@@ -149,4 +148,12 @@ func (s *SimulationSession) IsTerminal() bool {
 	defer s.mu.Unlock()
 	return s.Status == StatusCommitted || s.Status == StatusDiscarded ||
 		s.Status == StatusDestroyed || s.Status == StatusDirty
+}
+
+// SetStatus transitions the session to the given status under s.mu.
+// Callers must NOT hold s.mu when calling this method.
+func (s *SimulationSession) SetStatus(status SessionStatus) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Status = status
 }
