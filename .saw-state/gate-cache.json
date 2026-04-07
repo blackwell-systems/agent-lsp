@@ -36,6 +36,18 @@
         "cached_at": "2026-04-06T16:17:36.789472-07:00"
       }
     },
+    "06abc7571f4aa7ae8f2cebd56be3126e": {
+      "build": {
+        "gate_type": "build",
+        "command": "go build ./...",
+        "passed": false,
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "pattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies\n",
+        "from_cache": true,
+        "cached_at": "2026-04-06T20:53:54.382473-07:00"
+      }
+    },
     "080d5fb04cad91ec53a5f1230629ed82": {
       "lint": {
         "gate_type": "lint",
@@ -912,6 +924,18 @@
         "cached_at": "2026-04-06T16:16:42.826256-07:00"
       }
     },
+    "a7f0e2cd485a1e2c71a99c19f025b9e7": {
+      "test": {
+        "gate_type": "test",
+        "command": "go test ./...",
+        "passed": false,
+        "exit_code": 1,
+        "stdout": "FAIL\t./... [setup failed]\nFAIL\n",
+        "stderr": "# ./...\npattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies\n",
+        "from_cache": true,
+        "cached_at": "2026-04-06T20:53:54.654794-07:00"
+      }
+    },
     "a9ab31cc3ff6525dc8a09afd20516cc7": {
       "lint": {
         "gate_type": "lint",
@@ -960,6 +984,18 @@
         "cached_at": "2026-04-06T11:07:50.093165-07:00"
       }
     },
+    "b1d6b87c3fe0bead47c8738806ba2926": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "go vet ./...",
+        "passed": false,
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "pattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies\n",
+        "from_cache": true,
+        "cached_at": "2026-04-06T20:53:54.528628-07:00"
+      }
+    },
     "b5807411734a09e6b47d39b02207fe9a": {
       "lint": {
         "gate_type": "lint",
@@ -982,6 +1018,18 @@
         "stderr": "pattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies\n",
         "from_cache": true,
         "cached_at": "2026-04-06T12:29:31.804119-07:00"
+      }
+    },
+    "bc3e1015a455f412ba720584c6f9d797": {
+      "build": {
+        "gate_type": "build",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T17:33:18.820042-07:00"
       }
     },
     "bd8731e887f13c07353ab3b36c5f19ed": {
@@ -1366,6 +1414,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-04-06T13:53:00.833483-07:00"
+      }
+    },
+    "f3af034eaa65cb8bdcd98d0da7a8b3bf": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "cd /Users/dayna.blackwell/code/LSP-MCP-GO \u0026\u0026 GOWORK=off go vet ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-04-06T17:33:19.189343-07:00"
       }
     },
     "f755b9df16c5ebd35baca51e81f64275": {
