@@ -42,8 +42,13 @@ func (m *SessionManager) CreateSession(ctx context.Context, workspaceRoot, langu
 	}
 	id := hex.EncodeToString(b)
 
-	// Resolve LSP client.
-	client := m.resolver.DefaultClient()
+	// Resolve LSP client by language so multi-server mode routes correctly
+	// (e.g. gopls for Go, clangd for C/C++).
+	ext := languageToExtension(language)
+	client := m.resolver.ClientForFile(workspaceRoot + "/dummy" + ext)
+	if client == nil {
+		client = m.resolver.DefaultClient()
+	}
 	if client == nil {
 		return "", fmt.Errorf("no LSP client available")
 	}
@@ -464,4 +469,30 @@ func uriToPath(uri string) string {
 	// Simple conversion: strip "file://" prefix.
 	// For production, use proper URI decoding.
 	return strings.TrimPrefix(uri, "file://")
+}
+
+// languageToExtension maps a language ID to a file extension for ClientForFile routing.
+func languageToExtension(language string) string {
+	switch language {
+	case "go":
+		return ".go"
+	case "python":
+		return ".py"
+	case "typescript":
+		return ".ts"
+	case "javascript":
+		return ".js"
+	case "rust":
+		return ".rs"
+	case "c":
+		return ".c"
+	case "cpp", "c++":
+		return ".cpp"
+	case "java":
+		return ".java"
+	case "ruby":
+		return ".rb"
+	default:
+		return "." + language
+	}
 }
