@@ -150,7 +150,3 @@ func (s *SimulationSession) IsTerminal() bool {
 	return s.Status == StatusCommitted || s.Status == StatusDiscarded ||
 		s.Status == StatusDestroyed || s.Status == StatusDirty
 }
-
-// Ensure imports are used.
-var _ = context.Background
-var _ = lsp.NewLSPClient
