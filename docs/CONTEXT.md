@@ -11,3 +11,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-tier2-lang-expansion.yaml
 - **autodetect**: completed 2026-04-06, 2 waves, 2 agents
   - IMPL doc: docs/IMPL/complete/IMPL-autodetect.yaml
+- **lsp-mcp-go-audit-2-fixes**: completed 2026-04-07, 1 waves, 4 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-lsp-mcp-go-audit-2-fixes.yaml
