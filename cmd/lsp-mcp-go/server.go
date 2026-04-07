@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 
+	"github.com/blackwell-systems/lsp-mcp-go/internal/config"
 	"github.com/blackwell-systems/lsp-mcp-go/internal/extensions"
 	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
 	"github.com/blackwell-systems/lsp-mcp-go/internal/logging"
@@ -115,9 +117,78 @@ func clientForFile(resolver lsp.ClientResolver, cs *clientState, filePath string
 	return cs.get()
 }
 
+// autoInitClient attempts to infer a workspace root from filePath and
+// initialize the resolver. Safe to call concurrently via initMu.
+// Returns nil if filePath is empty, inference returns no root,
+// or if the file is already within the current workspace root.
+func autoInitClient(
+	ctx context.Context,
+	resolver lsp.ClientResolver,
+	cs *clientState,
+	initMu *sync.Mutex,
+	filePath string,
+) *lsp.LSPClient {
+	if filePath == "" {
+		return nil
+	}
+
+	// Check if client is already initialized and file is within its root.
+	if existing := cs.get(); existing != nil {
+		rootDir := existing.RootDir()
+		if rootDir != "" && strings.HasPrefix(filePath, rootDir+"/") {
+			return existing
+		}
+	}
+
+	root, _, err := config.InferWorkspaceRoot(filePath)
+	if err != nil || root == "" {
+		return nil
+	}
+
+	initMu.Lock()
+	defer initMu.Unlock()
+
+	// Re-check after acquiring lock (double-checked locking pattern).
+	if existing := cs.get(); existing != nil {
+		existingRoot := existing.RootDir()
+		if existingRoot != "" && strings.HasPrefix(filePath, existingRoot+"/") {
+			return existing
+		}
+	}
+
+	logging.Log(logging.LevelInfo, fmt.Sprintf(
+		"auto-init: inferred workspace root %q for file %q", root, filePath))
+
+	if sm, ok := resolver.(*lsp.ServerManager); ok {
+		if err := sm.StartAll(ctx, root); err != nil {
+			logging.Log(logging.LevelWarning, fmt.Sprintf("auto-init StartAll failed: %v", err))
+			return nil
+		}
+		if c := resolver.DefaultClient(); c != nil {
+			cs.set(c)
+			return c
+		}
+		return nil
+	}
+
+	// Single-server fallback: not supported via autoInitClient because
+	// serverPath/serverArgs are not in scope here. Return nil to fall
+	// through to the existing "LSP not initialized" error.
+	return nil
+}
+
 // Run creates and starts the MCP server.
 func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string) error {
 	cs := &clientState{client: resolver.DefaultClient()}
+	var initMu sync.Mutex
+	// clientForFileWithAutoInit extends clientForFile with auto-init behavior.
+	// If the resolver returns no client for filePath, attempt auto-initialization.
+	clientForFileWithAutoInit := func(filePath string) *lsp.LSPClient {
+		if c := clientForFile(resolver, cs, filePath); c != nil {
+			return c
+		}
+		return autoInitClient(ctx, resolver, cs, &initMu, filePath)
+	}
 	sessionMgr := session.NewSessionManager(&csResolver{cs: cs, delegate: resolver})
 
 	server := mcp.NewServer(&mcp.Implementation{
@@ -349,7 +420,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "open_document",
 		Description: "Open a file in the LSP server for analysis. Use this tool before performing operations like getting diagnostics, hover information, or completions for a file. The file remains open for continued analysis until explicitly closed. The language_id parameter tells the server which language service to use (e.g., 'typescript', 'javascript', 'haskell'). The LSP server starts automatically on MCP launch.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args OpenDocumentArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleOpenDocument(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleOpenDocument(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -357,7 +428,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "close_document",
 		Description: "Close a file in the LSP server. Use this tool when you're done with a file to free up resources and reduce memory usage. It's good practice to close files that are no longer being actively analyzed, especially in long-running sessions or when working with large codebases.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args CloseDocumentArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleCloseDocument(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleCloseDocument(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -365,7 +436,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "get_diagnostics",
 		Description: "Get diagnostic messages (errors, warnings) for files. Use this tool to identify problems in code files such as syntax errors, type mismatches, or other issues detected by the language server. When used without a file_path, returns diagnostics for all open files.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetDiagnosticsArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGetDiagnostics(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleGetDiagnostics(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -373,7 +444,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "get_info_on_location",
 		Description: "Get information on a specific location in a file via LSP hover. Use this tool to retrieve detailed type information, documentation, and other contextual details about symbols in your code. Particularly useful for understanding variable types, function signatures, and module documentation at a specific location in the code. Use this whenever you need to get a better idea on what a particular function is doing in that context.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetInfoOnLocationArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGetInfoOnLocation(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleGetInfoOnLocation(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -381,7 +452,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "get_completions",
 		Description: "Get completion suggestions at a specific location in a file. Use this tool to retrieve code completion options based on the current context, including variable names, function calls, object properties, and more. Helpful for code assistance and auto-completion at a particular location. Use this when determining which functions you have available in a given package, for example when changing libraries.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetCompletionsArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGetCompletions(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleGetCompletions(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -389,7 +460,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "get_signature_help",
 		Description: "Get function signature help at a specific location in a file via LSP. Returns available overloads and highlights the active parameter. Use this when the cursor is inside a function call's argument list to understand what parameters the function expects.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetSignatureHelpArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGetSignatureHelp(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleGetSignatureHelp(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -397,7 +468,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "get_code_actions",
 		Description: "Get code actions for a specific range in a file. Use this tool to obtain available refactorings, quick fixes, and other code modifications that can be applied to a selected code range. Examples include adding imports, fixing errors, or implementing interfaces.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetCodeActionsArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGetCodeActions(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleGetCodeActions(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -405,7 +476,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "get_document_symbols",
 		Description: "Get all symbols defined in a document via LSP (functions, classes, variables, methods, etc.). Returns a hierarchical DocumentSymbol tree or flat SymbolInformation list depending on server support. Use this to get a structural overview of a file.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetDocumentSymbolsArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGetDocumentSymbols(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleGetDocumentSymbols(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -421,7 +492,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "get_references",
 		Description: "Find all references to a symbol at a specific location in a file via LSP. Returns every location in the codebase where the symbol is used. Use this to determine if a symbol is dead (zero references), to understand call sites before refactoring, or to trace data flow. Results include file path and line/column for each reference.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetReferencesArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGetReferences(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleGetReferences(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -429,7 +500,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "go_to_definition",
 		Description: "Jump to the definition of a symbol at a specific location in a file via LSP. Returns the file path and position where the symbol is defined. Useful for navigating to type declarations, function implementations, or variable assignments across the codebase.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GoToDefinitionArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGoToDefinition(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleGoToDefinition(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -437,7 +508,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "go_to_type_definition",
 		Description: "Jump to the definition of the type of a symbol at a specific location in a file via LSP. Unlike go_to_definition (which goes to where the symbol itself is defined), this navigates to the type declaration. Useful for interface types, type aliases, and class definitions when working with instances or variables.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GoToTypeDefinitionArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGoToTypeDefinition(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleGoToTypeDefinition(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -445,7 +516,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "go_to_implementation",
 		Description: "Find all implementations of an interface or abstract method at a specific location in a file via LSP. Returns the file paths and positions of all concrete implementations. Use this to navigate from an interface declaration or abstract method to the concrete classes that implement it.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GoToImplementationArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGoToImplementation(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleGoToImplementation(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -453,7 +524,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "go_to_declaration",
 		Description: "Jump to the declaration of a symbol at a specific location in a file via LSP. Completes the 'go to X' family alongside go_to_definition, go_to_type_definition, and go_to_implementation. Most useful for languages with separate declaration and definition (e.g., C/C++ header files). Returns the file path and position where the symbol is declared.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GoToDeclarationArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGoToDeclaration(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleGoToDeclaration(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -461,7 +532,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "rename_symbol",
 		Description: "Get a WorkspaceEdit for renaming a symbol across the entire workspace via LSP. Returns the edit object describing all files and positions that need to change — it is NOT applied automatically. Inspect the returned WorkspaceEdit to understand the full scope of a rename before applying it.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args RenameSymbolArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleRenameSymbol(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleRenameSymbol(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -469,7 +540,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "prepare_rename",
 		Description: "Validate that a rename is possible at the given position before committing to rename_symbol. Returns the range that would be renamed and a placeholder name suggestion, or a message indicating rename is not supported at this position. Use this before rename_symbol to avoid attempting invalid renames. Returns null if the server does not support prepareRename.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args PrepareRenameArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandlePrepareRename(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandlePrepareRename(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -477,7 +548,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "format_document",
 		Description: "Get formatting edits for an entire document via LSP. Returns TextEdit[] describing the changes needed to format the file according to the language server's style rules. The edits are returned for inspection — they are NOT applied automatically. Use this to see what formatting changes a formatter would make.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args FormatDocumentArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleFormatDocument(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleFormatDocument(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -485,7 +556,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "format_range",
 		Description: "Get formatting edits for a specific range within a document via LSP (textDocument/rangeFormatting). Returns TextEdit[] for the selected lines/characters only. Use this when you want to format a function, block, or selection rather than the entire file. The edits are NOT applied automatically.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args FormatRangeArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleFormatRange(ctx, clientForFile(resolver, cs, args.FilePath), toolArgsToMap(args))
+		r, err := tools.HandleFormatRange(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -525,7 +596,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "call_hierarchy",
 		Description: "Show call hierarchy for a symbol at a position. Returns callers (incoming), callees (outgoing), or both depending on the direction parameter. Direction defaults to \"both\". Use this to understand code flow -- which functions call this function and which functions it calls.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args CallHierarchyArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleCallHierarchy(ctx, cs.get(), toolArgsToMap(args))
+		r, err := tools.HandleCallHierarchy(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -533,7 +604,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:        "get_semantic_tokens",
 		Description: "Get semantic tokens for a range in a file. Returns each token's type (function, variable, keyword, parameter, type, etc.) and modifiers (readonly, static, deprecated, etc.) with 1-based line/character positions. Use this to understand the syntactic role of code elements — distinct from hover which gives documentation. Only available when the language server supports textDocument/semanticTokens.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetSemanticTokensArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGetSemanticTokens(ctx, cs.get(), toolArgsToMap(args))
+		r, err := tools.HandleGetSemanticTokens(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
