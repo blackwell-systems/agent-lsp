@@ -51,7 +51,7 @@ file_ownership:
     - file: internal/tools/runner.go
       agent: A
       wave: 1
-      action: new
+      action: modify
     - file: internal/tools/build.go
       agent: A
       wave: 1
@@ -185,8 +185,8 @@ waves:
 
             ## Background Reading
             Before implementing, read:
-            - internal/tools/detect.go — HandleDetectLspServers pattern (no LSP client required)
-            - internal/tools/utilities.go — HandleSetLogLevel minimal handler pattern
+            - internal/tools/detect.go — HandleDetectLspServers pattern (note: this function accepts *lsp.LSPClient but ignores it with _; the new handlers must NOT include this parameter at all)
+            - internal/tools/utilities.go — HandleSetLogLevel minimal handler pattern (same note: accepts _ client, new handlers omit it entirely)
             - internal/tools/detect_test.go — unit test style (t.TempDir(), table-driven, no LSP)
             - internal/types/types.go — Location, Range, Position types (already defined)
             - internal/config/infer.go — InferWorkspaceRoot(filePath string) (root, languageID string, err error)
@@ -857,5 +857,33 @@ known_issues:
         where agents would make minimal additions (~50-100 lines). They are excluded
         from file_ownership and wave agents; their updates are in post_merge_checklist
         for manual application after all waves complete.
+critic_report:
+    verdict: ISSUES
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: ISSUES
+            issues:
+                - check: file_existence
+                  severity: error
+                  description: runner.go is listed as action:new but the file already exists as a pre-committed scaffold (commit 251ff26). The scaffolds section of the IMPL confirms it was committed before wave execution. The action must be changed to modify to avoid agent confusion about whether to create or extend the file.
+                  file: internal/tools/runner.go
+                - check: pattern_accuracy
+                  severity: warning
+                  description: 'The brief instructs Agent A to read HandleDetectLspServers (detect.go) and HandleSetLogLevel (utilities.go) as examples of handler patterns that do not require an LSP client. Both functions in the actual source DO accept a *lsp.LSPClient parameter (detect.go line 163: func HandleDetectLspServers(_ context.Context, _ *lsp.LSPClient, ...), utilities.go line 65: func HandleSetLogLevel(ctx context.Context, client *lsp.LSPClient, ...)). The brief describes these as the no-client pattern but they are actually the same 3-argument client-accepting pattern. The explicit Constraints section overrides this correctly by saying Do NOT add a *lsp.LSPClient parameter, but the pattern description is inaccurate and may cause Agent A to second-guess the constraint.'
+                  file: internal/tools/detect.go
+                  symbol: HandleDetectLspServers
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+    summary: 'One error found: runner.go is listed as action:new for Agent A but the file already exists as a pre-committed scaffold (commit 251ff26). The file_ownership table must be corrected to action:modify. Additionally, Agent A''s brief describes HandleDetectLspServers and HandleSetLogLevel as ''no LSP client required'' pattern examples, but both functions in the actual source DO accept a *lsp.LSPClient parameter (they ignore it). This is a warning-level pattern inaccuracy that could mislead Agent A — though the explicit ''Do NOT add a *lsp.LSPClient parameter'' constraint in the brief''s Constraints section overrides it. All other agent briefs (B, C, D) are accurate against the codebase: anchor texts are verified, symbol signatures match, dependency packages exist in go.mod, and existing tool count comments are present as described.'
+    reviewed_at: "2026-04-08T21:26:34Z"
+    issue_count: 2
 state: SCOUT_PENDING
 injection_method: hook
