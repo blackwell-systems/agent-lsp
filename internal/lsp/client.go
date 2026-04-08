@@ -41,7 +41,8 @@ var requestTimeouts = map[string]time.Duration{
 	"callHierarchy/outgoingCalls":         60 * time.Second,
 	"textDocument/prepareTypeHierarchy": 30 * time.Second,
 	"typeHierarchy/supertypes":           60 * time.Second,
-	"typeHierarchy/subtypes":              60 * time.Second,
+	"typeHierarchy/subtypes":             60 * time.Second,
+	"textDocument/inlayHint":             30 * time.Second,
 	"textDocument/semanticTokens/range":   30 * time.Second,
 	"textDocument/semanticTokens/full":    30 * time.Second,
 }
@@ -580,6 +581,9 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 					"dynamicRegistration": true,
 				},
 				"typeHierarchy": map[string]interface{}{
+					"dynamicRegistration": true,
+				},
+				"inlayHint": map[string]interface{}{
 					"dynamicRegistration": true,
 				},
 				"semanticTokens": map[string]interface{}{
@@ -1285,6 +1289,31 @@ func (c *LSPClient) GetOutgoingCalls(ctx context.Context, item types.CallHierarc
 		return nil, err
 	}
 	return calls, nil
+}
+
+// GetInlayHints returns inlay hints (inferred type annotations and parameter
+// name labels) for a range within a document.
+// Returns an empty slice when the server does not support inlayHintProvider.
+func (c *LSPClient) GetInlayHints(ctx context.Context, uri string, rng types.Range) ([]types.InlayHint, error) {
+	if !c.hasCapability("inlayHintProvider") {
+		logging.Log(logging.LevelDebug, "server does not support inlayHint")
+		return []types.InlayHint{}, nil
+	}
+	result, err := c.sendRequest(ctx, "textDocument/inlayHint", map[string]interface{}{
+		"textDocument": map[string]interface{}{"uri": uri},
+		"range":        rng,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return []types.InlayHint{}, nil
+	}
+	var hints []types.InlayHint
+	if err := json.Unmarshal(result, &hints); err != nil {
+		return nil, err
+	}
+	return hints, nil
 }
 
 // PrepareTypeHierarchy resolves the type hierarchy item at a position.

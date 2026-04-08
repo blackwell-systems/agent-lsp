@@ -5,6 +5,13 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (2026-04-08)
+- **`get_inlay_hints`** — new MCP tool (`textDocument/inlayHint`); returns inline type annotations and parameter name labels for a range; capability-guarded (returns empty array when server does not support `inlayHintProvider`); `InlayHint`, `InlayHintLabelPart`, `InlayHintKind` types added to `internal/types`
+- **`detect_lsp_servers`** — new MCP tool; scans workspace for source languages (file extensions + root markers, scored by prevalence), checks PATH for corresponding LSP server binaries, returns `suggested_config` entries ready to paste into MCP config; covers all 13 CI-verified languages; deduplicates shared binaries (c+cpp → one clangd entry)
+- **`get_workspace_symbols` enrichment** — new `detail_level`, `limit`, `offset` params; `detail_level=hover` enriches a paginated window of results with hover info (type signature + docs); `symbols[]` always returns full result set; `enriched[]` + `pagination` returned for the window; mirrors mcp-lsp-bridge's ToC + detail-window pattern
+- **`type_hierarchy`** — MCP tool for `textDocument/typeHierarchy`; `direction: supertypes/subtypes/both`; `TypeHierarchyItem` type (LSP 3.17); CI-verified for Java (jdtls) and TypeScript
+- **LSP response normalization** — `GetDocumentSymbols`, `GetCompletion`, `GetCodeActions` now return concrete typed Go structs; `NormalizeDocumentSymbols` (two-pass `SymbolInformation[]` → `DocumentSymbol[]` tree reconstruction), `NormalizeCompletion`, `NormalizeCodeActions` in `internal/lsp/normalize.go`
+
 ### Added
 - Auto-infer workspace root from file path — all per-file `mcp__lsp__*` tools now automatically walk up from the file path to find a workspace root marker (`go.mod`, `package.json`, `Cargo.toml`, `pyproject.toml`, `setup.py`, `.git`) and initialize the correct LSP client if none is active; `start_lsp` is no longer required before first use
   - `internal/config.InferWorkspaceRoot(filePath)` — exported helper, walks directory tree upward checking markers in priority order

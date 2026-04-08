@@ -230,3 +230,34 @@ type Extension interface {
 	SubscriptionHandlers() map[string]ResourceHandler
 	PromptHandlers() map[string]interface{}
 }
+
+// InlayHintKind indicates whether an inlay hint is for a Type annotation or
+// a Parameter name. See LSP 3.17 § InlayHintKind.
+type InlayHintKind int
+
+const (
+	InlayHintKindType      InlayHintKind = 1
+	InlayHintKindParameter InlayHintKind = 2
+)
+
+// InlayHintLabelPart is a single part of a composite inlay hint label.
+// See LSP 3.17 § InlayHintLabelPart.
+type InlayHintLabelPart struct {
+	Value    string    `json:"value"`
+	Tooltip  string    `json:"tooltip,omitempty"`
+	Location *Location `json:"location,omitempty"`
+}
+
+// InlayHint is an annotation displayed inline with source code, typically
+// showing inferred types or parameter names. See LSP 3.17 § InlayHint.
+//
+// Label is either a plain string or a JSON array of InlayHintLabelPart.
+// Use InlayHint.LabelString() for the display string in either case.
+type InlayHint struct {
+	Position     Position     `json:"position"`
+	Label        interface{}  `json:"label"` // string | []InlayHintLabelPart
+	Kind         InlayHintKind `json:"kind,omitempty"`
+	Tooltip      string       `json:"tooltip,omitempty"`
+	PaddingLeft  bool         `json:"paddingLeft,omitempty"`
+	PaddingRight bool         `json:"paddingRight,omitempty"`
+}
