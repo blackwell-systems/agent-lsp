@@ -506,6 +506,20 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		return makeCallToolResult(r), nil, err
 	})
 
+	type GetDocumentHighlightsArgs struct {
+		FilePath   string `json:"file_path"`
+		LanguageID string `json:"language_id,omitempty"`
+		Line       int    `json:"line"`
+		Column     int    `json:"column"`
+	}
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_document_highlights",
+		Description: "Find all occurrences of the symbol at a position within the same file via LSP (textDocument/documentHighlight). Returns ranges and kinds: 1=Text, 2=Read, 3=Write. File-scoped and instant — does not trigger a workspace-wide reference search. Use this to find all local usages of a variable, parameter, or field without the overhead of get_references.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetDocumentHighlightsArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleGetDocumentHighlights(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "go_to_definition",
 		Description: "Jump to the definition of a symbol at a specific location in a file via LSP. Returns the file path and position where the symbol is defined. Useful for navigating to type declarations, function implementations, or variable assignments across the codebase.",
