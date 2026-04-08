@@ -1,0 +1,797 @@
+title: 'Normalize return types: replace interface{} with concrete types in GetDocumentSymbols, GetCompletion, GetCodeActions'
+feature_slug: normalize-return-types
+verdict: SUITABLE
+suitability_assessment: |
+    Five-question suitability gate:
+
+    1. File decomposition: Three distinct layers change: types (internal/types/types.go),
+       LSP client (internal/lsp/client.go), and callers (internal/tools/analysis.go +
+       internal/resources/resources.go). Each layer is owned by one agent. Disjoint
+       ownership is achievable with 3 sequential waves.
+
+    2. Investigation-first: No unknown root cause. The interface{} return types are
+       already identified; the concrete types (DocumentSymbol, CompletionItem/CompletionList,
+       CodeAction) are well-specified by the LSP 3.16 spec and follow the project's
+       existing patterns (SymbolInformation, CallHierarchyItem, etc.).
+
+    3. Interface discoverability: All contracts can be defined before implementation.
+       The JSON field names are known from the LSP spec; existing typed structs in
+       internal/types/types.go provide the model.
+
+    4. Pre-implementation check: All three target functions (GetCompletion, GetCodeActions,
+       GetDocumentSymbols) currently return []interface{}. The concrete types do not yet
+       exist in internal/types/types.go. No work is already done; all items are TODO.
+
+    5. Parallelization value: Wave 1 (types) → Wave 2 (client) → Wave 3 (2 parallel
+       callers) provides meaningful parallelism. Build/test cycle is moderate (GOWORK=off
+       go build + test). Breaking changes are explicitly acceptable per user context —
+       no backwards-compatibility wrappers needed.
+
+    Verdict: SUITABLE. 3 waves, 4 agents. Sequential waves required due to strict
+    dependency chain (types → client → callers). Wave 3 has 2 parallel agents.
+
+    Estimated times:
+    - Scout phase: ~10 min (completed)
+    - Agent execution: ~15 min (4 agents × ~4 min avg, Wave 3 parallel)
+    - Merge & verification: ~5 min
+    Total SAW time: ~30 min
+
+    Sequential baseline: ~20 min (4 agents × 5 min sequential)
+    Time savings: marginal in absolute terms; value is correctness and coordination.
+
+    Recommendation: Clear speedup for Wave 3; audit trail value throughout.
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: internal/types/types.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: internal/lsp/client.go
+      agent: B
+      wave: 2
+      action: modify
+      depends_on:
+        - A
+    - file: internal/lsp/client_completion_test.go
+      agent: B
+      wave: 2
+      action: new
+      depends_on:
+        - A
+    - file: internal/tools/analysis.go
+      agent: C
+      wave: 3
+      action: modify
+      depends_on:
+        - B
+    - file: internal/tools/tools_test.go
+      agent: C
+      wave: 3
+      action: modify
+      depends_on:
+        - B
+    - file: internal/resources/resources.go
+      agent: D
+      wave: 3
+      action: modify
+      depends_on:
+        - B
+interface_contracts:
+    - name: DocumentSymbol
+      description: |-
+        Concrete type for an LSP DocumentSymbol (textDocument/documentSymbol response item).
+        Matches LSP 3.16 DocumentSymbol. Note: LSP servers may return either
+        DocumentSymbol[] or SymbolInformation[] from this request; the DocumentSymbol
+        type handles the richer nested form.
+      definition: |
+        // DocumentSymbol represents a symbol in a document (LSP DocumentSymbol).
+        type DocumentSymbol struct {
+            Name           string         `json:"name"`
+            Detail         *string        `json:"detail,omitempty"`
+            Kind           SymbolKind     `json:"kind"`
+            Tags           []SymbolTag    `json:"tags,omitempty"`
+            Deprecated     *bool          `json:"deprecated,omitempty"`
+            Range          Range          `json:"range"`
+            SelectionRange Range          `json:"selectionRange"`
+            Children       []DocumentSymbol `json:"children,omitempty"`
+        }
+      location: internal/types/types.go
+    - name: CompletionItem
+      description: |-
+        Concrete type for an LSP completion item. Captures the fields that the MCP
+        server exposes to callers. Additional LSP fields (textEdit, additionalTextEdits,
+        command) are omitted for now — they can be added without breaking changes.
+      definition: |
+        // CompletionItem represents a single completion suggestion (LSP CompletionItem).
+        type CompletionItem struct {
+            Label            string   `json:"label"`
+            Kind             *int     `json:"kind,omitempty"`
+            Detail           *string  `json:"detail,omitempty"`
+            Documentation    *string  `json:"documentation,omitempty"`
+            Deprecated       *bool    `json:"deprecated,omitempty"`
+            Preselect        *bool    `json:"preselect,omitempty"`
+            SortText         *string  `json:"sortText,omitempty"`
+            FilterText       *string  `json:"filterText,omitempty"`
+            InsertText       *string  `json:"insertText,omitempty"`
+            InsertTextFormat *int     `json:"insertTextFormat,omitempty"`
+        }
+      location: internal/types/types.go
+    - name: CodeAction
+      description: |-
+        Concrete type for an LSP code action (textDocument/codeAction response item).
+        LSP servers may return either Command or CodeAction objects from codeAction
+        requests; this type handles the CodeAction form. The Diagnostics field
+        links the action to its triggering diagnostic(s).
+      definition: |
+        // CodeActionKind is a string-typed code action category (e.g. "quickfix", "refactor").
+        type CodeActionKind string
+
+        // CodeAction represents a code action or refactoring suggestion (LSP CodeAction).
+        type CodeAction struct {
+            Title       string          `json:"title"`
+            Kind        *CodeActionKind `json:"kind,omitempty"`
+            Diagnostics []LSPDiagnostic `json:"diagnostics,omitempty"`
+            IsPreferred *bool           `json:"isPreferred,omitempty"`
+            Disabled    *struct {
+                Reason string `json:"reason"`
+            } `json:"disabled,omitempty"`
+            Data        interface{}     `json:"data,omitempty"`
+        }
+      location: internal/types/types.go
+    - name: LSPClient.GetCompletion
+      description: |-
+        Updated signature: returns ([]types.CompletionItem, error) instead of
+        ([]interface{}, error). The parseInterfaceArray helper is replaced by a new
+        typed parseCompletionItems function that handles both CompletionList and plain
+        []CompletionItem responses from the LSP server.
+      definition: |
+        func (c *LSPClient) GetCompletion(ctx context.Context, uri string, pos types.Position) ([]types.CompletionItem, error)
+      location: internal/lsp/client.go
+    - name: LSPClient.GetCodeActions
+      description: |-
+        Updated signature: returns ([]types.CodeAction, error) instead of
+        ([]interface{}, error). A new typed parseCodeActions function replaces
+        parseInterfaceArray for this call path.
+      definition: |
+        func (c *LSPClient) GetCodeActions(ctx context.Context, uri string, rng types.Range) ([]types.CodeAction, error)
+      location: internal/lsp/client.go
+    - name: LSPClient.GetDocumentSymbols
+      description: |-
+        Updated signature: returns ([]types.DocumentSymbol, error) instead of
+        ([]interface{}, error). A new typed parseDocumentSymbols function replaces
+        parseInterfaceArray for this call path. Note: some LSP servers return
+        SymbolInformation[] instead of DocumentSymbol[]; the parser should attempt
+        DocumentSymbol[] first, then fall back to converting SymbolInformation to
+        DocumentSymbol (Name, Kind, Range, SelectionRange=Range fields).
+      definition: |
+        func (c *LSPClient) GetDocumentSymbols(ctx context.Context, uri string) ([]types.DocumentSymbol, error)
+      location: internal/lsp/client.go
+    - name: parseCompletionItems
+      description: |-
+        New private helper in internal/lsp/client.go replacing the use of
+        parseInterfaceArray for completion responses. Handles both CompletionList
+        {"isIncomplete":bool,"items":[...]} and plain []CompletionItem responses.
+      definition: |
+        func parseCompletionItems(raw json.RawMessage) []types.CompletionItem
+      location: internal/lsp/client.go
+    - name: parseCodeActions
+      description: |-
+        New private helper in internal/lsp/client.go replacing the use of
+        parseInterfaceArray for codeAction responses. Handles []CodeAction.
+        LSP servers may also return Command objects; those are silently skipped
+        (they lack the "title" + "kind" CodeAction fields in a distinctive way —
+        a Command has a "command" string field and no "diagnostics").
+      definition: |
+        func parseCodeActions(raw json.RawMessage) []types.CodeAction
+      location: internal/lsp/client.go
+    - name: parseDocumentSymbols
+      description: |-
+        New private helper in internal/lsp/client.go replacing the use of
+        parseInterfaceArray for documentSymbol responses. Attempts to unmarshal as
+        []DocumentSymbol first (nested form), then falls back to []SymbolInformation
+        and converts to DocumentSymbol (using Name, Kind, and Location.Range as both
+        Range and SelectionRange). Returns empty slice on failure.
+      definition: |
+        func parseDocumentSymbols(raw json.RawMessage) []types.DocumentSymbol
+      location: internal/lsp/client.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Wave 1 Agent A: Add DocumentSymbol, CompletionItem, CodeAction types
+
+            You are Wave 1 Agent A. Add three new concrete LSP types to
+            `internal/types/types.go`: DocumentSymbol, CompletionItem, and CodeAction.
+            These types are currently missing; all three functions currently return
+            []interface{}. Wave 2 (Agent B) will depend on these types being committed
+            before it starts.
+
+            ## 1. File Ownership
+
+            You own these files:
+            - `internal/types/types.go` — modify (add new type definitions)
+
+            Do not touch any other files.
+
+            ## 2. Interfaces You Must Implement
+
+            Add these types to internal/types/types.go, after the existing SymbolInformation
+            type (line 148). Use the EXACT signatures from the interface contracts:
+
+            ```go
+            // DocumentSymbol represents a symbol in a document (LSP DocumentSymbol).
+            type DocumentSymbol struct {
+                Name           string           `json:"name"`
+                Detail         *string          `json:"detail,omitempty"`
+                Kind           SymbolKind       `json:"kind"`
+                Tags           []SymbolTag      `json:"tags,omitempty"`
+                Deprecated     *bool            `json:"deprecated,omitempty"`
+                Range          Range            `json:"range"`
+                SelectionRange Range            `json:"selectionRange"`
+                Children       []DocumentSymbol `json:"children,omitempty"`
+            }
+
+            // CompletionItem represents a single completion suggestion (LSP CompletionItem).
+            type CompletionItem struct {
+                Label            string   `json:"label"`
+                Kind             *int     `json:"kind,omitempty"`
+                Detail           *string  `json:"detail,omitempty"`
+                Documentation    *string  `json:"documentation,omitempty"`
+                Deprecated       *bool    `json:"deprecated,omitempty"`
+                Preselect        *bool    `json:"preselect,omitempty"`
+                SortText         *string  `json:"sortText,omitempty"`
+                FilterText       *string  `json:"filterText,omitempty"`
+                InsertText       *string  `json:"insertText,omitempty"`
+                InsertTextFormat *int     `json:"insertTextFormat,omitempty"`
+            }
+
+            // CodeActionKind is a string-typed code action category (e.g. "quickfix", "refactor").
+            type CodeActionKind string
+
+            // CodeAction represents a code action or refactoring suggestion (LSP CodeAction).
+            type CodeAction struct {
+                Title       string          `json:"title"`
+                Kind        *CodeActionKind `json:"kind,omitempty"`
+                Diagnostics []LSPDiagnostic `json:"diagnostics,omitempty"`
+                IsPreferred *bool           `json:"isPreferred,omitempty"`
+                Disabled    *struct {
+                    Reason string `json:"reason"`
+                } `json:"disabled,omitempty"`
+                Data        interface{}     `json:"data,omitempty"`
+            }
+            ```
+
+            Insert after this exact text in internal/types/types.go:
+            ```go
+            	ContainerName *string     `json:"containerName,omitempty"`
+            }
+            ```
+            (That is the last line of the SymbolInformation struct, at approximately line 148.)
+
+            ## 3. Interfaces You May Call
+
+            None — this is a pure type definitions wave.
+
+            ## 4. What to Implement
+
+            Read internal/types/types.go in full before editing to confirm the exact insertion
+            point. The file ends with the Extension interface at line ~168. Insert the three
+            new type definitions (DocumentSymbol, CompletionItem, CodeActionKind, CodeAction)
+            after the SymbolInformation struct definition and before the ToolHandler type alias.
+
+            Add a blank line between each type block for readability, consistent with the
+            existing style in the file.
+
+            ## 5. Tests to Write
+
+            No tests needed for pure type definitions. The types will be validated by the
+            build gate (go build ./...) and exercised by downstream waves.
+
+            ## 6. Verification Gate
+
+            ```bash
+            cd /Users/dayna.blackwell/code/LSP-MCP-GO
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./...
+            ```
+
+            Postcondition checks:
+            ```bash
+            # Confirm DocumentSymbol type was added
+            grep -c 'type DocumentSymbol struct' internal/types/types.go
+            # Expected output: 1
+
+            # Confirm CompletionItem type was added
+            grep -c 'type CompletionItem struct' internal/types/types.go
+            # Expected output: 1
+
+            # Confirm CodeAction type was added
+            grep -c 'type CodeAction struct' internal/types/types.go
+            # Expected output: 1
+            ```
+
+            ## 7. Constraints
+
+            - Do NOT modify any existing types in types.go (SymbolInformation, CallHierarchyItem, etc.)
+            - Do NOT add these types to client.go or any file outside your ownership list
+            - Do NOT create a new file; add to the existing types.go
+            - Error-handling: N/A — pure type definitions
+          files:
+            - internal/types/types.go
+    - number: 2
+      agents:
+        - id: B
+          task: |
+            ## Wave 2 Agent B: Update LSPClient methods to return concrete types
+
+            You are Wave 2 Agent B. Update three methods in internal/lsp/client.go to
+            return concrete types instead of []interface{}: GetCompletion → []types.CompletionItem,
+            GetCodeActions → []types.CodeAction, GetDocumentSymbols → []types.DocumentSymbol.
+            Also add three new typed parse helpers (parseCompletionItems, parseCodeActions,
+            parseDocumentSymbols) and remove the call to parseInterfaceArray from these three
+            methods. Do NOT remove parseInterfaceArray itself — check if it is used elsewhere
+            before deciding.
+
+            ## 1. File Ownership
+
+            You own these files:
+            - `internal/lsp/client.go` — modify (change return types, add typed parsers)
+
+            Do not touch any other files.
+
+            ## 2. Interfaces You Must Implement
+
+            Update these three existing methods (Wave 1 Agent A has already committed the
+            new types to internal/types/types.go — they are available on HEAD):
+
+            ```go
+            func (c *LSPClient) GetCompletion(ctx context.Context, uri string, pos types.Position) ([]types.CompletionItem, error)
+            func (c *LSPClient) GetCodeActions(ctx context.Context, uri string, rng types.Range) ([]types.CodeAction, error)
+            func (c *LSPClient) GetDocumentSymbols(ctx context.Context, uri string) ([]types.DocumentSymbol, error)
+            ```
+
+            Add these new private helpers:
+
+            ```go
+            func parseCompletionItems(raw json.RawMessage) []types.CompletionItem
+            func parseCodeActions(raw json.RawMessage) []types.CodeAction
+            func parseDocumentSymbols(raw json.RawMessage) []types.DocumentSymbol
+            ```
+
+            ## 3. Interfaces You May Call
+
+            Existing types committed by Agent A:
+            - types.CompletionItem, types.CodeAction, types.DocumentSymbol, types.CodeActionKind
+            - Existing: types.SymbolInformation (for SymbolInformation fallback in parseDocumentSymbols)
+
+            Existing helpers in client.go you may use as models:
+            - parseLocations (line ~1840): model for typed parse helpers
+            - parseLocationsFlat (line ~1862): model for typed parse helpers
+
+            ## 4. What to Implement
+
+            Read internal/lsp/client.go in full before editing, paying attention to:
+            1. GetCompletion at line 1051 — change return type; replace `parseInterfaceArray(result)` with `parseCompletionItems(result)`
+            2. GetCodeActions at line 1067 — change return type; replace `parseInterfaceArray(result)` with `parseCodeActions(result)`
+            3. GetDocumentSymbols at line 1189 — change return type; replace `parseInterfaceArray(result)` with `parseDocumentSymbols(result)`
+            4. Update the `return []interface{}{}` early-return nil-capability guards in each function to match the new return type
+            5. Add the three new parse helpers near the existing parseLocations helpers (~line 1840)
+            6. Check if parseInterfaceArray is used elsewhere: `grep -n 'parseInterfaceArray' internal/lsp/client.go`. If it is ONLY used by the three methods above, remove it. If used elsewhere, keep it.
+
+            ### parseCompletionItems
+
+            Handles two LSP response shapes:
+            - CompletionList: `{"isIncomplete": bool, "items": [...]}`
+            - Plain array: `[CompletionItem, ...]`
+
+            ```go
+            func parseCompletionItems(raw json.RawMessage) []types.CompletionItem {
+                if raw == nil || string(raw) == "null" {
+                    return []types.CompletionItem{}
+                }
+                // Try CompletionList form first: {"isIncomplete":..., "items":[...]}
+                var list struct {
+                    Items []types.CompletionItem `json:"items"`
+                }
+                if err := json.Unmarshal(raw, &list); err == nil && list.Items != nil {
+                    return list.Items
+                }
+                // Plain array form
+                var items []types.CompletionItem
+                if err := json.Unmarshal(raw, &items); err == nil {
+                    return items
+                }
+                return []types.CompletionItem{}
+            }
+            ```
+
+            ### parseCodeActions
+
+            Handles `[]CodeAction` response (LSP servers may also return Command objects;
+            those unmarshal with zero-value Title which is acceptable — they will marshal
+            back fine). A clean unmarshal with tolerant zero-values is fine here.
+
+            ```go
+            func parseCodeActions(raw json.RawMessage) []types.CodeAction {
+                if raw == nil || string(raw) == "null" {
+                    return []types.CodeAction{}
+                }
+                var actions []types.CodeAction
+                if err := json.Unmarshal(raw, &actions); err == nil {
+                    return actions
+                }
+                return []types.CodeAction{}
+            }
+            ```
+
+            ### parseDocumentSymbols
+
+            Attempts DocumentSymbol[] first (the richer nested form). Falls back to
+            SymbolInformation[] and converts: use Name, Kind, Location.Range as both
+            Range and SelectionRange, nil for Detail/Tags/Children/Deprecated.
+
+            ```go
+            func parseDocumentSymbols(raw json.RawMessage) []types.DocumentSymbol {
+                if raw == nil || string(raw) == "null" {
+                    return []types.DocumentSymbol{}
+                }
+                // Try DocumentSymbol[] first (richer nested form)
+                var syms []types.DocumentSymbol
+                if err := json.Unmarshal(raw, &syms); err == nil && len(syms) > 0 {
+                    return syms
+                }
+                // Fall back: some servers return SymbolInformation[]
+                var infos []types.SymbolInformation
+                if err := json.Unmarshal(raw, &infos); err == nil && len(infos) > 0 {
+                    result := make([]types.DocumentSymbol, len(infos))
+                    for i, si := range infos {
+                        result[i] = types.DocumentSymbol{
+                            Name:           si.Name,
+                            Kind:           si.Kind,
+                            Range:          si.Location.Range,
+                            SelectionRange: si.Location.Range,
+                        }
+                    }
+                    return result
+                }
+                return []types.DocumentSymbol{}
+            }
+            ```
+
+            ### Early-return guards
+
+            Each method has a `return []interface{}{}, nil` guard for unsupported capability.
+            Update to the concrete return type. For example, GetCompletion becomes:
+
+            Before (exact text to find and replace):
+            ```go
+            	if !c.hasCapability("completionProvider") {
+            		logging.Log(logging.LevelDebug, "server does not support completion")
+            		return []interface{}{}, nil
+            	}
+            ```
+            After:
+            ```go
+            	if !c.hasCapability("completionProvider") {
+            		logging.Log(logging.LevelDebug, "server does not support completion")
+            		return []types.CompletionItem{}, nil
+            	}
+            ```
+
+            Apply the same pattern for GetCodeActions ("codeActionProvider" guard → `[]types.CodeAction{}`)
+            and GetDocumentSymbols ("documentSymbolProvider" guard → `[]types.DocumentSymbol{}`).
+
+            Also update the `return nil, err` in each method — these are fine as-is (nil is
+            valid for any slice type in Go).
+
+            ## 5. Tests to Write
+
+            Add unit tests in a new file `internal/lsp/client_completion_test.go`:
+
+            1. TestParseCompletionItems_PlainArray — verifies plain []CompletionItem JSON parses correctly
+            2. TestParseCompletionItems_CompletionList — verifies CompletionList {"items":[...]} form parses correctly
+            3. TestParseCompletionItems_Nil — verifies nil/null returns empty slice
+            4. TestParseCodeActions_Array — verifies []CodeAction JSON parses correctly
+            5. TestParseCodeActions_Nil — verifies nil returns empty slice
+            6. TestParseDocumentSymbols_DocumentSymbolForm — verifies DocumentSymbol[] with children parses correctly
+            7. TestParseDocumentSymbols_SymbolInformationFallback — verifies SymbolInformation[] converts to DocumentSymbol
+            8. TestParseDocumentSymbols_Nil — verifies nil returns empty slice
+
+            File: `internal/lsp/client_completion_test.go`, package `lsp`.
+          files:
+            - internal/lsp/client.go
+            - internal/lsp/client_completion_test.go
+          dependencies:
+            - A
+    - number: 3
+      agents:
+        - id: C
+          task: |
+            ## Wave 3 Agent C: Update internal/tools/analysis.go and tools_test.go
+
+            You are Wave 3 Agent C. Update internal/tools/analysis.go to use concrete
+            types returned by the updated LSP client methods. The three Handler functions
+            that currently use `WithDocument[[]interface{}]` must be updated to use the
+            concrete types. Also remove the now-redundant `json.Marshal(result)` pattern
+            for these three functions — since the result is already a typed slice, marshal
+            directly. Update tools_test.go if needed for any type assertion changes.
+
+            ## 1. File Ownership
+
+            You own these files:
+            - `internal/tools/analysis.go` — modify
+            - `internal/tools/tools_test.go` — modify (if needed)
+
+            Do not touch any other files.
+
+            ## 2. Interfaces You Must Implement
+
+            The three Handle* functions must be updated to use concrete types.
+            Agent B (Wave 2) has committed the updated LSPClient signatures to HEAD.
+
+            Current HandleGetCompletions (exact text — confirm before editing):
+            ```go
+            	result, wErr := WithDocument[[]interface{}](ctx, client, filePath, languageID, func(fileURI string) ([]interface{}, error) {
+            		pos := types.Position{Line: line - 1, Character: col - 1}
+            		return client.GetCompletion(ctx, fileURI, pos)
+            	})
+            ```
+
+            Updated HandleGetCompletions:
+            ```go
+            	result, wErr := WithDocument[[]types.CompletionItem](ctx, client, filePath, languageID, func(fileURI string) ([]types.CompletionItem, error) {
+            		pos := types.Position{Line: line - 1, Character: col - 1}
+            		return client.GetCompletion(ctx, fileURI, pos)
+            	})
+            ```
+
+            Current HandleGetCodeActions (exact text — confirm before editing):
+            ```go
+            	result, wErr := WithDocument[[]interface{}](ctx, client, filePath, languageID, func(fileURI string) ([]interface{}, error) {
+            		return client.GetCodeActions(ctx, fileURI, rng)
+            	})
+            ```
+
+            Updated HandleGetCodeActions:
+            ```go
+            	result, wErr := WithDocument[[]types.CodeAction](ctx, client, filePath, languageID, func(fileURI string) ([]types.CodeAction, error) {
+            		return client.GetCodeActions(ctx, fileURI, rng)
+            	})
+            ```
+
+            Current HandleGetDocumentSymbols (exact text — confirm before editing):
+            ```go
+            	result, wErr := WithDocument[[]interface{}](ctx, client, filePath, languageID, func(fileURI string) ([]interface{}, error) {
+            		return client.GetDocumentSymbols(ctx, fileURI)
+            	})
+            ```
+
+            Updated HandleGetDocumentSymbols:
+            ```go
+            	result, wErr := WithDocument[[]types.DocumentSymbol](ctx, client, filePath, languageID, func(fileURI string) ([]types.DocumentSymbol, error) {
+            		return client.GetDocumentSymbols(ctx, fileURI)
+            	})
+            ```
+
+            The `json.Marshal(result)` call that follows each WithDocument block does not
+            need to change — json.Marshal works on typed slices just as well as []interface{}.
+            The behavior (JSON output) is identical; only the Go type changes.
+
+            ## 3. Interfaces You May Call
+
+            From Agent B (Wave 2, committed to HEAD):
+            - `(*lsp.LSPClient).GetCompletion(...) ([]types.CompletionItem, error)`
+            - `(*lsp.LSPClient).GetCodeActions(...) ([]types.CodeAction, error)`
+            - `(*lsp.LSPClient).GetDocumentSymbols(...) ([]types.DocumentSymbol, error)`
+
+            From Agent A (Wave 1, committed to HEAD):
+            - `types.CompletionItem`, `types.CodeAction`, `types.DocumentSymbol`
+
+            ## 4. What to Implement
+
+            Read internal/tools/analysis.go in full. The three functions to update are
+            HandleGetCompletions (line ~93), HandleGetCodeActions (line ~165), and
+            HandleGetDocumentSymbols (line ~200). Each has a `WithDocument[[]interface{}]`
+            call that must become `WithDocument[<ConcreteType>]`.
+
+            Check internal/tools/tools_test.go for any tests that do type assertions on
+            `[]interface{}` results from these handlers. The handlers return ToolResult
+            (not raw slices), so most tests won't need changes. If TestHandleGetCodeActions_RangeValidation
+            or other tests do type-assert on handler return values expecting []interface{},
+            update them to use the concrete type.
+
+            ## 5. Tests to Write
+
+            No new tests required — the existing test coverage (TestHandleGetCodeActions_RangeValidation,
+            TestHandleGoToDefinition_FormatsLocations) is sufficient. Update any existing test
+            that would break due to type changes.
+
+            ## 6. Verification Gate
+
+            ```bash
+            cd /Users/dayna.blackwell/code/LSP-MCP-GO
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./...
+            GOWORK=off go test ./internal/tools/...
+            ```
+
+            Postcondition checks:
+            ```bash
+            # Confirm no []interface{} remains in the three Handle* functions
+            grep -n 'WithDocument\[.*interface' internal/tools/analysis.go
+            # Expected output: (empty — no matches)
+
+            # Confirm concrete types are used
+            grep -c 'WithDocument\[.*CompletionItem\|WithDocument\[.*CodeAction\|WithDocument\[.*DocumentSymbol' internal/tools/analysis.go
+            # Expected output: 3
+            ```
+
+            ## 7. Constraints
+
+            - Do NOT modify internal/tools/analysis.go outside the three WithDocument call sites
+            - Do NOT modify the json.Marshal(result) calls — they work with typed slices
+            - Do NOT touch internal/resources/resources.go — that is Agent D's file
+            - Error-handling: match existing pattern (non-fatal error → ErrorResult return)
+          files:
+            - internal/tools/analysis.go
+            - internal/tools/tools_test.go
+          dependencies:
+            - B
+        - id: D
+          task: |
+            ## Wave 3 Agent D: Update internal/resources/resources.go
+
+            You are Wave 3 Agent D. Update internal/resources/resources.go to use the
+            concrete []types.CompletionItem return type from the updated GetCompletion method.
+            The file currently declares `completions, err := client.GetCompletion(...)` and
+            then calls `json.Marshal(completions)`. Since GetCompletion now returns
+            []types.CompletionItem instead of []interface{}, the variable type changes but
+            json.Marshal continues to work identically.
+
+            ## 1. File Ownership
+
+            You own these files:
+            - `internal/resources/resources.go` — modify (update type annotation if needed)
+
+            Do not touch any other files.
+
+            ## 2. Interfaces You Must Implement
+
+            No new interface — just use the updated signature from Agent B:
+            ```go
+            func (c *LSPClient) GetCompletion(ctx context.Context, uri string, pos types.Position) ([]types.CompletionItem, error)
+            ```
+
+            ## 3. Interfaces You May Call
+
+            From Agent B (Wave 2, committed to HEAD):
+            - `(*lsp.LSPClient).GetCompletion(...) ([]types.CompletionItem, error)`
+
+            From Agent A (Wave 1, committed to HEAD):
+            - `types.CompletionItem`
+
+            ## 4. What to Implement
+
+            Read internal/resources/resources.go. Find the completions call site near line 188:
+
+            ```go
+            	completions, err := client.GetCompletion(ctx, fileURI, pos)
+            	if err != nil {
+            		return ResourceResult{}, fmt.Errorf("get completions: %w", err)
+            	}
+
+            	text, err := json.Marshal(completions)
+            ```
+
+            In Go, if GetCompletion now returns `([]types.CompletionItem, error)`, the
+            variable `completions` is inferred as `[]types.CompletionItem`. No explicit
+            type annotation exists in the variable declaration (it uses `:=`), so Go's type
+            inference handles the change automatically. `json.Marshal(completions)` continues
+            to work without changes.
+
+            The only action required is to verify that the file compiles cleanly after
+            Agent B's changes are merged. Read the file, confirm the `:=` assignment, and
+            verify no explicit type assertion or type annotation on `completions` would break.
+
+            If there IS an explicit type annotation (e.g., `var completions []interface{}`),
+            update it to `var completions []types.CompletionItem` and add the import if needed.
+            Also verify the `types` import is present in the file's import block if
+            types.CompletionItem is referenced explicitly.
+
+            ## 5. Tests to Write
+
+            No tests required for this change — the resources package has no unit tests
+            (requires a live LSP client). The integration test in test/multi_lang_test.go
+            covers completions end-to-end but is excluded from the unit test command.
+
+            ## 6. Verification Gate
+
+            ```bash
+            cd /Users/dayna.blackwell/code/LSP-MCP-GO
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./...
+            GOWORK=off go test ./internal/resources/...
+            ```
+
+            Postcondition checks:
+            ```bash
+            # Confirm no []interface{} remains as a type annotation for completions in resources.go
+            grep -n 'interface{}' internal/resources/resources.go | grep -v 'map\[string\]interface\|interface{}.*json'
+            # Expected output: (zero lines relating to the completions variable)
+
+            # Confirm file builds cleanly (covered by go build above)
+            ```
+
+            ## 7. Constraints
+
+            - Do NOT modify any function other than the completions resource handler
+            - Do NOT modify internal/tools/analysis.go — that is Agent C's file
+            - Error-handling: match existing pattern (return ResourceResult{}, fmt.Errorf wrapping)
+          files:
+            - internal/resources/resources.go
+          dependencies:
+            - B
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |-
+            Agent A defines DocumentSymbol but forgets the recursive Children field, or uses
+            wrong json tags. Agent B's parseDocumentSymbols then fails to round-trip nested symbols.
+          likelihood: low
+          impact: medium
+          mitigation: |-
+            Agent A's task includes the exact struct definition verbatim. Agent B's test
+            TestParseDocumentSymbols_DocumentSymbolForm verifies Children field parsing.
+        - scenario: |-
+            Agent B's parseDocumentSymbols tries DocumentSymbol[] first, but some test server
+            returns SymbolInformation[]; the fallback conversion maps Location.Range to both
+            Range and SelectionRange, which is correct for most purposes but loses Container info.
+          likelihood: low
+          impact: low
+          mitigation: |-
+            The fallback is documented in the interface contract. The conversion is explicit
+            in the task prompt. No test server currently tested returns SymbolInformation form.
+        - scenario: |-
+            Agent C updates WithDocument type parameters but misses updating one of the three
+            handlers (e.g., only updates HandleGetCompletions and HandleGetCodeActions, misses
+            HandleGetDocumentSymbols). The build fails in Agent C's worktree.
+          likelihood: low
+          impact: low
+          mitigation: |-
+            The postcondition check `grep -c 'WithDocument\[.*CompletionItem\|...' analysis.go`
+            expects count 3 — this catches a partial update immediately.
+        - scenario: |-
+            parseInterfaceArray is used by more than the three target methods. Agent B removes
+            it after updating the three methods, but another method still calls it, causing a
+            build failure.
+          likelihood: low
+          impact: medium
+          mitigation: |-
+            Agent B's task explicitly says to grep for all uses of parseInterfaceArray before
+            deciding to remove it. The instruction is: "remove ONLY if used exclusively by the
+            three target methods."
+        - scenario: |-
+            Agent D finds that resources.go has an explicit `var completions []interface{}`
+            declaration (not `:=` inference), and updates it, but forgets to add/verify the
+            `types` import. Build fails.
+          likelihood: low
+          impact: low
+          mitigation: |-
+            Agent D's task covers this explicitly: check for explicit type annotation; if found,
+            update and verify the import block.
+state: WAVE_PENDING
+injection_method: hook

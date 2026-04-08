@@ -9,15 +9,25 @@ lsp-mcp-go is a [Model Context Protocol](https://modelcontextprotocol.io/) serve
 ```
 cmd/main.go                        ← CLI entrypoint
 internal/lsp/                      ← LSP subprocess wrapper
-  client.go                        ← LSPClient struct
+  client.go                        ← LSPClient struct; startWatcher/stopWatcher (fsnotify auto-watch)
   framing.go                       ← Content-Length framing
   diagnostics.go                   ← WaitForDiagnostics
-internal/tools/                    ← 34 MCP tool handlers
+  normalize.go                     ← NormalizeDocumentSymbols, NormalizeCompletion, NormalizeCodeActions
+internal/tools/                    ← 31 MCP tool handlers
   helpers.go                       ← WithDocument[T], shared utilities
-  session.go, analysis.go, navigation.go, refactoring.go, utilities.go
+  analysis.go                      ← get_diagnostics, hover, completions, signatures, code actions, symbols
+  navigation.go                    ← definition, references, implementation, declaration
+  callhierarchy.go                 ← call_hierarchy
+  typehierarchy.go                 ← type_hierarchy
+  inlayhints.go                    ← get_inlay_hints
+  highlights.go                    ← get_document_highlights
+  capabilities.go                  ← get_server_capabilities
+  detect.go                        ← detect_lsp_servers
+  session.go, workspace.go, utilities.go, semantic_tokens.go, fuzzy.go, simulation.go
 internal/resources/                ← Resource + subscription handlers
 internal/extensions/               ← Extension registry
-internal/types/types.go            ← Shared types
+internal/types/types.go            ← Shared types (TypeHierarchyItem, InlayHint, DocumentHighlight,
+                                     DocumentSymbol, CompletionList, CodeAction)
 internal/logging/logging.go        ← MCP logging bridge
 extensions/<language>/             ← Per-language extensions
 ```
@@ -44,7 +54,7 @@ func WithDocument[T any](
 ) (T, error)
 ```
 
-Used by 16 of the 24 tool handlers:
+Used by the majority of tool handlers:
 
 ```go
 func handleGoToDefinition(client *lsp.LSPClient, args GoToDefinitionArgs) (mcp.CallToolResult, error) {
@@ -62,7 +72,47 @@ func handleGoToDefinition(client *lsp.LSPClient, args GoToDefinitionArgs) (mcp.C
 }
 ```
 
-Handlers that do not follow this pattern (e.g. `open_document`, `get_diagnostics`, `get_workspace_symbols`) manage the LSP client directly — they either don't require a file path or have different lifecycle semantics.
+Handlers that do not follow this pattern (e.g. `open_document`, `get_diagnostics`, `get_workspace_symbols`, `get_server_capabilities`, `detect_lsp_servers`) manage the LSP client directly — they either don't require a file path or have different lifecycle semantics.
+
+---
+
+## Auto-Watch
+
+When `start_lsp` initializes the LSP client, `startWatcher(rootDir)` is called
+automatically. A goroutine watches the workspace root recursively using
+[fsnotify](https://github.com/fsnotify/fsnotify) and forwards file system events
+to the LSP server via `workspace/didChangeWatchedFiles`. Events are debounced
+with a 150ms window and batched into a single notification. Standard
+build/cache directories (`node_modules`, `vendor`, `target`, `.git`, etc.) are
+skipped. Dynamically-created subdirectories are added to the watcher on creation.
+
+`stopWatcher()` is called during `Shutdown` and at the beginning of each
+`startWatcher` call (to replace a previous watcher on `start_lsp` reinit).
+
+This means the `did_change_watched_files` tool is not required for normal
+editing workflows. The auto-watcher keeps the LSP index fresh without manual
+calls.
+
+---
+
+## LSP Response Normalization
+
+`internal/lsp/normalize.go` centralises the handling of LSP responses that
+have multiple valid shapes per spec:
+
+- **`NormalizeDocumentSymbols(raw)`** — converts `DocumentSymbol[] |
+  SymbolInformation[]` to `[]types.DocumentSymbol`. Discriminates on the
+  presence of `selectionRange`. When `SymbolInformation[]` is returned,
+  performs a two-pass tree reconstruction using `containerName` to attach
+  children to parents.
+
+- **`NormalizeCompletion(raw)`** — converts `CompletionItem[] | CompletionList`
+  to `types.CompletionList`. Discriminates on the presence of an `items` field.
+
+- **`NormalizeCodeActions(raw)`** — converts `(Command | CodeAction)[]` to
+  `[]types.CodeAction`. Discriminates each element by checking whether the
+  `command` field is a JSON string (bare `Command`) or an object (`CodeAction`).
+  Bare commands are wrapped in a synthetic `CodeAction`.
 
 ---
 

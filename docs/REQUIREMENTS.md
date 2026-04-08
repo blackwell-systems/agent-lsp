@@ -35,7 +35,7 @@ Use `mcp.StdioTransport{}` for the server transport.
 - stdin/stdout/stderr error handlers (EPIPE prevention)
 - `initialized = true` set BEFORE sending `initialized` notification (race fix)
 
-## Tools (24 total — all must be ported)
+## Tools (31 total)
 
 ### Session
 - `start_lsp` — initialize LSP server with root_dir
@@ -50,7 +50,11 @@ Use `mcp.StdioTransport{}` for the server transport.
 - `get_signature_help` — function signature at call site
 - `get_code_actions` — quick fixes for a range
 - `get_document_symbols` — all symbols in a file
-- `get_workspace_symbols` — search symbols across workspace
+- `get_workspace_symbols` — search symbols across workspace (detail_level, limit, offset params)
+- `get_semantic_tokens` — semantic token stream for a file
+- `get_document_highlights` — file-scoped symbol occurrences with read/write/text kinds
+- `get_inlay_hints` — inferred type annotations and parameter labels for a range
+- `get_server_capabilities` — capability map + supported/unsupported tool lists + serverInfo
 
 ### Navigation
 - `get_references` — all references to a symbol
@@ -58,6 +62,8 @@ Use `mcp.StdioTransport{}` for the server transport.
 - `go_to_type_definition` — jump to type definition
 - `go_to_implementation` — jump to all implementations
 - `go_to_declaration` — jump to declaration (C/C++ headers)
+- `call_hierarchy` — callers/callees of a function (incoming/outgoing/both)
+- `type_hierarchy` — supertypes/subtypes of a class or interface (LSP 3.17)
 
 ### Refactoring
 - `rename_symbol` — returns WorkspaceEdit
@@ -68,8 +74,9 @@ Use `mcp.StdioTransport{}` for the server transport.
 - `execute_command` — server-side command execution
 
 ### Utilities
-- `did_change_watched_files` — notify server of file changes on disk
+- `did_change_watched_files` — explicit notification of file changes (auto-watch handles normal edits)
 - `set_log_level` — change log verbosity at runtime
+- `detect_lsp_servers` — scan workspace for languages and check PATH for LSP server binaries
 
 ## Tool Argument Schemas
 
@@ -79,7 +86,7 @@ Use Go structs with json tags. Validate at handler entry, return structured erro
 
 ## withDocument Pattern
 
-16 of 24 tool handlers follow this pattern:
+The majority of tool handlers follow this pattern:
 1. Check LSP client initialized
 2. Read file from disk
 3. Create file URI (`file:///absolute/path`)

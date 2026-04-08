@@ -32,11 +32,14 @@ Every LSP 3.17 method and its MCP surface. "Protocol only" means the method is c
 | `textDocument/prepareRename` | §3.15.19 | `prepare_rename` | ✓ |
 | `textDocument/selectionRange` | §3.15.29 | — | ✗ not yet implemented |
 | `textDocument/foldingRange` | §3.15.28 | — | ✗ not yet implemented |
-| `textDocument/documentHighlight` | §3.15.10 | — | ✗ not yet implemented |
+| `textDocument/documentHighlight` | §3.15.10 | `get_document_highlights` | ✓ |
 | `textDocument/rangeFormatting` | §3.15.17 | `format_range` | ✓ |
 | `textDocument/codeLens` | §3.15.21 | — | ✗ not yet implemented |
-| `textDocument/inlayHint` | §3.17.11 | — | ✗ not yet implemented |
-| `textDocument/semanticTokens` | §3.16.12 | — | ✗ not yet implemented |
+| `textDocument/inlayHint` | §3.17.11 | `get_inlay_hints` | ✓ |
+| `textDocument/semanticTokens` | §3.16.12 | `get_semantic_tokens` | ✓ |
+| `textDocument/prepareTypeHierarchy` | §3.17.12 | `type_hierarchy` | ✓ |
+| `typeHierarchy/supertypes` | §3.17.12 | `type_hierarchy` | ✓ |
+| `typeHierarchy/subtypes` | §3.17.12 | `type_hierarchy` | ✓ |
 
 ### Workspace Methods
 
@@ -45,7 +48,7 @@ Every LSP 3.17 method and its MCP surface. "Protocol only" means the method is c
 | `workspace/symbol` | §3.15.21 | `get_workspace_symbols` | ✓ |
 | `workspace/configuration` | §3.16.14 | — | ✓ protocol only (server-initiated) |
 | `workspace/executeCommand` | §3.16.13 | `execute_command` | ✓ |
-| `workspace/didChangeWatchedFiles` | §3.16.8 | `did_change_watched_files` | ✓ |
+| `workspace/didChangeWatchedFiles` | §3.16.8 | `did_change_watched_files` (+ auto-watch) | ✓ |
 
 ### Protocol Infrastructure
 
@@ -67,7 +70,7 @@ Every LSP 3.17 method and its MCP surface. "Protocol only" means the method is c
 
 - Correct `initialize` → `initialized` → `shutdown` sequence
 - Graceful async shutdown via `SIGINT`/`SIGTERM` — the LSP subprocess is never orphaned on exit
-- Client capabilities declared for every feature used: `hover`, `completion`, `references`, `definition`, `implementation`, `typeDefinition`, `codeAction`, `publishDiagnostics`, `window.workDoneProgress`, `workspace.configuration`
+- Client capabilities declared for every feature used: `hover`, `completion`, `references`, `definition`, `implementation`, `typeDefinition`, `declaration`, `codeAction`, `publishDiagnostics`, `window.workDoneProgress`, `workspace.configuration`, `workspace.didChangeWatchedFiles`
 - Server capabilities checked before sending requests — if a server doesn't declare `hoverProvider`, `completionProvider`, `referencesProvider`, or `codeActionProvider`, the request is skipped rather than being sent and silently returning empty results
 - `initialize` timeout set to 300s to accommodate JVM-based servers (jdtls) that require 60-90s for cold OSGi container startup
 - LSP process crash immediately rejects all pending promises — callers fail fast rather than waiting for individual timeouts

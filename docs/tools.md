@@ -1,6 +1,6 @@
 # lsp-mcp Tool Reference
 
-All 24 tools exposed by the lsp-mcp MCP server. Coordinates are **1-based** for
+All 31 tools exposed by the lsp-mcp MCP server. Coordinates are **1-based** for
 both `line` and `column` in every tool call; the server converts internally to
 the 0-based values the LSP spec requires.
 
@@ -542,21 +542,24 @@ Symbol `kind` values: `4`=Constructor, `5`=Class, `6`=Method, `7`=Property,
 
 Search for symbols across the entire workspace via `workspace/symbol`. Provide
 an empty query to enumerate all indexed symbols, or a substring to filter by
-name.
+name. Optionally enrich results with hover documentation for a paginated window.
 
 **Parameters**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `query` | string | yes | Search string. Use `""` to list all symbols. |
+| `detail_level` | string | no | `"basic"` (default) returns name/kind/location only. `"hover"` returns the full structured response with hover-enriched `enriched[]` for the current pagination window. |
+| `limit` | number | no | Number of symbols to enrich when `detail_level=hover`. Default `3`. |
+| `offset` | number | no | Pagination offset into results for enrichment. Default `0`. |
 
-**Example call**
+**Example call — basic**
 
 ```json
 { "query": "Greeter" }
 ```
 
-**Expected output**
+**Expected output — basic**
 
 ```json
 [
@@ -574,6 +577,39 @@ name.
 ]
 ```
 
+**Example call — hover enriched**
+
+```json
+{ "query": "Greeter", "detail_level": "hover", "limit": 2, "offset": 0 }
+```
+
+**Expected output — hover enriched**
+
+```json
+{
+  "total": 1,
+  "symbols": [
+    {
+      "name": "Greeter",
+      "kind": 5,
+      "location": {
+        "uri": "file:///path/to/example.ts",
+        "range": { "start": { "line": 19, "character": 0 }, "end": { "line": 32, "character": 1 } }
+      }
+    }
+  ],
+  "enriched": [
+    {
+      "name": "Greeter",
+      "kind": 5,
+      "location": { "...": "..." },
+      "hover": "class Greeter"
+    }
+  ],
+  "pagination": { "offset": 0, "limit": 2, "more": false }
+}
+```
+
 **Notes**
 
 - Returns `[]` if the server does not declare `workspaceSymbolProvider`. Some
@@ -582,6 +618,9 @@ name.
 - Unlike `get_document_symbols`, this tool does not take a `file_path` — it
   queries the whole workspace index.
 - Result coordinates are 0-based (LSP native).
+- With `detail_level=hover`, `symbols[]` always contains the full result set.
+  Use `offset` to page through the `enriched[]` window without re-running the
+  workspace search.
 
 ---
 
@@ -1220,6 +1259,13 @@ Notified server of 2 file change(s)
   the server side.
 - Follow up with `get_diagnostics` after calling this if you want to verify the
   server picked up the changes.
+- **Auto-watch:** The server automatically watches the workspace root for file
+  changes using fsnotify and forwards them to the LSP server via
+  `workspace/didChangeWatchedFiles` with a 150ms debounce. For normal editing
+  workflows, calling this tool manually is not required. Use it only for
+  explicit control — e.g., to notify the server of changes made by external
+  processes before the auto-watcher's debounce window has closed, or for files
+  outside the workspace root.
 
 ---
 
@@ -1258,6 +1304,394 @@ Log level set to: warning
   Useful in production to reduce noise.
 - This affects the MCP server's own logging only, not the underlying language
   server's verbosity.
+
+---
+
+## Code Intelligence tools
+
+### `call_hierarchy`
+
+Resolve the call hierarchy for a symbol at a specific position. Returns the
+symbol's `CallHierarchyItem` plus callers (incoming) and/or callees (outgoing),
+via `textDocument/prepareCallHierarchy`, `callHierarchy/incomingCalls`, and
+`callHierarchy/outgoingCalls`.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | Absolute path to the file |
+| `language_id` | string | yes | Language identifier |
+| `line` | number | yes | Line of the symbol (1-based) |
+| `column` | number | yes | Column of the symbol (1-based) |
+| `direction` | string | no | `"incoming"` (callers), `"outgoing"` (callees), or `"both"` (default) |
+
+**Example call**
+
+```json
+{
+  "file_path": "/path/to/project/pkg/handler.go",
+  "language_id": "go",
+  "line": 42,
+  "column": 6,
+  "direction": "incoming"
+}
+```
+
+**Expected output**
+
+```json
+{
+  "items": [
+    {
+      "name": "HandleRequest",
+      "kind": 12,
+      "uri": "file:///path/to/project/pkg/handler.go",
+      "range": { "start": { "line": 41, "character": 0 }, "end": { "line": 55, "character": 1 } },
+      "selectionRange": { "start": { "line": 41, "character": 5 }, "end": { "line": 41, "character": 20 } }
+    }
+  ],
+  "incoming": [
+    {
+      "from": {
+        "name": "ServeHTTP",
+        "kind": 6,
+        "uri": "file:///path/to/project/pkg/server.go",
+        "range": { "...": "..." },
+        "selectionRange": { "...": "..." }
+      },
+      "fromRanges": [
+        { "start": { "line": 22, "character": 2 }, "end": { "line": 22, "character": 17 } }
+      ]
+    }
+  ]
+}
+```
+
+**Notes**
+
+- Returns `"No call hierarchy item found at ..."` as a string when no symbol is
+  found at the given position.
+- Returns an error if the server does not declare `callHierarchyProvider`.
+- `direction: "both"` fetches both incoming and outgoing in a single call.
+
+---
+
+### `type_hierarchy`
+
+Resolve the type hierarchy for a symbol at a specific position. Returns the
+symbol's `TypeHierarchyItem` plus supertypes (parent classes/interfaces) and/or
+subtypes (implementations/subclasses), via `textDocument/prepareTypeHierarchy`,
+`typeHierarchy/supertypes`, and `typeHierarchy/subtypes`. Requires LSP 3.17.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | Absolute path to the file |
+| `language_id` | string | yes | Language identifier |
+| `line` | number | yes | Line of the symbol (1-based) |
+| `column` | number | yes | Column of the symbol (1-based) |
+| `direction` | string | no | `"supertypes"` (parents), `"subtypes"` (implementations), or `"both"` (default) |
+
+**Example call**
+
+```json
+{
+  "file_path": "/path/to/project/pkg/animal.go",
+  "language_id": "go",
+  "line": 10,
+  "column": 6,
+  "direction": "both"
+}
+```
+
+**Expected output**
+
+```json
+{
+  "items": [
+    {
+      "name": "Animal",
+      "kind": 11,
+      "uri": "file:///path/to/project/pkg/animal.go",
+      "range": { "start": { "line": 9, "character": 0 }, "end": { "line": 15, "character": 1 } },
+      "selectionRange": { "start": { "line": 9, "character": 5 }, "end": { "line": 9, "character": 11 } }
+    }
+  ],
+  "supertypes": [],
+  "subtypes": [
+    {
+      "name": "Dog",
+      "kind": 5,
+      "uri": "file:///path/to/project/pkg/dog.go",
+      "range": { "...": "..." },
+      "selectionRange": { "...": "..." }
+    }
+  ]
+}
+```
+
+**Notes**
+
+- Returns `"No type hierarchy item found at ..."` as a string when no symbol is
+  found at the given position.
+- Requires the server to declare `typeHierarchyProvider` (LSP 3.17).
+- Omitted fields (`supertypes`, `subtypes`) are absent rather than empty arrays
+  when `direction` limits which are fetched.
+
+---
+
+### `get_inlay_hints`
+
+Return inlay hints for a range within a document via `textDocument/inlayHint`.
+Inlay hints show inferred type annotations and parameter name labels inline with
+source code — the same annotations IDEs display in TypeScript, Rust, Go, and
+other languages with type inference.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | Absolute path to the file |
+| `language_id` | string | no | Language identifier |
+| `start_line` | number | yes | Start line of the range (1-based) |
+| `start_column` | number | yes | Start column (1-based) |
+| `end_line` | number | yes | End line of the range (1-based) |
+| `end_column` | number | yes | End column (1-based) |
+
+**Example call**
+
+```json
+{
+  "file_path": "/path/to/project/src/example.ts",
+  "language_id": "typescript",
+  "start_line": 1,
+  "start_column": 1,
+  "end_line": 20,
+  "end_column": 1
+}
+```
+
+**Expected output**
+
+```json
+[
+  {
+    "position": { "line": 3, "character": 7 },
+    "label": ": number",
+    "kind": 1,
+    "paddingLeft": true
+  },
+  {
+    "position": { "line": 7, "character": 12 },
+    "label": "name: ",
+    "kind": 2
+  }
+]
+```
+
+`kind` values: `1`=Type annotation, `2`=Parameter name. `label` may be either a
+plain string or an array of `InlayHintLabelPart` objects with `value`, `tooltip`,
+and optional `location`.
+
+**Notes**
+
+- Returns `[]` when the server does not declare `inlayHintProvider` or has no
+  hints for the given range.
+- Position coordinates in the output are 0-based (LSP native).
+
+---
+
+### `get_document_highlights`
+
+Return all occurrences of the symbol at a position within the same file via
+`textDocument/documentHighlight`. Highlights are file-scoped and instant — they
+do not trigger a workspace-wide reference search.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | Absolute path to the file |
+| `language_id` | string | no | Language identifier |
+| `line` | number | yes | Line of the symbol (1-based) |
+| `column` | number | yes | Column of the symbol (1-based) |
+
+**Example call**
+
+```json
+{
+  "file_path": "/path/to/project/src/example.ts",
+  "language_id": "typescript",
+  "line": 4,
+  "column": 17
+}
+```
+
+**Expected output**
+
+```json
+[
+  {
+    "range": {
+      "start": { "line": 3, "character": 16 },
+      "end": { "line": 3, "character": 19 }
+    },
+    "kind": 1
+  },
+  {
+    "range": {
+      "start": { "line": 7, "character": 12 },
+      "end": { "line": 7, "character": 15 }
+    },
+    "kind": 2
+  }
+]
+```
+
+`kind` values: `1`=Text, `2`=Read, `3`=Write.
+
+**Notes**
+
+- Returns `[]` if the server does not declare `documentHighlightProvider`.
+- Use this instead of `get_references` when you only need occurrences within
+  the current file — it is faster and requires no workspace indexing.
+- Coordinates in the output are 0-based (LSP native).
+
+---
+
+### `get_server_capabilities`
+
+Return the language server's capability map and classify every lsp-mcp-go tool
+as supported or unsupported based on what the server advertised during
+initialization. Useful for discovering which tools will return meaningful results
+before making analysis calls.
+
+**Parameters**
+
+None. The tool takes no arguments.
+
+**Example call**
+
+```json
+{}
+```
+
+**Expected output**
+
+```json
+{
+  "server_name": "gopls",
+  "server_version": "v0.16.2",
+  "supported_tools": [
+    "apply_edit",
+    "call_hierarchy",
+    "did_change_watched_files",
+    "format_document",
+    "get_code_actions",
+    "get_completions",
+    "get_diagnostics",
+    "get_document_symbols",
+    "get_info_on_location",
+    "get_references",
+    "get_semantic_tokens",
+    "get_signature_help",
+    "get_workspace_symbols",
+    "go_to_definition",
+    "go_to_implementation",
+    "go_to_type_definition",
+    "rename_symbol",
+    "prepare_rename",
+    "start_lsp",
+    "..."
+  ],
+  "unsupported_tools": [
+    "get_inlay_hints",
+    "type_hierarchy"
+  ],
+  "capabilities": {
+    "hoverProvider": true,
+    "completionProvider": { "triggerCharacters": [".", ":"], "resolveProvider": true },
+    "..."
+  }
+}
+```
+
+**Notes**
+
+- Requires `start_lsp` to have been called first.
+- Always-available tools (e.g., `start_lsp`, `open_document`, `set_log_level`,
+  `detect_lsp_servers`) appear in `supported_tools` regardless of server
+  capabilities.
+- `server_name` and `server_version` are omitted if the server did not provide
+  them in its `initialize` response.
+
+---
+
+### `detect_lsp_servers`
+
+Scan a workspace directory for source languages and check PATH for the
+corresponding LSP server binaries. Returns the detected languages, installed
+servers with their executable paths, and a `suggested_config` array ready to
+paste into the lsp-mcp-go MCP server args.
+
+Does not require `start_lsp` to have been called — it works standalone.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `workspace_dir` | string | yes | Absolute path to the workspace root to scan |
+
+**Example call**
+
+```json
+{
+  "workspace_dir": "/Users/dayna.blackwell/code/myproject"
+}
+```
+
+**Expected output**
+
+```json
+{
+  "workspace_dir": "/Users/dayna.blackwell/code/myproject",
+  "workspace_languages": ["go", "typescript"],
+  "installed_servers": [
+    {
+      "language": "go",
+      "server": "gopls",
+      "path": "/usr/local/bin/gopls",
+      "config_entry": "go:gopls"
+    },
+    {
+      "language": "typescript",
+      "server": "typescript-language-server",
+      "path": "/usr/local/bin/typescript-language-server",
+      "config_entry": "typescript:typescript-language-server,--stdio"
+    }
+  ],
+  "suggested_config": [
+    "go:gopls",
+    "typescript:typescript-language-server,--stdio"
+  ],
+  "not_installed": []
+}
+```
+
+**Notes**
+
+- Language detection is score-based: project root markers (e.g., `go.mod`,
+  `package.json`, `Cargo.toml`) score +50; individual source files score +1
+  per file. Languages are returned ranked by score.
+- Skips `node_modules`, `vendor`, `target`, `build`, `dist`, `.git`, and other
+  standard build/cache directories.
+- `not_installed` lists languages detected in the workspace whose server binary
+  was not found on PATH.
+- `suggested_config` entries use the format `language:binary` or
+  `language:binary,arg1,arg2` and can be passed directly as lsp-mcp-go MCP
+  server args.
 
 ---
 
