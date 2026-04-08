@@ -13,7 +13,9 @@ Language servers are the intelligence layer behind IDE features — go-to-defini
 
 **Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One lsp-mcp-go process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright — no reconfiguration when you switch projects.
 
-**Persistent session, warm index.** Unlike per-request bridges, lsp-mcp-go maintains a live language server session. `start_lsp` indexes the workspace once; every subsequent call hits the warm index. `get_references` returns all 12 call sites without loading files into context. `get_diagnostics` returns only the errors. `get_info_on_location` returns the type signature at one position without loading the module. The index stays fresh via `did_change_watched_files` — no restart needed after edits.
+**Persistent session, warm index.** Unlike per-request bridges, lsp-mcp-go maintains a live language server session. `start_lsp` indexes the workspace once; every subsequent call hits the warm index. `get_references` returns all 12 call sites without loading files into context. `get_diagnostics` returns only the errors. `get_info_on_location` returns the type signature at one position without loading the module. The index stays fresh automatically — lsp-mcp-go watches the workspace for file changes and notifies the language server in the background. No restart, no manual calls needed.
+
+**Auto-watch keeps the index fresh.** lsp-mcp-go watches the workspace root for file changes using kernel-level filesystem events (inotify/kqueue/FSEvents). Every file edit, creation, or deletion is automatically forwarded to the language server — `get_references`, `get_diagnostics`, and hover info always reflect the current state on disk. No `did_change_watched_files` calls required. High-churn directories (`.git/`, `node_modules/`, etc.) are excluded at the watcher level; rapid edits are debounced at 150ms.
 
 **Fuzzy position fallback.** When an AI assistant gets a line/column slightly wrong, `go_to_definition` and `get_references` fall back to workspace symbol search by hover name and retry — returning results instead of silently returning empty.
 
@@ -100,6 +102,7 @@ Then use any of the 30 tools. The session persists — no need to restart when s
 | Call hierarchy | **✓** (single tool, direction param) | ✗ or 3 separate tools |
 | Type hierarchy | **✓** (single tool, direction param) | ✗ or untested |
 | Fuzzy position fallback | **✓** | ✗ or partial |
+| Auto-watch (index stays fresh) | **✓** (always-on, debounced) | ✗ (manual notify required) |
 | Path traversal prevention | **✓** | ✗ |
 | Distribution | **single Go binary** | Node.js or Bun runtime required |
 
@@ -192,7 +195,7 @@ All other tools (`get_inlay_hints`, `get_code_actions`, `rename_symbol`, `format
 ### Utilities
 | Tool | Description |
 |------|-------------|
-| `did_change_watched_files` | Notify the server when files change on disk outside the editor |
+| `did_change_watched_files` | Manually notify the server of file changes — not needed for normal edits (auto-watch handles those); use when an external process changes files outside the session |
 | `get_server_capabilities` | Return the server capability map and classify every tool as supported or unsupported — use before calling capability-gated tools |
 | `set_log_level` | Change log verbosity at runtime |
 | `detect_lsp_servers` | Scan a workspace for source languages and check PATH for installed LSP servers — returns detected languages, server paths, and a `suggested_config` array ready to paste into your MCP config |
@@ -206,17 +209,11 @@ get_info_on_location(...) / get_references(...)
 close_document(...)
 ```
 
-**Keeping the index fresh during active editing:**
+**Keeping the index fresh:**
 
-Without notifying the language server of file changes, its index becomes stale immediately — `get_references`, `get_diagnostics`, and hover info will reflect the old state, not what was just written. After every file edit, call:
+lsp-mcp-go watches the workspace root for file changes and automatically notifies the language server — no `did_change_watched_files` calls required after edits. The watcher skips high-churn directories (`.git/`, `node_modules/`, `target/`, etc.) and debounces rapid edits at 150ms.
 
-```
-did_change_watched_files(changes=[
-  { uri: "file:///absolute/path/to/file.go", type: 2 }
-])
-```
-
-Type values: `1` = created, `2` = changed, `3` = deleted. The server re-reads from disk and updates its index — no restart required. In long sessions where files change frequently, this is the difference between a reliable index and silently stale results.
+`did_change_watched_files` is still available for cases where files are changed by an external process that the watcher may not see immediately, or for explicit control over change notifications.
 
 **Rename workflow** (`prepare_rename` → `rename_symbol` → `apply_edit`):
 ```
