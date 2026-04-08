@@ -76,8 +76,16 @@ jobs:
           printf '#!/bin/bash\nexec java \\\n  -Declipse.application=org.eclipse.jdt.ls.core.id1 \\\n  -Dosgi.bundles.defaultStartLevel=4 \\\n  -Declipse.product=org.eclipse.jdt.ls.core.product \\\n  -Dlog.level=ERROR \\\n  -Xmx1G \\\n  --add-modules=ALL-SYSTEM \\\n  --add-opens java.base/java.util=ALL-UNNAMED \\\n  --add-opens java.base/java.lang=ALL-UNNAMED \\\n  -jar %s \\\n  -configuration /opt/jdtls/config_linux \\\n  -data /tmp/jdtls-data "$@"\n' "$LAUNCHER" | sudo tee /usr/local/bin/jdtls > /dev/null
           sudo chmod +x /usr/local/bin/jdtls
 
+      - name: Install kotlin-language-server
+        continue-on-error: true
+        run: |
+          KLS_VERSION=$(curl -fsSL https://api.github.com/repos/fwcd/kotlin-language-server/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          wget -q "https://github.com/fwcd/kotlin-language-server/releases/download/${KLS_VERSION}/server.zip" -O /tmp/kls.zip
+          sudo unzip -q /tmp/kls.zip -d /opt/kls
+          sudo ln -sf /opt/kls/server/bin/kotlin-language-server /usr/local/bin/kotlin-language-server
+
       - name: Run core language tests
-        run: GOWORK=off go test -v -run "TestMultiLanguage/^(Go|TypeScript|Python|Rust|Java)$" ./test/ -timeout 20m
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^(Go|TypeScript|Python|Rust|Java|Kotlin)$" ./test/ -timeout 25m
 
   # Extended languages: C, C++, JavaScript, PHP, Ruby, YAML, JSON, Dockerfile, CSharp
   multi-lang-extended:
