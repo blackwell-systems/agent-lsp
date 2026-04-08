@@ -147,9 +147,9 @@ All tools require `start_lsp` to be called first.
 **CI coverage:** The following tools are end-to-end integration-tested against real language servers on every CI run across all 13 languages:
 
 - **Tier 1** (all 13): `start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`
-- **Tier 2** (all 13): `get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`, `get_info_on_location`, `call_hierarchy`, `get_semantic_tokens`, `get_signature_help`
+- **Tier 2** (all 13): `get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`, `get_info_on_location`, `call_hierarchy`, `get_semantic_tokens`, `get_signature_help`, `get_document_highlights`, `get_inlay_hints`, `get_code_actions`, `prepare_rename`, `rename_symbol`, `get_server_capabilities`, `add_workspace_folder`
 
-All other tools (`get_inlay_hints`, `get_code_actions`, `rename_symbol`, `format_range`, etc.) are unit tested. End-to-end CI coverage for remaining tools is tracked for expansion.
+Speculative session tools (`create_simulation_session`, `simulate_edit_atomic`, `evaluate_session`, `commit_session`, `discard_session`) are covered by `TestSpeculativeSessions` in `test/speculative_test.go`. All other tools (`format_range`, `apply_edit`, `execute_command`, etc.) are unit tested.
 
 ### Session
 | Tool | Description |
