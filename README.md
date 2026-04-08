@@ -4,15 +4,15 @@
 [![CI](https://github.com/blackwell-systems/lsp-mcp-go/actions/workflows/ci.yml/badge.svg)](https://github.com/blackwell-systems/lsp-mcp-go/actions)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 [![Languages](https://img.shields.io/badge/languages-22_CI--verified-brightgreen.svg)](#multi-language-support)
-[![Tools](https://img.shields.io/badge/tools-42-blue.svg)](#tools)
-[![CI Coverage](https://img.shields.io/badge/CI--verified_tools-26%2F42-brightgreen.svg)](#tools)
+[![Tools](https://img.shields.io/badge/tools-45-blue.svg)](#tools)
+[![CI Coverage](https://img.shields.io/badge/CI--verified_tools-28%2F45-brightgreen.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships.
 
 lsp-mcp-go is a stateful runtime over real language servers — not a bridge. It maintains a persistent, warm session, reshapes LSP into agent-oriented workflows, and adds a transactional execution layer for safe speculative edits.
 
-**42 tools** across navigation, analysis, refactoring, and formatting — **26 CI-verified** end-to-end against real language servers across **22 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+**45 tools** across navigation, analysis, refactoring, and formatting — **28 CI-verified** end-to-end against real language servers across **22 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
 **Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One lsp-mcp-go process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright — no reconfiguration when you switch projects.
 
@@ -97,14 +97,14 @@ Once your AI session opens, call `start_lsp` with your project root to initializ
 start_lsp(root_dir="/your/project")
 ```
 
-Then use any of the 42 tools. The session persists — no need to restart when switching files.
+Then use any of the 45 tools. The session persists — no need to restart when switching files.
 
 ## Why lsp-mcp-go
 
 | | lsp-mcp-go | other MCP-LSP implementations |
 |--|---------|---------------------|
 | Languages (CI-verified) | **22** (end-to-end integration tests) | config-listed, untested |
-| Tools | **42** | 3–18 |
+| Tools | **45** | 3–18 |
 | Multi-server routing | **✓** (one process, many languages) | varies |
 | LSP spec compliance | **3.17, built to spec** | ad hoc |
 | Connection model | **persistent** (warm index) | per-request or cold-start |
@@ -168,7 +168,7 @@ All tools require `start_lsp` to be called first.
 **CI coverage:** The following tools are end-to-end integration-tested against real language servers on every CI run across all 22 languages:
 
 - **Tier 1** (all 13): `start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`
-- **Tier 2** (all 13): `get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`, `get_info_on_location`, `call_hierarchy`, `get_semantic_tokens`, `get_signature_help`, `get_document_highlights`, `get_inlay_hints`, `get_code_actions`, `prepare_rename`, `rename_symbol`, `get_server_capabilities`, `add_workspace_folder`, `go_to_type_definition`, `go_to_implementation`, `format_range`, `apply_edit`, `detect_lsp_servers`, `close_document`, `did_change_watched_files`
+- **Tier 2** (all 13): `get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`, `get_info_on_location`, `call_hierarchy`, `get_semantic_tokens`, `get_signature_help`, `get_document_highlights`, `get_inlay_hints`, `get_code_actions`, `prepare_rename`, `rename_symbol`, `get_server_capabilities`, `add_workspace_folder`, `go_to_type_definition`, `go_to_implementation`, `format_range`, `apply_edit`, `detect_lsp_servers`, `close_document`, `did_change_watched_files`, `run_build`, `run_tests`
 
 Speculative session tools (`create_simulation_session`, `simulate_edit`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session`, `commit_session`, `discard_session`, `destroy_session`) are covered by `TestSpeculativeSessions` in `test/speculative_test.go`. Remaining tools (`restart_lsp_server`, `execute_command`, `set_log_level`) are unit tested.
 
