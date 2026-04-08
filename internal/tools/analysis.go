@@ -226,17 +226,39 @@ func HandleGetDocumentSymbols(ctx context.Context, client *lsp.LSPClient, args m
 	return types.TextResult(string(data)), nil
 }
 
-// workspaceSymbolDetail is the enriched form of SymbolInformation returned
-// when detail_level is "hover". The Hover field is omitted when empty.
-type workspaceSymbolDetail struct {
+// workspaceSymbolEnriched is a SymbolInformation with an optional hover field.
+type workspaceSymbolEnriched struct {
 	types.SymbolInformation
 	Hover string `json:"hover,omitempty"`
 }
 
+// workspaceSymbolsResponse is the structured response for get_workspace_symbols.
+// symbols contains all matches (name/kind/location only). enriched contains
+// the hover-enriched window defined by offset and limit. pagination describes
+// the current window position.
+type workspaceSymbolsResponse struct {
+	Total      int                       `json:"total"`
+	Symbols    []types.SymbolInformation `json:"symbols"`
+	Enriched   []workspaceSymbolEnriched `json:"enriched,omitempty"`
+	Pagination *workspaceSymbolPagination `json:"pagination,omitempty"`
+}
+
+type workspaceSymbolPagination struct {
+	Offset int  `json:"offset"`
+	Limit  int  `json:"limit"`
+	More   bool `json:"more"`
+}
+
 // HandleGetWorkspaceSymbols searches for symbols across the workspace.
-// When detail_level is "hover", each symbol is enriched with hover info
-// (type signature + docs) via a textDocument/hover request. Enrichment is
-// capped at 20 symbols to prevent excessive LSP round trips.
+//
+// detail_level controls enrichment:
+//   - "basic" (or empty): returns all matching symbols with name/kind/location only.
+//   - "hover" (default when limit/offset used): returns all symbols in symbols[],
+//     plus hover-enriched results for the offset..offset+limit window in enriched[].
+//
+// limit (default 3) and offset (default 0) control the enrichment window.
+// The AI can paginate: read symbols[] to see all results, use offset to step
+// through enriched detail windows without re-running the workspace search.
 func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
@@ -244,26 +266,43 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 
 	query, _ := args["query"].(string)
 	detailLevel, _ := args["detail_level"].(string)
+	limit := 3
+	if v, ok := toIntOpt(args, "limit"); ok && v > 0 {
+		limit = v
+	}
+	offset := 0
+	if v, ok := toIntOpt(args, "offset"); ok && v >= 0 {
+		offset = v
+	}
 
-	result, err := client.GetWorkspaceSymbols(ctx, query)
+	symbols, err := client.GetWorkspaceSymbols(ctx, query)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("get_workspace_symbols: %s", err)), nil
 	}
 
-	if detailLevel != "hover" {
-		data, mErr := json.Marshal(result)
+	if detailLevel == "basic" || detailLevel == "" {
+		data, mErr := json.Marshal(symbols)
 		if mErr != nil {
 			return types.ErrorResult(fmt.Sprintf("marshaling workspace symbols: %s", mErr)), nil
 		}
 		return types.TextResult(string(data)), nil
 	}
 
-	// Enrich up to 20 symbols with hover info.
-	const maxEnrich = 20
-	enriched := make([]workspaceSymbolDetail, len(result))
-	for i, sym := range result {
-		enriched[i] = workspaceSymbolDetail{SymbolInformation: sym}
-		if i < maxEnrich {
+	// Enrich the offset..offset+limit window with hover info.
+	resp := workspaceSymbolsResponse{
+		Total:   len(symbols),
+		Symbols: symbols,
+	}
+
+	if offset < len(symbols) {
+		end := offset + limit
+		if end > len(symbols) {
+			end = len(symbols)
+		}
+		window := symbols[offset:end]
+		enriched := make([]workspaceSymbolEnriched, len(window))
+		for i, sym := range window {
+			enriched[i] = workspaceSymbolEnriched{SymbolInformation: sym}
 			filePath, pErr := URIToFilePath(sym.Location.URI)
 			if pErr == nil {
 				pos := types.Position{
@@ -278,13 +317,25 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 				}
 			}
 		}
+		resp.Enriched = enriched
+		resp.Pagination = &workspaceSymbolPagination{
+			Offset: offset,
+			Limit:  limit,
+			More:   end < len(symbols),
+		}
 	}
 
-	data, mErr := json.Marshal(enriched)
+	data, mErr := json.Marshal(resp)
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling workspace symbols: %s", mErr)), nil
 	}
 	return types.TextResult(string(data)), nil
+}
+
+// toIntOpt reads an integer argument without error — returns (value, true) if present and valid.
+func toIntOpt(args map[string]interface{}, key string) (int, bool) {
+	v, err := toInt(args, key)
+	return v, err == nil
 }
 
 // extractPosition reads line and column from args, validates 1-indexed.

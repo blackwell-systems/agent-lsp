@@ -251,6 +251,8 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	type GetWorkspaceSymbolsArgs struct {
 		Query       string `json:"query,omitempty"`
 		DetailLevel string `json:"detail_level,omitempty"`
+		Limit       int    `json:"limit,omitempty"`
+		Offset      int    `json:"offset,omitempty"`
 	}
 	type GetReferencesArgs struct {
 		FilePath           string `json:"file_path"`
@@ -490,7 +492,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_workspace_symbols",
-		Description: "Search for symbols across the entire workspace via LSP. Use an empty query string to list all indexed symbols, or provide a query to filter by name. Returns matching symbol names, kinds, and locations. Set detail_level to \"hover\" to enrich each result with hover info (type signature and documentation) — enrichment is applied to the first 20 results.",
+		Description: "Search for symbols across the entire workspace via LSP. Returns all matching symbols with name, kind, and location. detail_level controls enrichment: omit or use \"basic\" for names/locations only; use \"hover\" to also return hover info (type signature + docs) for a paginated window of results. limit (default 3) and offset (default 0) control which symbols get enriched — use offset to step through results without re-running the search.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetWorkspaceSymbolsArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleGetWorkspaceSymbols(ctx, cs.get(), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
