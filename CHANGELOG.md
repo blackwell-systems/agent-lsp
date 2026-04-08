@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Added (2026-04-08)
+- **`get_server_capabilities`** — returns server identity (`name`, `version` from `serverInfo`), full LSP capability map, and classified tool lists (`supported_tools` / `unsupported_tools`) based on what the server advertised at initialization; lets AI pre-filter capability-gated tools before calling them; `GetCapabilities()` and `GetServerInfo()` methods added to `LSPClient`; `serverName`/`serverVersion` now captured from initialize response
 - **`get_inlay_hints`** — new MCP tool (`textDocument/inlayHint`); returns inline type annotations and parameter name labels for a range; capability-guarded (returns empty array when server does not support `inlayHintProvider`); `InlayHint`, `InlayHintLabelPart`, `InlayHintKind` types added to `internal/types`
 - **`detect_lsp_servers`** — new MCP tool; scans workspace for source languages (file extensions + root markers, scored by prevalence), checks PATH for corresponding LSP server binaries, returns `suggested_config` entries ready to paste into MCP config; covers all 13 CI-verified languages; deduplicates shared binaries (c+cpp → one clangd entry)
 - **`get_workspace_symbols` enrichment** — new `detail_level`, `limit`, `offset` params; `detail_level=hover` enriches a paginated window of results with hover info (type signature + docs); `symbols[]` always returns full result set; `enriched[]` + `pagination` returned for the window; mirrors mcp-lsp-bridge's ToC + detail-window pattern
