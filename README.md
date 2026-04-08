@@ -4,12 +4,12 @@
 [![CI](https://github.com/blackwell-systems/lsp-mcp-go/actions/workflows/ci.yml/badge.svg)](https://github.com/blackwell-systems/lsp-mcp-go/actions)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 [![Languages](https://img.shields.io/badge/languages-13_verified-green.svg)](#multi-language-support)
-[![Tools](https://img.shields.io/badge/tools-27-blue.svg)](#tools)
+[![Tools](https://img.shields.io/badge/tools-28-blue.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships. lsp-mcp-go exposes that intelligence to agents through MCP.
 
-**27 tools** across navigation, analysis, refactoring, and formatting. CI-verified against real language servers across **13 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+**28 tools** across navigation, analysis, refactoring, and formatting. CI-verified against real language servers across **13 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
 **Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One lsp-mcp-go process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright — no reconfiguration when you switch projects.
 
@@ -83,14 +83,14 @@ Once your AI session opens, call `start_lsp` with your project root to initializ
 start_lsp(root_dir="/your/project")
 ```
 
-Then use any of the 27 tools. The session persists — no need to restart when switching files.
+Then use any of the 28 tools. The session persists — no need to restart when switching files.
 
 ## Why lsp-mcp-go
 
 | | lsp-mcp-go | other MCP-LSP implementations |
 |--|---------|---------------------|
 | Languages (CI-verified) | **13** (end-to-end integration tests) | config-listed, untested |
-| Tools | **26** | 3–18 |
+| Tools | **28** | 3–18 |
 | Multi-server routing | **✓** (one process, many languages) | varies |
 | LSP spec compliance | **3.17, built to spec** | ad hoc |
 | Connection model | **persistent** (warm index) | per-request or cold-start |
@@ -186,6 +186,7 @@ All tools require `start_lsp` to be called first.
 |------|-------------|
 | `did_change_watched_files` | Notify the server when files change on disk outside the editor |
 | `set_log_level` | Change log verbosity at runtime |
+| `detect_lsp_servers` | Scan a workspace for source languages and check PATH for installed LSP servers — returns detected languages, server paths, and a `suggested_config` array ready to paste into your MCP config |
 
 **Recommended agent workflow:**
 ```
