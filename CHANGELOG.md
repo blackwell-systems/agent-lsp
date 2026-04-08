@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Added (2026-04-08)
+- **`apply_edit` real file-write test** — replaced no-op empty WorkspaceEdit with a full format→apply→re-format cycle; Go, TypeScript, and Rust fixtures each have a blank line with deliberate trailing whitespace that their formatters strip; second `format_document` call returning empty edits proves the write persisted to disk; skip message when fixture already clean (subsequent runs on same checkout)
+- **`detect_lsp_servers` extended to 22 languages** — added `knownServers` entries and file extension mappings for C#, Kotlin, Lua, Swift, Zig, CSS/SCSS/Less, HTML, Terraform, Scala; fixed `.kt`/`.kts` extensions which were incorrectly mapped to `java` instead of `kotlin`
 - **Zig language support** — `zls` added as 19th CI-verified language; dedicated `multi-lang-zig` CI job; fixture with `person.zig`, `greeter.zig`, `main.zig`, `build.zig`
 - **CSS language support** — `vscode-css-language-server` added as 20th CI-verified language; zero new CI install cost (`vscode-langservers-extracted` already present); fixture: `styles.css`
 - **HTML language support** — `vscode-html-language-server` added as 21st CI-verified language; zero new CI install cost; fixture: `index.html`
