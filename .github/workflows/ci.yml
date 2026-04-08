@@ -85,7 +85,7 @@ jobs:
           sudo ln -sf /opt/kls/server/bin/kotlin-language-server /usr/local/bin/kotlin-language-server
 
       - name: Run core language tests
-        run: GOWORK=off go test -v -run "TestMultiLanguage/^(Go|TypeScript|Python|Rust|Java|Kotlin)$" ./test/ -timeout 25m
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^(Go|TypeScript|Python|Rust|Java|Kotlin)$" ./test/ -timeout 45m
 
   # Extended languages: C, C++, JavaScript, PHP, Ruby, YAML, JSON, Dockerfile, CSharp
   multi-lang-extended:
@@ -175,7 +175,7 @@ jobs:
         run: |
           TF_LS_VERSION=$(curl -fsSL https://api.github.com/repos/hashicorp/terraform-ls/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
           wget -q "https://releases.hashicorp.com/terraform-ls/${TF_LS_VERSION}/terraform-ls_${TF_LS_VERSION}_linux_amd64.zip" -O /tmp/terraform-ls.zip
-          sudo unzip -q /tmp/terraform-ls.zip -d /usr/local/bin
+          sudo unzip -o -q /tmp/terraform-ls.zip terraform-ls -d /usr/local/bin
           sudo chmod +x /usr/local/bin/terraform-ls
 
       - name: Run Terraform tests

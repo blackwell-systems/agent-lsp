@@ -755,12 +755,16 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		return langTestResult{tier1: "skip"}
 	}
 
-	// Determine timeout.
+	// Determine timeout. JVM-based servers (Java, Kotlin, Scala) need longer
+	// timeouts due to slow cold-start initialization.
 	var timeout time.Duration
-	if lang.id == "java" {
+	switch lang.id {
+	case "java":
+		timeout = 300 * time.Second
+	case "kotlin", "scala":
 		timeout = 180 * time.Second
-	} else {
-		timeout = 60 * time.Second
+	default:
+		timeout = 90 * time.Second
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -804,11 +808,14 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 	}
 	t.Logf("[%s] start_lsp result: %s", lang.name, startText)
 
-	// LSP init wait.
+	// LSP init wait after start_lsp — JVM servers need longer to finish indexing.
 	var initWait time.Duration
-	if lang.id == "java" {
+	switch lang.id {
+	case "java":
 		initWait = 150 * time.Second
-	} else {
+	case "kotlin", "scala":
+		initWait = 30 * time.Second
+	default:
 		initWait = 8 * time.Second
 	}
 	time.Sleep(initWait)

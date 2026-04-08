@@ -394,8 +394,9 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		SessionID string `json:"session_id"`
 	}
 	type SimulateEditAtomicArgs struct {
-		WorkspaceRoot string `json:"workspace_root"`
-		Language      string `json:"language"`
+		SessionID     string `json:"session_id,omitempty"`
+		WorkspaceRoot string `json:"workspace_root,omitempty"`
+		Language      string `json:"language,omitempty"`
 		FilePath      string `json:"file_path"`
 		StartLine     int    `json:"start_line"`
 		StartColumn   int    `json:"start_column"`
