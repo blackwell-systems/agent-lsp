@@ -5,6 +5,9 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed (2026-04-08)
+- **`run_build` and `run_tests` in Go workspaces** — both tools now unconditionally set `GOWORK=off` when running `go build` and `go test`; Go searches upward through parent directories for `go.work` files, and when found, `./...` patterns only match modules listed in the workspace file; setting `GOWORK=off` forces Go to build/test all modules in the directory, matching the tool's intent
+
 ### Added (2026-04-08)
 - **`run_build`, `run_tests`, and `get_tests_for_file` MCP tools** — three new
   build-tool integration tools that do not require `start_lsp`; language-specific
