@@ -196,3 +196,204 @@ func TestBuildResultShape(t *testing.T) {
 		t.Errorf("Success mismatch after round-trip")
 	}
 }
+
+// TestRunners_NewLanguages verifies that the four new language entries
+// are present in the runners dispatch table and have non-empty commands.
+func TestRunners_NewLanguages(t *testing.T) {
+	languages := []string{"csharp", "swift", "zig", "kotlin"}
+	for _, lang := range languages {
+		t.Run(lang, func(t *testing.T) {
+			runner, ok := runners[lang]
+			if !ok {
+				t.Fatalf("language %q not found in runners map", lang)
+			}
+			if runner.buildCmd == "" {
+				t.Errorf("language %q has empty buildCmd", lang)
+			}
+			if runner.testCmd == "" {
+				t.Errorf("language %q has empty testCmd", lang)
+			}
+		})
+	}
+}
+
+// TestParseBuildErrors_CSharp verifies MSBuild-style error parsing.
+func TestParseBuildErrors_CSharp(t *testing.T) {
+	input := []byte("Program.cs(10,5): error CS0246: The type or namespace name 'Foo' could not be found\n")
+	errors := parseBuildErrors("csharp", input)
+	if len(errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(errors))
+	}
+	if errors[0].File != "Program.cs" {
+		t.Errorf("expected File=Program.cs, got %q", errors[0].File)
+	}
+	if errors[0].Line != 10 {
+		t.Errorf("expected Line=10, got %d", errors[0].Line)
+	}
+	if errors[0].Column != 5 {
+		t.Errorf("expected Column=5, got %d", errors[0].Column)
+	}
+}
+
+// TestParseBuildErrors_Swift verifies Swift compiler error parsing.
+func TestParseBuildErrors_Swift(t *testing.T) {
+	input := []byte("Sources/main.swift:3:10: error: use of unresolved identifier 'Foo'\n")
+	errors := parseBuildErrors("swift", input)
+	if len(errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(errors))
+	}
+	if errors[0].File != "Sources/main.swift" {
+		t.Errorf("expected File=Sources/main.swift, got %q", errors[0].File)
+	}
+	if errors[0].Line != 3 {
+		t.Errorf("expected Line=3, got %d", errors[0].Line)
+	}
+	if errors[0].Column != 10 {
+		t.Errorf("expected Column=10, got %d", errors[0].Column)
+	}
+}
+
+// TestParseBuildErrors_Zig verifies Zig compiler error parsing.
+func TestParseBuildErrors_Zig(t *testing.T) {
+	input := []byte("src/main.zig:7:3: error: expected ';' after statement\n")
+	errors := parseBuildErrors("zig", input)
+	if len(errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(errors))
+	}
+	if errors[0].File != "src/main.zig" {
+		t.Errorf("expected File=src/main.zig, got %q", errors[0].File)
+	}
+	if errors[0].Line != 7 {
+		t.Errorf("expected Line=7, got %d", errors[0].Line)
+	}
+	if errors[0].Column != 3 {
+		t.Errorf("expected Column=3, got %d", errors[0].Column)
+	}
+}
+
+// TestParseBuildErrors_Kotlin verifies Gradle Kotlin error parsing.
+func TestParseBuildErrors_Kotlin(t *testing.T) {
+	input := []byte("e: Greeter.kt: (12, 8): error: unresolved reference: Person\n")
+	errors := parseBuildErrors("kotlin", input)
+	if len(errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(errors))
+	}
+	if errors[0].File != "Greeter.kt" {
+		t.Errorf("expected File=Greeter.kt, got %q", errors[0].File)
+	}
+	if errors[0].Line != 12 {
+		t.Errorf("expected Line=12, got %d", errors[0].Line)
+	}
+	if errors[0].Column != 8 {
+		t.Errorf("expected Column=8, got %d", errors[0].Column)
+	}
+}
+
+// TestParseBuildErrors_NewLanguages_NoErrors verifies that clean output yields empty slice
+// for each new language.
+func TestParseBuildErrors_NewLanguages_NoErrors(t *testing.T) {
+	languages := []string{"csharp", "swift", "zig", "kotlin"}
+	for _, lang := range languages {
+		t.Run(lang, func(t *testing.T) {
+			result := parseBuildErrors(lang, []byte("Build succeeded.\n"))
+			if len(result) != 0 {
+				t.Errorf("expected 0 errors for clean output, got %d", len(result))
+			}
+		})
+	}
+}
+
+// TestFindTestFiles_CSharp verifies that FindTestFiles finds *Test*.cs files.
+func TestFindTestFiles_CSharp(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Greeter.cs"), []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	testFile := filepath.Join(dir, "GreeterTests.cs")
+	if err := os.WriteFile(testFile, []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := FindTestFiles(context.Background(), dir, "csharp", filepath.Join(dir, "Greeter.cs"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, tf := range result.TestFiles {
+		if tf == testFile {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected GreeterTests.cs in TestFiles, got: %v", result.TestFiles)
+	}
+}
+
+// TestFindTestFiles_Swift verifies that FindTestFiles finds *Tests.swift files.
+func TestFindTestFiles_Swift(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Greeter.swift"), []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	testFile := filepath.Join(dir, "GreeterTests.swift")
+	if err := os.WriteFile(testFile, []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := FindTestFiles(context.Background(), dir, "swift", filepath.Join(dir, "Greeter.swift"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, tf := range result.TestFiles {
+		if tf == testFile {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected GreeterTests.swift in TestFiles, got: %v", result.TestFiles)
+	}
+}
+
+// TestFindTestFiles_Zig verifies that FindTestFiles returns the source file
+// itself (inline tests, same pattern as Rust).
+func TestFindTestFiles_Zig(t *testing.T) {
+	dir := t.TempDir()
+	srcFile := filepath.Join(dir, "greeter.zig")
+	if err := os.WriteFile(srcFile, []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := FindTestFiles(context.Background(), dir, "zig", srcFile)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.TestFiles) != 1 {
+		t.Fatalf("expected 1 test file (source itself), got %d: %v", len(result.TestFiles), result.TestFiles)
+	}
+	if result.TestFiles[0] != srcFile {
+		t.Errorf("expected source file %q, got %q", srcFile, result.TestFiles[0])
+	}
+}
+
+// TestFindTestFiles_Kotlin verifies that FindTestFiles finds *Test.kt files.
+func TestFindTestFiles_Kotlin(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Greeter.kt"), []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	testFile := filepath.Join(dir, "GreeterTest.kt")
+	if err := os.WriteFile(testFile, []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := FindTestFiles(context.Background(), dir, "kotlin", filepath.Join(dir, "Greeter.kt"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, tf := range result.TestFiles {
+		if tf == testFile {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected GreeterTest.kt in TestFiles, got: %v", result.TestFiles)
+	}
+}
