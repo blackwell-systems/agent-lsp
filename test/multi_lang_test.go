@@ -641,6 +641,11 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		testRenameSymbol(t, ctx, session, lang),
 		testGetServerCapabilities(t, ctx, session, lang),
 		testWorkspaceFolders(t, ctx, session, lang),
+		testGoToTypeDefinition(t, ctx, session, lang),
+		testGoToImplementation(t, ctx, session, lang),
+		testFormatRange(t, ctx, session, lang),
+		testApplyEdit(t, ctx, session, lang),
+		testDetectLspServers(t, ctx, session, lang),
 	}
 
 	return langTestResult{tier1: "pass", tier2: tier2Results}
@@ -1452,6 +1457,139 @@ func testWorkspaceFolders(t *testing.T, ctx context.Context, session *mcp.Client
 	return toolResult{tool: "workspace_folders", status: "pass"}
 }
 
+// testGoToTypeDefinition tests the go_to_type_definition tool.
+// Uses referenceLine/referenceColumn as the position — calling from a symbol
+// reference rather than its definition to exercise the type-jump behavior.
+func testGoToTypeDefinition(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	line := lang.referenceLine
+	col := lang.referenceColumn
+	if line == 0 {
+		return toolResult{tool: "go_to_type_definition", status: "skip", detail: "no reference position configured"}
+	}
+	res, err := callTool(ctx, session, "go_to_type_definition", map[string]any{
+		"file_path":   lang.file,
+		"language_id": lang.id,
+		"line":        line,
+		"column":      col,
+	})
+	if err != nil {
+		return toolResult{tool: "go_to_type_definition", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "go_to_type_definition", status: "skip",
+			detail: fmt.Sprintf("server does not support typeDefinition: %v", res.Content)}
+	}
+	text, err := textFromResult(res)
+	if err != nil {
+		return toolResult{tool: "go_to_type_definition", status: "fail", detail: err.Error()}
+	}
+	if text == "" || text == "null" || text == "[]" {
+		return toolResult{tool: "go_to_type_definition", status: "skip", detail: "empty result"}
+	}
+	return toolResult{tool: "go_to_type_definition", status: "pass"}
+}
+
+// testGoToImplementation tests the go_to_implementation tool.
+// Uses hoverLine/hoverColumn (typically pointing at a type or interface definition).
+// Most servers will return empty for concrete types; the result is skip not fail.
+func testGoToImplementation(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	if lang.hoverLine == 0 {
+		return toolResult{tool: "go_to_implementation", status: "skip", detail: "no hover position configured"}
+	}
+	res, err := callTool(ctx, session, "go_to_implementation", map[string]any{
+		"file_path":   lang.file,
+		"language_id": lang.id,
+		"line":        lang.hoverLine,
+		"column":      lang.hoverColumn,
+	})
+	if err != nil {
+		return toolResult{tool: "go_to_implementation", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "go_to_implementation", status: "skip",
+			detail: fmt.Sprintf("server does not support implementation: %v", res.Content)}
+	}
+	text, err := textFromResult(res)
+	if err != nil {
+		return toolResult{tool: "go_to_implementation", status: "fail", detail: err.Error()}
+	}
+	if text == "" || text == "null" || text == "[]" {
+		return toolResult{tool: "go_to_implementation", status: "skip", detail: "no implementations found"}
+	}
+	return toolResult{tool: "go_to_implementation", status: "pass"}
+}
+
+// testFormatRange tests the format_range tool over the first 5 lines of the file.
+func testFormatRange(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	if !lang.supportsFormatting {
+		return toolResult{tool: "format_range", status: "skip", detail: "not supported"}
+	}
+	res, err := callTool(ctx, session, "format_range", map[string]any{
+		"file_path":    lang.file,
+		"language_id":  lang.id,
+		"start_line":   1,
+		"start_column": 1,
+		"end_line":     5,
+		"end_column":   120,
+	})
+	if err != nil {
+		return toolResult{tool: "format_range", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "format_range", status: "skip",
+			detail: fmt.Sprintf("server does not support rangeFormatting: %v", res.Content)}
+	}
+	return toolResult{tool: "format_range", status: "pass"}
+}
+
+// testApplyEdit tests the apply_edit tool using a no-op WorkspaceEdit.
+// An empty changes map is a valid WorkspaceEdit that applies zero edits —
+// it tests the tool's wiring without modifying any fixture files.
+func testApplyEdit(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	res, err := callTool(ctx, session, "apply_edit", map[string]any{
+		"workspace_edit": map[string]any{"changes": map[string]any{}},
+	})
+	if err != nil {
+		return toolResult{tool: "apply_edit", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		text, _ := textFromResult(res)
+		return toolResult{tool: "apply_edit", status: "fail",
+			detail: fmt.Sprintf("apply_edit returned IsError: %s", text)}
+	}
+	return toolResult{tool: "apply_edit", status: "pass"}
+}
+
+// testDetectLspServers tests the detect_lsp_servers tool against the language fixture.
+func testDetectLspServers(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	res, err := callTool(ctx, session, "detect_lsp_servers", map[string]any{
+		"workspace_dir": lang.fixture,
+	})
+	if err != nil {
+		return toolResult{tool: "detect_lsp_servers", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		text, _ := textFromResult(res)
+		return toolResult{tool: "detect_lsp_servers", status: "fail",
+			detail: fmt.Sprintf("detect_lsp_servers returned IsError: %s", text)}
+	}
+	text, err := textFromResult(res)
+	if err != nil {
+		return toolResult{tool: "detect_lsp_servers", status: "fail", detail: err.Error()}
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		return toolResult{tool: "detect_lsp_servers", status: "fail",
+			detail: fmt.Sprintf("failed to parse detect_lsp_servers response: %s", text)}
+	}
+	return toolResult{tool: "detect_lsp_servers", status: "pass"}
+}
+
 // statusIcon returns a visual icon for a tool result status.
 func statusIcon(s string) string {
 	switch s {
@@ -1468,12 +1606,13 @@ func statusIcon(s string) string {
 func printMultiLangSummary(t *testing.T, results []langResult) {
 	t.Helper()
 	header := fmt.Sprintf(
-		"%-14s | T1 | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s",
+		"%-14s | T1 | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s | %-8s | %-10s | %-11s | %-10s | %-12s",
 		"Language", "symbols", "definition", "references", "completions",
 		"workspace", "format", "declaration", "type_hierarchy", "hover",
 		"call_hier", "sem_tok", "sig_help",
 		"highlights", "inlay_hints", "code_act", "prep_ren", "rename",
-		"srv_caps", "wk_folders")
+		"srv_caps", "wk_folders",
+		"type_def", "go_to_impl", "format_range", "apply_edit", "detect_servers")
 	sep := strings.Repeat("-", len(header))
 	t.Logf("\n%s\n%s", header, sep)
 
@@ -1490,7 +1629,7 @@ func printMultiLangSummary(t *testing.T, results []langResult) {
 			return " "
 		}
 		t.Logf(
-			"%-14s | %-2s | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s",
+			"%-14s | %-2s | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s | %-8s | %-10s | %-11s | %-10s | %-12s",
 			r.name,
 			statusIcon(r.tier1),
 			get("get_document_symbols"),
@@ -1512,6 +1651,11 @@ func printMultiLangSummary(t *testing.T, results []langResult) {
 			get("rename_symbol"),
 			get("get_server_capabilities"),
 			get("workspace_folders"),
+			get("go_to_type_definition"),
+			get("go_to_implementation"),
+			get("format_range"),
+			get("apply_edit"),
+			get("detect_lsp_servers"),
 		)
 	}
 	t.Logf("%s", sep)

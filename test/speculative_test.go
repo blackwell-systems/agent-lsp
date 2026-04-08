@@ -167,4 +167,106 @@ func TestSpeculativeSessions(t *testing.T) {
 			t.Logf("commit_session succeeded")
 		}
 	})
+
+	t.Run("destroy_session", func(t *testing.T) {
+		// Create a session solely to test destroy_session.
+		res, err := callTool(ctx, session, "create_simulation_session", map[string]any{
+			"workspace_root": goFixture,
+			"language":       "go",
+		})
+		if err != nil || res.IsError {
+			t.Skipf("create_simulation_session failed (expected if not supported)")
+		}
+		text, err := textFromResult(res)
+		if err != nil {
+			t.Fatalf("failed to parse create_simulation_session response: %v", err)
+		}
+		var createResult map[string]any
+		if err := json.Unmarshal([]byte(text), &createResult); err != nil {
+			t.Fatalf("failed to unmarshal: %s", text)
+		}
+		sessionID, _ := createResult["session_id"].(string)
+		if sessionID == "" {
+			t.Fatalf("no session_id in response")
+		}
+
+		res, err = callTool(ctx, session, "destroy_session", map[string]any{
+			"session_id": sessionID,
+		})
+		if err != nil {
+			t.Errorf("destroy_session failed: %v", err)
+		} else if res.IsError {
+			text, _ := textFromResult(res)
+			t.Errorf("destroy_session returned IsError: %s", text)
+		} else {
+			t.Logf("destroy_session succeeded")
+		}
+
+		// Verify destroyed session is no longer accessible.
+		res, err = callTool(ctx, session, "evaluate_session", map[string]any{
+			"session_id": sessionID,
+		})
+		if err == nil && !res.IsError {
+			t.Errorf("evaluate_session succeeded after destroy_session — session was not removed")
+		} else {
+			t.Logf("evaluate_session correctly rejected destroyed session")
+		}
+	})
+
+	t.Run("simulate_chain", func(t *testing.T) {
+		// Create a session for simulate_chain.
+		res, err := callTool(ctx, session, "create_simulation_session", map[string]any{
+			"workspace_root": goFixture,
+			"language":       "go",
+		})
+		if err != nil || res.IsError {
+			t.Skipf("create_simulation_session failed (expected if not supported)")
+		}
+		text, err := textFromResult(res)
+		if err != nil {
+			t.Fatalf("failed to parse create_simulation_session response: %v", err)
+		}
+		var createResult map[string]any
+		if err := json.Unmarshal([]byte(text), &createResult); err != nil {
+			t.Fatalf("failed to unmarshal: %s", text)
+		}
+		sessionID, _ := createResult["session_id"].(string)
+		if sessionID == "" {
+			t.Fatalf("no session_id in response")
+		}
+		defer func() {
+			_, _ = callTool(ctx, session, "discard_session", map[string]any{"session_id": sessionID})
+		}()
+
+		// Apply a two-step chain: add a comment, then add another.
+		res, err = callTool(ctx, session, "simulate_chain", map[string]any{
+			"session_id": sessionID,
+			"edits": []map[string]any{
+				{
+					"file_path":    goFile,
+					"start_line":   1,
+					"start_column": 1,
+					"end_line":     1,
+					"end_column":   1,
+					"new_text":     "// chain step 1\n",
+				},
+				{
+					"file_path":    goFile,
+					"start_line":   2,
+					"start_column": 1,
+					"end_line":     2,
+					"end_column":   1,
+					"new_text":     "// chain step 2\n",
+				},
+			},
+		})
+		if err != nil {
+			t.Errorf("simulate_chain failed: %v", err)
+		} else if res.IsError {
+			text, _ := textFromResult(res)
+			t.Logf("simulate_chain returned IsError (may be expected): %s", text)
+		} else {
+			t.Logf("simulate_chain succeeded")
+		}
+	})
 }
