@@ -1770,8 +1770,10 @@ Does not require `start_lsp` to have been called — it works standalone.
 ### `run_build`
 
 Compile the project using the detected workspace language. Language-specific
-dispatch — `go build ./...`, `cargo build`, `tsc --noEmit`, `mypy .` (Python
-typecheck proxy). Does not require `start_lsp`.
+dispatch — `go build ./...` (Go), `cargo build` (Rust), `tsc --noEmit`
+(TypeScript), `mypy .` (Python typecheck proxy), `npm run build` (JavaScript),
+`dotnet build` (C#), `swift build` (Swift), `zig build` (Zig),
+`gradle build --quiet` (Kotlin). Does not require `start_lsp`.
 
 **Parameters**
 
@@ -1805,8 +1807,10 @@ typecheck proxy). Does not require `start_lsp`.
 ### `run_tests`
 
 Run the test suite for the detected workspace language. Language-specific
-dispatch — `go test -json ./...`, `cargo test --message-format=json`,
-`pytest --tb=json`, `npm test`. Test failure `location` fields are
+dispatch — `go test -json ./...` (Go), `cargo test --message-format=json`
+(Rust), `pytest --tb=json` (Python), `npm test` (JavaScript/TypeScript),
+`dotnet test` (C#), `swift test` (Swift), `zig build test` (Zig),
+`gradle test --quiet` (Kotlin). Test failure `location` fields are
 LSP-normalized (file URI + zero-based range) — paste directly into
 `go_to_definition`. Does not require `start_lsp`.
 
@@ -1854,7 +1858,11 @@ Return test files that exercise a given source file. Static lookup — no test
 execution. Go: `*_test.go` in the same directory. Python: `test_*.py` /
 `*_test.py` in the same directory and a `tests/` sibling. TypeScript/JS:
 `*.test.ts`, `*.spec.ts`, `*.test.js`, `*.spec.js`, etc. Rust: returns the
-source file itself (tests are inline). Does not require `start_lsp`.
+source file itself (tests are inline). Swift: returns the source file itself
+(tests are inline via XCTest). Zig: returns the source file itself (inline
+`test` blocks). C#: globs `*Test*.cs` / `*Tests.cs` in the project tree.
+Kotlin: globs `*Test.kt` / `*Tests.kt` in the project tree.
+Does not require `start_lsp`.
 
 **Parameters**
 
@@ -1876,8 +1884,11 @@ source file itself (tests are inline). Does not require `start_lsp`.
 **Notes**
 
 - `test_files` is an empty array when no test files are found.
-- For Rust, the source file itself is returned in `test_files` because tests
-  live in the same file as the source code.
+- For Rust, Swift, and Zig, the source file itself is returned in `test_files`
+  because tests live in the same file as the source code (Rust `#[cfg(test)]`
+  modules, Swift XCTest methods, Zig inline `test` blocks).
+- For C#, test files are discovered by globbing `*Test*.cs` / `*Tests.cs`.
+- For Kotlin, test files are discovered by globbing `*Test.kt` / `*Tests.kt`.
 - Does not start or require an LSP session.
 
 ---
