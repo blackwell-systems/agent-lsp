@@ -147,6 +147,70 @@ type SymbolInformation struct {
 	ContainerName *string     `json:"containerName,omitempty"`
 }
 
+// DocumentSymbol is the hierarchical variant of a document symbol.
+// See LSP 3.17 § DocumentSymbol.
+type DocumentSymbol struct {
+	Name           string           `json:"name"`
+	Detail         string           `json:"detail,omitempty"`
+	Kind           SymbolKind       `json:"kind"`
+	Tags           []SymbolTag      `json:"tags,omitempty"`
+	Deprecated     bool             `json:"deprecated,omitempty"`
+	Range          Range            `json:"range"`
+	SelectionRange Range            `json:"selectionRange"`
+	Children       []DocumentSymbol `json:"children,omitempty"`
+}
+
+// Command is an LSP workspace command (used both standalone and embedded).
+// See LSP 3.17 § Command.
+type Command struct {
+	Title     string        `json:"title"`
+	Command   string        `json:"command"`
+	Arguments []interface{} `json:"arguments,omitempty"`
+}
+
+// CompletionItem represents a single completion suggestion.
+// See LSP 3.17 § CompletionItem.
+type CompletionItem struct {
+	Label               string      `json:"label"`
+	Kind                *int        `json:"kind,omitempty"`
+	Tags                []SymbolTag `json:"tags,omitempty"`
+	Detail              *string     `json:"detail,omitempty"`
+	Documentation       interface{} `json:"documentation,omitempty"`
+	Deprecated          bool        `json:"deprecated,omitempty"`
+	Preselect           bool        `json:"preselect,omitempty"`
+	SortText            *string     `json:"sortText,omitempty"`
+	FilterText          *string     `json:"filterText,omitempty"`
+	InsertText          *string     `json:"insertText,omitempty"`
+	InsertTextFormat    *int        `json:"insertTextFormat,omitempty"`
+	TextEdit            interface{} `json:"textEdit,omitempty"`
+	AdditionalTextEdits []TextEdit  `json:"additionalTextEdits,omitempty"`
+	CommitCharacters    []string    `json:"commitCharacters,omitempty"`
+	Command             *Command    `json:"command,omitempty"`
+	Data                interface{} `json:"data,omitempty"`
+}
+
+// CompletionList is the canonical completion response wrapper.
+// See LSP 3.17 § CompletionList.
+type CompletionList struct {
+	IsIncomplete bool             `json:"isIncomplete"`
+	Items        []CompletionItem `json:"items"`
+}
+
+// CodeAction is the canonical code action shape.
+// See LSP 3.17 § CodeAction.
+type CodeAction struct {
+	Title       string          `json:"title"`
+	Kind        *string         `json:"kind,omitempty"`
+	Diagnostics []LSPDiagnostic `json:"diagnostics,omitempty"`
+	IsPreferred *bool           `json:"isPreferred,omitempty"`
+	Disabled    *struct {
+		Reason string `json:"reason"`
+	} `json:"disabled,omitempty"`
+	Edit    interface{} `json:"edit,omitempty"`
+	Command *Command    `json:"command,omitempty"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
 // ToolHandler is the function signature for tool handler callbacks registered
 // by extensions. The ctx, client, and args mirror the standard tool handler args.
 type ToolHandler func(ctx interface{}, args map[string]interface{}) (ToolResult, error)
