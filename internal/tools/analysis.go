@@ -294,12 +294,9 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 		Symbols: symbols,
 	}
 
-	if offset < len(symbols) {
-		end := offset + limit
-		if end > len(symbols) {
-			end = len(symbols)
-		}
-		window := symbols[offset:end]
+	if start, end, pg := symbolPaginationWindow(len(symbols), offset, limit); pg != nil {
+		resp.Pagination = pg
+		window := symbols[start:end]
 		enriched := make([]workspaceSymbolEnriched, len(window))
 		for i, sym := range window {
 			enriched[i] = workspaceSymbolEnriched{SymbolInformation: sym}
@@ -318,11 +315,6 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 			}
 		}
 		resp.Enriched = enriched
-		resp.Pagination = &workspaceSymbolPagination{
-			Offset: offset,
-			Limit:  limit,
-			More:   end < len(symbols),
-		}
 	}
 
 	data, mErr := json.Marshal(resp)
@@ -336,6 +328,24 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 func toIntOpt(args map[string]interface{}, key string) (int, bool) {
 	v, err := toInt(args, key)
 	return v, err == nil
+}
+
+// symbolPaginationWindow computes the enrichment window [start, end) and pagination
+// metadata for a result set of size total. Returns nil pagination when offset is
+// out of bounds. Extracted for testing.
+func symbolPaginationWindow(total, offset, limit int) (start, end int, p *workspaceSymbolPagination) {
+	if offset >= total || total == 0 {
+		return 0, 0, nil
+	}
+	end = offset + limit
+	if end > total {
+		end = total
+	}
+	return offset, end, &workspaceSymbolPagination{
+		Offset: offset,
+		Limit:  limit,
+		More:   end < total,
+	}
 }
 
 // extractPosition reads line and column from args, validates 1-indexed.
