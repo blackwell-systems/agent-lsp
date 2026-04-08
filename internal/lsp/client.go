@@ -39,6 +39,9 @@ var requestTimeouts = map[string]time.Duration{
 	"textDocument/prepareCallHierarchy": 30 * time.Second,
 	"callHierarchy/incomingCalls":        60 * time.Second,
 	"callHierarchy/outgoingCalls":         60 * time.Second,
+	"textDocument/prepareTypeHierarchy": 30 * time.Second,
+	"typeHierarchy/supertypes":           60 * time.Second,
+	"typeHierarchy/subtypes":              60 * time.Second,
 	"textDocument/semanticTokens/range":   30 * time.Second,
 	"textDocument/semanticTokens/full":    30 * time.Second,
 }
@@ -574,6 +577,9 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 					},
 				},
 				"callHierarchy": map[string]interface{}{
+					"dynamicRegistration": true,
+				},
+				"typeHierarchy": map[string]interface{}{
 					"dynamicRegistration": true,
 				},
 				"semanticTokens": map[string]interface{}{
@@ -1275,6 +1281,66 @@ func (c *LSPClient) GetOutgoingCalls(ctx context.Context, item types.CallHierarc
 		return nil, err
 	}
 	return calls, nil
+}
+
+// PrepareTypeHierarchy resolves the type hierarchy item at a position.
+// Returns a typed slice or an empty slice if unsupported.
+func (c *LSPClient) PrepareTypeHierarchy(ctx context.Context, uri string, pos types.Position) ([]types.TypeHierarchyItem, error) {
+	if !c.hasCapability("typeHierarchyProvider") {
+		logging.Log(logging.LevelDebug, "server does not support typeHierarchy")
+		return []types.TypeHierarchyItem{}, nil
+	}
+	result, err := c.sendRequest(ctx, "textDocument/prepareTypeHierarchy", map[string]interface{}{
+		"textDocument": map[string]interface{}{"uri": uri},
+		"position":     pos,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return []types.TypeHierarchyItem{}, nil
+	}
+	var items []types.TypeHierarchyItem
+	if err := json.Unmarshal(result, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+// GetSupertypes returns all supertypes (parent classes/interfaces) of the given type hierarchy item.
+func (c *LSPClient) GetSupertypes(ctx context.Context, item types.TypeHierarchyItem) ([]types.TypeHierarchyItem, error) {
+	result, err := c.sendRequest(ctx, "typeHierarchy/supertypes", map[string]interface{}{
+		"item": item,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return []types.TypeHierarchyItem{}, nil
+	}
+	var items []types.TypeHierarchyItem
+	if err := json.Unmarshal(result, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+// GetSubtypes returns all subtypes (subclasses/implementations) of the given type hierarchy item.
+func (c *LSPClient) GetSubtypes(ctx context.Context, item types.TypeHierarchyItem) ([]types.TypeHierarchyItem, error) {
+	result, err := c.sendRequest(ctx, "typeHierarchy/subtypes", map[string]interface{}{
+		"item": item,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return []types.TypeHierarchyItem{}, nil
+	}
+	var items []types.TypeHierarchyItem
+	if err := json.Unmarshal(result, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 // GetSignatureHelp returns signature help at a position.
