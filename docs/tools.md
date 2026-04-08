@@ -1,6 +1,6 @@
 # lsp-mcp Tool Reference
 
-All 31 tools exposed by the lsp-mcp MCP server. Coordinates are **1-based** for
+All 34 tools exposed by the lsp-mcp MCP server. Coordinates are **1-based** for
 both `line` and `column` in every tool call; the server converts internally to
 the 0-based values the LSP spec requires.
 
@@ -151,6 +151,78 @@ File successfully closed: /Users/dayna.blackwell/code/LSP-MCP/test/ts-project/sr
   done analyzing.
 - `get_diagnostics` (no `file_path`) only returns diagnostics for currently
   open files, so closing a file removes it from those results.
+
+---
+
+### `add_workspace_folder`
+
+Add a directory to the LSP workspace, enabling cross-repo references, definitions,
+and diagnostics. After adding a folder the language server re-indexes it — call
+sites and symbol definitions in both repos become visible to each other.
+
+Useful pattern: `start_lsp` on a library repo, then `add_workspace_folder` for a
+consumer repo. `get_references` on a library function then returns call sites in
+both projects.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `path` | string | yes | Absolute path to the directory to add |
+
+**Example call**
+
+```json
+{ "path": "/Users/dayna.blackwell/code/my-app" }
+```
+
+**Actual output**
+
+```json
+{
+  "added": "/Users/dayna.blackwell/code/my-app",
+  "workspace_folders": [
+    { "uri": "file:///Users/dayna.blackwell/code/my-library", "name": "/Users/dayna.blackwell/code/my-library" },
+    { "uri": "file:///Users/dayna.blackwell/code/my-app",     "name": "/Users/dayna.blackwell/code/my-app" }
+  ]
+}
+```
+
+**Notes**
+
+- Requires `start_lsp` to have been called first.
+- Supported by gopls, rust-analyzer, typescript-language-server. Servers that do not support multi-root workspaces silently ignore the notification.
+- Idempotent — adding a folder that is already present is a no-op.
+
+---
+
+### `remove_workspace_folder`
+
+Remove a directory from the LSP workspace. The server stops indexing that folder.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `path` | string | yes | Absolute path to the directory to remove |
+
+---
+
+### `list_workspace_folders`
+
+Return the current list of workspace folders the server is indexing.
+
+**Parameters** — none
+
+**Actual output**
+
+```json
+{
+  "workspace_folders": [
+    { "uri": "file:///Users/dayna.blackwell/code/my-library", "name": "/Users/dayna.blackwell/code/my-library" }
+  ]
+}
+```
 
 ---
 
