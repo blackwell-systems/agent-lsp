@@ -45,6 +45,16 @@ type langConfig struct {
 	declarationColumn  int // C only
 	typeHierarchyLine   int // Java and TypeScript only
 	typeHierarchyColumn int // Java and TypeScript only
+
+	// Fields for Tier 2 expansion tools.
+	highlightLine      int    // for get_document_highlights; uses hoverLine if 0
+	highlightColumn    int    // for get_document_highlights; uses hoverColumn if 0
+	inlayHintEndLine   int    // end line for get_inlay_hints range; computed from hoverLine if 0
+	renameSymbolLine   int    // for rename_symbol / prepare_rename
+	renameSymbolColumn int    // for rename_symbol / prepare_rename
+	renameSymbolName   string // new_name for rename_symbol
+	codeActionLine     int    // start line for get_code_actions range; uses hoverLine if 0
+	codeActionEndLine  int    // end line for get_code_actions range; codeActionLine+1 if 0
 }
 
 // toolResult holds the outcome of a single Tier 2 tool test.
@@ -140,6 +150,14 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			symbolName:          "Person",
 			typeHierarchyLine:   11,
 			typeHierarchyColumn: 18,
+			highlightLine:      11,
+			highlightColumn:    18,
+			inlayHintEndLine:   35,
+			renameSymbolLine:   11,
+			renameSymbolColumn: 18,
+			renameSymbolName:   "RenamedPerson",
+			codeActionLine:     36,
+			codeActionEndLine:  38,
 		},
 		{
 			name:               "Python",
@@ -162,6 +180,14 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			supportsFormatting: false,
 			secondFile:         filepath.Join(fixtureBase, "python", "greeter.py"),
 			symbolName:         "Person",
+			highlightLine:      4,
+			highlightColumn:    7,
+			inlayHintEndLine:   16,
+			renameSymbolLine:   4,
+			renameSymbolColumn: 7,
+			renameSymbolName:   "RenamedPerson",
+			codeActionLine:     4,
+			codeActionEndLine:  7,
 		},
 		{
 			name:               "Go",
@@ -184,6 +210,14 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			supportsFormatting: true,
 			secondFile:         filepath.Join(fixtureBase, "go", "greeter.go"),
 			symbolName:         "Person",
+			highlightLine:      6,
+			highlightColumn:    6,
+			inlayHintEndLine:   20,
+			renameSymbolLine:   6,
+			renameSymbolColumn: 6,
+			renameSymbolName:   "RenamedPerson",
+			codeActionLine:     6,
+			codeActionEndLine:  9,
 		},
 		{
 			name:               "Rust",
@@ -206,6 +240,14 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			supportsFormatting: true,
 			secondFile:         filepath.Join(fixtureBase, "rust", "src", "greeter.rs"),
 			symbolName:         "Person",
+			highlightLine:      2,
+			highlightColumn:    8,
+			inlayHintEndLine:   20,
+			renameSymbolLine:   2,
+			renameSymbolColumn: 8,
+			renameSymbolName:   "RenamedPerson",
+			codeActionLine:     2,
+			codeActionEndLine:  5,
 		},
 		{
 			name:       "Java",
@@ -233,6 +275,14 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			symbolName:          "Person",
 			typeHierarchyLine:   6,
 			typeHierarchyColumn: 14,
+			highlightLine:      6,
+			highlightColumn:    14,
+			inlayHintEndLine:   20,
+			renameSymbolLine:   6,
+			renameSymbolColumn: 14,
+			renameSymbolName:   "RenamedPerson",
+			codeActionLine:     6,
+			codeActionEndLine:  8,
 		},
 		{
 			name:               "C",
@@ -257,6 +307,14 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			symbolName:         "create_person",
 			declarationLine:    3,
 			declarationColumn:  1,
+			highlightLine:      3,
+			highlightColumn:    1,
+			inlayHintEndLine:   15,
+			renameSymbolLine:   3,
+			renameSymbolColumn: 1,
+			renameSymbolName:   "renamed_person",
+			codeActionLine:     3,
+			codeActionEndLine:  5,
 		},
 		{
 			name:               "PHP",
@@ -576,6 +634,13 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		testCallHierarchy(t, ctx, session, lang),
 		testGetSemanticTokens(t, ctx, session, lang),
 		testGetSignatureHelp(t, ctx, session, lang),
+		testGetDocumentHighlights(t, ctx, session, lang),
+		testGetInlayHints(t, ctx, session, lang),
+		testGetCodeActions(t, ctx, session, lang),
+		testPrepareRename(t, ctx, session, lang),
+		testRenameSymbol(t, ctx, session, lang),
+		testGetServerCapabilities(t, ctx, session, lang),
+		testWorkspaceFolders(t, ctx, session, lang),
 	}
 
 	return langTestResult{tier1: "pass", tier2: tier2Results}
@@ -1104,6 +1169,289 @@ func testGetSignatureHelp(t *testing.T, ctx context.Context, session *mcp.Client
 	return toolResult{tool: "get_signature_help", status: "pass"}
 }
 
+// testGetDocumentHighlights tests the get_document_highlights tool.
+func testGetDocumentHighlights(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	line := lang.highlightLine
+	col := lang.highlightColumn
+	if line == 0 {
+		line = lang.hoverLine
+		col = lang.hoverColumn
+	}
+	if line == 0 {
+		return toolResult{tool: "get_document_highlights", status: "skip", detail: "no position configured"}
+	}
+	res, err := callTool(ctx, session, "get_document_highlights", map[string]any{
+		"file_path":   lang.file,
+		"language_id": lang.id,
+		"line":        line,
+		"column":      col,
+	})
+	if err != nil {
+		return toolResult{tool: "get_document_highlights", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "get_document_highlights", status: "skip",
+			detail: fmt.Sprintf("server does not support documentHighlights: %v", res.Content)}
+	}
+	text, err := textFromResult(res)
+	if err != nil {
+		return toolResult{tool: "get_document_highlights", status: "fail",
+			detail: fmt.Sprintf("failed to parse response: %v", err)}
+	}
+	var items []map[string]any
+	if err := json.Unmarshal([]byte(text), &items); err != nil {
+		return toolResult{tool: "get_document_highlights", status: "fail",
+			detail: fmt.Sprintf("failed to unmarshal response: %s", text)}
+	}
+	if len(items) == 0 {
+		return toolResult{tool: "get_document_highlights", status: "skip", detail: "no highlights returned"}
+	}
+	return toolResult{tool: "get_document_highlights", status: "pass"}
+}
+
+// testGetInlayHints tests the get_inlay_hints tool over a range.
+func testGetInlayHints(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	endLine := lang.inlayHintEndLine
+	if endLine == 0 {
+		endLine = lang.hoverLine + 5
+	}
+	if endLine < 5 {
+		endLine = 5
+	}
+	res, err := callTool(ctx, session, "get_inlay_hints", map[string]any{
+		"file_path":    lang.file,
+		"language_id":  lang.id,
+		"start_line":   1,
+		"start_column": 1,
+		"end_line":     endLine,
+		"end_column":   120,
+	})
+	if err != nil {
+		return toolResult{tool: "get_inlay_hints", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "get_inlay_hints", status: "skip",
+			detail: fmt.Sprintf("server does not support inlayHints: %v", res.Content)}
+	}
+	text, err := textFromResult(res)
+	if err != nil {
+		return toolResult{tool: "get_inlay_hints", status: "fail",
+			detail: fmt.Sprintf("failed to parse response: %v", err)}
+	}
+	var hints []map[string]any
+	if err := json.Unmarshal([]byte(text), &hints); err != nil {
+		return toolResult{tool: "get_inlay_hints", status: "fail",
+			detail: fmt.Sprintf("failed to unmarshal response: %s", text)}
+	}
+	if len(hints) == 0 {
+		return toolResult{tool: "get_inlay_hints", status: "skip", detail: "no inlay hints returned"}
+	}
+	return toolResult{tool: "get_inlay_hints", status: "pass"}
+}
+
+// testGetCodeActions tests the get_code_actions tool.
+func testGetCodeActions(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	startLine := lang.codeActionLine
+	if startLine == 0 {
+		startLine = lang.hoverLine
+	}
+	if startLine == 0 {
+		return toolResult{tool: "get_code_actions", status: "skip", detail: "no position configured"}
+	}
+	endLine := lang.codeActionEndLine
+	if endLine == 0 {
+		endLine = startLine + 1
+	}
+	res, err := callTool(ctx, session, "get_code_actions", map[string]any{
+		"file_path":    lang.file,
+		"language_id":  lang.id,
+		"start_line":   startLine,
+		"start_column": 1,
+		"end_line":     endLine,
+		"end_column":   120,
+	})
+	if err != nil {
+		return toolResult{tool: "get_code_actions", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "get_code_actions", status: "skip",
+			detail: fmt.Sprintf("server does not support codeActions: %v", res.Content)}
+	}
+	_, err = textFromResult(res)
+	if err != nil {
+		return toolResult{tool: "get_code_actions", status: "fail",
+			detail: fmt.Sprintf("failed to parse response: %v", err)}
+	}
+	// Empty action list is valid — the range may have no applicable actions.
+	return toolResult{tool: "get_code_actions", status: "pass"}
+}
+
+// testPrepareRename tests the prepare_rename validation step.
+func testPrepareRename(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	if lang.renameSymbolLine == 0 {
+		return toolResult{tool: "prepare_rename", status: "skip", detail: "renameSymbolLine not configured"}
+	}
+	res, err := callTool(ctx, session, "prepare_rename", map[string]any{
+		"file_path":   lang.file,
+		"language_id": lang.id,
+		"line":        lang.renameSymbolLine,
+		"column":      lang.renameSymbolColumn,
+	})
+	if err != nil {
+		return toolResult{tool: "prepare_rename", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "prepare_rename", status: "skip",
+			detail: fmt.Sprintf("server does not support prepareRename: %v", res.Content)}
+	}
+	text, err := textFromResult(res)
+	if err != nil || strings.TrimSpace(text) == "" || text == "null" {
+		return toolResult{tool: "prepare_rename", status: "skip", detail: "no prepare_rename response"}
+	}
+	return toolResult{tool: "prepare_rename", status: "pass"}
+}
+
+// testRenameSymbol tests the rename_symbol tool (returns WorkspaceEdit, does not apply it).
+func testRenameSymbol(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	if lang.renameSymbolLine == 0 || lang.renameSymbolName == "" {
+		return toolResult{tool: "rename_symbol", status: "skip", detail: "rename position or name not configured"}
+	}
+	res, err := callTool(ctx, session, "rename_symbol", map[string]any{
+		"file_path":   lang.file,
+		"language_id": lang.id,
+		"line":        lang.renameSymbolLine,
+		"column":      lang.renameSymbolColumn,
+		"new_name":    lang.renameSymbolName,
+	})
+	if err != nil {
+		return toolResult{tool: "rename_symbol", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "rename_symbol", status: "skip",
+			detail: fmt.Sprintf("server does not support rename: %v", res.Content)}
+	}
+	text, err := textFromResult(res)
+	if err != nil || strings.TrimSpace(text) == "" || text == "null" {
+		return toolResult{tool: "rename_symbol", status: "skip", detail: "no WorkspaceEdit returned"}
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		return toolResult{tool: "rename_symbol", status: "fail",
+			detail: fmt.Sprintf("failed to unmarshal WorkspaceEdit: %s", text)}
+	}
+	_, hasChanges := result["changes"]
+	_, hasDocChanges := result["documentChanges"]
+	if !hasChanges && !hasDocChanges {
+		return toolResult{tool: "rename_symbol", status: "skip",
+			detail: "WorkspaceEdit has neither 'changes' nor 'documentChanges'"}
+	}
+	return toolResult{tool: "rename_symbol", status: "pass"}
+}
+
+// testGetServerCapabilities tests the get_server_capabilities tool.
+func testGetServerCapabilities(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	res, err := callTool(ctx, session, "get_server_capabilities", map[string]any{})
+	if err != nil {
+		return toolResult{tool: "get_server_capabilities", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "get_server_capabilities", status: "fail",
+			detail: fmt.Sprintf("tool returned IsError=true: %v", res.Content)}
+	}
+	text, err := textFromResult(res)
+	if err != nil {
+		return toolResult{tool: "get_server_capabilities", status: "fail",
+			detail: fmt.Sprintf("failed to parse response: %v", err)}
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		return toolResult{tool: "get_server_capabilities", status: "fail",
+			detail: fmt.Sprintf("failed to unmarshal response: %s", text)}
+	}
+	supportedTools, ok := result["supported_tools"].([]any)
+	if !ok || len(supportedTools) == 0 {
+		return toolResult{tool: "get_server_capabilities", status: "fail",
+			detail: "supported_tools missing or empty"}
+	}
+	// Verify start_lsp is always present.
+	found := false
+	for _, v := range supportedTools {
+		if s, ok := v.(string); ok && s == "start_lsp" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return toolResult{tool: "get_server_capabilities", status: "fail",
+			detail: "'start_lsp' not in supported_tools"}
+	}
+	return toolResult{tool: "get_server_capabilities", status: "pass"}
+}
+
+// testWorkspaceFolders tests the workspace folder lifecycle tools.
+func testWorkspaceFolders(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+
+	// Step 1: list current workspace folders.
+	res, err := callTool(ctx, session, "list_workspace_folders", map[string]any{})
+	if err != nil {
+		return toolResult{tool: "workspace_folders", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "workspace_folders", status: "skip",
+			detail: fmt.Sprintf("list_workspace_folders not supported: %v", res.Content)}
+	}
+
+	// Step 2: add a temporary folder.
+	tmpDir, mkErr := os.MkdirTemp("", "lsp-mcp-wf-test-*")
+	if mkErr != nil {
+		return toolResult{tool: "workspace_folders", status: "fail",
+			detail: fmt.Sprintf("failed to create temp dir: %v", mkErr)}
+	}
+	defer os.RemoveAll(tmpDir)
+
+	res, err = callTool(ctx, session, "add_workspace_folder", map[string]any{
+		"path": tmpDir,
+	})
+	if err != nil {
+		return toolResult{tool: "workspace_folders", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		// Server may not support didChangeWorkspaceFolders — treat as skip.
+		return toolResult{tool: "workspace_folders", status: "skip",
+			detail: fmt.Sprintf("add_workspace_folder not supported: %v", res.Content)}
+	}
+	text, err := textFromResult(res)
+	if err != nil {
+		return toolResult{tool: "workspace_folders", status: "fail",
+			detail: fmt.Sprintf("failed to parse add response: %v", err)}
+	}
+	var addResult map[string]any
+	if err := json.Unmarshal([]byte(text), &addResult); err != nil || addResult["added"] == nil {
+		return toolResult{tool: "workspace_folders", status: "fail",
+			detail: fmt.Sprintf("add_workspace_folder: unexpected response: %s", text)}
+	}
+
+	// Step 3: remove the folder.
+	res, err = callTool(ctx, session, "remove_workspace_folder", map[string]any{
+		"path": tmpDir,
+	})
+	if err != nil {
+		return toolResult{tool: "workspace_folders", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "workspace_folders", status: "skip",
+			detail: fmt.Sprintf("remove_workspace_folder not supported: %v", res.Content)}
+	}
+	return toolResult{tool: "workspace_folders", status: "pass"}
+}
+
 // statusIcon returns a visual icon for a tool result status.
 func statusIcon(s string) string {
 	switch s {
@@ -1119,8 +1467,13 @@ func statusIcon(s string) string {
 // printMultiLangSummary prints a summary table of all language test results.
 func printMultiLangSummary(t *testing.T, results []langResult) {
 	t.Helper()
-	header := fmt.Sprintf("%-14s | T1 | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s",
-		"Language", "symbols", "definition", "references", "completions", "workspace", "format", "declaration", "type_hierarchy", "hover", "call_hier", "sem_tok", "sig_help")
+	header := fmt.Sprintf(
+		"%-14s | T1 | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s",
+		"Language", "symbols", "definition", "references", "completions",
+		"workspace", "format", "declaration", "type_hierarchy", "hover",
+		"call_hier", "sem_tok", "sig_help",
+		"highlights", "inlay_hints", "code_act", "prep_ren", "rename",
+		"srv_caps", "wk_folders")
 	sep := strings.Repeat("-", len(header))
 	t.Logf("\n%s\n%s", header, sep)
 
@@ -1136,7 +1489,8 @@ func printMultiLangSummary(t *testing.T, results []langResult) {
 			}
 			return " "
 		}
-		t.Logf("%-14s | %-2s | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s",
+		t.Logf(
+			"%-14s | %-2s | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s",
 			r.name,
 			statusIcon(r.tier1),
 			get("get_document_symbols"),
@@ -1151,6 +1505,13 @@ func printMultiLangSummary(t *testing.T, results []langResult) {
 			get("call_hierarchy"),
 			get("get_semantic_tokens"),
 			get("get_signature_help"),
+			get("get_document_highlights"),
+			get("get_inlay_hints"),
+			get("get_code_actions"),
+			get("prepare_rename"),
+			get("rename_symbol"),
+			get("get_server_capabilities"),
+			get("workspace_folders"),
 		)
 	}
 	t.Logf("%s", sep)
