@@ -407,7 +407,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		TimeoutMs     int    `json:"timeout_ms,omitempty"`
 	}
 
-	// ------- Register all 35 tools -------
+	// ------- Register all 45 tools -------
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "start_lsp",
@@ -673,11 +673,48 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	type DetectLspServersArgs struct {
 		WorkspaceDir string `json:"workspace_dir"`
 	}
+	type RunBuildArgs struct {
+		WorkspaceDir string `json:"workspace_dir"`
+		Path         string `json:"path,omitempty"`
+		Language     string `json:"language,omitempty"`
+	}
+	type RunTestsArgs struct {
+		WorkspaceDir string `json:"workspace_dir"`
+		Path         string `json:"path,omitempty"`
+		Language     string `json:"language,omitempty"`
+	}
+	type GetTestsForFileArgs struct {
+		FilePath string `json:"file_path"`
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "detect_lsp_servers",
 		Description: "Scan a workspace directory for source languages and check PATH for the corresponding LSP server binaries. Returns detected workspace languages (ranked by prevalence), installed servers with their paths, and a suggested_config array ready to paste into the lsp-mcp-go MCP server args. Use this to set up lsp-mcp-go for a new project or verify your configuration.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args DetectLspServersArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleDetectLspServers(ctx, cs.get(), toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "run_build",
+		Description: "Compile the project at workspace_dir using the detected workspace language. Language-specific dispatch (no arbitrary shell execution): go build ./..., cargo build, tsc --noEmit, mypy . (Python typecheck proxy). Optional path param narrows scope. Returns: { success: bool, errors: [{file, line, column, message}], raw: string }. Does not require start_lsp.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args RunBuildArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleRunBuild(ctx, toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "run_tests",
+		Description: "Run the test suite for the detected workspace language. Language-specific dispatch: go test -json ./..., cargo test --message-format=json, pytest --tb=json, npm test. Optional path param narrows scope. Test failure locations are LSP-normalized — paste directly into go_to_definition. Returns: { passed: bool, failures: [{file, line, test_name, message, location}], raw: string }. Does not require start_lsp.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args RunTestsArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleRunTests(ctx, toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_tests_for_file",
+		Description: "Given a source file path, return the test files that exercise it. Static lookup — no test execution. Go: *_test.go in same directory. Python: test_*.py / *_test.py in same dir and tests/ sibling. TypeScript/JS: *.test.ts, *.spec.ts etc. Rust: returns source file itself (tests inline). Does not require start_lsp.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetTestsForFileArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleGetTestsForFile(ctx, toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
