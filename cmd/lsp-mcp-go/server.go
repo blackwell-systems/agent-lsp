@@ -331,6 +331,13 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Column     int    `json:"column"`
 		Direction  string `json:"direction,omitempty"`
 	}
+	type TypeHierarchyArgs struct {
+		FilePath   string `json:"file_path"`
+		LanguageID string `json:"language_id,omitempty"`
+		Line       int    `json:"line"`
+		Column     int    `json:"column"`
+		Direction  string `json:"direction,omitempty"`
+	}
 	type GetSemanticTokensArgs struct {
 		FilePath    string `json:"file_path"`
 		LanguageID  string `json:"language_id,omitempty"`
@@ -386,7 +393,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		TimeoutMs     int    `json:"timeout_ms,omitempty"`
 	}
 
-	// ------- Register all 34 tools -------
+	// ------- Register all 35 tools -------
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "start_lsp",
@@ -597,6 +604,14 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Description: "Show call hierarchy for a symbol at a position. Returns callers (incoming), callees (outgoing), or both depending on the direction parameter. Direction defaults to \"both\". Use this to understand code flow -- which functions call this function and which functions it calls.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args CallHierarchyArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleCallHierarchy(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "type_hierarchy",
+		Description: "Show type hierarchy for a type at a position. Returns supertypes (parent classes/interfaces), subtypes (subclasses/implementations), or both depending on the direction parameter. Direction defaults to \"both\". Use this to understand class and interface inheritance relationships.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args TypeHierarchyArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleTypeHierarchy(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
