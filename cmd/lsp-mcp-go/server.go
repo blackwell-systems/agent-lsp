@@ -570,6 +570,22 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		return makeCallToolResult(r), nil, err
 	})
 
+	type GetInlayHintsArgs struct {
+		FilePath    string `json:"file_path"`
+		LanguageID  string `json:"language_id,omitempty"`
+		StartLine   int    `json:"start_line"`
+		StartColumn int    `json:"start_column"`
+		EndLine     int    `json:"end_line"`
+		EndColumn   int    `json:"end_column"`
+	}
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_inlay_hints",
+		Description: "Get inlay hints for a range within a document via LSP (textDocument/inlayHint). Inlay hints are inline annotations that IDEs display in source code — typically inferred type names (e.g. `: string`) and parameter name labels (e.g. `count:`). Useful in languages with type inference (TypeScript, Rust, Go) to see what the compiler knows without reading every type annotation. Returns an array of InlayHint objects, each with a position, label, and optional kind (1=Type, 2=Parameter). Returns an empty array if the language server does not support inlay hints.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetInlayHintsArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleGetInlayHints(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "apply_edit",
 		Description: "Apply a WorkspaceEdit to the workspace by writing file changes to disk. Pass the WorkspaceEdit object returned by rename_symbol or format_document. Edits are applied in reverse order to preserve offsets, then the LSP server is notified of each changed file via didChange. Use this after inspecting the edit returned by rename_symbol or format_document to commit the changes.",
