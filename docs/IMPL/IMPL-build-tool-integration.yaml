@@ -1,0 +1,861 @@
+title: Build Tool Integration — run_build, run_tests, and get_tests_for_file MCP Tools
+feature_slug: build-tool-integration
+verdict: SUITABLE
+suitability_assessment: |
+    All five suitability questions resolve cleanly.
+
+    1. File decomposition: Work spans 8+ distinct files with clean ownership splits.
+       Agent A owns the new runner abstraction (runner.go + build.go + unit tests).
+       Agent B owns server.go registration. Agent C owns README.md + CHANGELOG.md.
+       Agent D creates test/build_tools_test.go (new file, test function definitions).
+       Post-merge checklist handles docs/tools.md and multi_lang_test.go tier2 wiring
+       (both files exceed the V048 2000-line agent budget).
+       No two agents need conflicting modifications to the same file.
+
+    2. No investigation-first work. Language dispatch is well-understood (InferWorkspaceRoot
+       already maps root markers to language IDs). The LSP Location type is already
+       defined in internal/types/types.go. No root cause analysis needed.
+
+    3. Interface contracts are fully discoverable. The runner abstraction signatures,
+       JSON output shapes, and Location normalization layer can all be defined before
+       implementation. Agents B and D consume types defined by Agent A.
+
+    4. Pre-implementation status: run_build, run_tests, and get_tests_for_file do not
+       exist anywhere in the codebase. All work is net-new.
+
+    5. Parallelization value: Go build/test cycle ~5-10s. 4 wave-1 agents running in
+       parallel. Agent B in Wave 2 is a short sequential step (server registration only).
+       Integration wave for docs/tools.md and tier2 wiring is minimal sequential work.
+       Clear speedup over sequential.
+
+    Estimated times:
+    - Scout phase: ~20 min (thorough codebase analysis)
+    - Agent execution: ~25 min (A+C+D in parallel Wave 1, B alone in Wave 2, brief integration)
+    - Merge & verification: ~5 min
+    Total SAW time: ~50 min
+
+    Sequential baseline: ~75 min
+    Time savings: ~25 min (~33% faster)
+
+    Recommendation: Clear speedup. Proceed.
+
+    Note on V048 LOC budget:
+    docs/tools.md has 2161 lines, exceeding the 2000-line agent budget. It is assigned
+    to an integration wave agent (E) rather than a parallel wave agent to minimize risk.
+    test/multi_lang_test.go has 2062 lines; the tier2 wiring (3 lines) is also in an
+    integration wave (F). These are known pre-existing large files; the agents make
+    minimal additions.
+test_command: GOWORK=off go test ./...
+lint_command: go vet ./...
+file_ownership:
+    - file: internal/tools/runner.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/tools/build.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/tools/build_test.go
+      agent: A
+      wave: 1
+      action: new
+    - file: README.md
+      agent: C
+      wave: 1
+      action: modify
+    - file: CHANGELOG.md
+      agent: C
+      wave: 1
+      action: modify
+    - file: test/build_tools_test.go
+      agent: D
+      wave: 1
+      action: new
+    - file: cmd/lsp-mcp-go/server.go
+      agent: B
+      wave: 2
+      action: modify
+      depends_on:
+        - A
+interface_contracts:
+    - name: BuildError
+      description: A single compilation error/warning with location info
+      definition: |
+        type BuildError struct {
+            File    string `json:"file"`
+            Line    int    `json:"line"`
+            Column  int    `json:"column"`
+            Message string `json:"message"`
+        }
+      location: internal/tools/runner.go
+    - name: BuildResult
+      description: Structured output type for run_build tool
+      definition: |
+        type BuildResult struct {
+            Success bool         `json:"success"`
+            Errors  []BuildError `json:"errors"`
+            Raw     string       `json:"raw"`
+        }
+      location: internal/tools/runner.go
+    - name: TestFailure
+      description: |
+        A single test failure with location and test name.
+        Location field is LSP-normalized (file URI + zero-based range) so callers
+        can pass it directly to go_to_definition or get_references without conversion.
+      definition: |
+        type TestFailure struct {
+            File     string          `json:"file"`
+            Line     int             `json:"line"`
+            TestName string          `json:"test_name"`
+            Message  string          `json:"message"`
+            Location *types.Location `json:"location,omitempty"`
+        }
+      location: internal/tools/runner.go
+    - name: TestResult
+      description: Structured output type for run_tests tool
+      definition: |
+        type TestResult struct {
+            Passed   bool          `json:"passed"`
+            Failures []TestFailure `json:"failures"`
+            Raw      string        `json:"raw"`
+        }
+      location: internal/tools/runner.go
+    - name: TestFileResult
+      description: Structured output type for get_tests_for_file tool
+      definition: |
+        type TestFileResult struct {
+            SourceFile string   `json:"source_file"`
+            TestFiles  []string `json:"test_files"`
+        }
+      location: internal/tools/runner.go
+    - name: HandleRunBuild
+      description: |
+        MCP tool handler for run_build. No *lsp.LSPClient parameter — runs shell
+        commands independently of any LSP session.
+      definition: |
+        func HandleRunBuild(ctx context.Context, args map[string]interface{}) (types.ToolResult, error)
+      location: internal/tools/build.go
+    - name: HandleRunTests
+      description: |
+        MCP tool handler for run_tests. No *lsp.LSPClient parameter.
+      definition: |
+        func HandleRunTests(ctx context.Context, args map[string]interface{}) (types.ToolResult, error)
+      location: internal/tools/build.go
+    - name: HandleGetTestsForFile
+      description: |
+        MCP tool handler for get_tests_for_file. No *lsp.LSPClient parameter.
+        Returns test files that exercise the given source file.
+      definition: |
+        func HandleGetTestsForFile(ctx context.Context, args map[string]interface{}) (types.ToolResult, error)
+      location: internal/tools/build.go
+    - name: RunBuild
+      description: Internal function called by HandleRunBuild
+      definition: |
+        func RunBuild(ctx context.Context, root, lang, path string) (BuildResult, error)
+      location: internal/tools/build.go
+    - name: RunTests
+      description: Internal function called by HandleRunTests
+      definition: |
+        func RunTests(ctx context.Context, root, lang, path string) (TestResult, error)
+      location: internal/tools/build.go
+    - name: FindTestFiles
+      description: |
+        Internal function called by HandleGetTestsForFile. Performs static file lookup
+        without running the test suite.
+      definition: |
+        func FindTestFiles(ctx context.Context, root, lang, sourceFile string) (TestFileResult, error)
+      location: internal/tools/build.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Role
+            You are implementing the core runner abstraction and all three tool handlers
+            (run_build, run_tests, get_tests_for_file) for the LSP-MCP-GO project.
+
+            ## Repository
+            /Users/dayna.blackwell/workspace/code/LSP-MCP-GO
+
+            ## Owned Files
+            - internal/tools/runner.go  — scaffold exists; add runner dispatch logic below the types
+            - internal/tools/build.go   — new file; HandleRunBuild, HandleRunTests, HandleGetTestsForFile + RunBuild, RunTests, FindTestFiles
+            - internal/tools/build_test.go — new file; unit tests
+
+            ## Background Reading
+            Before implementing, read:
+            - internal/tools/detect.go — HandleDetectLspServers pattern (no LSP client required)
+            - internal/tools/utilities.go — HandleSetLogLevel minimal handler pattern
+            - internal/tools/detect_test.go — unit test style (t.TempDir(), table-driven, no LSP)
+            - internal/types/types.go — Location, Range, Position types (already defined)
+            - internal/config/infer.go — InferWorkspaceRoot(filePath string) (root, languageID string, err error)
+
+            ## What to Implement
+
+            ### internal/tools/runner.go (scaffold extension)
+            The scaffold file already defines the five output types. Do NOT redefine them.
+            Add the language dispatch table BELOW the type definitions:
+
+            ```go
+            // languageRunner maps a language ID to its build and test commands.
+            type languageRunner struct {
+                buildCmd  string
+                buildArgs []string // template args; "{path}" is replaced at runtime
+                testCmd   string
+                testArgs  []string // template args; "{path}" is replaced at runtime
+            }
+
+            // runners is the dispatch table for language-specific build and test commands.
+            var runners = map[string]languageRunner{
+                "go": {
+                    buildCmd:  "go",
+                    buildArgs: []string{"build", "{path}"},
+                    testCmd:   "go",
+                    testArgs:  []string{"test", "-json", "{path}"},
+                },
+                "typescript": {
+                    buildCmd:  "tsc",
+                    buildArgs: []string{"--noEmit"},
+                    testCmd:   "npm",
+                    testArgs:  []string{"test"},
+                },
+                "javascript": {
+                    buildCmd:  "eslint",
+                    buildArgs: []string{"."},
+                    testCmd:   "npm",
+                    testArgs:  []string{"test"},
+                },
+                "python": {
+                    buildCmd:  "mypy",
+                    buildArgs: []string{"{path}"},
+                    testCmd:   "pytest",
+                    testArgs:  []string{"--tb=json", "-q", "{path}"},
+                },
+                "rust": {
+                    buildCmd:  "cargo",
+                    buildArgs: []string{"build"},
+                    testCmd:   "cargo",
+                    testArgs:  []string{"test", "--message-format=json"},
+                },
+            }
+            ```
+
+            Default path values when path param is empty:
+            - Go: `./...`
+            - Python: `.`
+            - TypeScript: (no path arg for tsc)
+            - Rust: (no path narrowing for cargo build)
+
+            ### internal/tools/build.go (six exported/unexported functions)
+
+            **Package declaration and imports:**
+            Use `package tools`. Import context, encoding/json, fmt, os/exec,
+            path/filepath, strings, and the internal packages.
+
+            **1. HandleRunBuild(ctx, args)**
+            - Extract workspace_dir (required string) and path, language (optional strings)
+            - If language not provided: call config.InferWorkspaceRoot(workspace_dir) to detect
+            - If workspace_dir empty: return types.ErrorResult("workspace_dir is required")
+            - Look up runner in runners map; if not found: return types.ErrorResult("unsupported language: <lang>")
+            - Call RunBuild(ctx, root, lang, path)
+            - Marshal BuildResult to JSON, return types.TextResult(json)
+
+            **2. HandleRunTests(ctx, args)**
+            - Same pattern as HandleRunBuild but calls RunTests and returns TestResult JSON
+
+            **3. HandleGetTestsForFile(ctx, args)**
+            - Extract file_path (required string)
+            - If empty: return types.ErrorResult("file_path is required")
+            - Call config.InferWorkspaceRoot(file_path) to get root+lang
+            - Call FindTestFiles(ctx, root, lang, file_path)
+            - Marshal TestFileResult to JSON, return types.TextResult(json)
+
+            **4. RunBuild(ctx, root, lang, path string) (BuildResult, error)**
+            - Look up runner; replace "{path}" placeholder with path (default to "./..." for Go, "." for others)
+            - exec.CommandContext(ctx, cmd.buildCmd, buildArgs...) with Dir=root
+            - Capture CombinedOutput()
+            - Parse output into BuildErrors based on language:
+              - Go: regex `^([^:]+):(\d+):(\d+):\s+(.+)$` on each stderr line
+              - TypeScript tsc: regex `^([^(]+)\((\d+),(\d+)\): error TS\d+: (.+)$`
+              - Rust: multi-line; look for "error[" lines, then "--> file:line:col" on next line
+              - Python mypy: regex `^([^:]+):(\d+):\s+error:\s+(.+)$`
+              - Others: no structured parsing
+            - Return BuildResult{Success: exitCode==0, Errors: parsed, Raw: string(output)}
+
+            **5. RunTests(ctx, root, lang, path string) (TestResult, error)**
+            - Execute test command with Dir=root
+            - Parse output into TestFailures:
+              - Go (go test -json): parse JSON lines; for lines where Action=="fail" and Test!="",
+                extract test name from Test field; scan surrounding Output lines for file:line patterns
+              - Rust (cargo test --message-format=json): parse lines where type=="test" and event=="failed";
+                TestName from "name"; message from "stdout" field
+              - Python (pytest --tb=json): attempt JSON parse; extract failures[].longrepr for message,
+                failures[].nodeid for test name; fallback to raw output
+              - TypeScript/JavaScript: raw output only, no structured parsing
+            - LSP Location normalization for each TestFailure where File != "" and Line > 0:
+              ```go
+              absPath, _ := filepath.Abs(filepath.Join(root, failure.File))
+              failure.Location = &types.Location{
+                  URI: "file://" + absPath,
+                  Range: types.Range{
+                      Start: types.Position{Line: failure.Line - 1, Character: 0},
+                      End:   types.Position{Line: failure.Line - 1, Character: 0},
+                  },
+              }
+              ```
+            - Return TestResult{Passed: exitCode==0, Failures: parsed, Raw: string(output)}
+
+            **6. FindTestFiles(ctx, root, lang, sourceFile string) (TestFileResult, error)**
+            - Static lookup, no subprocess:
+              - Go: filepath.Glob(filepath.Join(filepath.Dir(sourceFile), "*_test.go"))
+              - Python: glob test_*.py and *_test.py in same dir; also check tests/ sibling dir
+              - TypeScript/JavaScript: glob *.test.ts, *.spec.ts, *.test.js, *.spec.js in same dir
+              - Rust: return []string{sourceFile} (tests are inline in Rust)
+              - Others: return []string{}
+            - Clean the sourceFile path with filepath.Abs() before returning
+            - Return TestFileResult{SourceFile: absPath, TestFiles: found}
+
+            ### internal/tools/build_test.go (unit tests)
+            All tests use t.TempDir() — no real build tools required.
+
+            1. TestHandleRunBuild_MissingWorkspaceDir — empty args → IsError=true
+            2. TestHandleRunTests_MissingWorkspaceDir — empty args → IsError=true
+            3. TestHandleGetTestsForFile_MissingFilePath — empty args → IsError=true
+            4. TestHandleRunBuild_UnsupportedLanguage — language="cobol" → IsError=true
+            5. TestHandleRunTests_UnsupportedLanguage — language="cobol" → IsError=true
+            6. TestFindTestFiles_Go — t.TempDir() + create main.go and main_test.go;
+               call FindTestFiles; verify main_test.go appears in TestFiles
+            7. TestFindTestFiles_Go_NoTests — dir with only main.go; verify TestFiles=[]
+            8. TestLocationNormalization — verify that when RunTests parses a synthetic
+               Go test failure with File="pkg_test.go", Line=42, the resulting
+               TestFailure.Location.URI starts with "file://" and
+               TestFailure.Location.Range.Start.Line == 41 (0-indexed)
+            9. TestBuildResultShape — call RunBuild with a command that exits 0 (e.g.
+               language="go", a valid go.mod dir); verify result.Success==true and
+               result.Raw is a string (may be empty if no output)
+
+            ## Constraints
+            - Do NOT add a *lsp.LSPClient parameter to any handler function. Agent B's
+              registration calls them as tools.HandleRunBuild(ctx, toolArgsToMap(args)) — no client.
+            - Do NOT modify cmd/lsp-mcp-go/server.go (Agent B).
+            - Do NOT modify test/multi_lang_test.go (Agent F).
+            - The scaffold defines the five output types — do NOT redefine them in build.go.
+              Use them directly by importing the same package (they are in package tools).
+            - For Location normalization: use types.Location, types.Range, types.Position
+              from internal/types. Import path: github.com/blackwell-systems/lsp-mcp-go/internal/types
+
+            ## Verification Gate
+            ```bash
+            cd /Users/dayna.blackwell/workspace/code/LSP-MCP-GO
+            GOWORK=off go build ./internal/...
+            GOWORK=off go vet ./internal/...
+            GOWORK=off go test ./internal/tools/ -run "TestHandleRun|TestFindTestFiles|TestLocation|TestBuildResult"
+            # Postcondition checks:
+            grep -c "func HandleRunBuild" internal/tools/build.go         # expect: 1
+            grep -c "func HandleRunTests" internal/tools/build.go         # expect: 1
+            grep -c "func HandleGetTestsForFile" internal/tools/build.go  # expect: 1
+            grep -c "func RunBuild" internal/tools/build.go               # expect: 1
+            grep -c "func RunTests" internal/tools/build.go               # expect: 1
+            grep -c "func FindTestFiles" internal/tools/build.go          # expect: 1
+            ```
+          files: []
+        - id: C
+          task: |
+            ## Role
+            You are updating README.md and CHANGELOG.md to reflect the three new
+            MCP tools (run_build, run_tests, get_tests_for_file) in LSP-MCP-GO.
+
+            ## Repository
+            /Users/dayna.blackwell/workspace/code/LSP-MCP-GO
+
+            ## Owned Files (modify)
+            - README.md
+            - CHANGELOG.md
+
+            Note: docs/tools.md is handled by a separate integration wave agent (Agent E)
+            due to its size. Do NOT modify docs/tools.md.
+
+            ## What to Implement
+
+            ### README.md — Tool count updates (42 → 45)
+            Read README.md before editing. Three new tools are added, bringing total to 45.
+
+            Update these locations (read the file to confirm exact current text):
+            1. Badge URL: `tools-42-blue.svg` → `tools-45-blue.svg`
+            2. CI coverage badge: `CI--verified_tools-26%2F42` → `CI--verified_tools-28%2F45`
+            3. "**42 tools**" bold text in the introduction → "**45 tools**"
+            4. "42 tools" in the "Then use any of the 42 tools" sentence → "45 tools"
+            5. The number "**42**" in the feature comparison table row → "**45**"
+
+            Also add run_build, run_tests, and get_tests_for_file to the CI-verified tools
+            list in README.md (around the section that says "CI coverage: The following
+            tools are end-to-end integration-tested..."). Add run_build and run_tests to
+            that list (get_tests_for_file is unit tested only, not in the integration matrix).
+
+            ### CHANGELOG.md — Add entry under [Unreleased]
+            Read CHANGELOG.md first to confirm the exact current format of the
+            `### Added` section under `## [Unreleased]`. Add this entry at the top
+            of the Added list:
+
+            ```
+            - **`run_build`, `run_tests`, and `get_tests_for_file` MCP tools** — three new
+              build-tool integration tools that do not require `start_lsp`; language-specific
+              dispatch: `go build ./...` / `cargo build` / `tsc --noEmit` / `mypy .` (run_build),
+              `go test -json ./...` / `cargo test --message-format=json` / `pytest --tb=json` /
+              `npm test` (run_tests); test failure `location` fields are LSP-normalized (file URI
+              + zero-based range) — paste directly into `go_to_definition` or `get_references`;
+              `get_tests_for_file` returns test files for a source file via static lookup (no test
+              execution); shared runner abstraction in `internal/tools/runner.go`; tool count 42 → 45
+            ```
+
+            ## Constraints
+            - Do NOT modify docs/tools.md — that is Agent E's file.
+            - Do NOT modify any .go or test files.
+            - Read each file before editing; use exact string matching, not line numbers, as anchors.
+
+            ## Verification Gate
+            ```bash
+            grep "45 tools\|45-blue" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/README.md
+            grep "run_build" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/CHANGELOG.md
+            grep "get_tests_for_file" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/CHANGELOG.md
+            ```
+          files: []
+        - id: D
+          task: |
+            ## Role
+            You are creating a new test file test/build_tools_test.go that defines the
+            integration test functions for run_build, run_tests, and get_tests_for_file.
+            These functions are called by the tier2Results slice in multi_lang_test.go
+            (which a separate integration wave agent will wire up).
+
+            ## Repository
+            /Users/dayna.blackwell/workspace/code/LSP-MCP-GO
+
+            ## Owned Files (create new)
+            - test/build_tools_test.go
+
+            ## Background Reading
+            Read test/multi_lang_test.go (first 100 lines and the last 200 lines) to understand:
+            - The package declaration (`package main_test`)
+            - The langConfig struct fields available (fixture, file, id)
+            - The callTool, textFromResult helper functions already defined there
+            - The toolResult struct shape {tool string, status string, detail string}
+            - The existing test function signatures: testDocumentSymbols, testDetectLspServers
+
+            ## What to Implement
+
+            Create test/build_tools_test.go with `package main_test`. This file defines
+            three test functions that will be called from the tier2Results slice in
+            multi_lang_test.go.
+
+            The file needs these imports: context, encoding/json, fmt, testing,
+            and github.com/modelcontextprotocol/go-sdk/mcp.
+
+            ```go
+            package main_test
+
+            import (
+                "context"
+                "encoding/json"
+                "fmt"
+                "testing"
+
+                "github.com/modelcontextprotocol/go-sdk/mcp"
+            )
+
+            // testRunBuild tests the run_build tool for languages with known build tooling.
+            // Skips (not fails) for languages where a build tool may not be installed in CI.
+            func testRunBuild(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+                t.Helper()
+                switch lang.id {
+                case "go", "typescript", "python", "rust":
+                    // known build dispatch supported
+                default:
+                    return toolResult{tool: "run_build", status: "skip", detail: "no build dispatch for " + lang.id}
+                }
+                res, err := callTool(ctx, session, "run_build", map[string]any{
+                    "workspace_dir": lang.fixture,
+                    "language":      lang.id,
+                })
+                if err != nil {
+                    return toolResult{tool: "run_build", status: "fail", detail: err.Error()}
+                }
+                if res.IsError {
+                    // Build tool not installed — skip rather than fail to keep CI green
+                    // on machines without tsc/mypy/cargo.
+                    return toolResult{tool: "run_build", status: "skip",
+                        detail: "run_build returned IsError (build tool may not be installed)"}
+                }
+                text, err := textFromResult(res)
+                if err != nil {
+                    return toolResult{tool: "run_build", status: "fail", detail: err.Error()}
+                }
+                var result map[string]any
+                if err := json.Unmarshal([]byte(text), &result); err != nil {
+                    return toolResult{tool: "run_build", status: "fail",
+                        detail: fmt.Sprintf("run_build: failed to parse response: %s", text)}
+                }
+                if _, hasSuccess := result["success"]; !hasSuccess {
+                    return toolResult{tool: "run_build", status: "fail",
+                        detail: "run_build: response missing 'success' field"}
+                }
+                return toolResult{tool: "run_build", status: "pass"}
+            }
+
+            // testRunTests tests the run_tests tool for languages with known test tooling.
+            func testRunTests(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+                t.Helper()
+                switch lang.id {
+                case "go", "typescript", "python", "rust":
+                    // known test dispatch supported
+                default:
+                    return toolResult{tool: "run_tests", status: "skip", detail: "no test dispatch for " + lang.id}
+                }
+                res, err := callTool(ctx, session, "run_tests", map[string]any{
+                    "workspace_dir": lang.fixture,
+                    "language":      lang.id,
+                })
+                if err != nil {
+                    return toolResult{tool: "run_tests", status: "fail", detail: err.Error()}
+                }
+                if res.IsError {
+                    return toolResult{tool: "run_tests", status: "skip",
+                        detail: "run_tests returned IsError (test runner may not be installed)"}
+                }
+                text, err := textFromResult(res)
+                if err != nil {
+                    return toolResult{tool: "run_tests", status: "fail", detail: err.Error()}
+                }
+                var result map[string]any
+                if err := json.Unmarshal([]byte(text), &result); err != nil {
+                    return toolResult{tool: "run_tests", status: "fail",
+                        detail: fmt.Sprintf("run_tests: failed to parse response: %s", text)}
+                }
+                if _, hasPassed := result["passed"]; !hasPassed {
+                    return toolResult{tool: "run_tests", status: "fail",
+                        detail: "run_tests: response missing 'passed' field"}
+                }
+                return toolResult{tool: "run_tests", status: "pass"}
+            }
+
+            // testGetTestsForFile tests the get_tests_for_file tool.
+            func testGetTestsForFile(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+                t.Helper()
+                res, err := callTool(ctx, session, "get_tests_for_file", map[string]any{
+                    "file_path": lang.file,
+                })
+                if err != nil {
+                    return toolResult{tool: "get_tests_for_file", status: "fail", detail: err.Error()}
+                }
+                if res.IsError {
+                    return toolResult{tool: "get_tests_for_file", status: "fail",
+                        detail: fmt.Sprintf("tool returned IsError=true: %v", res.Content)}
+                }
+                text, err := textFromResult(res)
+                if err != nil {
+                    return toolResult{tool: "get_tests_for_file", status: "fail", detail: err.Error()}
+                }
+                var result map[string]any
+                if err := json.Unmarshal([]byte(text), &result); err != nil {
+                    return toolResult{tool: "get_tests_for_file", status: "fail",
+                        detail: fmt.Sprintf("get_tests_for_file: failed to parse response: %s", text)}
+                }
+                if _, hasSourceFile := result["source_file"]; !hasSourceFile {
+                    return toolResult{tool: "get_tests_for_file", status: "fail",
+                        detail: "get_tests_for_file: response missing 'source_file' field"}
+                }
+                return toolResult{tool: "get_tests_for_file", status: "pass"}
+            }
+            ```
+
+            ## Constraints
+            - Do NOT modify test/multi_lang_test.go — Agent F wires the tier2 calls.
+            - The file MUST use `package main_test` (same package as multi_lang_test.go).
+            - Do NOT redefine langConfig, toolResult, callTool, or textFromResult — those
+              are already defined in multi_lang_test.go and visible in the same package.
+            - Do NOT add any imports beyond those listed above.
+
+            ## Verification Gate
+            ```bash
+            cd /Users/dayna.blackwell/workspace/code/LSP-MCP-GO
+            GOWORK=off go build ./test/...
+            grep -c "func testRunBuild" test/build_tools_test.go       # expect: 1
+            grep -c "func testRunTests" test/build_tools_test.go       # expect: 1
+            grep -c "func testGetTestsForFile" test/build_tools_test.go # expect: 1
+            ```
+          files: []
+    - number: 2
+      agents:
+        - id: B
+          task: |
+            ## Role
+            You are registering the three new MCP tools (run_build, run_tests,
+            get_tests_for_file) in server.go and updating the tool count comment.
+
+            ## Repository
+            /Users/dayna.blackwell/workspace/code/LSP-MCP-GO
+
+            ## Owned Files (modify)
+            - cmd/lsp-mcp-go/server.go
+
+            ## Prerequisites
+            Agent A (Wave 1) has completed. internal/tools/build.go now exports:
+            - HandleRunBuild(ctx context.Context, args map[string]interface{}) (types.ToolResult, error)
+            - HandleRunTests(ctx context.Context, args map[string]interface{}) (types.ToolResult, error)
+            - HandleGetTestsForFile(ctx context.Context, args map[string]interface{}) (types.ToolResult, error)
+
+            ## What to Implement
+
+            ### Step 1 — Update the tool count comment
+            Read server.go and find this line (currently stale — there are 42 tools registered):
+
+            ```go
+            	// ------- Register all 35 tools -------
+            ```
+
+            Replace with (42 existing + 3 new = 45):
+
+            ```go
+            	// ------- Register all 45 tools -------
+            ```
+
+            ### Step 2 — Add tool arg structs
+            In the `// ------- Tool argument types -------` section, find this struct:
+
+            ```go
+            	type DetectLspServersArgs struct {
+            		WorkspaceDir string `json:"workspace_dir"`
+            	}
+            ```
+
+            After the closing brace of that struct, add:
+
+            ```go
+            	type RunBuildArgs struct {
+            		WorkspaceDir string `json:"workspace_dir"`
+            		Path         string `json:"path,omitempty"`
+            		Language     string `json:"language,omitempty"`
+            	}
+            	type RunTestsArgs struct {
+            		WorkspaceDir string `json:"workspace_dir"`
+            		Path         string `json:"path,omitempty"`
+            		Language     string `json:"language,omitempty"`
+            	}
+            	type GetTestsForFileArgs struct {
+            		FilePath string `json:"file_path"`
+            	}
+            ```
+
+            ### Step 3 — Register the three new tools
+            Find the end of the detect_lsp_servers AddTool block:
+
+            ```go
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "detect_lsp_servers",
+            		Description: "Scan a workspace directory for source languages and check PATH for the corresponding LSP server binaries. Returns detected workspace languages (ranked by prevalence), installed servers with their paths, and a suggested_config array ready to paste into the lsp-mcp-go MCP server args. Use this to set up lsp-mcp-go for a new project or verify your configuration.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args DetectLspServersArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleDetectLspServers(ctx, cs.get(), toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+            ```
+
+            After that block, add:
+
+            ```go
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "run_build",
+            		Description: "Compile the project at workspace_dir using the detected workspace language. Language-specific dispatch (no arbitrary shell execution): go build ./..., cargo build, tsc --noEmit, mypy . (Python typecheck proxy). Optional path param narrows scope. Returns: { success: bool, errors: [{file, line, column, message}], raw: string }. Does not require start_lsp.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args RunBuildArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleRunBuild(ctx, toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "run_tests",
+            		Description: "Run the test suite for the detected workspace language. Language-specific dispatch: go test -json ./..., cargo test --message-format=json, pytest --tb=json, npm test. Optional path param narrows scope. Test failure locations are LSP-normalized — paste directly into go_to_definition. Returns: { passed: bool, failures: [{file, line, test_name, message, location}], raw: string }. Does not require start_lsp.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args RunTestsArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleRunTests(ctx, toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "get_tests_for_file",
+            		Description: "Given a source file path, return the test files that exercise it. Static lookup — no test execution. Go: *_test.go in same directory. Python: test_*.py / *_test.py in same dir and tests/ sibling. TypeScript/JS: *.test.ts, *.spec.ts etc. Rust: returns source file itself (tests inline). Does not require start_lsp.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetTestsForFileArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleGetTestsForFile(ctx, toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+            ```
+
+            CRITICAL: HandleRunBuild, HandleRunTests, and HandleGetTestsForFile do NOT take
+            a *lsp.LSPClient argument. Call them with (ctx, toolArgsToMap(args)) only —
+            do NOT pass cs.get() to these three handlers.
+
+            ## Constraints
+            - Do NOT modify internal/tools/ files (Agent A).
+            - Do NOT modify test/ files (Agents D and F).
+            - Do NOT modify README.md, docs/tools.md, CHANGELOG.md (Agents C and F do docs).
+            - Use exact verbatim text anchors. Read server.go before each edit.
+
+            ## Verification Gate
+            ```bash
+            cd /Users/dayna.blackwell/workspace/code/LSP-MCP-GO
+            GOWORK=off go build ./cmd/lsp-mcp-go/...
+            GOWORK=off go vet ./cmd/lsp-mcp-go/...
+            grep -c '"run_build"' cmd/lsp-mcp-go/server.go          # expect: 1
+            grep -c '"run_tests"' cmd/lsp-mcp-go/server.go          # expect: 1
+            grep -c '"get_tests_for_file"' cmd/lsp-mcp-go/server.go # expect: 1
+            grep "Register all 45" cmd/lsp-mcp-go/server.go         # expect: 1 match
+            ```
+          files: []
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+          repo: LSP-MCP-GO
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+          repo: LSP-MCP-GO
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+          repo: LSP-MCP-GO
+post_merge_checklist:
+    groups:
+        - title: Documentation updates (large files)
+          items:
+            - description: |
+                Update docs/tools.md tool count from 42 to 45.
+                Find "All 42 tools exposed" and replace with "All 45 tools exposed".
+              command: grep "All 45 tools" docs/tools.md
+            - description: |
+                Add three new tool entries to docs/tools.md after the detect_lsp_servers section.
+                Document run_build (language dispatch, params, returns {success, errors, raw}),
+                run_tests (language dispatch with machine-readable formats, returns {passed, failures, raw},
+                failures have LSP-normalized location), and get_tests_for_file (static lookup,
+                returns {source_file, test_files}).
+              command: grep "run_build" docs/tools.md
+        - title: Integration test wiring
+          items:
+            - description: |
+                Add three tier2 call sites to test/multi_lang_test.go runLanguageTest function.
+                The test/build_tools_test.go file (Agent D) defines the functions.
+                Find the tier2Results slice ending with testDidChangeWatchedFiles call and add:
+                  testRunBuild(t, ctx, session, lang),
+                  testRunTests(t, ctx, session, lang),
+                  testGetTestsForFile(t, ctx, session, lang),
+                before the closing brace.
+              command: GOWORK=off go build ./test/...
+scaffolds:
+    - file_path: internal/tools/runner.go
+      contents: |
+        package tools
+
+        import "github.com/blackwell-systems/lsp-mcp-go/internal/types"
+
+        // BuildError is a single compilation error or diagnostic returned by run_build.
+        type BuildError struct {
+            File    string `json:"file"`
+            Line    int    `json:"line"`
+            Column  int    `json:"column"`
+            Message string `json:"message"`
+        }
+
+        // BuildResult is the structured output of run_build.
+        type BuildResult struct {
+            Success bool         `json:"success"`
+            Errors  []BuildError `json:"errors"`
+            Raw     string       `json:"raw"`
+        }
+
+        // TestFailure is a single test failure entry returned by run_tests.
+        // Location is an LSP-normalized location (file URI + range) for interop
+        // with go_to_definition, get_references, and other LSP tools.
+        type TestFailure struct {
+            File     string          `json:"file"`
+            Line     int             `json:"line"`
+            TestName string          `json:"test_name"`
+            Message  string          `json:"message"`
+            Location *types.Location `json:"location,omitempty"`
+        }
+
+        // TestResult is the structured output of run_tests.
+        type TestResult struct {
+            Passed   bool          `json:"passed"`
+            Failures []TestFailure `json:"failures"`
+            Raw      string        `json:"raw"`
+        }
+
+        // TestFileResult is the structured output of get_tests_for_file.
+        type TestFileResult struct {
+            SourceFile string   `json:"source_file"`
+            TestFiles  []string `json:"test_files"`
+        }
+      import_path: github.com/blackwell-systems/lsp-mcp-go/internal/tools
+      status: committed (251ff26)
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |
+            Agent A adds a *lsp.LSPClient parameter to HandleRunBuild, HandleRunTests,
+            or HandleGetTestsForFile. Agent B's registration calls them without a client
+            argument and the binary fails to compile.
+          likelihood: medium
+          impact: high
+          mitigation: |
+            Interface contracts explicitly define no LSPClient parameter. Agent A's
+            Constraints section lists this as the top "Do NOT" item. Agent B's verification
+            gate builds the full binary and catches any mismatch immediately.
+        - scenario: |
+            Agent D creates test/build_tools_test.go in `package main` instead of
+            `package main_test`, causing duplicate symbol errors when linked with
+            multi_lang_test.go.
+          likelihood: low
+          impact: high
+          mitigation: |
+            Agent D's task explicitly states "MUST use package main_test" and provides
+            the exact package declaration. The verification gate `go build ./test/...`
+            catches this at compile time.
+        - scenario: |
+            LSP Location normalization in TestFailure uses 1-based line numbers instead
+            of 0-based LSP convention. Agents calling go_to_definition with the location
+            get off-by-one position misses.
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Agent A's task states explicitly: "Location.Range.Start.Line = failure.Line - 1
+            (0-indexed per LSP spec)". Unit test TestLocationNormalization verifies
+            Line=42 maps to Location.Range.Start.Line=41.
+        - scenario: |
+            Agent C updates the tool count to 44 (forgetting get_tests_for_file makes
+            it 45), creating a mismatch between README badge and actual tool count.
+          likelihood: medium
+          impact: low
+          mitigation: |
+            Agent C's brief explicitly states "42 + 3 = 45". Agent B independently sets
+            the server.go comment to 45. Verification greps check for "45 tools" in README
+            and "Register all 45" in server.go. These are caught at merge time.
+        - scenario: |
+            The fixture directories for TypeScript and Python lack a working tsconfig.json
+            or pytest configuration, causing testRunBuild/testRunTests to return IsError
+            in CI and appear as failures rather than skips.
+          likelihood: low
+          impact: low
+          mitigation: |
+            Agent D's test functions return "skip" status (not "fail") when IsError=true.
+            This matches the existing testDetectLspServers pattern. CI failures are blocked
+            only on "fail" status results, not "skip".
+known_issues:
+    - title: Large file modifications deferred to post_merge_checklist
+      description: |
+        docs/tools.md (2161 lines) and test/multi_lang_test.go (2062 lines) exceed
+        the 2000-line agent ownership budget (V048). Both are pre-existing large files
+        where agents would make minimal additions (~50-100 lines). They are excluded
+        from file_ownership and wave agents; their updates are in post_merge_checklist
+        for manual application after all waves complete.
+state: SCOUT_PENDING
+injection_method: hook
