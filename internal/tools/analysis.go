@@ -110,7 +110,7 @@ func HandleGetCompletions(ctx context.Context, client *lsp.LSPClient, args map[s
 		languageID = "plaintext"
 	}
 
-	result, wErr := WithDocument[[]interface{}](ctx, client, filePath, languageID, func(fileURI string) ([]interface{}, error) {
+	result, wErr := WithDocument[types.CompletionList](ctx, client, filePath, languageID, func(fileURI string) (types.CompletionList, error) {
 		pos := types.Position{Line: line - 1, Character: col - 1}
 		return client.GetCompletion(ctx, fileURI, pos)
 	})
@@ -182,7 +182,7 @@ func HandleGetCodeActions(ctx context.Context, client *lsp.LSPClient, args map[s
 		languageID = "plaintext"
 	}
 
-	result, wErr := WithDocument[[]interface{}](ctx, client, filePath, languageID, func(fileURI string) ([]interface{}, error) {
+	result, wErr := WithDocument[[]types.CodeAction](ctx, client, filePath, languageID, func(fileURI string) ([]types.CodeAction, error) {
 		return client.GetCodeActions(ctx, fileURI, rng)
 	})
 	if wErr != nil {
@@ -212,7 +212,7 @@ func HandleGetDocumentSymbols(ctx context.Context, client *lsp.LSPClient, args m
 		languageID = "plaintext"
 	}
 
-	result, wErr := WithDocument[[]interface{}](ctx, client, filePath, languageID, func(fileURI string) ([]interface{}, error) {
+	result, wErr := WithDocument[[]types.DocumentSymbol](ctx, client, filePath, languageID, func(fileURI string) ([]types.DocumentSymbol, error) {
 		return client.GetDocumentSymbols(ctx, fileURI)
 	})
 	if wErr != nil {
