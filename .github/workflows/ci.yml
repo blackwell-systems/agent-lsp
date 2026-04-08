@@ -126,7 +126,60 @@ jobs:
         run: dotnet tool install -g csharp-ls
 
       - name: Run extended language tests
-        run: GOWORK=off go test -v -run "TestMultiLanguage/^(C|C\+\+|JavaScript|PHP|Ruby|YAML|JSON|Dockerfile|CSharp)$" ./test/ -timeout 20m
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^(C|C\+\+|JavaScript|PHP|Ruby|YAML|JSON|Dockerfile|CSharp|CSS|HTML)$" ./test/ -timeout 20m
+
+  # Zig via zls
+  multi-lang-zig:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install Zig + zls
+        run: |
+          ZIG_VERSION="0.13.0"
+          wget -q "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -O /tmp/zig.tar.xz
+          sudo tar -xJf /tmp/zig.tar.xz -C /opt
+          sudo ln -sf "/opt/zig-linux-x86_64-${ZIG_VERSION}/zig" /usr/local/bin/zig
+          wget -q "https://github.com/zigtools/zls/releases/download/${ZIG_VERSION}/zls-x86_64-linux.tar.xz" -O /tmp/zls.tar.xz
+          sudo mkdir -p /opt/zls
+          sudo tar -xJf /tmp/zls.tar.xz -C /opt/zls
+          sudo chmod +x /opt/zls/zls
+          sudo ln -sf /opt/zls/zls /usr/local/bin/zls
+
+      - name: Run Zig tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^Zig$" ./test/ -timeout 10m
+
+  # Terraform via terraform-ls
+  multi-lang-terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install terraform-ls
+        run: |
+          TF_LS_VERSION=$(curl -fsSL https://api.github.com/repos/hashicorp/terraform-ls/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
+          wget -q "https://releases.hashicorp.com/terraform-ls/${TF_LS_VERSION}/terraform-ls_${TF_LS_VERSION}_linux_amd64.zip" -O /tmp/terraform-ls.zip
+          sudo unzip -q /tmp/terraform-ls.zip -d /usr/local/bin
+          sudo chmod +x /usr/local/bin/terraform-ls
+
+      - name: Run Terraform tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^Terraform$" ./test/ -timeout 10m
 
   # Lua via lua-language-server
   multi-lang-lua:

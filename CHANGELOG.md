@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Added (2026-04-08)
+- **Zig language support** — `zls` added as 19th CI-verified language; dedicated `multi-lang-zig` CI job; fixture with `person.zig`, `greeter.zig`, `main.zig`, `build.zig`
+- **CSS language support** — `vscode-css-language-server` added as 20th CI-verified language; zero new CI install cost (`vscode-langservers-extracted` already present); fixture: `styles.css`
+- **HTML language support** — `vscode-html-language-server` added as 21st CI-verified language; zero new CI install cost; fixture: `index.html`
+- **Terraform language support** — `terraform-ls` (HashiCorp) added as 22nd CI-verified language; dedicated `multi-lang-terraform` CI job; fixture: `main.tf`, `variables.tf`
 - **Lua language support** — `lua-language-server` added as 17th CI-verified language; fixture with `person.lua`, `greeter.lua`, `main.lua` (EmmyDoc annotations for type-aware hover); dedicated `multi-lang-lua` CI job; binary installed from GitHub releases
 - **Swift language support** — `sourcekit-lsp` added as 18th CI-verified language; fixture with `Person.swift`, `Greeter.swift`, `main.swift`, `Package.swift`; dedicated `multi-lang-swift` CI job on `macos-latest` (sourcekit-lsp ships with Xcode, zero install cost)
 - **Scala language support** — `metals` added as 16th CI-verified language; fixture with `Person.scala`, `Greeter.scala`, `Main.scala`, `build.sbt`; dedicated `multi-lang-scala` CI job with `continue-on-error: true` and 30-minute timeout (metals requires sbt compilation on cold start)
