@@ -235,7 +235,7 @@ Safe what-if analysis — simulate edits in-memory, evaluate diagnostic changes 
 |------|-------------|
 | `create_simulation_session` | Create a session with baseline diagnostics for a file |
 | `simulate_edit` | Apply an in-memory edit to the session (no disk write) |
-| `simulate_edit_atomic` | Apply an edit, evaluate diagnostics, and discard in one call — returns net error delta |
+| `simulate_edit_atomic` | Apply an edit, evaluate diagnostics, and discard in one call — returns net error delta; accepts optional `session_id` to reuse an existing session |
 | `simulate_chain` | Apply a sequence of edits and evaluate after each step |
 | `evaluate_session` | Compare current in-memory diagnostics against baseline — returns errors introduced and resolved |
 | `commit_session` | Write the session's edits to disk |

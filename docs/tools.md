@@ -2077,14 +2077,19 @@ Clean up all resources associated with a session. Must be called after committin
 
 ### `simulate_edit_atomic`
 
-One-shot convenience wrapper: creates a session, applies a single edit, evaluates diagnostics, then discards and destroys the session automatically. The file on disk is never modified.
+One-shot convenience wrapper: applies a single edit, evaluates diagnostics, and discards in one call. The file on disk is never modified.
+
+Two modes:
+- **Standalone** (`session_id` omitted): creates a temporary session, applies the edit, evaluates, then destroys the session automatically. Requires `workspace_root` and `language`.
+- **Existing session** (`session_id` provided): applies the edit into an existing session and evaluates without destroying it. `workspace_root` and `language` are ignored.
 
 **Parameters**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `workspace_root` | string | yes | Absolute path to the workspace root |
-| `language` | string | yes | Language identifier |
+| `session_id` | string | no | Existing session ID — if provided, uses that session instead of creating a temporary one |
+| `workspace_root` | string | no* | Absolute path to the workspace root (*required when `session_id` is omitted) |
+| `language` | string | no* | Language identifier (*required when `session_id` is omitted) |
 | `file_path` | string | yes | Absolute path to the file to edit |
 | `start_line` | int | yes | Start line (1-indexed) |
 | `start_column` | int | yes | Start column (1-indexed) |
