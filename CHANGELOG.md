@@ -6,6 +6,14 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Added (2026-04-08)
+- **`run_build`, `run_tests`, and `get_tests_for_file` MCP tools** — three new
+  build-tool integration tools that do not require `start_lsp`; language-specific
+  dispatch: `go build ./...` / `cargo build` / `tsc --noEmit` / `mypy .` (run_build),
+  `go test -json ./...` / `cargo test --message-format=json` / `pytest --tb=json` /
+  `npm test` (run_tests); test failure `location` fields are LSP-normalized (file URI
+  + zero-based range) — paste directly into `go_to_definition` or `get_references`;
+  `get_tests_for_file` returns test files for a source file via static lookup (no test
+  execution); shared runner abstraction in `internal/tools/runner.go`; tool count 42 → 45
 - **`apply_edit` real file-write test** — replaced no-op empty WorkspaceEdit with a full format→apply→re-format cycle; Go, TypeScript, and Rust fixtures each have a blank line with deliberate trailing whitespace that their formatters strip; second `format_document` call returning empty edits proves the write persisted to disk; skip message when fixture already clean (subsequent runs on same checkout)
 - **`detect_lsp_servers` extended to 22 languages** — added `knownServers` entries and file extension mappings for C#, Kotlin, Lua, Swift, Zig, CSS/SCSS/Less, HTML, Terraform, Scala; fixed `.kt`/`.kts` extensions which were incorrectly mapped to `java` instead of `kotlin`
 - **Zig language support** — `zls` added as 19th CI-verified language; dedicated `multi-lang-zig` CI job; fixture with `person.zig`, `greeter.zig`, `main.zig`, `build.zig`
