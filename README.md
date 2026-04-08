@@ -4,12 +4,12 @@
 [![CI](https://github.com/blackwell-systems/lsp-mcp-go/actions/workflows/ci.yml/badge.svg)](https://github.com/blackwell-systems/lsp-mcp-go/actions)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 [![Languages](https://img.shields.io/badge/languages-13_verified-green.svg)](#multi-language-support)
-[![Tools](https://img.shields.io/badge/tools-26-blue.svg)](#tools)
+[![Tools](https://img.shields.io/badge/tools-27-blue.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships. lsp-mcp-go exposes that intelligence to agents through MCP.
 
-**26 tools** across navigation, analysis, refactoring, and formatting. CI-verified against real language servers across **13 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+**27 tools** across navigation, analysis, refactoring, and formatting. CI-verified against real language servers across **13 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
 **Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One lsp-mcp-go process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright — no reconfiguration when you switch projects.
 
@@ -83,7 +83,7 @@ Once your AI session opens, call `start_lsp` with your project root to initializ
 start_lsp(root_dir="/your/project")
 ```
 
-Then use any of the 26 tools. The session persists — no need to restart when switching files.
+Then use any of the 27 tools. The session persists — no need to restart when switching files.
 
 ## Why lsp-mcp-go
 
@@ -98,6 +98,7 @@ Then use any of the 26 tools. The session persists — no need to restart when s
 | Real-time diagnostic subscriptions | **✓** | ✗ |
 | Semantic token classification | **✓** | ✗ (only one competitor) |
 | Call hierarchy | **✓** (single tool, direction param) | ✗ or 3 separate tools |
+| Type hierarchy | **✓** (single tool, direction param) | ✗ or untested |
 | Fuzzy position fallback | **✓** | ✗ or partial |
 | Path traversal prevention | **✓** | ✗ |
 | Distribution | **single Go binary** | Node.js or Bun runtime required |
@@ -113,27 +114,27 @@ Then use any of the 26 tools. The session persists — no need to restart when s
 
 ## Multi-Language Support
 
-Every language below is integration-tested on every CI run with a real language server binary and a real fixture codebase. The test harness verifies **Tier 1** (`start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`) and **Tier 2** (`get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`) for each language. No other MCP-LSP implementation has an equivalent test matrix — competitors list supported languages in config examples but do not run integration tests against them.
+Every language below is integration-tested on every CI run with a real language server binary and a real fixture codebase. The test harness verifies **Tier 1** (`start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`) and **Tier 2** (`get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`) for each language. No other MCP-LSP implementation has an equivalent test matrix — competitors list supported languages in config examples but do not run integration tests against them.
 
 Tier 2 results per language from the latest CI run:
 
-| Language | Tier 1 | symbols | definition | references | completions | workspace | format |
-|----------|--------|---------|------------|------------|-------------|-----------|--------|
-| TypeScript | pass | pass | pass | pass | pass | pass | pass |
-| Python | pass | pass | pass | pass | pass | pass | — |
-| Go | pass | pass | pass | pass | pass | pass | pass |
-| Rust | pass | pass | pass | pass | pass | pass | pass |
-| Java | pass | — | — | — | — | — | — |
-| C | pass | pass | pass | pass | pass | pass | pass |
-| PHP | pass | pass | pass | pass | pass | pass | — |
-| C++ | pass | pass | pass | pass | pass | pass | pass |
-| JavaScript | pass | pass | pass | pass | pass | pass | pass |
-| Ruby | pass | pass | pass | pass | pass | pass | pass |
-| YAML | pass | — | — | — | pass | pass | pass |
-| JSON | pass | — | — | — | pass | pass | pass |
-| Dockerfile | pass | — | — | — | pass | pass | — |
+| Language | Tier 1 | symbols | definition | references | completions | workspace | format | declaration | type_hierarchy |
+|----------|--------|---------|------------|------------|-------------|-----------|--------|-------------|----------------|
+| TypeScript | pass | pass | pass | pass | pass | pass | pass | pass | — |
+| Python | pass | pass | pass | pass | pass | pass | — | — | — |
+| Go | pass | pass | pass | pass | pass | pass | pass | — | — |
+| Rust | pass | pass | pass | pass | pass | pass | pass | — | — |
+| Java | pass | — | — | — | — | — | — | — | pass |
+| C | pass | pass | pass | pass | pass | pass | pass | pass | — |
+| PHP | pass | pass | pass | pass | pass | pass | — | — | — |
+| C++ | pass | pass | pass | pass | pass | pass | pass | pass | — |
+| JavaScript | pass | pass | pass | pass | pass | pass | pass | pass | — |
+| Ruby | pass | pass | pass | pass | pass | pass | pass | — | — |
+| YAML | pass | — | — | — | pass | pass | pass | — | — |
+| JSON | pass | — | — | — | pass | pass | pass | — | — |
+| Dockerfile | pass | — | — | — | pass | pass | — | — | — |
 
-Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout (a known jdtls cold-start characteristic, not a tool bug).
+Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout (a known jdtls cold-start characteristic, not a tool bug). `type_hierarchy` is tested on Java (jdtls) and TypeScript (typescript-language-server); TypeScript skips when the server does not return a hierarchy item at the configured position.
 
 ## Tools
 
@@ -168,6 +169,7 @@ All tools require `start_lsp` to be called first.
 | `go_to_implementation` | Jump to all implementations of an interface or abstract method |
 | `go_to_declaration` | Jump to the declaration of a symbol (distinct from definition — e.g. C/C++ headers) |
 | `call_hierarchy` | Callers and/or callees of a function — `direction: "incoming"`, `"outgoing"`, or `"both"` (default) |
+| `type_hierarchy` | Supertypes and/or subtypes of a type — `direction: "supertypes"`, `"subtypes"`, or `"both"` (default) |
 
 ### Refactoring
 | Tool | Description |
