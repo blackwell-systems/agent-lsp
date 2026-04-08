@@ -168,6 +168,62 @@ func TestSpeculativeSessions(t *testing.T) {
 		}
 	})
 
+	t.Run("simulate_edit_non_atomic", func(t *testing.T) {
+		// Tests simulate_edit (the non-atomic variant) followed by evaluate_session.
+		res, err := callTool(ctx, session, "create_simulation_session", map[string]any{
+			"workspace_root": goFixture,
+			"language":       "go",
+		})
+		if err != nil || res.IsError {
+			t.Skipf("create_simulation_session failed (expected if not supported)")
+		}
+		text, err := textFromResult(res)
+		if err != nil {
+			t.Fatalf("failed to parse create_simulation_session response: %v", err)
+		}
+		var createResult map[string]any
+		if err := json.Unmarshal([]byte(text), &createResult); err != nil {
+			t.Fatalf("failed to unmarshal: %s", text)
+		}
+		sessionID, _ := createResult["session_id"].(string)
+		if sessionID == "" {
+			t.Fatalf("no session_id in response")
+		}
+		defer func() {
+			_, _ = callTool(ctx, session, "discard_session", map[string]any{"session_id": sessionID})
+		}()
+
+		// Apply a non-atomic edit (no immediate evaluate).
+		res, err = callTool(ctx, session, "simulate_edit", map[string]any{
+			"session_id":   sessionID,
+			"file_path":    goFile,
+			"start_line":   1,
+			"start_column": 1,
+			"end_line":     1,
+			"end_column":   1,
+			"new_text":     "// non-atomic edit\n",
+		})
+		if err != nil {
+			t.Errorf("simulate_edit failed: %v", err)
+		} else if res.IsError {
+			text, _ := textFromResult(res)
+			t.Logf("simulate_edit returned IsError (may be expected): %s", text)
+		} else {
+			t.Logf("simulate_edit succeeded")
+		}
+
+		// Explicitly evaluate after the non-atomic edit.
+		res, err = callTool(ctx, session, "evaluate_session", map[string]any{
+			"session_id": sessionID,
+		})
+		if err != nil {
+			t.Errorf("evaluate_session after simulate_edit failed: %v", err)
+		} else {
+			evalText, _ := textFromResult(res)
+			t.Logf("evaluate_session result: %s", evalText)
+		}
+	})
+
 	t.Run("destroy_session", func(t *testing.T) {
 		// Create a session solely to test destroy_session.
 		res, err := callTool(ctx, session, "create_simulation_session", map[string]any{

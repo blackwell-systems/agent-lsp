@@ -646,6 +646,8 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		testFormatRange(t, ctx, session, lang),
 		testApplyEdit(t, ctx, session, lang),
 		testDetectLspServers(t, ctx, session, lang),
+		testCloseDocument(t, ctx, session, lang),
+		testDidChangeWatchedFiles(t, ctx, session, lang),
 	}
 
 	return langTestResult{tier1: "pass", tier2: tier2Results}
@@ -1590,6 +1592,46 @@ func testDetectLspServers(t *testing.T, ctx context.Context, session *mcp.Client
 	return toolResult{tool: "detect_lsp_servers", status: "pass"}
 }
 
+// testCloseDocument tests the close_document tool by reopening and closing the file.
+func testCloseDocument(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	// Re-open first so we have a tracked document to close.
+	_, _ = callTool(ctx, session, "open_document", map[string]any{
+		"file_path":   lang.file,
+		"language_id": lang.id,
+	})
+	res, err := callTool(ctx, session, "close_document", map[string]any{
+		"file_path": lang.file,
+	})
+	if err != nil {
+		return toolResult{tool: "close_document", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		text, _ := textFromResult(res)
+		return toolResult{tool: "close_document", status: "fail",
+			detail: fmt.Sprintf("close_document returned IsError: %s", text)}
+	}
+	return toolResult{tool: "close_document", status: "pass"}
+}
+
+// testDidChangeWatchedFiles tests the did_change_watched_files tool with an empty
+// changes array — valid per LSP spec and exercises the tool without modifying files.
+func testDidChangeWatchedFiles(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	res, err := callTool(ctx, session, "did_change_watched_files", map[string]any{
+		"changes": []any{},
+	})
+	if err != nil {
+		return toolResult{tool: "did_change_watched_files", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		text, _ := textFromResult(res)
+		return toolResult{tool: "did_change_watched_files", status: "fail",
+			detail: fmt.Sprintf("did_change_watched_files returned IsError: %s", text)}
+	}
+	return toolResult{tool: "did_change_watched_files", status: "pass"}
+}
+
 // statusIcon returns a visual icon for a tool result status.
 func statusIcon(s string) string {
 	switch s {
@@ -1606,13 +1648,14 @@ func statusIcon(s string) string {
 func printMultiLangSummary(t *testing.T, results []langResult) {
 	t.Helper()
 	header := fmt.Sprintf(
-		"%-14s | T1 | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s | %-8s | %-10s | %-11s | %-10s | %-12s",
+		"%-14s | T1 | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s | %-8s | %-10s | %-11s | %-10s | %-12s | %-12s | %-17s",
 		"Language", "symbols", "definition", "references", "completions",
 		"workspace", "format", "declaration", "type_hierarchy", "hover",
 		"call_hier", "sem_tok", "sig_help",
 		"highlights", "inlay_hints", "code_act", "prep_ren", "rename",
 		"srv_caps", "wk_folders",
-		"type_def", "go_to_impl", "format_range", "apply_edit", "detect_servers")
+		"type_def", "go_to_impl", "format_range", "apply_edit", "detect_servers",
+		"close_doc", "did_change_watched")
 	sep := strings.Repeat("-", len(header))
 	t.Logf("\n%s\n%s", header, sep)
 
@@ -1629,7 +1672,7 @@ func printMultiLangSummary(t *testing.T, results []langResult) {
 			return " "
 		}
 		t.Logf(
-			"%-14s | %-2s | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s | %-8s | %-10s | %-11s | %-10s | %-12s",
+			"%-14s | %-2s | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s | %-8s | %-10s | %-11s | %-10s | %-12s | %-12s | %-17s",
 			r.name,
 			statusIcon(r.tier1),
 			get("get_document_symbols"),
@@ -1656,6 +1699,8 @@ func printMultiLangSummary(t *testing.T, results []langResult) {
 			get("format_range"),
 			get("apply_edit"),
 			get("detect_lsp_servers"),
+			get("close_document"),
+			get("did_change_watched_files"),
 		)
 	}
 	t.Logf("%s", sep)
