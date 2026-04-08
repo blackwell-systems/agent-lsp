@@ -1033,5 +1033,5 @@ known_issues:
         scanner pattern-matches as a symbol name. No interface signatures are changed
         by this IMPL (all additions are new functions); the existing test files do not
         need updating. These errors do not block wave execution.
-state: SCOUT_PENDING
+state: "REVIEWED"
 original_branch: main
