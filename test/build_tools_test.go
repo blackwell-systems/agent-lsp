@@ -14,7 +14,7 @@ import (
 func testRunBuild(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
 	t.Helper()
 	switch lang.id {
-	case "go", "typescript", "python", "rust":
+	case "go", "typescript", "python", "rust", "csharp", "swift", "zig", "kotlin":
 		// known build dispatch supported
 	default:
 		return toolResult{tool: "run_build", status: "skip", detail: "no build dispatch for " + lang.id}
@@ -52,7 +52,7 @@ func testRunBuild(t *testing.T, ctx context.Context, session *mcp.ClientSession,
 func testRunTests(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
 	t.Helper()
 	switch lang.id {
-	case "go", "typescript", "python", "rust":
+	case "go", "typescript", "python", "rust", "csharp", "swift", "zig", "kotlin":
 		// known test dispatch supported
 	default:
 		return toolResult{tool: "run_tests", status: "skip", detail: "no test dispatch for " + lang.id}
