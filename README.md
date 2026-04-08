@@ -17,7 +17,7 @@ Language servers are the intelligence layer behind IDE features — go-to-defini
 
 **Auto-watch keeps the index fresh.** lsp-mcp-go watches the workspace root for file changes using kernel-level filesystem events (inotify/kqueue/FSEvents). Every file edit, creation, or deletion is automatically forwarded to the language server — `get_references`, `get_diagnostics`, and hover info always reflect the current state on disk. No `did_change_watched_files` calls required. High-churn directories (`.git/`, `node_modules/`, etc.) are excluded at the watcher level; rapid edits are debounced at 150ms.
 
-**Fuzzy position fallback.** When an AI assistant gets a line/column slightly wrong, `go_to_definition` and `get_references` fall back to workspace symbol search by hover name and retry — returning results instead of silently returning empty.
+**Fuzzy position fallback.** When an AI assistant gets a line/column slightly wrong, `go_to_definition`, `get_references`, and `rename_symbol` fall back to workspace symbol search by hover name and retry — returning results instead of silently returning empty.
 
 **Semantic token classification.** `get_semantic_tokens` classifies every token in a range as `function`, `parameter`, `variable`, `type`, `keyword`, etc. — the same data an IDE uses to colorize code. No other MCP-LSP server exposes this.
 
@@ -187,7 +187,7 @@ All other tools (`get_inlay_hints`, `get_code_actions`, `rename_symbol`, `format
 ### Refactoring
 | Tool | Description |
 |------|-------------|
-| `rename_symbol` | Get a `WorkspaceEdit` for renaming a symbol across the workspace |
+| `rename_symbol` | Get a `WorkspaceEdit` for renaming a symbol across the workspace (with fuzzy position fallback) |
 | `prepare_rename` | Validate a rename is possible before committing |
 | `format_document` | Get `TextEdit[]` formatting edits for a file |
 | `format_range` | Get `TextEdit[]` formatting edits for a selection |

@@ -6,10 +6,13 @@ import (
 	"fmt"
 
 	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
+	"github.com/blackwell-systems/lsp-mcp-go/internal/logging"
 	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
 )
 
 // HandleRenameSymbol renames the symbol at the given location across the workspace.
+// When the direct position lookup returns an empty WorkspaceEdit, it falls back to
+// workspace symbol search by hover name and retries — handling imprecise AI positions.
 func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
@@ -37,7 +40,15 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 
 	result, wErr := WithDocument[interface{}](ctx, client, filePath, languageID, func(fileURI string) (interface{}, error) {
 		pos := types.Position{Line: line - 1, Character: col - 1}
-		return client.RenameSymbol(ctx, fileURI, pos, newName)
+		res, rErr := client.RenameSymbol(ctx, fileURI, pos, newName)
+		if rErr != nil {
+			return nil, rErr
+		}
+		if isEmptyWorkspaceEdit(res) {
+			logging.Log(logging.LevelDebug, "rename_symbol: empty result at exact position, trying fuzzy fallback")
+			res = renameWithFuzzyFallback(ctx, client, fileURI, line, col, newName)
+		}
+		return res, nil
 	})
 	if wErr != nil {
 		return types.ErrorResult(fmt.Sprintf("rename_symbol: %s", wErr)), nil
@@ -48,6 +59,60 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 		return types.ErrorResult(fmt.Sprintf("marshaling rename result: %s", mErr)), nil
 	}
 	return types.TextResult(string(data)), nil
+}
+
+// renameWithFuzzyFallback retries rename using workspace symbol candidates when the
+// direct position lookup returned an empty WorkspaceEdit. Mirrors the pattern used
+// by go_to_definition and get_references for position-imprecise AI callers.
+func renameWithFuzzyFallback(ctx context.Context, client *lsp.LSPClient, fileURI string, line, col int, newName string) interface{} {
+	hoverPos := types.Position{Line: line - 1, Character: col - 1}
+	hoverText, err := client.GetInfoOnLocation(ctx, fileURI, hoverPos)
+	if err != nil || hoverText == "" {
+		return nil
+	}
+
+	symbolName := extractSymbolName(hoverText)
+	if symbolName == "" {
+		return nil
+	}
+
+	logging.Log(logging.LevelDebug, "rename fuzzyFallback: searching workspace symbols for "+symbolName)
+
+	syms, symErr := client.GetWorkspaceSymbols(ctx, symbolName)
+	if symErr != nil || len(syms) == 0 {
+		return nil
+	}
+
+	for _, sym := range syms {
+		if sym.Location.URI == "" {
+			continue
+		}
+		candidatePos := types.Position{
+			Line:      sym.Location.Range.Start.Line,
+			Character: sym.Location.Range.Start.Character,
+		}
+		res, rErr := client.RenameSymbol(ctx, sym.Location.URI, candidatePos, newName)
+		if rErr == nil && !isEmptyWorkspaceEdit(res) {
+			logging.Log(logging.LevelDebug, "rename fuzzyFallback: found result via workspace symbol candidate")
+			return res
+		}
+	}
+	return nil
+}
+
+// isEmptyWorkspaceEdit reports whether a RenameSymbol result contains no edits.
+// A nil result or one that marshals to "null" or "{}" is considered empty —
+// indicating the server found no symbol at the requested position.
+func isEmptyWorkspaceEdit(result interface{}) bool {
+	if result == nil {
+		return true
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return true
+	}
+	s := string(data)
+	return s == "null" || s == "{}"
 }
 
 // HandlePrepareRename checks whether a rename is valid at the given location.
