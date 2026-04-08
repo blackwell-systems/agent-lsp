@@ -1,6 +1,6 @@
 # Language Support
 
-## Current (18 languages, CI-tested)
+## Current (22 languages, CI-tested)
 
 | Language | Language Server | Status |
 |---|---|---|
@@ -21,6 +21,10 @@
 | Kotlin | kotlin-language-server | ✅ passing |
 | Lua | lua-language-server | ✅ passing |
 | Swift | sourcekit-lsp | ✅ passing (macos-latest runner) |
+| Zig | zls | ✅ passing |
+| CSS | vscode-css-language-server | ✅ passing |
+| HTML | vscode-html-language-server | ✅ passing |
+| Terraform | terraform-ls | ✅ passing |
 | Scala | metals | ⚠️ best-effort (cold-start; continue-on-error CI job) |
 
 ---
@@ -30,10 +34,13 @@
 | Job | Languages | Runner |
 |---|---|---|
 | `multi-lang-core` | Go, TypeScript, Python, Rust, Java, Kotlin | ubuntu-latest |
-| `multi-lang-extended` | C, C++, JavaScript, PHP, Ruby, YAML, JSON, Dockerfile, CSharp | ubuntu-latest |
+| `multi-lang-extended` | C, C++, JavaScript, PHP, Ruby, YAML, JSON, Dockerfile, C#, CSS, HTML | ubuntu-latest |
+| `multi-lang-zig` | Zig | ubuntu-latest |
+| `multi-lang-terraform` | Terraform | ubuntu-latest |
 | `multi-lang-lua` | Lua | ubuntu-latest |
 | `multi-lang-swift` | Swift | macos-latest |
 | `multi-lang-scala` | Scala | ubuntu-latest (continue-on-error) |
+| `speculative-test` | session lifecycle (gopls) | ubuntu-latest |
 
 ---
 
@@ -53,42 +60,38 @@ Each new language needs three things:
    - `workspaceSymbol` — a symbol name that workspace symbol search should return
    - `secondFile` — cross-file fixture (for definition + references across files)
    - `supportsFormatting` — whether the server formats documents
-   - `declarationLine/declarationColumn` + `supportsDeclaration` — optional, for C-style go_to_declaration
+   - `declarationLine/declarationColumn` — optional, for C-style go_to_declaration
    - `highlightLine/highlightColumn` — position for document highlight testing
    - `inlayHintEndLine` — end line for inlay hint range
-   - `renameSymbolLine/renameSymbolColumn/renameSymbolName` — position and new name for rename testing
+   - `renameSymbolLine/renameSymbolColumn/renameSymbolName` — position and new name for rename testing (set to 0 to skip)
    - `codeActionLine/codeActionEndLine` — line range for code action testing
 
 2. **Fixture files** in `test/fixtures/<lang>/`:
    - A primary file with a `Person` class/struct (or similar named symbol)
    - A `greeter` cross-file that imports and calls `Person`
-   - Follow the pattern of existing fixtures (each has a hover target, a definition cross-ref, and a completion context)
+   - A build/project file if the language server requires one (e.g. `go.mod`, `build.zig`, `Package.swift`, `build.sbt`)
+   - Follow the pattern of existing fixtures (hover target, definition cross-ref, completion context)
 
-3. **CI install step** in the appropriate `.github/workflows/ci.yml` job based on language runtime:
-   - JVM-based languages (Java, Kotlin, Scala) → `multi-lang-core` or the scala job
-   - Lightweight npm/binary-installed servers → `multi-lang-extended`
-   - Special runtime requirements → dedicated job (e.g. Swift requires macOS runner, Lua has its own job)
+3. **CI install step** in the appropriate `.github/workflows/ci.yml` job:
+   - JVM-based (Java, Kotlin) → `multi-lang-core` (Java already set up)
+   - Lightweight npm/binary → `multi-lang-extended`
+   - macOS-only → dedicated job with `runs-on: macos-latest`
+   - Heavy/slow startup → dedicated job with `continue-on-error: true`
+   - Everything else → dedicated job (keeps extended job install time bounded)
 
 ---
 
 ## Tier 3 — Next expansion candidates
 
-### Zig (zls)
-- **Install:** `sudo snap install zls --classic` or download binary from GitHub releases
-- **Binary:** `zls`, language ID `zig`
-- **Fixture:** `test/fixtures/zig/src/` — `person.zig`, `greeter.zig`, `build.zig`
-- **Notes:** Full Tier 1+2. zls has excellent Go-to-definition support.
+### Bash (bash-language-server)
+- **Install:** `npm install -g bash-language-server`
+- **Binary:** `bash-language-server`, language ID `shellscript`
+- **Fixture:** `test/fixtures/bash/` — simple script with functions
+- **Notes:** Good hover and completions. Definition/references limited.
 
-### CSS (vscode-css-language-server)
-- **Install:** `npm install -g vscode-css-language-server`
-- **Binary:** `vscode-css-language-server --stdio`, language ID `css`
-- **Fixture:** `test/fixtures/css/` — a stylesheet with named custom properties and classes
-- **Notes:** Hover and completions work well. Definition/references limited.
-
-### HTML (vscode-html-language-server)
-- **Install:** `npm install -g vscode-html-language-server`
-- **Binary:** `vscode-html-language-server --stdio`, language ID `html`
-- **Notes:** Embedded language handling (CSS/JS in HTML). Tier 1 only initially.
+### Haskell (haskell-language-server)
+- **Install:** `ghcup install hls` — slow and fragile in CI
+- **Blocker:** ghcup setup adds 5+ minutes; GHC version matrix complexity
 
 ---
 
@@ -99,6 +102,7 @@ Each new language needs three things:
 | Haskell | haskell-language-server | ghcup setup is slow and fragile in CI |
 | OCaml | ocamllsp | opam setup nontrivial |
 | Elm | elm-language-server | Niche; requires elm + elm-format |
+| R | r-languageserver | Niche; R package install in CI adds complexity |
 
 ---
 
@@ -106,8 +110,8 @@ Each new language needs three things:
 
 | Tier | Languages | Count |
 |---|---|---|
-| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Swift, Scala | **18** |
-| Tier 3 candidates | Zig, CSS, HTML | 3 |
-| **Potential total** | | **21** |
+| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Swift, Zig, CSS, HTML, Terraform, Scala | **22** |
+| Tier 3 candidates | Bash, (Haskell — hard) | 1–2 |
+| **Potential total** | | **23–24** |
 
-The current 18-language set covers the most common development scenarios. Tier 3 expansion would add 3 more languages with one additional binary install each.
+The 22-language set covers the most common development scenarios across systems, web, JVM, scripting, infrastructure, and config domains.

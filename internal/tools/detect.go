@@ -38,6 +38,15 @@ var knownServers = []lspServerDef{
 	{Language: "yaml", Binary: "yaml-language-server", Args: []string{"--stdio"}, DisplayName: "yaml-language-server"},
 	{Language: "json", Binary: "vscode-json-language-server", Args: []string{"--stdio"}, DisplayName: "vscode-json-language-server"},
 	{Language: "dockerfile", Binary: "docker-langserver", Args: []string{"--stdio"}, DisplayName: "docker-langserver"},
+	{Language: "csharp", Binary: "csharp-ls", Args: nil, DisplayName: "csharp-ls"},
+	{Language: "kotlin", Binary: "kotlin-language-server", Args: nil, DisplayName: "kotlin-language-server"},
+	{Language: "lua", Binary: "lua-language-server", Args: nil, DisplayName: "lua-language-server"},
+	{Language: "swift", Binary: "sourcekit-lsp", Args: nil, DisplayName: "sourcekit-lsp"},
+	{Language: "zig", Binary: "zls", Args: nil, DisplayName: "zls"},
+	{Language: "css", Binary: "vscode-css-language-server", Args: []string{"--stdio"}, DisplayName: "vscode-css-language-server"},
+	{Language: "html", Binary: "vscode-html-language-server", Args: []string{"--stdio"}, DisplayName: "vscode-html-language-server"},
+	{Language: "terraform", Binary: "terraform-ls", Args: []string{"serve"}, DisplayName: "terraform-ls"},
+	{Language: "scala", Binary: "metals", Args: nil, DisplayName: "metals"},
 }
 
 // rootMarkers maps a project root file to the language it signals.
@@ -56,11 +65,15 @@ var rootMarkers = map[string]string{
 	"Pipfile":           "python",
 	"pom.xml":           "java",
 	"build.gradle":      "java",
-	"build.gradle.kts":  "java",
+	"build.gradle.kts":  "kotlin",
 	"Gemfile":           "ruby",
 	"composer.json":     "php",
-	"Dockerfile":        "dockerfile",
-	"dockerfile":        "dockerfile",
+	"Dockerfile":          "dockerfile",
+	"dockerfile":          "dockerfile",
+	"settings.gradle.kts": "kotlin",
+	"build.zig":           "zig",
+	"Package.swift":       "swift",
+	"build.sbt":           "scala",
 }
 
 // extLanguages maps file extensions to language IDs.
@@ -78,8 +91,6 @@ var extLanguages = map[string]string{
 	".pyi":        "python",
 	".rs":         "rust",
 	".java":       "java",
-	".kt":         "java",
-	".kts":        "java",
 	".c":          "c",
 	".h":          "c",
 	".cpp":        "cpp",
@@ -94,6 +105,21 @@ var extLanguages = map[string]string{
 	".yml":        "yaml",
 	".json":       "json",
 	".jsonc":      "json",
+	".cs":         "csharp",
+	".kt":         "kotlin",
+	".kts":        "kotlin",
+	".lua":        "lua",
+	".swift":      "swift",
+	".zig":        "zig",
+	".css":        "css",
+	".scss":       "css",
+	".less":       "css",
+	".html":       "html",
+	".htm":        "html",
+	".tf":         "terraform",
+	".tfvars":     "terraform",
+	".sc":         "scala",
+	".scala":      "scala",
 }
 
 // skipDirs are directory names that should never be walked.
