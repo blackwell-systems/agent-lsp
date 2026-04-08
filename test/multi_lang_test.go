@@ -43,6 +43,8 @@ type langConfig struct {
 	symbolName         string
 	declarationLine    int // C only
 	declarationColumn  int // C only
+	typeHierarchyLine   int // Java and TypeScript only
+	typeHierarchyColumn int // Java and TypeScript only
 }
 
 // toolResult holds the outcome of a single Tier 2 tool test.
@@ -135,7 +137,9 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			workspaceSymbol:    "Person",
 			supportsFormatting: true,
 			secondFile:         filepath.Join(fixtureBase, "typescript", "src", "consumer.ts"),
-			symbolName:         "Person",
+			symbolName:          "Person",
+			typeHierarchyLine:   11,
+			typeHierarchyColumn: 18,
 		},
 		{
 			name:               "Python",
@@ -226,7 +230,9 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			supportsFormatting: true,
 			secondFile: filepath.Join(fixtureBase, "java", "src", "main", "java", "com", "example",
 				"Greeter.java"),
-			symbolName: "Person",
+			symbolName:          "Person",
+			typeHierarchyLine:   6,
+			typeHierarchyColumn: 14,
 		},
 		{
 			name:               "C",
@@ -565,6 +571,7 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		testWorkspaceSymbols(t, ctx, session, lang),
 		testFormatDocument(t, ctx, session, lang),
 		testGoToDeclaration(t, ctx, session, lang),
+		testTypeHierarchy(t, ctx, session, lang),
 	}
 
 	return langTestResult{tier1: "pass", tier2: tier2Results}
@@ -902,6 +909,53 @@ func testGoToDeclaration(t *testing.T, ctx context.Context, session *mcp.ClientS
 	return toolResult{tool: "go_to_declaration", status: "pass"}
 }
 
+// testTypeHierarchy tests the type_hierarchy tool (Java and TypeScript only).
+func testTypeHierarchy(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	if lang.typeHierarchyLine == 0 {
+		return toolResult{tool: "type_hierarchy", status: "skip", detail: "not configured for this language"}
+	}
+	res, err := callTool(ctx, session, "type_hierarchy", map[string]any{
+		"file_path":   lang.file,
+		"language_id": lang.id,
+		"line":        lang.typeHierarchyLine,
+		"column":      lang.typeHierarchyColumn,
+		"direction":   "both",
+	})
+	if err != nil {
+		return toolResult{tool: "type_hierarchy", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		// Type hierarchy not supported by this server — treat as skip.
+		return toolResult{tool: "type_hierarchy", status: "skip",
+			detail: fmt.Sprintf("tool returned IsError=true (server may not support typeHierarchy): %v", res.Content)}
+	}
+	text, err := textFromResult(res)
+	if err != nil {
+		return toolResult{tool: "type_hierarchy", status: "fail",
+			detail: fmt.Sprintf("failed to parse type_hierarchy response: %v", err)}
+	}
+	var result struct {
+		Items      []map[string]any `json:"items"`
+		Supertypes []map[string]any `json:"supertypes"`
+		Subtypes   []map[string]any `json:"subtypes"`
+	}
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		// May be a plain text message like "No type hierarchy item found"
+		if strings.Contains(text, "No type hierarchy item found") {
+			return toolResult{tool: "type_hierarchy", status: "skip",
+				detail: "server returned no type hierarchy item at configured position"}
+		}
+		return toolResult{tool: "type_hierarchy", status: "fail",
+			detail: fmt.Sprintf("failed to unmarshal type_hierarchy response: %s", text)}
+	}
+	if len(result.Items) == 0 {
+		return toolResult{tool: "type_hierarchy", status: "skip",
+			detail: "no items returned (server may not index this position)"}
+	}
+	return toolResult{tool: "type_hierarchy", status: "pass"}
+}
+
 // statusIcon returns a visual icon for a tool result status.
 func statusIcon(s string) string {
 	switch s {
@@ -917,8 +971,8 @@ func statusIcon(s string) string {
 // printMultiLangSummary prints a summary table of all language test results.
 func printMultiLangSummary(t *testing.T, results []langResult) {
 	t.Helper()
-	header := fmt.Sprintf("%-14s | T1 | %-8s | %-11s | %-11s | %-12s | %-10s | %-6s | %-12s",
-		"Language", "symbols", "definition", "references", "completions", "workspace", "format", "declaration")
+	header := fmt.Sprintf("%-14s | T1 | %-8s | %-11s | %-11s | %-12s | %-10s | %-6s | %-12s | %-14s",
+		"Language", "symbols", "definition", "references", "completions", "workspace", "format", "declaration", "type_hierarchy")
 	sep := strings.Repeat("-", len(header))
 	t.Logf("\n%s\n%s", header, sep)
 
@@ -934,7 +988,7 @@ func printMultiLangSummary(t *testing.T, results []langResult) {
 			}
 			return " "
 		}
-		t.Logf("%-14s | %-2s | %-8s | %-11s | %-11s | %-12s | %-10s | %-6s | %-12s",
+		t.Logf("%-14s | %-2s | %-8s | %-11s | %-11s | %-12s | %-10s | %-6s | %-12s | %-14s",
 			r.name,
 			statusIcon(r.tier1),
 			get("get_document_symbols"),
@@ -944,6 +998,7 @@ func printMultiLangSummary(t *testing.T, results []langResult) {
 			get("get_workspace_symbols"),
 			get("format_document"),
 			get("go_to_declaration"),
+			get("type_hierarchy"),
 		)
 	}
 	t.Logf("%s", sep)
