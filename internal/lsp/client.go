@@ -1048,27 +1048,31 @@ func (c *LSPClient) GetInfoOnLocation(ctx context.Context, uri string, pos types
 	}
 }
 
-// GetCompletion requests completion items at a position.
-func (c *LSPClient) GetCompletion(ctx context.Context, uri string, pos types.Position) ([]interface{}, error) {
+// GetCompletion requests completion items at a position, normalized to CompletionList.
+// The LSP server may return CompletionList or CompletionItem[]; both are normalized
+// to CompletionList (bare array wrapped with isIncomplete=false).
+func (c *LSPClient) GetCompletion(ctx context.Context, uri string, pos types.Position) (types.CompletionList, error) {
 	if !c.hasCapability("completionProvider") {
 		logging.Log(logging.LevelDebug, "server does not support completion")
-		return []interface{}{}, nil
+		return types.CompletionList{Items: []types.CompletionItem{}}, nil
 	}
 	result, err := c.sendRequest(ctx, "textDocument/completion", map[string]interface{}{
 		"textDocument": map[string]interface{}{"uri": uri},
 		"position":     pos,
 	})
 	if err != nil {
-		return nil, err
+		return types.CompletionList{}, err
 	}
-	return parseInterfaceArray(result), nil
+	return NormalizeCompletion(result)
 }
 
-// GetCodeActions requests code actions for a range.
-func (c *LSPClient) GetCodeActions(ctx context.Context, uri string, rng types.Range) ([]interface{}, error) {
+// GetCodeActions requests code actions, normalized to []types.CodeAction.
+// The LSP server may return (Command | CodeAction)[]; bare Commands are
+// synthesized into CodeAction{Title, Command: &cmd}.
+func (c *LSPClient) GetCodeActions(ctx context.Context, uri string, rng types.Range) ([]types.CodeAction, error) {
 	if !c.hasCapability("codeActionProvider") {
 		logging.Log(logging.LevelDebug, "server does not support codeAction")
-		return []interface{}{}, nil
+		return []types.CodeAction{}, nil
 	}
 	// Retrieve diagnostics that overlap the requested range.
 	c.diagMu.RLock()
@@ -1076,8 +1080,6 @@ func (c *LSPClient) GetCodeActions(ctx context.Context, uri string, rng types.Ra
 	c.diagMu.RUnlock()
 	var overlapping []types.LSPDiagnostic
 	for _, d := range allDiags {
-		// A diagnostic overlaps if its range intersects the requested range.
-		// Intersection: diag.start <= rng.end AND diag.end >= rng.start
 		diagStart := d.Range.Start
 		diagEnd := d.Range.End
 		beforeRange := diagEnd.Line < rng.Start.Line ||
@@ -1099,7 +1101,7 @@ func (c *LSPClient) GetCodeActions(ctx context.Context, uri string, rng types.Ra
 	if err != nil {
 		return nil, err
 	}
-	return parseInterfaceArray(result), nil
+	return NormalizeCodeActions(result)
 }
 
 // GetDefinition returns the definition location(s).
@@ -1186,11 +1188,13 @@ func (c *LSPClient) GetReferences(ctx context.Context, uri string, pos types.Pos
 	return parseLocationsFlat(result), nil
 }
 
-// GetDocumentSymbols returns document symbols.
-func (c *LSPClient) GetDocumentSymbols(ctx context.Context, uri string) ([]interface{}, error) {
+// GetDocumentSymbols returns document symbols normalized to []types.DocumentSymbol.
+// The LSP server may return DocumentSymbol[] or SymbolInformation[]; both are
+// normalized to the richer DocumentSymbol shape.
+func (c *LSPClient) GetDocumentSymbols(ctx context.Context, uri string) ([]types.DocumentSymbol, error) {
 	if !c.hasCapability("documentSymbolProvider") {
 		logging.Log(logging.LevelDebug, "server does not support documentSymbol")
-		return []interface{}{}, nil
+		return []types.DocumentSymbol{}, nil
 	}
 	result, err := c.sendRequest(ctx, "textDocument/documentSymbol", map[string]interface{}{
 		"textDocument": map[string]interface{}{"uri": uri},
@@ -1198,7 +1202,7 @@ func (c *LSPClient) GetDocumentSymbols(ctx context.Context, uri string) ([]inter
 	if err != nil {
 		return nil, err
 	}
-	return parseInterfaceArray(result), nil
+	return NormalizeDocumentSymbols(result)
 }
 
 // GetWorkspaceSymbols queries workspace symbols.
@@ -1903,23 +1907,6 @@ func (l *locationOrLink) toLocation() *types.Location {
 	return nil
 }
 
-func parseInterfaceArray(raw json.RawMessage) []interface{} {
-	if raw == nil || string(raw) == "null" {
-		return []interface{}{}
-	}
-	// Could be a CompletionList {items: [...]} or a plain array.
-	var list struct {
-		Items []interface{} `json:"items"`
-	}
-	if err := json.Unmarshal(raw, &list); err == nil && list.Items != nil {
-		return list.Items
-	}
-	var arr []interface{}
-	if err := json.Unmarshal(raw, &arr); err == nil {
-		return arr
-	}
-	return []interface{}{}
-}
 
 // uriToPath converts a file:// URI to a local path, correctly decoding
 // percent-encoded characters (e.g. %20 -> space) per RFC 3986.
