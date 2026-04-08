@@ -4,12 +4,12 @@
 [![CI](https://github.com/blackwell-systems/lsp-mcp-go/actions/workflows/ci.yml/badge.svg)](https://github.com/blackwell-systems/lsp-mcp-go/actions)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 [![Languages](https://img.shields.io/badge/languages-13_verified-green.svg)](#multi-language-support)
-[![Tools](https://img.shields.io/badge/tools-34-blue.svg)](#tools)
+[![Tools](https://img.shields.io/badge/tools-42-blue.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships. lsp-mcp-go exposes that intelligence to agents through MCP.
 
-**34 tools** across navigation, analysis, refactoring, and formatting. CI-verified against real language servers across **13 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+**42 tools** across navigation, analysis, refactoring, and formatting. CI-verified against real language servers across **13 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
 **Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One lsp-mcp-go process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright — no reconfiguration when you switch projects.
 
@@ -85,14 +85,14 @@ Once your AI session opens, call `start_lsp` with your project root to initializ
 start_lsp(root_dir="/your/project")
 ```
 
-Then use any of the 34 tools. The session persists — no need to restart when switching files.
+Then use any of the 42 tools. The session persists — no need to restart when switching files.
 
 ## Why lsp-mcp-go
 
 | | lsp-mcp-go | other MCP-LSP implementations |
 |--|---------|---------------------|
 | Languages (CI-verified) | **13** (end-to-end integration tests) | config-listed, untested |
-| Tools | **34** | 3–18 |
+| Tools | **42** | 3–18 |
 | Multi-server routing | **✓** (one process, many languages) | varies |
 | LSP spec compliance | **3.17, built to spec** | ad hoc |
 | Connection model | **persistent** (warm index) | per-request or cold-start |
@@ -168,7 +168,7 @@ All other tools (`get_inlay_hints`, `get_code_actions`, `rename_symbol`, `format
 | `get_signature_help` | Function signature and active parameter at a call site |
 | `get_code_actions` | Quick fixes and refactors for a range |
 | `get_document_symbols` | All symbols in a file (functions, classes, variables) |
-| `get_workspace_symbols` | Search symbols by name across the workspace |
+| `get_workspace_symbols` | Search symbols by name across the workspace; `detail_level=hover` enriches results with type signatures and docs without loading files into context |
 | `get_semantic_tokens` | Classify tokens in a range as function/parameter/variable/type/keyword/etc — same data IDEs use for syntax highlighting |
 | `get_inlay_hints` | Inline type annotations and parameter name labels for a range — inferred type hints IDEs overlay on source code (Type and Parameter kinds) |
 
@@ -202,6 +202,29 @@ All other tools (`get_inlay_hints`, `get_code_actions`, `rename_symbol`, `format
 | `set_log_level` | Change log verbosity at runtime |
 | `detect_lsp_servers` | Scan a workspace for source languages and check PATH for installed LSP servers — returns detected languages, server paths, and a `suggested_config` array ready to paste into your MCP config |
 
+### Workspace
+| Tool | Description |
+|------|-------------|
+| `add_workspace_folder` | Add a directory to the LSP workspace — enables cross-repo references, definitions, and diagnostics across library + consumer repos in one session |
+| `remove_workspace_folder` | Remove a directory from the LSP workspace |
+| `list_workspace_folders` | Return the current workspace folder list |
+
+### Speculative Execution
+Safe what-if analysis — simulate edits in-memory, evaluate diagnostic changes (errors introduced/resolved), then commit or discard atomically. No disk writes until you call `commit_session`.
+
+| Tool | Description |
+|------|-------------|
+| `create_simulation_session` | Create a session with baseline diagnostics for a file |
+| `simulate_edit` | Apply an in-memory edit to the session (no disk write) |
+| `simulate_edit_atomic` | Apply an edit, evaluate diagnostics, and discard in one call — returns net error delta |
+| `simulate_chain` | Apply a sequence of edits and evaluate after each step |
+| `evaluate_session` | Compare current in-memory diagnostics against baseline — returns errors introduced and resolved |
+| `commit_session` | Write the session's edits to disk |
+| `discard_session` | Revert in-memory edits without touching disk |
+| `destroy_session` | Release all session resources |
+
+See [docs/speculative-execution.md](./docs/speculative-execution.md) for full workflow examples.
+
 **Recommended agent workflow:**
 ```
 start_lsp(root_dir="/your/project")
@@ -219,13 +242,13 @@ lsp-mcp-go watches the workspace root for file changes and automatically notifie
 
 **Rename workflow** (`prepare_rename` → `rename_symbol` → `apply_edit`):
 ```
-prepare_rename(file_path=..., line=..., column=...)   # confirm rename is valid at this position
+prepare_rename(file_path=..., line=..., column=...)        # confirm rename is valid at this position
 rename_symbol(file_path=..., line=..., column=..., new_name="newName")  # returns WorkspaceEdit
-apply_edit(edit=<WorkspaceEdit>)                      # writes all changed files to disk
-did_change_watched_files(changes=[...])               # notify server of the disk changes
+apply_edit(edit=<WorkspaceEdit>)                           # writes all changed files to disk
+# auto-watch notifies the server automatically — no did_change_watched_files needed
 ```
 
-**Language IDs:** `typescript`, `typescriptreact`, `javascript`, `javascriptreact`, `python`, `go`, `rust`, `java`, `c`, `cpp`, `php`
+**Language IDs:** `typescript`, `typescriptreact`, `javascript`, `javascriptreact`, `python`, `go`, `rust`, `java`, `c`, `cpp`, `php`, `ruby`, `yaml`, `json`, `dockerfile`
 
 ## Resources
 
