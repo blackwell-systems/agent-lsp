@@ -44,6 +44,16 @@ func inferWorkspaceRoot(filePath string) (root, languageID string, err error) {
 		{"Cargo.toml", "rust"},
 		{"pyproject.toml", "python"},
 		{"setup.py", "python"},
+		{"Package.swift", "swift"},
+		{"build.zig", "zig"},
+		{"build.gradle.kts", "kotlin"},
+		{"settings.gradle.kts", "kotlin"},
+		{"build.gradle", "java"},
+		{"pom.xml", "java"},
+		{"build.sbt", "scala"},
+		{".terraform.lock.hcl", "terraform"},
+		{"Gemfile", "ruby"},
+		{"composer.json", "php"},
 		{".git", ""},
 	}
 

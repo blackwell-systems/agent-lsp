@@ -501,6 +501,16 @@ func (c *LSPClient) RootDir() string {
 	return c.rootDir
 }
 
+// IsInitialized reports whether the LSP handshake has completed successfully.
+// A non-nil client is not necessarily initialized — NewLSPClient creates a
+// client object but Initialize must be called to start the process and complete
+// the LSP handshake.
+func (c *LSPClient) IsInitialized() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.initialized
+}
+
 // Initialize starts the LSP process and performs the LSP handshake.
 func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	if err := c.start(); err != nil {
