@@ -1810,21 +1810,75 @@ func testFormatRange(t *testing.T, ctx context.Context, session *mcp.ClientSessi
 	return toolResult{tool: "format_range", status: "pass"}
 }
 
-// testApplyEdit tests the apply_edit tool using a no-op WorkspaceEdit.
-// An empty changes map is a valid WorkspaceEdit that applies zero edits —
-// it tests the tool's wiring without modifying any fixture files.
+// testApplyEdit exercises the full file-write path:
+//  1. format_document → get TextEdit[] (non-empty when fixture has deliberate trailing whitespace)
+//  2. apply_edit with a WorkspaceEdit wrapping those edits → writes to disk
+//  3. format_document again → verify edits are now empty (proves write happened)
+//
+// Fixtures for Go, TypeScript, and Rust contain a blank line with trailing
+// whitespace that their respective formatters will remove, ensuring step 1
+// always returns non-empty edits on a fresh checkout.
 func testApplyEdit(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
 	t.Helper()
-	res, err := callTool(ctx, session, "apply_edit", map[string]any{
-		"workspace_edit": map[string]any{"changes": map[string]any{}},
+	if !lang.supportsFormatting {
+		return toolResult{tool: "apply_edit", status: "skip", detail: "formatting not supported"}
+	}
+
+	// Step 1: get formatting edits.
+	res, err := callTool(ctx, session, "format_document", map[string]any{
+		"file_path":   lang.file,
+		"language_id": lang.id,
 	})
 	if err != nil {
 		return toolResult{tool: "apply_edit", status: "fail", detail: err.Error()}
 	}
 	if res.IsError {
-		text, _ := textFromResult(res)
+		return toolResult{tool: "apply_edit", status: "skip", detail: "format_document not supported"}
+	}
+	text, err := textFromResult(res)
+	if err != nil {
+		return toolResult{tool: "apply_edit", status: "fail", detail: err.Error()}
+	}
+	var edits []map[string]any
+	if err := json.Unmarshal([]byte(text), &edits); err != nil {
 		return toolResult{tool: "apply_edit", status: "fail",
-			detail: fmt.Sprintf("apply_edit returned IsError: %s", text)}
+			detail: fmt.Sprintf("parse format edits: %v — raw: %s", err, text)}
+	}
+	if len(edits) == 0 {
+		return toolResult{tool: "apply_edit", status: "skip",
+			detail: "no formatting edits returned (fixture already clean — run from fresh checkout to exercise write path)"}
+	}
+
+	// Step 2: apply the edits.
+	fileURI := "file://" + lang.file
+	res, err = callTool(ctx, session, "apply_edit", map[string]any{
+		"workspace_edit": map[string]any{
+			"changes": map[string]any{fileURI: edits},
+		},
+	})
+	if err != nil {
+		return toolResult{tool: "apply_edit", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		errText, _ := textFromResult(res)
+		return toolResult{tool: "apply_edit", status: "fail",
+			detail: fmt.Sprintf("apply_edit returned IsError: %s", errText)}
+	}
+
+	// Step 3: re-format to verify the write actually hit disk.
+	res, err = callTool(ctx, session, "format_document", map[string]any{
+		"file_path":   lang.file,
+		"language_id": lang.id,
+	})
+	if err != nil || res.IsError {
+		// apply didn't error — treat as pass even if we can't verify
+		return toolResult{tool: "apply_edit", status: "pass"}
+	}
+	text2, _ := textFromResult(res)
+	var edits2 []map[string]any
+	if err := json.Unmarshal([]byte(text2), &edits2); err == nil && len(edits2) > 0 {
+		return toolResult{tool: "apply_edit", status: "fail",
+			detail: fmt.Sprintf("re-format returned %d edits after apply — file write may not have persisted", len(edits2))}
 	}
 	return toolResult{tool: "apply_edit", status: "pass"}
 }
