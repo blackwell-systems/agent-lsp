@@ -119,9 +119,11 @@ type LSPClient struct {
 	progressMu     sync.Mutex
 	progressTokens map[interface{}]struct{} // active begin tokens
 
-	// server capabilities (from initialize response)
+	// server capabilities and identity (from initialize response)
 	capsMu       sync.RWMutex
 	capabilities map[string]interface{}
+	serverName   string
+	serverVersion string
 
 	// semantic token legend (from initialize response)
 	legendMu        sync.RWMutex
@@ -613,13 +615,23 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 		return fmt.Errorf("initialize request: %w", err)
 	}
 
-	// Store server capabilities.
+	// Store server capabilities and identity.
 	var initResult struct {
 		Capabilities map[string]interface{} `json:"capabilities"`
+		ServerInfo   *struct {
+			Name    string `json:"name"`
+			Version string `json:"version"`
+		} `json:"serverInfo"`
 	}
-	if err := json.Unmarshal(result, &initResult); err == nil && initResult.Capabilities != nil {
+	if err := json.Unmarshal(result, &initResult); err == nil {
 		c.capsMu.Lock()
-		c.capabilities = initResult.Capabilities
+		if initResult.Capabilities != nil {
+			c.capabilities = initResult.Capabilities
+		}
+		if initResult.ServerInfo != nil {
+			c.serverName = initResult.ServerInfo.Name
+			c.serverVersion = initResult.ServerInfo.Version
+		}
 		c.capsMu.Unlock()
 	}
 
@@ -1745,6 +1757,26 @@ func (c *LSPClient) getCapabilityRaw(key string) interface{} {
 	c.capsMu.RLock()
 	defer c.capsMu.RUnlock()
 	return c.capabilities[key]
+}
+
+// GetCapabilities returns a shallow copy of the server's capability map.
+// The map reflects what the server advertised in the initialize response.
+func (c *LSPClient) GetCapabilities() map[string]interface{} {
+	c.capsMu.RLock()
+	defer c.capsMu.RUnlock()
+	out := make(map[string]interface{}, len(c.capabilities))
+	for k, v := range c.capabilities {
+		out[k] = v
+	}
+	return out
+}
+
+// GetServerInfo returns the server name and version from the initialize response.
+// Both fields may be empty if the server did not advertise serverInfo.
+func (c *LSPClient) GetServerInfo() (name, version string) {
+	c.capsMu.RLock()
+	defer c.capsMu.RUnlock()
+	return c.serverName, c.serverVersion
 }
 
 // GetSemanticTokenLegend returns the token type and modifier name arrays
