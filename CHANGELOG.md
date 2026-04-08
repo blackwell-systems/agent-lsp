@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Added (2026-04-08)
+- **Lua language support** — `lua-language-server` added as 17th CI-verified language; fixture with `person.lua`, `greeter.lua`, `main.lua` (EmmyDoc annotations for type-aware hover); dedicated `multi-lang-lua` CI job; binary installed from GitHub releases
+- **Swift language support** — `sourcekit-lsp` added as 18th CI-verified language; fixture with `Person.swift`, `Greeter.swift`, `main.swift`, `Package.swift`; dedicated `multi-lang-swift` CI job on `macos-latest` (sourcekit-lsp ships with Xcode, zero install cost)
 - **Scala language support** — `metals` added as 16th CI-verified language; fixture with `Person.scala`, `Greeter.scala`, `Main.scala`, `build.sbt`; dedicated `multi-lang-scala` CI job with `continue-on-error: true` and 30-minute timeout (metals requires sbt compilation on cold start)
 - **Kotlin language support** — `kotlin-language-server` added as 15th CI-verified language; fixture with `Person.kt`, `Greeter.kt`, `main.kt`, `build.gradle.kts`; added to `multi-lang-core` CI job (reuses Java setup); full Tier 1 + Tier 2 coverage
 - **C# language support** — `csharp-ls` added as 14th CI-verified language; fixture with `Person.cs`, `Greeter.cs`, `Program.cs`; full Tier 1 + Tier 2 coverage including hover, definition, references, completions, formatting, rename, highlights

@@ -128,6 +128,48 @@ jobs:
       - name: Run extended language tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^(C|C\+\+|JavaScript|PHP|Ruby|YAML|JSON|Dockerfile|CSharp)$" ./test/ -timeout 20m
 
+  # Lua via lua-language-server
+  multi-lang-lua:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install lua-language-server
+        run: |
+          LLS_VERSION=$(curl -fsSL https://api.github.com/repos/LuaLS/lua-language-server/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          wget -q "https://github.com/LuaLS/lua-language-server/releases/download/${LLS_VERSION}/lua-language-server-${LLS_VERSION}-linux-x64.tar.gz" -O /tmp/lls.tar.gz
+          sudo mkdir -p /opt/lls
+          sudo tar -xzf /tmp/lls.tar.gz -C /opt/lls
+          sudo ln -sf /opt/lls/bin/lua-language-server /usr/local/bin/lua-language-server
+
+      - name: Run Lua tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^Lua$" ./test/ -timeout 10m
+
+  # Swift via sourcekit-lsp — macOS runner required (sourcekit-lsp ships with Xcode)
+  multi-lang-swift:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Run Swift tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^Swift$" ./test/ -timeout 15m
+
   # Scala via metals — best-effort; metals cold-start is slow and may exceed timeout
   multi-lang-scala:
     runs-on: ubuntu-latest
