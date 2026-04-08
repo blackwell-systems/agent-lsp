@@ -247,6 +247,38 @@ func FindTestFiles(_ context.Context, root, lang, sourceFile string) (TestFileRe
 		// Tests are inline in Rust source files.
 		testFiles = []string{absSource}
 
+	case "csharp":
+		var found []string
+		csPatterns := []string{
+			filepath.Join(dir, "*Test*.cs"),
+			filepath.Join(dir, "*Tests.cs"),
+		}
+		for _, p := range csPatterns {
+			m, _ := filepath.Glob(p)
+			found = append(found, m...)
+		}
+		testFiles = found
+
+	case "swift":
+		m, _ := filepath.Glob(filepath.Join(dir, "*Tests.swift"))
+		testFiles = m
+
+	case "zig":
+		// Zig tests are inline in source files, same as Rust.
+		testFiles = []string{absSource}
+
+	case "kotlin":
+		var found []string
+		ktPatterns := []string{
+			filepath.Join(dir, "*Test.kt"),
+			filepath.Join(dir, "*Tests.kt"),
+		}
+		for _, p := range ktPatterns {
+			m, _ := filepath.Glob(p)
+			found = append(found, m...)
+		}
+		testFiles = found
+
 	default:
 		testFiles = []string{}
 	}
@@ -329,6 +361,10 @@ var (
 	reBuildGo         = regexp.MustCompile(`^([^:]+):(\d+):(\d+):\s+(.+)$`)
 	reBuildTypeScript = regexp.MustCompile(`^([^(]+)\((\d+),(\d+)\): error TS\d+: (.+)$`)
 	reBuildPython     = regexp.MustCompile(`^([^:]+):(\d+):\s+error:\s+(.+)$`)
+	reBuildCSharp     = regexp.MustCompile(`^([^(]+)\((\d+),(\d+)\): error [A-Z]+\d+: (.+)$`)
+	reBuildSwift      = regexp.MustCompile(`^([^:]+):(\d+):(\d+): error: (.+)$`)
+	reBuildZig        = regexp.MustCompile(`^([^:]+):(\d+):(\d+): error: (.+)$`)
+	reBuildKotlin     = regexp.MustCompile(`^e: ([^:]+): \((\d+), (\d+)\): error: (.+)$`)
 )
 
 func parseBuildErrors(lang string, output []byte) []BuildError {
@@ -420,6 +456,70 @@ func parseBuildErrors(lang string, output []byte) []BuildError {
 				Message: m[3],
 			})
 		}
+
+	case "csharp":
+		for _, line := range lines {
+			m := reBuildCSharp.FindStringSubmatch(line)
+			if m == nil {
+				continue
+			}
+			lineNum, _ := strconv.Atoi(m[2])
+			colNum, _ := strconv.Atoi(m[3])
+			errors = append(errors, BuildError{
+				File:    strings.TrimSpace(m[1]),
+				Line:    lineNum,
+				Column:  colNum,
+				Message: m[4],
+			})
+		}
+
+	case "swift":
+		for _, line := range lines {
+			m := reBuildSwift.FindStringSubmatch(line)
+			if m == nil {
+				continue
+			}
+			lineNum, _ := strconv.Atoi(m[2])
+			colNum, _ := strconv.Atoi(m[3])
+			errors = append(errors, BuildError{
+				File:    m[1],
+				Line:    lineNum,
+				Column:  colNum,
+				Message: m[4],
+			})
+		}
+
+	case "zig":
+		for _, line := range lines {
+			m := reBuildZig.FindStringSubmatch(line)
+			if m == nil {
+				continue
+			}
+			lineNum, _ := strconv.Atoi(m[2])
+			colNum, _ := strconv.Atoi(m[3])
+			errors = append(errors, BuildError{
+				File:    m[1],
+				Line:    lineNum,
+				Column:  colNum,
+				Message: m[4],
+			})
+		}
+
+	case "kotlin":
+		for _, line := range lines {
+			m := reBuildKotlin.FindStringSubmatch(line)
+			if m == nil {
+				continue
+			}
+			lineNum, _ := strconv.Atoi(m[2])
+			colNum, _ := strconv.Atoi(m[3])
+			errors = append(errors, BuildError{
+				File:    strings.TrimSpace(m[1]),
+				Line:    lineNum,
+				Column:  colNum,
+				Message: m[4],
+			})
+		}
 	}
 
 	return errors
@@ -451,6 +551,20 @@ func parseTestFailures(lang, root string, output []byte) []TestFailure {
 
 	case "python":
 		failures = parsePythonTestFailures(output)
+
+	case "csharp":
+		failures = parseDotnetTestFailures(output)
+
+	case "swift":
+		failures = parseSwiftTestFailures(output)
+
+	case "zig":
+		// zig build test exits non-zero if tests fail; output is plain text.
+		// Minimal: return empty failures list (raw output preserved in TestResult.Raw).
+		// No structured parsing needed.
+
+	case "kotlin":
+		failures = parseGradleTestFailures(output)
 
 	default:
 		// TypeScript/JavaScript: raw output only, no structured parsing.
@@ -562,6 +676,92 @@ func parsePythonTestFailures(output []byte) []TestFailure {
 	}
 
 	// Fallback: raw output, no structured parsing.
+	return failures
+}
+
+// reSwiftTestFailed matches XCTest failure lines:
+// "  Test Case '-[Suite testName]' failed (0.001 seconds)."
+var reSwiftTestFailed = regexp.MustCompile(`Test Case '(.+)' failed`)
+
+func parseSwiftTestFailures(output []byte) []TestFailure {
+	var failures []TestFailure
+	scanner := bufio.NewScanner(bytes.NewReader(output))
+	for scanner.Scan() {
+		line := scanner.Text()
+		m := reSwiftTestFailed.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		failures = append(failures, TestFailure{
+			TestName: m[1],
+			Message:  strings.TrimSpace(line),
+		})
+	}
+	return failures
+}
+
+// reDotnetTestFailed matches dotnet test verbose output failure lines:
+// "  Failed TestName [12 ms]"
+var reDotnetTestFailed = regexp.MustCompile(`^\s+Failed\s+(\S+)\s+\[`)
+
+func parseDotnetTestFailures(output []byte) []TestFailure {
+	var failures []TestFailure
+	scanner := bufio.NewScanner(bytes.NewReader(output))
+	var currentTest string
+	var collectMessage bool
+	var msgLines []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		m := reDotnetTestFailed.FindStringSubmatch(line)
+		if m != nil {
+			if currentTest != "" {
+				failures = append(failures, TestFailure{
+					TestName: currentTest,
+					Message:  strings.Join(msgLines, "\n"),
+				})
+			}
+			currentTest = m[1]
+			collectMessage = false
+			msgLines = nil
+			continue
+		}
+		if currentTest != "" && strings.Contains(line, "Error Message:") {
+			collectMessage = true
+			continue
+		}
+		if collectMessage && strings.TrimSpace(line) != "" {
+			msgLines = append(msgLines, strings.TrimSpace(line))
+			collectMessage = false
+		}
+	}
+	if currentTest != "" {
+		failures = append(failures, TestFailure{
+			TestName: currentTest,
+			Message:  strings.Join(msgLines, "\n"),
+		})
+	}
+	return failures
+}
+
+// reGradleTestFailed matches Gradle test failure summary lines:
+// "FAILED: ClassName > testName FAILED"  or
+// "  com.example.TestClass > testName FAILED"
+var reGradleTestFailed = regexp.MustCompile(`(\S+)\s+FAILED\s*$`)
+
+func parseGradleTestFailures(output []byte) []TestFailure {
+	var failures []TestFailure
+	scanner := bufio.NewScanner(bytes.NewReader(output))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		m := reGradleTestFailed.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		failures = append(failures, TestFailure{
+			TestName: m[1],
+			Message:  line,
+		})
+	}
 	return failures
 }
 

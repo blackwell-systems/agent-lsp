@@ -81,4 +81,28 @@ var runners = map[string]languageRunner{
 		testCmd:   "cargo",
 		testArgs:  []string{"test", "--message-format=json"},
 	},
+	"csharp": {
+		buildCmd:  "dotnet",
+		buildArgs: []string{"build"},
+		testCmd:   "dotnet",
+		testArgs:  []string{"test", "--logger", "console;verbosity=detailed"},
+	},
+	"swift": {
+		buildCmd:  "swift",
+		buildArgs: []string{"build"},
+		testCmd:   "swift",
+		testArgs:  []string{"test"},
+	},
+	"zig": {
+		buildCmd:  "zig",
+		buildArgs: []string{"build"},
+		testCmd:   "zig",
+		testArgs:  []string{"build", "test"},
+	},
+	"kotlin": {
+		buildCmd:  "gradle",
+		buildArgs: []string{"build", "--quiet"},
+		testCmd:   "gradle",
+		testArgs:  []string{"test", "--quiet"},
+	},
 }
