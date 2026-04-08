@@ -40,3 +40,45 @@ type TestFileResult struct {
 	SourceFile string   `json:"source_file"`
 	TestFiles  []string `json:"test_files"`
 }
+
+// languageRunner maps a language ID to its build and test commands.
+type languageRunner struct {
+	buildCmd  string
+	buildArgs []string // template args; "{path}" is replaced at runtime
+	testCmd   string
+	testArgs  []string // template args; "{path}" is replaced at runtime
+}
+
+// runners is the dispatch table for language-specific build and test commands.
+var runners = map[string]languageRunner{
+	"go": {
+		buildCmd:  "go",
+		buildArgs: []string{"build", "{path}"},
+		testCmd:   "go",
+		testArgs:  []string{"test", "-json", "{path}"},
+	},
+	"typescript": {
+		buildCmd:  "tsc",
+		buildArgs: []string{"--noEmit"},
+		testCmd:   "npm",
+		testArgs:  []string{"test"},
+	},
+	"javascript": {
+		buildCmd:  "eslint",
+		buildArgs: []string{"."},
+		testCmd:   "npm",
+		testArgs:  []string{"test"},
+	},
+	"python": {
+		buildCmd:  "mypy",
+		buildArgs: []string{"{path}"},
+		testCmd:   "pytest",
+		testArgs:  []string{"--tb=json", "-q", "{path}"},
+	},
+	"rust": {
+		buildCmd:  "cargo",
+		buildArgs: []string{"build"},
+		testCmd:   "cargo",
+		testArgs:  []string{"test", "--message-format=json"},
+	},
+}
