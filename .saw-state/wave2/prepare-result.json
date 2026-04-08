@@ -2,18 +2,18 @@
   "wave": 2,
   "worktrees": [
     {
-      "agent": "D",
-      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/type-hierarchy-tools/wave2-agent-D",
-      "branch": "saw/type-hierarchy-tools/wave2-agent-D"
+      "agent": "B",
+      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/build-tool-integration/wave2-agent-B",
+      "branch": "saw/build-tool-integration/wave2-agent-B"
     }
   ],
   "agent_briefs": [
     {
-      "agent": "D",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/type-hierarchy-tools/wave2-agent-D/.saw-agent-brief.md",
-      "brief_length": 13002,
-      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave2/agent-D",
-      "files_owned": 2
+      "agent": "B",
+      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/build-tool-integration/wave2-agent-B/.saw-agent-brief.md",
+      "brief_length": 8496,
+      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave2/agent-B",
+      "files_owned": 0
     }
   ],
   "steps": [
@@ -73,9 +73,9 @@
       "detail": "all files validated"
     },
     {
-      "step": "commit_baseline",
+      "step": "commit_state",
       "status": "success",
-      "detail": "committed 2 file(s)"
+      "detail": "committed 3 SAW state file(s)"
     },
     {
       "step": "baseline_gates",

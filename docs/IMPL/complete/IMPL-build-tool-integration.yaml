@@ -1,3 +1,4 @@
+completion_date: "2026-04-08"
 title: Build Tool Integration — run_build, run_tests, and get_tests_for_file MCP Tools
 feature_slug: build-tool-integration
 verdict: SUITABLE
@@ -710,6 +711,7 @@ waves:
             grep "Register all 45" cmd/lsp-mcp-go/server.go         # expect: 1 match
             ```
           files: []
+      base_commit: ed61e63bd955847231b229971a5c0ea14b53449e
 quality_gates:
     level: standard
     gates:
@@ -822,6 +824,14 @@ completion_reports:
             - TestBuildResultShape
         verification: PASS
         notes: All 9 tests pass. runner.go extended with language dispatch table. build.go implements all 6 required functions. No *lsp.LSPClient parameter on any handler. Types consumed from runner.go scaffold (same package). Agent B must register HandleRunBuild, HandleRunTests, HandleGetTestsForFile in cmd/lsp-mcp-go/server.go.
+    B:
+        status: complete
+        branch: saw/build-tool-integration/wave2-agent-B
+        commit: "09133e8"
+        files_changed:
+            - cmd/lsp-mcp-go/server.go
+        verification: PASS
+        notes: Registered run_build, run_tests, get_tests_for_file in server.go. Added RunBuildArgs, RunTestsArgs, GetTestsForFileArgs structs. Updated tool count comment from 35 to 45. All three handlers called with (ctx, toolArgsToMap(args)) only — no cs.get() passed. Build, vet, and all grep checks pass.
     C:
         status: complete
         branch: saw/build-tool-integration/wave1-agent-C
@@ -926,6 +936,6 @@ critic_report:
     summary: 'Both prior errors are resolved. Check 1 (file_existence): runner.go is now action:modify and the file exists at the scaffold content — clear. build.go, build_test.go, and test/build_tools_test.go are action:new and do not yet exist — correct. All other modified files (server.go, README.md, CHANGELOG.md) exist. Check 2 (symbol_accuracy): Agent A''s background reading note now correctly states HandleDetectLspServers accepts *lsp.LSPClient but ignores it, and new handlers must NOT include this parameter — the guidance matches the actual source (detect.go line 163 uses _ *lsp.LSPClient). InferWorkspaceRoot signature (root, languageID string, err error) matches infer.go exactly. types.Location, types.Range, types.Position all exist in internal/types/types.go. Agent B''s anchor text in server.go verified: DetectLspServersArgs struct at line 673 and detect_lsp_servers AddTool block at line 676 both present as described. The comment to be updated reads ''// ------- Register all 35 tools -------'' (line 410), not 42 as the brief states — but Agent B''s brief says ''currently stale — there are 42 tools registered'' and instructs replacement with 45; the actual current text reads 35 tools. The count in the comment is stale at 35, not 42. This is a minor inaccuracy in the brief description but does not affect correctness: Agent B is told to replace with 45 regardless of the exact current number and uses exact text matching to find the anchor. Check 3 (pattern_accuracy): server.go registration pattern confirmed — AddTool with typed args struct and toolArgsToMap(args) is the established pattern; HandleDetectLspServers is called with cs.get() as the client argument; the brief correctly instructs the three new handlers to be called without cs.get(). Check 4 (interface_consistency): All five output types in runner.go scaffold match the interface_contracts definitions exactly. types.Location import path (github.com/blackwell-systems/lsp-mcp-go/internal/types) is correct. Check 5 (import_chains): All packages referenced in new files exist — context, encoding/json, fmt, os/exec, path/filepath, strings are stdlib; github.com/blackwell-systems/lsp-mcp-go/internal/types and internal/config exist locally; github.com/modelcontextprotocol/go-sdk/mcp is in go.mod. Check 6 (side_effect_completeness): Agent B in Wave 2 owns server.go registration — correctly planned. Agent B is properly sequenced after Agent A via depends_on. One advisory warning carried forward: server.go line 410 reads ''// ------- Register all 35 tools -------'' but Agent B''s brief describes it as ''there are 42 tools registered''. The brief''s description of the current comment text is inaccurate (35, not 42), but Agent B performs a full text replacement to 45 regardless and the anchor text is unique in the file, so execution will succeed. No errors found.'
     reviewed_at: "2026-04-08T21:28:52Z"
     issue_count: 1
-state: REVIEWED
+state: COMPLETE
 original_branch: main
 injection_method: hook

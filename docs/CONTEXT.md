@@ -17,3 +17,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-audit-3-fixes.yaml
 - **test-coverage-expansion**: completed 2026-04-08, 1 waves, 1 agents
   - IMPL doc: docs/IMPL/complete/IMPL-test-coverage-expansion.yaml
+- **build-tool-integration**: completed 2026-04-08, 2 waves, 4 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-build-tool-integration.yaml
