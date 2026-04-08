@@ -572,6 +572,10 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		testFormatDocument(t, ctx, session, lang),
 		testGoToDeclaration(t, ctx, session, lang),
 		testTypeHierarchy(t, ctx, session, lang),
+		testGetInfoOnLocation(t, ctx, session, lang),
+		testCallHierarchy(t, ctx, session, lang),
+		testGetSemanticTokens(t, ctx, session, lang),
+		testGetSignatureHelp(t, ctx, session, lang),
 	}
 
 	return langTestResult{tier1: "pass", tier2: tier2Results}
@@ -956,6 +960,150 @@ func testTypeHierarchy(t *testing.T, ctx context.Context, session *mcp.ClientSes
 	return toolResult{tool: "type_hierarchy", status: "pass"}
 }
 
+// testGetInfoOnLocation tests the get_info_on_location (hover) tool.
+func testGetInfoOnLocation(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	if lang.hoverLine == 0 {
+		return toolResult{tool: "get_info_on_location", status: "skip", detail: "no hover position configured"}
+	}
+	res, err := callTool(ctx, session, "get_info_on_location", map[string]any{
+		"file_path":   lang.file,
+		"language_id": lang.id,
+		"line":        lang.hoverLine,
+		"column":      lang.hoverColumn,
+	})
+	if err != nil {
+		return toolResult{tool: "get_info_on_location", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "get_info_on_location", status: "skip",
+			detail: fmt.Sprintf("server does not support hover: %v", res.Content)}
+	}
+	text, err := textFromResult(res)
+	if err != nil || strings.TrimSpace(text) == "" {
+		return toolResult{tool: "get_info_on_location", status: "skip", detail: "empty hover response"}
+	}
+	return toolResult{tool: "get_info_on_location", status: "pass"}
+}
+
+// testCallHierarchy tests the call_hierarchy tool.
+// Uses the hover position which points at a function/method declaration in every fixture.
+func testCallHierarchy(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	if lang.hoverLine == 0 {
+		return toolResult{tool: "call_hierarchy", status: "skip", detail: "no position configured"}
+	}
+	res, err := callTool(ctx, session, "call_hierarchy", map[string]any{
+		"file_path":   lang.file,
+		"language_id": lang.id,
+		"line":        lang.hoverLine,
+		"column":      lang.hoverColumn,
+		"direction":   "both",
+	})
+	if err != nil {
+		return toolResult{tool: "call_hierarchy", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "call_hierarchy", status: "skip",
+			detail: fmt.Sprintf("server does not support callHierarchy: %v", res.Content)}
+	}
+	text, err := textFromResult(res)
+	if err != nil {
+		return toolResult{tool: "call_hierarchy", status: "fail",
+			detail: fmt.Sprintf("failed to parse call_hierarchy response: %v", err)}
+	}
+	var result struct {
+		Items   []map[string]any `json:"items"`
+		Callers []map[string]any `json:"callers"`
+		Callees []map[string]any `json:"callees"`
+	}
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		if strings.Contains(text, "No call hierarchy") {
+			return toolResult{tool: "call_hierarchy", status: "skip", detail: "no call hierarchy item at position"}
+		}
+		return toolResult{tool: "call_hierarchy", status: "fail",
+			detail: fmt.Sprintf("failed to unmarshal call_hierarchy response: %s", text)}
+	}
+	if len(result.Items) == 0 {
+		return toolResult{tool: "call_hierarchy", status: "skip", detail: "no items returned"}
+	}
+	return toolResult{tool: "call_hierarchy", status: "pass"}
+}
+
+// testGetSemanticTokens tests the get_semantic_tokens tool over a small range.
+func testGetSemanticTokens(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	endLine := lang.hoverLine + 5
+	if endLine < 5 {
+		endLine = 5
+	}
+	res, err := callTool(ctx, session, "get_semantic_tokens", map[string]any{
+		"file_path":    lang.file,
+		"language_id":  lang.id,
+		"start_line":   1,
+		"start_column": 1,
+		"end_line":     endLine,
+		"end_column":   120,
+	})
+	if err != nil {
+		return toolResult{tool: "get_semantic_tokens", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "get_semantic_tokens", status: "skip",
+			detail: fmt.Sprintf("server does not support semanticTokens: %v", res.Content)}
+	}
+	text, err := textFromResult(res)
+	if err != nil {
+		return toolResult{tool: "get_semantic_tokens", status: "fail",
+			detail: fmt.Sprintf("failed to parse semantic tokens response: %v", err)}
+	}
+	var tokens []map[string]any
+	if err := json.Unmarshal([]byte(text), &tokens); err != nil || len(tokens) == 0 {
+		return toolResult{tool: "get_semantic_tokens", status: "skip", detail: "no tokens returned"}
+	}
+	return toolResult{tool: "get_semantic_tokens", status: "pass"}
+}
+
+// testGetSignatureHelp tests the get_signature_help tool.
+// Uses completionLine/completionColumn — positions inside expressions where
+// signature help is likely to trigger.
+func testGetSignatureHelp(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	if lang.completionLine == 0 {
+		return toolResult{tool: "get_signature_help", status: "skip", detail: "no position configured"}
+	}
+	completionFile := lang.completionFile
+	if completionFile == "" {
+		completionFile = lang.file
+	}
+	res, err := callTool(ctx, session, "get_signature_help", map[string]any{
+		"file_path":   completionFile,
+		"language_id": lang.id,
+		"line":        lang.completionLine,
+		"column":      lang.completionColumn,
+	})
+	if err != nil {
+		return toolResult{tool: "get_signature_help", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		return toolResult{tool: "get_signature_help", status: "skip",
+			detail: fmt.Sprintf("server does not support signatureHelp: %v", res.Content)}
+	}
+	text, err := textFromResult(res)
+	if err != nil || strings.TrimSpace(text) == "" || text == "null" || text == "{}" {
+		return toolResult{tool: "get_signature_help", status: "skip", detail: "no signature help at position"}
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		return toolResult{tool: "get_signature_help", status: "skip", detail: "empty or non-JSON response"}
+	}
+	sigs, _ := result["signatures"].([]any)
+	if len(sigs) == 0 {
+		return toolResult{tool: "get_signature_help", status: "skip", detail: "no signatures returned"}
+	}
+	return toolResult{tool: "get_signature_help", status: "pass"}
+}
+
 // statusIcon returns a visual icon for a tool result status.
 func statusIcon(s string) string {
 	switch s {
@@ -971,8 +1119,8 @@ func statusIcon(s string) string {
 // printMultiLangSummary prints a summary table of all language test results.
 func printMultiLangSummary(t *testing.T, results []langResult) {
 	t.Helper()
-	header := fmt.Sprintf("%-14s | T1 | %-8s | %-11s | %-11s | %-12s | %-10s | %-6s | %-12s | %-14s",
-		"Language", "symbols", "definition", "references", "completions", "workspace", "format", "declaration", "type_hierarchy")
+	header := fmt.Sprintf("%-14s | T1 | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s",
+		"Language", "symbols", "definition", "references", "completions", "workspace", "format", "declaration", "type_hierarchy", "hover", "call_hier", "sem_tok", "sig_help")
 	sep := strings.Repeat("-", len(header))
 	t.Logf("\n%s\n%s", header, sep)
 
@@ -988,7 +1136,7 @@ func printMultiLangSummary(t *testing.T, results []langResult) {
 			}
 			return " "
 		}
-		t.Logf("%-14s | %-2s | %-8s | %-11s | %-11s | %-12s | %-10s | %-6s | %-12s | %-14s",
+		t.Logf("%-14s | %-2s | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s",
 			r.name,
 			statusIcon(r.tier1),
 			get("get_document_symbols"),
@@ -999,6 +1147,10 @@ func printMultiLangSummary(t *testing.T, results []langResult) {
 			get("format_document"),
 			get("go_to_declaration"),
 			get("type_hierarchy"),
+			get("get_info_on_location"),
+			get("call_hierarchy"),
+			get("get_semantic_tokens"),
+			get("get_signature_help"),
 		)
 	}
 	t.Logf("%s", sep)
