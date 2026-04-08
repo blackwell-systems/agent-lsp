@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Added (2026-04-08)
+- **Scala language support** — `metals` added as 16th CI-verified language; fixture with `Person.scala`, `Greeter.scala`, `Main.scala`, `build.sbt`; dedicated `multi-lang-scala` CI job with `continue-on-error: true` and 30-minute timeout (metals requires sbt compilation on cold start)
 - **Kotlin language support** — `kotlin-language-server` added as 15th CI-verified language; fixture with `Person.kt`, `Greeter.kt`, `main.kt`, `build.gradle.kts`; added to `multi-lang-core` CI job (reuses Java setup); full Tier 1 + Tier 2 coverage
 - **C# language support** — `csharp-ls` added as 14th CI-verified language; fixture with `Person.cs`, `Greeter.cs`, `Program.cs`; full Tier 1 + Tier 2 coverage including hover, definition, references, completions, formatting, rename, highlights
 - **CI workflow split into 4 parallel jobs** — `test` (unit + binary smoke), `multi-lang-core` (Go/TypeScript/Python/Rust/Java), `multi-lang-extended` (C/C++/JS/PHP/Ruby/YAML/JSON/Dockerfile/CSharp), `speculative-test` (gopls + `TestSpeculativeSessions`); unit tests now correctly run `./internal/... ./cmd/...` instead of `-run TestBinary`; `TestSpeculativeSessions` now in CI

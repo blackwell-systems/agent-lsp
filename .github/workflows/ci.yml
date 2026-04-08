@@ -128,6 +128,37 @@ jobs:
       - name: Run extended language tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^(C|C\+\+|JavaScript|PHP|Ruby|YAML|JSON|Dockerfile|CSharp)$" ./test/ -timeout 20m
 
+  # Scala via metals — best-effort; metals cold-start is slow and may exceed timeout
+  multi-lang-scala:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install Coursier + metals + sbt
+        run: |
+          curl -fL https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-linux.gz | gzip -d > /tmp/cs
+          chmod +x /tmp/cs
+          sudo mv /tmp/cs /usr/local/bin/cs
+          cs install metals sbt
+          echo "$HOME/.local/share/coursier/bin" >> $GITHUB_PATH
+
+      - name: Run Scala tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^Scala$" ./test/ -timeout 30m
+
   # Speculative session lifecycle (Go/gopls only)
   speculative-test:
     runs-on: ubuntu-latest

@@ -3,14 +3,14 @@
 [![Blackwell Systems](https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg)](https://github.com/blackwell-systems)
 [![CI](https://github.com/blackwell-systems/lsp-mcp-go/actions/workflows/ci.yml/badge.svg)](https://github.com/blackwell-systems/lsp-mcp-go/actions)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
-[![Languages](https://img.shields.io/badge/languages-15_CI--verified-brightgreen.svg)](#multi-language-support)
+[![Languages](https://img.shields.io/badge/languages-16_CI--verified-brightgreen.svg)](#multi-language-support)
 [![Tools](https://img.shields.io/badge/tools-42-blue.svg)](#tools)
 [![CI Coverage](https://img.shields.io/badge/CI--verified_tools-26%2F42-brightgreen.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships. lsp-mcp-go exposes that intelligence to agents through MCP.
 
-**42 tools** across navigation, analysis, refactoring, and formatting — **26 CI-verified** end-to-end against real language servers across **15 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+**42 tools** across navigation, analysis, refactoring, and formatting — **26 CI-verified** end-to-end against real language servers across **16 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
 **Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One lsp-mcp-go process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright — no reconfiguration when you switch projects.
 
@@ -57,6 +57,7 @@ lsp-mcp-go is a bridge — it needs language servers already installed on your m
 | Dockerfile | `docker-langserver` | `npm i -g dockerfile-language-server-nodejs` |
 | C# | `csharp-ls` | `dotnet tool install -g csharp-ls` |
 | Kotlin | `kotlin-language-server` | [GitHub releases](https://github.com/fwcd/kotlin-language-server/releases) |
+| Scala | `metals` | `cs install metals` ([Coursier](https://get-coursier.io)) |
 
 ### Step 2 — Add to your AI config
 
@@ -94,7 +95,7 @@ Then use any of the 42 tools. The session persists — no need to restart when s
 
 | | lsp-mcp-go | other MCP-LSP implementations |
 |--|---------|---------------------|
-| Languages (CI-verified) | **15** (end-to-end integration tests) | config-listed, untested |
+| Languages (CI-verified) | **16** (end-to-end integration tests) | config-listed, untested |
 | Tools | **42** | 3–18 |
 | Multi-server routing | **✓** (one process, many languages) | varies |
 | LSP spec compliance | **3.17, built to spec** | ad hoc |
@@ -142,8 +143,9 @@ Tier 2 results per language from the latest CI run:
 | Dockerfile | pass | — | — | — | pass | pass | — | — | — | pass | — | — | — |
 | C# | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
 | Kotlin | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
+| Scala | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
 
-Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout (a known jdtls cold-start characteristic, not a tool bug). `type_hierarchy` is tested on Java (jdtls) and TypeScript (typescript-language-server); TypeScript skips when the server does not return a hierarchy item at the configured position.
+Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout (a known jdtls cold-start characteristic, not a tool bug). Scala (metals) runs in a separate CI job with `continue-on-error: true` and a 30-minute timeout — metals requires sbt compilation on first start; results are informational. `type_hierarchy` is tested on Java (jdtls) and TypeScript (typescript-language-server); TypeScript skips when the server does not return a hierarchy item at the configured position.
 
 ## Tools
 
@@ -253,7 +255,7 @@ apply_edit(edit=<WorkspaceEdit>)                           # writes all changed 
 # auto-watch notifies the server automatically — no did_change_watched_files needed
 ```
 
-**Language IDs:** `typescript`, `typescriptreact`, `javascript`, `javascriptreact`, `python`, `go`, `rust`, `java`, `kotlin`, `c`, `cpp`, `csharp`, `php`, `ruby`, `yaml`, `json`, `dockerfile`
+**Language IDs:** `typescript`, `typescriptreact`, `javascript`, `javascriptreact`, `python`, `go`, `rust`, `java`, `kotlin`, `scala`, `c`, `cpp`, `csharp`, `php`, `ruby`, `yaml`, `json`, `dockerfile`
 
 ## Resources
 
