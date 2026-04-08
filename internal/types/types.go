@@ -105,6 +105,19 @@ type CallHierarchyOutgoingCall struct {
 	FromRanges []Range `json:"fromRanges"`
 }
 
+// TypeHierarchyItem represents a single node in a type hierarchy graph.
+// See LSP 3.17 § TypeHierarchyItem.
+type TypeHierarchyItem struct {
+	Name           string      `json:"name"`
+	Kind           SymbolKind  `json:"kind"`
+	Tags           []SymbolTag `json:"tags,omitempty"`
+	Detail         *string     `json:"detail,omitempty"`
+	URI            string      `json:"uri"`
+	Range          Range       `json:"range"`
+	SelectionRange Range       `json:"selectionRange"`
+	Data           interface{} `json:"data,omitempty"`
+}
+
 // SemanticToken is a single decoded semantic token with absolute 1-based position
 // and resolved type/modifier names from the server's legend.
 type SemanticToken struct {
