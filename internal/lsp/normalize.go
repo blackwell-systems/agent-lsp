@@ -61,17 +61,25 @@ func NormalizeDocumentSymbols(raw json.RawMessage) ([]types.DocumentSymbol, erro
 		nameMap[info.Name] = ds // last write wins on duplicates
 	}
 
-	// Pass 2: attach children to parents; collect roots.
-	var roots []types.DocumentSymbol
+	// Pass 2: attach children to parents. Track which nodes have a parent.
+	hasParent := make([]bool, len(infos))
 	for i, info := range infos {
 		ds := symPtrs[i]
 		if info.ContainerName != nil && *info.ContainerName != "" {
 			if parent, ok := nameMap[*info.ContainerName]; ok {
 				parent.Children = append(parent.Children, *ds)
-				continue
+				hasParent[i] = true
 			}
 		}
-		roots = append(roots, *ds)
+	}
+
+	// Pass 3: collect roots by dereferencing pointers after all children are wired.
+	// Value-copying roots before Pass 2 completes would miss children added later.
+	var roots []types.DocumentSymbol
+	for i := range infos {
+		if !hasParent[i] {
+			roots = append(roots, *symPtrs[i])
+		}
 	}
 
 	if roots == nil {
