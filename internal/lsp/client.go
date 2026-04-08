@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
-	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/blackwell-systems/lsp-mcp-go/internal/logging"
 	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/fsnotify/fsnotify"
 )
 
 // Per-method request timeouts. Mirrors the TypeScript REQUEST_TIMEOUTS table
@@ -133,6 +135,10 @@ type LSPClient struct {
 	// stderr drain
 	stderrBuf []byte
 	stderrMu  sync.Mutex
+
+	// auto-watcher: watches the workspace root and notifies the server
+	// of file changes automatically, keeping the LSP index fresh.
+	watcherStop chan struct{}
 }
 
 // NewLSPClient creates a new, unstarted LSP client.
@@ -671,11 +677,16 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	c.initialized = true
 	c.mu.Unlock()
 
+	// Start auto-watcher so file changes are reflected in the LSP index
+	// without requiring manual did_change_watched_files calls.
+	c.startWatcher(rootDir)
+
 	return c.sendNotification("initialized", map[string]interface{}{})
 }
 
 // Shutdown gracefully shuts down the LSP server.
 func (c *LSPClient) Shutdown(ctx context.Context) error {
+	c.stopWatcher()
 	_, err := c.sendRequest(ctx, "shutdown", nil)
 	if err != nil {
 		return fmt.Errorf("shutdown request: %w", err)
@@ -1777,6 +1788,129 @@ func (c *LSPClient) GetServerInfo() (name, version string) {
 	c.capsMu.RLock()
 	defer c.capsMu.RUnlock()
 	return c.serverName, c.serverVersion
+}
+
+// watcherSkipDirs are directory names that the auto-watcher skips entirely.
+// These directories change frequently but are not part of the source index.
+var watcherSkipDirs = map[string]bool{
+	".git":        true,
+	"node_modules": true,
+	"target":      true,
+	"build":       true,
+	"dist":        true,
+	"vendor":      true,
+	"__pycache__": true,
+	".venv":       true,
+	"venv":        true,
+	".next":       true,
+	".cache":      true,
+	".idea":       true,
+	".vscode":     true,
+}
+
+// startWatcher starts an auto-watcher on rootDir that notifies the LSP server
+// whenever files change on disk — keeping the index fresh without manual
+// did_change_watched_files calls. Uses a 150ms debounce to batch rapid edits.
+// A previous watcher (if any) is stopped first.
+func (c *LSPClient) startWatcher(rootDir string) {
+	c.stopWatcher()
+
+	stop := make(chan struct{})
+	c.watcherStop = stop
+
+	go func() {
+		watcher, err := fsnotify.NewWatcher()
+		if err != nil {
+			logging.Log(logging.LevelDebug, "auto-watcher: failed to create watcher: "+err.Error())
+			return
+		}
+		defer watcher.Close()
+
+		// Walk the workspace and add all non-excluded directories.
+		_ = filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
+			if err != nil || !d.IsDir() {
+				return nil
+			}
+			if watcherSkipDirs[d.Name()] || (strings.HasPrefix(d.Name(), ".") && d.Name() != ".") {
+				return filepath.SkipDir
+			}
+			_ = watcher.Add(path)
+			return nil
+		})
+
+		// debounce: collect events for 150ms then flush as a batch.
+		const debounce = 150 * time.Millisecond
+		pending := make(map[string]fsnotify.Op)
+		var timer *time.Timer
+		flush := func() {
+			if len(pending) == 0 {
+				return
+			}
+			changes := make([]types.FileChangeEvent, 0, len(pending))
+			for path, op := range pending {
+				changeType := 2 // Changed
+				if op&fsnotify.Create != 0 {
+					changeType = 1 // Created
+				} else if op&(fsnotify.Remove|fsnotify.Rename) != 0 {
+					changeType = 3 // Deleted
+				}
+				changes = append(changes, types.FileChangeEvent{
+					URI:  "file://" + path,
+					Type: changeType,
+				})
+			}
+			pending = make(map[string]fsnotify.Op)
+			if err := c.DidChangeWatchedFiles(changes); err != nil {
+				logging.Log(logging.LevelDebug, "auto-watcher: didChangeWatchedFiles error: "+err.Error())
+			}
+		}
+
+		for {
+			select {
+			case <-stop:
+				if timer != nil {
+					timer.Stop()
+				}
+				flush()
+				return
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				// Skip directory events and hidden files.
+				name := filepath.Base(event.Name)
+				if strings.HasPrefix(name, ".") {
+					continue
+				}
+				pending[event.Name] = pending[event.Name] | event.Op
+				// If a new directory was created, add it to the watcher.
+				if event.Op&fsnotify.Create != 0 {
+					if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+						if !watcherSkipDirs[name] {
+							_ = watcher.Add(event.Name)
+						}
+					}
+				}
+				if timer != nil {
+					timer.Stop()
+				}
+				timer = time.AfterFunc(debounce, flush)
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				logging.Log(logging.LevelDebug, "auto-watcher error: "+err.Error())
+			}
+		}
+	}()
+}
+
+// stopWatcher stops the auto-watcher if one is running.
+func (c *LSPClient) stopWatcher() {
+	if c.watcherStop != nil {
+		close(c.watcherStop)
+		c.watcherStop = nil
+	}
 }
 
 // GetSemanticTokenLegend returns the token type and modifier name arrays
