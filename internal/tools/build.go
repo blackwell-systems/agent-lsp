@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -137,6 +138,12 @@ func RunBuild(ctx context.Context, root, lang, path string) (BuildResult, error)
 	cmd := exec.CommandContext(ctx, runner.buildCmd, args...)
 	cmd.Dir = root
 
+	// For Go, always disable workspace mode to build all modules in the directory
+	// (go.work may exist in parent directories and affect behavior)
+	if lang == "go" {
+		cmd.Env = append(os.Environ(), "GOWORK=off")
+	}
+
 	output, err := cmd.CombinedOutput()
 	exitCode := 0
 	if err != nil {
@@ -171,6 +178,12 @@ func RunTests(ctx context.Context, root, lang, path string) (TestResult, error) 
 
 	cmd := exec.CommandContext(ctx, runner.testCmd, args...)
 	cmd.Dir = root
+
+	// For Go, always disable workspace mode to test all modules in the directory
+	// (go.work may exist in parent directories and affect behavior)
+	if lang == "go" {
+		cmd.Env = append(os.Environ(), "GOWORK=off")
+	}
 
 	output, err := cmd.CombinedOutput()
 	exitCode := 0
