@@ -3,41 +3,17 @@
   "worktrees": [
     {
       "agent": "A",
-      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/type-hierarchy-tools/wave1-agent-A",
-      "branch": "saw/type-hierarchy-tools/wave1-agent-A"
-    },
-    {
-      "agent": "B",
-      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/type-hierarchy-tools/wave1-agent-B",
-      "branch": "saw/type-hierarchy-tools/wave1-agent-B"
-    },
-    {
-      "agent": "C",
-      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/type-hierarchy-tools/wave1-agent-C",
-      "branch": "saw/type-hierarchy-tools/wave1-agent-C"
+      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/test-coverage-expansion/wave1-agent-A",
+      "branch": "saw/test-coverage-expansion/wave1-agent-A"
     }
   ],
   "agent_briefs": [
     {
       "agent": "A",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/type-hierarchy-tools/wave1-agent-A/.saw-agent-brief.md",
-      "brief_length": 4942,
-      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave1/agent-A",
-      "files_owned": 1
-    },
-    {
-      "agent": "B",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/type-hierarchy-tools/wave1-agent-B/.saw-agent-brief.md",
-      "brief_length": 7255,
-      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave1/agent-B",
-      "files_owned": 1
-    },
-    {
-      "agent": "C",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/type-hierarchy-tools/wave1-agent-C/.saw-agent-brief.md",
-      "brief_length": 7260,
-      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave1/agent-C",
-      "files_owned": 1
+      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/test-coverage-expansion/wave1-agent-A/.saw-agent-brief.md",
+      "brief_length": 33430,
+      "journal_dir": ".saw-state/wave1/agent-A",
+      "files_owned": 2
     }
   ],
   "steps": [
@@ -63,8 +39,8 @@
     },
     {
       "step": "critic_verdict",
-      "status": "success",
-      "detail": "critic review passed"
+      "status": "skipped",
+      "detail": "threshold not met — critic review not required"
     },
     {
       "step": "stale_cleanup",
@@ -84,7 +60,7 @@
     {
       "step": "commit_baseline",
       "status": "success",
-      "detail": "committed 3 file(s)"
+      "detail": "committed 4 file(s)"
     },
     {
       "step": "baseline_gates",
@@ -134,7 +110,7 @@
     {
       "step": "create_worktrees",
       "status": "success",
-      "detail": "created 3 worktree(s)"
+      "detail": "created 1 worktree(s)"
     },
     {
       "step": "workspace_setup",
@@ -149,7 +125,7 @@
     {
       "step": "extract_briefs",
       "status": "success",
-      "detail": "prepared 3 agent(s)"
+      "detail": "prepared 1 agent(s)"
     }
   ],
   "success": false

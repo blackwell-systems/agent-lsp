@@ -8,7 +8,9 @@
 [![CI Coverage](https://img.shields.io/badge/CI--verified_tools-26%2F42-brightgreen.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships. lsp-mcp-go exposes that intelligence to agents through MCP.
+Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships.
+
+lsp-mcp-go is a stateful runtime over real language servers — not a bridge. It maintains a persistent, warm session, reshapes LSP into agent-oriented workflows, and adds a transactional execution layer for safe speculative edits.
 
 **42 tools** across navigation, analysis, refactoring, and formatting — **26 CI-verified** end-to-end against real language servers across **22 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
@@ -40,7 +42,7 @@ export PATH="$PATH:$(go env GOPATH)/bin"   # add to ~/.zshrc or ~/.bashrc to per
 
 ### Step 1 — Install language servers for your stack
 
-lsp-mcp-go is a bridge — it needs language servers already installed on your machine.
+lsp-mcp-go runs on top of real language servers — install the servers for your stack and lsp-mcp-go handles the rest.
 
 | Language | Server | Install |
 |----------|--------|---------|
