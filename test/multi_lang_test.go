@@ -918,6 +918,9 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		testDetectLspServers(t, ctx, session, lang),
 		testCloseDocument(t, ctx, session, lang),
 		testDidChangeWatchedFiles(t, ctx, session, lang),
+		testRunBuild(t, ctx, session, lang),
+		testRunTests(t, ctx, session, lang),
+		testGetTestsForFile(t, ctx, session, lang),
 	}
 
 	return langTestResult{tier1: "pass", tier2: tier2Results}

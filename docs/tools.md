@@ -1,6 +1,6 @@
 # lsp-mcp Tool Reference
 
-All 42 tools exposed by the lsp-mcp MCP server. Coordinates are **1-based** for
+All 45 tools exposed by the lsp-mcp MCP server. Coordinates are **1-based** for
 both `line` and `column` in every tool call; the server converts internally to
 the 0-based values the LSP spec requires.
 
@@ -1764,6 +1764,121 @@ Does not require `start_lsp` to have been called — it works standalone.
 - `suggested_config` entries use the format `language:binary` or
   `language:binary,arg1,arg2` and can be passed directly as lsp-mcp-go MCP
   server args.
+
+---
+
+### `run_build`
+
+Compile the project using the detected workspace language. Language-specific
+dispatch — `go build ./...`, `cargo build`, `tsc --noEmit`, `mypy .` (Python
+typecheck proxy). Does not require `start_lsp`.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `workspace_dir` | string | yes | Absolute path to the workspace root |
+| `path` | string | no | Narrows the build scope (e.g., a subdirectory or file) |
+| `language` | string | no | Override auto-detected language |
+
+**Returns**
+
+```json
+{
+  "success": true,
+  "errors": [
+    { "file": "/path/to/file.go", "line": 12, "column": 5, "message": "undefined: Foo" }
+  ],
+  "raw": "go build ./...\n..."
+}
+```
+
+**Notes**
+
+- Language is auto-detected from workspace root markers (`go.mod`, `Cargo.toml`,
+  `package.json`, `pyproject.toml`, etc.) when `language` is omitted.
+- `errors` is always an array; it is empty on a clean build.
+- Does not start or require an LSP session.
+
+---
+
+### `run_tests`
+
+Run the test suite for the detected workspace language. Language-specific
+dispatch — `go test -json ./...`, `cargo test --message-format=json`,
+`pytest --tb=json`, `npm test`. Test failure `location` fields are
+LSP-normalized (file URI + zero-based range) — paste directly into
+`go_to_definition`. Does not require `start_lsp`.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `workspace_dir` | string | yes | Absolute path to the workspace root |
+| `path` | string | no | Narrows the test scope (e.g., a package path or file) |
+| `language` | string | no | Override auto-detected language |
+
+**Returns**
+
+```json
+{
+  "passed": false,
+  "failures": [
+    {
+      "file": "/path/to/file_test.go",
+      "line": 42,
+      "test_name": "TestFoo",
+      "message": "assertion failed: expected 1, got 2",
+      "location": {
+        "uri": "file:///path/to/file_test.go",
+        "range": { "start": { "line": 41, "character": 0 }, "end": { "line": 41, "character": 0 } }
+      }
+    }
+  ],
+  "raw": "..."
+}
+```
+
+**Notes**
+
+- `passed` is `true` only when all tests pass and the test runner exits 0.
+- `failures` is empty when `passed` is `true`.
+- `location` is LSP-normalized for direct use with `go_to_definition`.
+- Does not start or require an LSP session.
+
+---
+
+### `get_tests_for_file`
+
+Return test files that exercise a given source file. Static lookup — no test
+execution. Go: `*_test.go` in the same directory. Python: `test_*.py` /
+`*_test.py` in the same directory and a `tests/` sibling. TypeScript/JS:
+`*.test.ts`, `*.spec.ts`, `*.test.js`, `*.spec.js`, etc. Rust: returns the
+source file itself (tests are inline). Does not require `start_lsp`.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | Absolute path to the source file |
+
+**Returns**
+
+```json
+{
+  "source_file": "/path/to/pkg/handler.go",
+  "test_files": [
+    "/path/to/pkg/handler_test.go"
+  ]
+}
+```
+
+**Notes**
+
+- `test_files` is an empty array when no test files are found.
+- For Rust, the source file itself is returned in `test_files` because tests
+  live in the same file as the source code.
+- Does not start or require an LSP session.
 
 ---
 
