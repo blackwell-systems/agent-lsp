@@ -1,6 +1,6 @@
 # lsp-mcp Tool Reference
 
-All 34 tools exposed by the lsp-mcp MCP server. Coordinates are **1-based** for
+All 42 tools exposed by the lsp-mcp MCP server. Coordinates are **1-based** for
 both `line` and `column` in every tool call; the server converts internally to
 the 0-based values the LSP spec requires.
 

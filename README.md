@@ -155,7 +155,7 @@ Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout
 
 All tools require `start_lsp` to be called first.
 
-**CI coverage:** The following tools are end-to-end integration-tested against real language servers on every CI run across all 14 languages:
+**CI coverage:** The following tools are end-to-end integration-tested against real language servers on every CI run across all 18 languages:
 
 - **Tier 1** (all 13): `start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`
 - **Tier 2** (all 13): `get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`, `get_info_on_location`, `call_hierarchy`, `get_semantic_tokens`, `get_signature_help`, `get_document_highlights`, `get_inlay_hints`, `get_code_actions`, `prepare_rename`, `rename_symbol`, `get_server_capabilities`, `add_workspace_folder`, `go_to_type_definition`, `go_to_implementation`, `format_range`, `apply_edit`, `detect_lsp_servers`, `close_document`, `did_change_watched_files`
