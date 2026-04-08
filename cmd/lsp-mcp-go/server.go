@@ -610,6 +610,14 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		return makeCallToolResult(r), nil, err
 	})
 
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_server_capabilities",
+		Description: "Return the language server's capability map and classify every lsp-mcp-go tool as supported or unsupported based on what the server advertised during initialization. Use this to determine which tools will return results before calling them — saves round trips on servers that don't support certain LSP features (e.g. not all servers support type_hierarchy or inlay_hints). Requires start_lsp to have been called first.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleGetServerCapabilities(ctx, cs.get(), nil)
+		return makeCallToolResult(r), nil, err
+	})
+
 	type DetectLspServersArgs struct {
 		WorkspaceDir string `json:"workspace_dir"`
 	}
