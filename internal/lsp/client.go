@@ -44,7 +44,8 @@ var requestTimeouts = map[string]time.Duration{
 	"textDocument/prepareTypeHierarchy": 30 * time.Second,
 	"typeHierarchy/supertypes":           60 * time.Second,
 	"typeHierarchy/subtypes":             60 * time.Second,
-	"textDocument/inlayHint":             30 * time.Second,
+	"textDocument/inlayHint":              30 * time.Second,
+	"textDocument/documentHighlight":      10 * time.Second,
 	"textDocument/semanticTokens/range":   30 * time.Second,
 	"textDocument/semanticTokens/full":    30 * time.Second,
 }
@@ -592,6 +593,9 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 					"dynamicRegistration": true,
 				},
 				"inlayHint": map[string]interface{}{
+					"dynamicRegistration": true,
+				},
+				"documentHighlight": map[string]interface{}{
 					"dynamicRegistration": true,
 				},
 				"semanticTokens": map[string]interface{}{
@@ -1806,6 +1810,32 @@ var watcherSkipDirs = map[string]bool{
 	".cache":      true,
 	".idea":       true,
 	".vscode":     true,
+}
+
+// GetDocumentHighlights returns all occurrences of the symbol at the given
+// position within the same document. Each highlight includes a range and an
+// optional kind (Text=1, Read=2, Write=3). Returns an empty slice when the
+// server does not support documentHighlightProvider.
+func (c *LSPClient) GetDocumentHighlights(ctx context.Context, uri string, pos types.Position) ([]types.DocumentHighlight, error) {
+	if !c.hasCapability("documentHighlightProvider") {
+		logging.Log(logging.LevelDebug, "server does not support documentHighlight")
+		return []types.DocumentHighlight{}, nil
+	}
+	result, err := c.sendRequest(ctx, "textDocument/documentHighlight", map[string]interface{}{
+		"textDocument": map[string]interface{}{"uri": uri},
+		"position":     pos,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return []types.DocumentHighlight{}, nil
+	}
+	var highlights []types.DocumentHighlight
+	if err := json.Unmarshal(result, &highlights); err != nil {
+		return nil, err
+	}
+	return highlights, nil
 }
 
 // startWatcher starts an auto-watcher on rootDir that notifies the LSP server

@@ -261,3 +261,23 @@ type InlayHint struct {
 	PaddingLeft  bool         `json:"paddingLeft,omitempty"`
 	PaddingRight bool         `json:"paddingRight,omitempty"`
 }
+
+// DocumentHighlightKind indicates the role of a highlighted symbol occurrence.
+// See LSP 3.17 § DocumentHighlightKind.
+type DocumentHighlightKind int
+
+const (
+	// DocumentHighlightText is a textual occurrence (not read or write).
+	DocumentHighlightText  DocumentHighlightKind = 1
+	// DocumentHighlightRead is a read access of the symbol.
+	DocumentHighlightRead  DocumentHighlightKind = 2
+	// DocumentHighlightWrite is a write access of the symbol.
+	DocumentHighlightWrite DocumentHighlightKind = 3
+)
+
+// DocumentHighlight is a single highlighted occurrence of a symbol within a file.
+// See LSP 3.17 § DocumentHighlight.
+type DocumentHighlight struct {
+	Range Range                 `json:"range"`
+	Kind  DocumentHighlightKind `json:"kind,omitempty"`
+}
