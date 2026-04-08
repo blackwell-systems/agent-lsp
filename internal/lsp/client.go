@@ -123,10 +123,11 @@ type LSPClient struct {
 	progressTokens map[interface{}]struct{} // active begin tokens
 
 	// server capabilities and identity (from initialize response)
-	capsMu       sync.RWMutex
-	capabilities map[string]interface{}
-	serverName   string
-	serverVersion string
+	capsMu          sync.RWMutex
+	capabilities    map[string]interface{}
+	serverName      string
+	serverVersion   string
+	workspaceFolders []workspaceFolder
 
 	// semantic token legend (from initialize response)
 	legendMu        sync.RWMutex
@@ -508,6 +509,9 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 
 	c.rootDir = rootDir
 	rootURI := (&url.URL{Scheme: "file", Path: rootDir}).String()
+	c.capsMu.Lock()
+	c.workspaceFolders = []workspaceFolder{{URI: rootURI, Name: rootDir}}
+	c.capsMu.Unlock()
 
 	initParams := map[string]interface{}{
 		"processId": os.Getpid(),
@@ -1792,6 +1796,83 @@ func (c *LSPClient) GetServerInfo() (name, version string) {
 	c.capsMu.RLock()
 	defer c.capsMu.RUnlock()
 	return c.serverName, c.serverVersion
+}
+
+// workspaceFolder is a single LSP workspace folder entry.
+type workspaceFolder struct {
+	URI  string `json:"uri"`
+	Name string `json:"name"`
+}
+
+// GetWorkspaceFolders returns the current list of workspace folders.
+func (c *LSPClient) GetWorkspaceFolders() []workspaceFolder {
+	c.capsMu.RLock()
+	defer c.capsMu.RUnlock()
+	out := make([]workspaceFolder, len(c.workspaceFolders))
+	copy(out, c.workspaceFolders)
+	return out
+}
+
+// AddWorkspaceFolder adds a directory to the workspace via
+// workspace/didChangeWorkspaceFolders. The LSP server re-indexes the new root
+// and cross-folder references become available immediately.
+func (c *LSPClient) AddWorkspaceFolder(path string) error {
+	folderURI := (&url.URL{Scheme: "file", Path: path}).String()
+	folder := workspaceFolder{URI: folderURI, Name: path}
+
+	c.capsMu.Lock()
+	for _, f := range c.workspaceFolders {
+		if f.URI == folderURI {
+			c.capsMu.Unlock()
+			return nil // already present
+		}
+	}
+	c.workspaceFolders = append(c.workspaceFolders, folder)
+	c.capsMu.Unlock()
+
+	if err := c.sendNotification("workspace/didChangeWorkspaceFolders", map[string]interface{}{
+		"event": map[string]interface{}{
+			"added":   []workspaceFolder{folder},
+			"removed": []workspaceFolder{},
+		},
+	}); err != nil {
+		return err
+	}
+
+	// Extend the auto-watcher to cover the new folder.
+	c.startWatcher(c.rootDir)
+	return nil
+}
+
+// RemoveWorkspaceFolder removes a directory from the workspace via
+// workspace/didChangeWorkspaceFolders.
+func (c *LSPClient) RemoveWorkspaceFolder(path string) error {
+	folderURI := (&url.URL{Scheme: "file", Path: path}).String()
+	folder := workspaceFolder{URI: folderURI, Name: path}
+
+	c.capsMu.Lock()
+	found := false
+	updated := c.workspaceFolders[:0]
+	for _, f := range c.workspaceFolders {
+		if f.URI == folderURI {
+			found = true
+		} else {
+			updated = append(updated, f)
+		}
+	}
+	if !found {
+		c.capsMu.Unlock()
+		return nil // not present, nothing to do
+	}
+	c.workspaceFolders = updated
+	c.capsMu.Unlock()
+
+	return c.sendNotification("workspace/didChangeWorkspaceFolders", map[string]interface{}{
+		"event": map[string]interface{}{
+			"added":   []workspaceFolder{},
+			"removed": []workspaceFolder{folder},
+		},
+	})
 }
 
 // watcherSkipDirs are directory names that the auto-watcher skips entirely.

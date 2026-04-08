@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Added (2026-04-08)
+- **Multi-root workspace support** — `add_workspace_folder`, `remove_workspace_folder`, `list_workspace_folders` tools; `workspace/didChangeWorkspaceFolders` notifications; enables cross-repo references, definitions, and diagnostics across library + consumer repos in one session; workspace folder list persisted on client and initialized from `start_lsp` root
 - **`get_document_highlights`** — file-scoped symbol occurrence search (`textDocument/documentHighlight`); returns ranges with read/write/text kinds; instant, no workspace scan; `DocumentHighlight` and `DocumentHighlightKind` types added to `internal/types`
 - **Auto-watch workspace** — `fsnotify` watcher starts automatically after `start_lsp`; forwards file changes to the LSP server via `workspace/didChangeWatchedFiles`; debounced 150ms; skips `.git/`, `node_modules/`, etc.; `did_change_watched_files` tool no longer required for normal editing workflows
 - **`get_server_capabilities`** — returns server identity (`name`, `version` from `serverInfo`), full LSP capability map, and classified tool lists (`supported_tools` / `unsupported_tools`) based on what the server advertised at initialization; lets AI pre-filter capability-gated tools before calling them; `GetCapabilities()` and `GetServerInfo()` methods added to `LSPClient`; `serverName`/`serverVersion` now captured from initialize response
