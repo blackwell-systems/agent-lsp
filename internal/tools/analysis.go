@@ -226,21 +226,61 @@ func HandleGetDocumentSymbols(ctx context.Context, client *lsp.LSPClient, args m
 	return types.TextResult(string(data)), nil
 }
 
+// workspaceSymbolDetail is the enriched form of SymbolInformation returned
+// when detail_level is "hover". The Hover field is omitted when empty.
+type workspaceSymbolDetail struct {
+	types.SymbolInformation
+	Hover string `json:"hover,omitempty"`
+}
+
 // HandleGetWorkspaceSymbols searches for symbols across the workspace.
+// When detail_level is "hover", each symbol is enriched with hover info
+// (type signature + docs) via a textDocument/hover request. Enrichment is
+// capped at 20 symbols to prevent excessive LSP round trips.
 func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
 
 	query, _ := args["query"].(string)
-	// query may be empty (returns all symbols)
+	detailLevel, _ := args["detail_level"].(string)
 
 	result, err := client.GetWorkspaceSymbols(ctx, query)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("get_workspace_symbols: %s", err)), nil
 	}
 
-	data, mErr := json.Marshal(result)
+	if detailLevel != "hover" {
+		data, mErr := json.Marshal(result)
+		if mErr != nil {
+			return types.ErrorResult(fmt.Sprintf("marshaling workspace symbols: %s", mErr)), nil
+		}
+		return types.TextResult(string(data)), nil
+	}
+
+	// Enrich up to 20 symbols with hover info.
+	const maxEnrich = 20
+	enriched := make([]workspaceSymbolDetail, len(result))
+	for i, sym := range result {
+		enriched[i] = workspaceSymbolDetail{SymbolInformation: sym}
+		if i < maxEnrich {
+			filePath, pErr := URIToFilePath(sym.Location.URI)
+			if pErr == nil {
+				pos := types.Position{
+					Line:      sym.Location.Range.Start.Line + 1,
+					Character: sym.Location.Range.Start.Character + 1,
+				}
+				hoverText, hErr := WithDocument[string](ctx, client, filePath, "", func(uri string) (string, error) {
+					return client.GetInfoOnLocation(ctx, uri, pos)
+				})
+				if hErr == nil && hoverText != "" {
+					enriched[i].Hover = hoverText
+				}
+			}
+		}
+	}
+
+	data, mErr := json.Marshal(enriched)
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling workspace symbols: %s", mErr)), nil
 	}
