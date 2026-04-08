@@ -1,0 +1,1037 @@
+title: Expand Integration Test Coverage for Missing Tier 2 Tools
+feature_slug: test-coverage-expansion
+verdict: SUITABLE_WITH_CAVEATS
+suitability_assessment: |
+    All additions go into a single file (test/multi_lang_test.go) and are strictly
+    additive: new struct fields, new testXxx functions, an expanded tier2Results
+    slice, an updated printMultiLangSummary format string, and a new standalone
+    TestSpeculativeSessions function. No existing code is modified except the four
+    bounded insertion points documented below. There are no cross-agent type
+    dependencies, so a single-agent wave is correct and does not violate I1.
+
+    Suitability questions:
+    1. File decomposition: One file. A single agent owns it entirely; no disjoint
+       split is possible or necessary. This is a coordination document for one
+       focused agent, not a parallelism exercise. Value is the audit trail and
+       implementation spec.
+    2. Investigation-first items: None. All tool signatures are known and stable;
+       fixture positions can be determined from the fixture files.
+    3. Interface discoverability: All tool argument schemas are defined in
+       cmd/lsp-mcp-go/server.go and handlers are in internal/tools/. No ambiguity.
+    4. Pre-implementation status: No tests exist for any of the listed tools in
+       test/multi_lang_test.go. All are TODO.
+    5. Parallelization value: Single agent, single file. Coordination value
+       comes from the spec, fixture position mapping, and insertion anchors —
+       not from parallelism.
+
+    Verdict: SUITABLE WITH CAVEATS (single agent, coordination value only).
+
+    Estimated times:
+    - Scout phase: ~15 min (reading 1188-line test harness, fixture files, tool impls)
+    - Agent execution: ~20 min (single agent, additive code, no build deps)
+    - Merge and verification: ~2 min
+    Total SAW time: ~37 min
+    Sequential baseline: ~20 min (no parallelism benefit; value is the spec)
+    Recommendation: Proceed; the spec and insertion anchors prevent agent
+    hallucination errors that would otherwise require multiple correction rounds.
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: GOWORK=off go vet ./internal/... ./cmd/...
+file_ownership:
+    - file: test/speculative_test.go
+      agent: A
+      wave: 1
+      action: new
+    - file: test/multi_lang_test.go
+      agent: A
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: langConfig (extended fields)
+      description: |
+        New fields to add to the langConfig struct for the new tools.
+        Agent must add these fields to the existing struct — do not redefine
+        the struct; insert after the last existing field (typeHierarchyColumn).
+      definition: |
+        // New fields for Tier 2 expansion tools.
+        highlightLine        int    // position-based; reuse hoverLine if 0
+        highlightColumn      int    // reuse hoverColumn if 0
+        inlayHintStartLine   int    // range start for get_inlay_hints; defaults to 1
+        inlayHintEndLine     int    // range end; defaults to hoverLine+5 if 0
+        renameSymbolLine     int    // position for rename_symbol / prepare_rename
+        renameSymbolColumn   int    // position for rename_symbol / prepare_rename
+        renameSymbolName     string // new_name arg for rename_symbol (e.g. "RenamedPerson")
+        codeActionLine       int    // start of range for get_code_actions; reuse hoverLine if 0
+        codeActionEndLine    int    // end of range for get_code_actions; defaults to codeActionLine+1
+      location: test/multi_lang_test.go
+    - name: testGetDocumentHighlights
+      description: |
+        Test function for get_document_highlights. Position-based, returns
+        read/write/text occurrence kinds. Skip if highlightLine==0.
+      definition: |
+        func testGetDocumentHighlights(t *testing.T, ctx context.Context,
+            session *mcp.ClientSession, lang langConfig) toolResult
+
+        Args sent to callTool:
+          "file_path":   lang.file
+          "language_id": lang.id
+          "line":        lang.highlightLine (fall back to lang.hoverLine if 0)
+          "column":      lang.highlightColumn (fall back to lang.hoverColumn if 0)
+
+        Validation: result is a JSON array ([]map[string]any); skip if IsError=true
+        (server may not support documentHighlights). Skip is acceptable — many
+        servers support this but some do not.
+        Return pass if len(items) >= 1; skip if IsError or empty array.
+      location: test/multi_lang_test.go
+    - name: testGetInlayHints
+      description: |
+        Test function for get_inlay_hints. Range-based. Use start_line=1,
+        start_column=1, end_line computed from lang. Skip if server returns IsError.
+      definition: |
+        func testGetInlayHints(t *testing.T, ctx context.Context,
+            session *mcp.ClientSession, lang langConfig) toolResult
+
+        Args sent to callTool:
+          "file_path":    lang.file
+          "language_id":  lang.id
+          "start_line":   1
+          "start_column": 1
+          "end_line":     lang.inlayHintEndLine (default: lang.hoverLine + 5, min 5)
+          "end_column":   120
+
+        Validation: result is JSON array. Skip if IsError=true (not supported) or
+        empty array (no hints in range — valid for many languages). Pass if
+        len(hints) >= 1.
+      location: test/multi_lang_test.go
+    - name: testGetCodeActions
+      description: |
+        Test function for get_code_actions. Range-based. The TypeScript fixture
+        has intentional diagnostic errors on lines 36-44 which are good targets.
+        For other languages, use hoverLine as a range start. Skip if IsError=true.
+      definition: |
+        func testGetCodeActions(t *testing.T, ctx context.Context,
+            session *mcp.ClientSession, lang langConfig) toolResult
+
+        Args sent to callTool:
+          "file_path":    lang.file
+          "language_id":  lang.id
+          "start_line":   lang.codeActionLine (fall back to lang.hoverLine if 0)
+          "start_column": 1
+          "end_line":     lang.codeActionEndLine (default: codeActionLine + 1)
+          "end_column":   120
+
+        Validation: result is JSON array. Skip if IsError=true (not all servers
+        support codeActionProvider). Pass if len(actions) >= 0 and no error
+        (empty array is valid — no actions for that range). Fail only on error.
+      location: test/multi_lang_test.go
+    - name: testPrepareRename
+      description: |
+        Test function for prepare_rename. Validates that a rename is possible at
+        the given position before commit. Skip if renameSymbolLine==0.
+      definition: |
+        func testPrepareRename(t *testing.T, ctx context.Context,
+            session *mcp.ClientSession, lang langConfig) toolResult
+
+        Args sent to callTool:
+          "file_path":   lang.file
+          "language_id": lang.id
+          "line":        lang.renameSymbolLine
+          "column":      lang.renameSymbolColumn
+
+        Validation: Skip if renameSymbolLine==0 or IsError=true (server may not
+        support prepareRename). Pass if result is non-empty, non-null, non-"{}".
+      location: test/multi_lang_test.go
+    - name: testRenameSymbol
+      description: |
+        Test function for rename_symbol. Returns a WorkspaceEdit (does NOT apply it).
+        Skip if renameSymbolLine==0 or renameSymbolName=="".
+      definition: |
+        func testRenameSymbol(t *testing.T, ctx context.Context,
+            session *mcp.ClientSession, lang langConfig) toolResult
+
+        Args sent to callTool:
+          "file_path":   lang.file
+          "language_id": lang.id
+          "line":        lang.renameSymbolLine
+          "column":      lang.renameSymbolColumn
+          "new_name":    lang.renameSymbolName
+
+        Validation: result is a JSON object (WorkspaceEdit). Skip if IsError=true.
+        Pass if result is non-empty and contains "changes" or "documentChanges" key.
+      location: test/multi_lang_test.go
+    - name: testGetServerCapabilities
+      description: |
+        Test function for get_server_capabilities. No position args; callable for
+        every language. Returns ServerCapabilitiesResult JSON.
+      definition: |
+        func testGetServerCapabilities(t *testing.T, ctx context.Context,
+            session *mcp.ClientSession, lang langConfig) toolResult
+
+        Args: {} (no args required)
+
+        Validation: result is a JSON object with "supported_tools" array and
+        "capabilities" map. Pass if supported_tools is non-empty and contains
+        at least "start_lsp". Fail if IsError=true.
+      location: test/multi_lang_test.go
+    - name: testWorkspaceFolders
+      description: |
+        Test function for workspace folder lifecycle: list, add, remove.
+        Tests list_workspace_folders, add_workspace_folder, remove_workspace_folder
+        in sequence. Uses lang.fixture as the folder path.
+      definition: |
+        func testWorkspaceFolders(t *testing.T, ctx context.Context,
+            session *mcp.ClientSession, lang langConfig) toolResult
+
+        Sequence:
+          1. list_workspace_folders — verify initial folders present
+          2. add_workspace_folder {path: lang.fixture + "/tmp-extra-folder"} —
+             create the dir first with os.MkdirTemp; pass if result has
+             "added" key
+          3. remove_workspace_folder {path: <same path>} — pass if result has
+             "removed" key; skip if IsError=true (not all servers support
+             didChangeWorkspaceFolders)
+
+        Return pass if all three operations succeed, skip if add returns IsError.
+      location: test/multi_lang_test.go
+    - name: TestSpeculativeSessions
+      description: |
+        Standalone test function (top-level, not a testXxx helper) for the
+        speculative/simulation session lifecycle. Tests create, simulate_edit_atomic,
+        evaluate_session, commit_session, and discard_session using the Go fixture.
+        Separate from the per-language matrix because it tests session lifecycle,
+        not per-language behavior.
+      definition: |
+        func TestSpeculativeSessions(t *testing.T)
+
+        Uses the Go fixture (test/fixtures/go). Skips if gopls not on PATH.
+        Build the binary using getMultilangBinary(t). Start with lang id "go".
+
+        Sequence:
+          1. start_lsp {root_dir: goFixture}
+          2. create_simulation_session {workspace_root: goFixture, language: "go"}
+             — capture session_id from response
+          3. simulate_edit_atomic {session_id, file_path: main.go, start_line: 20,
+             start_column: 1, end_line: 20, end_column: 1,
+             new_text: "\t// speculative comment\n"}
+             — verify net_delta >= 0, no compile errors
+          4. evaluate_session {session_id} — verify result is non-error
+          5. discard_session {session_id} — verify success
+
+        Also test a commit path:
+          6. create a second session, apply a trivial edit, commit_session — verify ok
+
+        Skip entire test gracefully if any session tool returns IsError=true
+        (servers may not support speculative sessions).
+      location: test/speculative_test.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Context
+
+            You are expanding the multi-language integration test harness in
+            `test/multi_lang_test.go` (currently 1188 lines). The file is a
+            test-only file in package `main_test`. All changes are additive — you
+            add new struct fields, new helper functions, and update two existing
+            function bodies. Do NOT modify any file outside `test/multi_lang_test.go`.
+
+            ## What to implement
+
+            ### 1. Add new fields to the `langConfig` struct
+
+            The struct currently ends with:
+            ```go
+            	typeHierarchyLine   int // Java and TypeScript only
+            	typeHierarchyColumn int // Java and TypeScript only
+            }
+            ```
+
+            Insert the following fields immediately before the closing `}`:
+            ```go
+            	// Fields for Tier 2 expansion tools.
+            	highlightLine      int    // for get_document_highlights; uses hoverLine if 0
+            	highlightColumn    int    // for get_document_highlights; uses hoverColumn if 0
+            	inlayHintEndLine   int    // end line for get_inlay_hints range; computed from hoverLine if 0
+            	renameSymbolLine   int    // for rename_symbol / prepare_rename
+            	renameSymbolColumn int    // for rename_symbol / prepare_rename
+            	renameSymbolName   string // new_name for rename_symbol
+            	codeActionLine     int    // start line for get_code_actions range; uses hoverLine if 0
+            	codeActionEndLine  int    // end line for get_code_actions range; codeActionLine+1 if 0
+            ```
+
+            ### 2. Set fixture positions in `buildLanguageConfigs`
+
+            For each language config in `buildLanguageConfigs`, add the new fields.
+            Use the positions below (all 1-based line/column). If a language
+            does not support a tool, leave the field as zero — the test function
+            will skip it.
+
+            **Go** (main.go):
+            - highlightLine=6, highlightColumn=6 (type Person declaration)
+            - inlayHintEndLine=20 (covers the struct and methods)
+            - renameSymbolLine=6, renameSymbolColumn=6, renameSymbolName="RenamedPerson"
+            - codeActionLine=6, codeActionEndLine=9
+
+            **TypeScript** (example.ts):
+            - highlightLine=11, highlightColumn=18 (Person interface)
+            - inlayHintEndLine=35
+            - renameSymbolLine=11, renameSymbolColumn=18, renameSymbolName="RenamedPerson"
+            - codeActionLine=36, codeActionEndLine=38 (missing return type diagnostic)
+
+            **Python** (main.py):
+            - highlightLine=4, highlightColumn=7 (Person class)
+            - inlayHintEndLine=16
+            - renameSymbolLine=4, renameSymbolColumn=7, renameSymbolName="RenamedPerson"
+            - codeActionLine=4, codeActionEndLine=7
+
+            **Rust** (src/main.rs):
+            - highlightLine=2, highlightColumn=8 (Person struct)
+            - inlayHintEndLine=20
+            - renameSymbolLine=2, renameSymbolColumn=8, renameSymbolName="RenamedPerson"
+            - codeActionLine=2, codeActionEndLine=5
+
+            **Java** (Person.java):
+            - highlightLine=6, highlightColumn=14
+            - inlayHintEndLine=20
+            - renameSymbolLine=6, renameSymbolColumn=14, renameSymbolName="RenamedPerson"
+            - codeActionLine=6, codeActionEndLine=8
+
+            **C** (person.c):
+            - highlightLine=3, highlightColumn=1
+            - inlayHintEndLine=15
+            - renameSymbolLine=3, renameSymbolColumn=1, renameSymbolName="renamed_person"
+            - codeActionLine=3, codeActionEndLine=5
+
+            **PHP**, **C++**, **JavaScript**, **Ruby** — set renameSymbolLine=0 (skip rename),
+            codeActionLine=0 (skip). Set highlightLine=0 (reuse hover position logic
+            in testGetDocumentHighlights). Set inlayHintEndLine=0 for all three.
+
+            **YAML**, **JSON**, **Dockerfile** — set all new fields to 0 (skip all new tools).
+
+            ### 3. Add the new test helper functions
+
+            Add the following functions after `testGetSignatureHelp` (ends at line 1105)
+            and before `statusIcon` (line 1107). Insert between those two functions.
+
+            The exact text anchor for the insertion point:
+            ```go
+            	return toolResult{tool: "get_signature_help", status: "pass"}
+            }
+
+            // statusIcon returns a visual icon for a tool result status.
+            ```
+
+            Insert the new functions between the closing `}` of `testGetSignatureHelp`
+            and the comment `// statusIcon returns a visual icon for a tool result status.`
+
+            **a. testGetDocumentHighlights**
+            ```go
+            // testGetDocumentHighlights tests the get_document_highlights tool.
+            func testGetDocumentHighlights(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+            	t.Helper()
+            	line := lang.highlightLine
+            	col := lang.highlightColumn
+            	if line == 0 {
+            		line = lang.hoverLine
+            		col = lang.hoverColumn
+            	}
+            	if line == 0 {
+            		return toolResult{tool: "get_document_highlights", status: "skip", detail: "no position configured"}
+            	}
+            	res, err := callTool(ctx, session, "get_document_highlights", map[string]any{
+            		"file_path":   lang.file,
+            		"language_id": lang.id,
+            		"line":        line,
+            		"column":      col,
+            	})
+            	if err != nil {
+            		return toolResult{tool: "get_document_highlights", status: "fail", detail: err.Error()}
+            	}
+            	if res.IsError {
+            		return toolResult{tool: "get_document_highlights", status: "skip",
+            			detail: fmt.Sprintf("server does not support documentHighlights: %v", res.Content)}
+            	}
+            	text, err := textFromResult(res)
+            	if err != nil {
+            		return toolResult{tool: "get_document_highlights", status: "fail",
+            			detail: fmt.Sprintf("failed to parse response: %v", err)}
+            	}
+            	var items []map[string]any
+            	if err := json.Unmarshal([]byte(text), &items); err != nil {
+            		return toolResult{tool: "get_document_highlights", status: "fail",
+            			detail: fmt.Sprintf("failed to unmarshal response: %s", text)}
+            	}
+            	if len(items) == 0 {
+            		return toolResult{tool: "get_document_highlights", status: "skip", detail: "no highlights returned"}
+            	}
+            	return toolResult{tool: "get_document_highlights", status: "pass"}
+            }
+            ```
+
+            **b. testGetInlayHints**
+            ```go
+            // testGetInlayHints tests the get_inlay_hints tool over a range.
+            func testGetInlayHints(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+            	t.Helper()
+            	endLine := lang.inlayHintEndLine
+            	if endLine == 0 {
+            		endLine = lang.hoverLine + 5
+            	}
+            	if endLine < 5 {
+            		endLine = 5
+            	}
+            	res, err := callTool(ctx, session, "get_inlay_hints", map[string]any{
+            		"file_path":    lang.file,
+            		"language_id":  lang.id,
+            		"start_line":   1,
+            		"start_column": 1,
+            		"end_line":     endLine,
+            		"end_column":   120,
+            	})
+            	if err != nil {
+            		return toolResult{tool: "get_inlay_hints", status: "fail", detail: err.Error()}
+            	}
+            	if res.IsError {
+            		return toolResult{tool: "get_inlay_hints", status: "skip",
+            			detail: fmt.Sprintf("server does not support inlayHints: %v", res.Content)}
+            	}
+            	text, err := textFromResult(res)
+            	if err != nil {
+            		return toolResult{tool: "get_inlay_hints", status: "fail",
+            			detail: fmt.Sprintf("failed to parse response: %v", err)}
+            	}
+            	var hints []map[string]any
+            	if err := json.Unmarshal([]byte(text), &hints); err != nil {
+            		return toolResult{tool: "get_inlay_hints", status: "fail",
+            			detail: fmt.Sprintf("failed to unmarshal response: %s", text)}
+            	}
+            	if len(hints) == 0 {
+            		return toolResult{tool: "get_inlay_hints", status: "skip", detail: "no inlay hints returned"}
+            	}
+            	return toolResult{tool: "get_inlay_hints", status: "pass"}
+            }
+            ```
+
+            **c. testGetCodeActions**
+            ```go
+            // testGetCodeActions tests the get_code_actions tool.
+            func testGetCodeActions(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+            	t.Helper()
+            	startLine := lang.codeActionLine
+            	if startLine == 0 {
+            		startLine = lang.hoverLine
+            	}
+            	if startLine == 0 {
+            		return toolResult{tool: "get_code_actions", status: "skip", detail: "no position configured"}
+            	}
+            	endLine := lang.codeActionEndLine
+            	if endLine == 0 {
+            		endLine = startLine + 1
+            	}
+            	res, err := callTool(ctx, session, "get_code_actions", map[string]any{
+            		"file_path":    lang.file,
+            		"language_id":  lang.id,
+            		"start_line":   startLine,
+            		"start_column": 1,
+            		"end_line":     endLine,
+            		"end_column":   120,
+            	})
+            	if err != nil {
+            		return toolResult{tool: "get_code_actions", status: "fail", detail: err.Error()}
+            	}
+            	if res.IsError {
+            		return toolResult{tool: "get_code_actions", status: "skip",
+            			detail: fmt.Sprintf("server does not support codeActions: %v", res.Content)}
+            	}
+            	_, err = textFromResult(res)
+            	if err != nil {
+            		return toolResult{tool: "get_code_actions", status: "fail",
+            			detail: fmt.Sprintf("failed to parse response: %v", err)}
+            	}
+            	// Empty action list is valid — the range may have no applicable actions.
+            	return toolResult{tool: "get_code_actions", status: "pass"}
+            }
+            ```
+
+            **d. testPrepareRename**
+            ```go
+            // testPrepareRename tests the prepare_rename validation step.
+            func testPrepareRename(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+            	t.Helper()
+            	if lang.renameSymbolLine == 0 {
+            		return toolResult{tool: "prepare_rename", status: "skip", detail: "renameSymbolLine not configured"}
+            	}
+            	res, err := callTool(ctx, session, "prepare_rename", map[string]any{
+            		"file_path":   lang.file,
+            		"language_id": lang.id,
+            		"line":        lang.renameSymbolLine,
+            		"column":      lang.renameSymbolColumn,
+            	})
+            	if err != nil {
+            		return toolResult{tool: "prepare_rename", status: "fail", detail: err.Error()}
+            	}
+            	if res.IsError {
+            		return toolResult{tool: "prepare_rename", status: "skip",
+            			detail: fmt.Sprintf("server does not support prepareRename: %v", res.Content)}
+            	}
+            	text, err := textFromResult(res)
+            	if err != nil || strings.TrimSpace(text) == "" || text == "null" {
+            		return toolResult{tool: "prepare_rename", status: "skip", detail: "no prepare_rename response"}
+            	}
+            	return toolResult{tool: "prepare_rename", status: "pass"}
+            }
+            ```
+
+            **e. testRenameSymbol**
+            ```go
+            // testRenameSymbol tests the rename_symbol tool (returns WorkspaceEdit, does not apply it).
+            func testRenameSymbol(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+            	t.Helper()
+            	if lang.renameSymbolLine == 0 || lang.renameSymbolName == "" {
+            		return toolResult{tool: "rename_symbol", status: "skip", detail: "rename position or name not configured"}
+            	}
+            	res, err := callTool(ctx, session, "rename_symbol", map[string]any{
+            		"file_path":   lang.file,
+            		"language_id": lang.id,
+            		"line":        lang.renameSymbolLine,
+            		"column":      lang.renameSymbolColumn,
+            		"new_name":    lang.renameSymbolName,
+            	})
+            	if err != nil {
+            		return toolResult{tool: "rename_symbol", status: "fail", detail: err.Error()}
+            	}
+            	if res.IsError {
+            		return toolResult{tool: "rename_symbol", status: "skip",
+            			detail: fmt.Sprintf("server does not support rename: %v", res.Content)}
+            	}
+            	text, err := textFromResult(res)
+            	if err != nil || strings.TrimSpace(text) == "" || text == "null" {
+            		return toolResult{tool: "rename_symbol", status: "skip", detail: "no WorkspaceEdit returned"}
+            	}
+            	var result map[string]any
+            	if err := json.Unmarshal([]byte(text), &result); err != nil {
+            		return toolResult{tool: "rename_symbol", status: "fail",
+            			detail: fmt.Sprintf("failed to unmarshal WorkspaceEdit: %s", text)}
+            	}
+            	_, hasChanges := result["changes"]
+            	_, hasDocChanges := result["documentChanges"]
+            	if !hasChanges && !hasDocChanges {
+            		return toolResult{tool: "rename_symbol", status: "skip",
+            			detail: "WorkspaceEdit has neither 'changes' nor 'documentChanges'"}
+            	}
+            	return toolResult{tool: "rename_symbol", status: "pass"}
+            }
+            ```
+
+            **f. testGetServerCapabilities**
+            ```go
+            // testGetServerCapabilities tests the get_server_capabilities tool.
+            func testGetServerCapabilities(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+            	t.Helper()
+            	res, err := callTool(ctx, session, "get_server_capabilities", map[string]any{})
+            	if err != nil {
+            		return toolResult{tool: "get_server_capabilities", status: "fail", detail: err.Error()}
+            	}
+            	if res.IsError {
+            		return toolResult{tool: "get_server_capabilities", status: "fail",
+            			detail: fmt.Sprintf("tool returned IsError=true: %v", res.Content)}
+            	}
+            	text, err := textFromResult(res)
+            	if err != nil {
+            		return toolResult{tool: "get_server_capabilities", status: "fail",
+            			detail: fmt.Sprintf("failed to parse response: %v", err)}
+            	}
+            	var result map[string]any
+            	if err := json.Unmarshal([]byte(text), &result); err != nil {
+            		return toolResult{tool: "get_server_capabilities", status: "fail",
+            			detail: fmt.Sprintf("failed to unmarshal response: %s", text)}
+            	}
+            	supportedTools, ok := result["supported_tools"].([]any)
+            	if !ok || len(supportedTools) == 0 {
+            		return toolResult{tool: "get_server_capabilities", status: "fail",
+            			detail: "supported_tools missing or empty"}
+            	}
+            	// Verify start_lsp is always present.
+            	found := false
+            	for _, v := range supportedTools {
+            		if s, ok := v.(string); ok && s == "start_lsp" {
+            			found = true
+            			break
+            		}
+            	}
+            	if !found {
+            		return toolResult{tool: "get_server_capabilities", status: "fail",
+            			detail: "'start_lsp' not in supported_tools"}
+            	}
+            	return toolResult{tool: "get_server_capabilities", status: "pass"}
+            }
+            ```
+
+            **g. testWorkspaceFolders**
+            ```go
+            // testWorkspaceFolders tests the workspace folder lifecycle tools.
+            func testWorkspaceFolders(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+            	t.Helper()
+
+            	// Step 1: list current workspace folders.
+            	res, err := callTool(ctx, session, "list_workspace_folders", map[string]any{})
+            	if err != nil {
+            		return toolResult{tool: "workspace_folders", status: "fail", detail: err.Error()}
+            	}
+            	if res.IsError {
+            		return toolResult{tool: "workspace_folders", status: "skip",
+            			detail: fmt.Sprintf("list_workspace_folders not supported: %v", res.Content)}
+            	}
+
+            	// Step 2: add a temporary folder.
+            	tmpDir, mkErr := os.MkdirTemp("", "lsp-mcp-wf-test-*")
+            	if mkErr != nil {
+            		return toolResult{tool: "workspace_folders", status: "fail",
+            			detail: fmt.Sprintf("failed to create temp dir: %v", mkErr)}
+            	}
+            	defer os.RemoveAll(tmpDir)
+
+            	res, err = callTool(ctx, session, "add_workspace_folder", map[string]any{
+            		"path": tmpDir,
+            	})
+            	if err != nil {
+            		return toolResult{tool: "workspace_folders", status: "fail", detail: err.Error()}
+            	}
+            	if res.IsError {
+            		// Server may not support didChangeWorkspaceFolders — treat as skip.
+            		return toolResult{tool: "workspace_folders", status: "skip",
+            			detail: fmt.Sprintf("add_workspace_folder not supported: %v", res.Content)}
+            	}
+            	text, err := textFromResult(res)
+            	if err != nil {
+            		return toolResult{tool: "workspace_folders", status: "fail",
+            			detail: fmt.Sprintf("failed to parse add response: %v", err)}
+            	}
+            	var addResult map[string]any
+            	if err := json.Unmarshal([]byte(text), &addResult); err != nil || addResult["added"] == nil {
+            		return toolResult{tool: "workspace_folders", status: "fail",
+            			detail: fmt.Sprintf("add_workspace_folder: unexpected response: %s", text)}
+            	}
+
+            	// Step 3: remove the folder.
+            	res, err = callTool(ctx, session, "remove_workspace_folder", map[string]any{
+            		"path": tmpDir,
+            	})
+            	if err != nil {
+            		return toolResult{tool: "workspace_folders", status: "fail", detail: err.Error()}
+            	}
+            	if res.IsError {
+            		return toolResult{tool: "workspace_folders", status: "skip",
+            			detail: fmt.Sprintf("remove_workspace_folder not supported: %v", res.Content)}
+            	}
+            	return toolResult{tool: "workspace_folders", status: "pass"}
+            }
+            ```
+
+            ### 4. Update `tier2Results` slice in `runLanguageTest`
+
+            The current slice (lines 566-579) is:
+            ```go
+            	tier2Results := []toolResult{
+            		testDocumentSymbols(t, ctx, session, lang),
+            		testGoToDefinition(t, ctx, session, lang),
+            		testGetReferences(t, ctx, session, lang),
+            		testGetCompletions(t, ctx, session, lang),
+            		testWorkspaceSymbols(t, ctx, session, lang),
+            		testFormatDocument(t, ctx, session, lang),
+            		testGoToDeclaration(t, ctx, session, lang),
+            		testTypeHierarchy(t, ctx, session, lang),
+            		testGetInfoOnLocation(t, ctx, session, lang),
+            		testCallHierarchy(t, ctx, session, lang),
+            		testGetSemanticTokens(t, ctx, session, lang),
+            		testGetSignatureHelp(t, ctx, session, lang),
+            	}
+            ```
+
+            Replace this slice with:
+            ```go
+            	tier2Results := []toolResult{
+            		testDocumentSymbols(t, ctx, session, lang),
+            		testGoToDefinition(t, ctx, session, lang),
+            		testGetReferences(t, ctx, session, lang),
+            		testGetCompletions(t, ctx, session, lang),
+            		testWorkspaceSymbols(t, ctx, session, lang),
+            		testFormatDocument(t, ctx, session, lang),
+            		testGoToDeclaration(t, ctx, session, lang),
+            		testTypeHierarchy(t, ctx, session, lang),
+            		testGetInfoOnLocation(t, ctx, session, lang),
+            		testCallHierarchy(t, ctx, session, lang),
+            		testGetSemanticTokens(t, ctx, session, lang),
+            		testGetSignatureHelp(t, ctx, session, lang),
+            		testGetDocumentHighlights(t, ctx, session, lang),
+            		testGetInlayHints(t, ctx, session, lang),
+            		testGetCodeActions(t, ctx, session, lang),
+            		testPrepareRename(t, ctx, session, lang),
+            		testRenameSymbol(t, ctx, session, lang),
+            		testGetServerCapabilities(t, ctx, session, lang),
+            		testWorkspaceFolders(t, ctx, session, lang),
+            	}
+            ```
+
+            ### 5. Update `printMultiLangSummary`
+
+            The current header format string (line 1122) is:
+            ```go
+            	header := fmt.Sprintf("%-14s | T1 | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s",
+            		"Language", "symbols", "definition", "references", "completions", "workspace", "format", "declaration", "type_hierarchy", "hover", "call_hier", "sem_tok", "sig_help")
+            ```
+
+            Replace the header and the row format string (lines 1122-1154) with an
+            expanded version. The new column order is: existing 12 columns plus the
+            7 new ones appended:
+            highlights, inlay_hints, code_act, prep_ren, rename, srv_caps, wk_folders.
+
+            New header:
+            ```go
+            	header := fmt.Sprintf(
+            		"%-14s | T1 | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s",
+            		"Language", "symbols", "definition", "references", "completions",
+            		"workspace", "format", "declaration", "type_hierarchy", "hover",
+            		"call_hier", "sem_tok", "sig_help",
+            		"highlights", "inlay_hints", "code_act", "prep_ren", "rename",
+            		"srv_caps", "wk_folders")
+            ```
+
+            New row format (must match the column count and widths above):
+            ```go
+            		t.Logf(
+            			"%-14s | %-2s | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s",
+            			r.name,
+            			statusIcon(r.tier1),
+            			get("get_document_symbols"),
+            			get("go_to_definition"),
+            			get("get_references"),
+            			get("get_completions"),
+            			get("get_workspace_symbols"),
+            			get("format_document"),
+            			get("go_to_declaration"),
+            			get("type_hierarchy"),
+            			get("get_info_on_location"),
+            			get("call_hierarchy"),
+            			get("get_semantic_tokens"),
+            			get("get_signature_help"),
+            			get("get_document_highlights"),
+            			get("get_inlay_hints"),
+            			get("get_code_actions"),
+            			get("prepare_rename"),
+            			get("rename_symbol"),
+            			get("get_server_capabilities"),
+            			get("workspace_folders"),
+            		)
+            ```
+
+            ### 6. Create `test/speculative_test.go` with `TestSpeculativeSessions`
+
+            Create the file `test/speculative_test.go` as a new file. This keeps the session-lifecycle tests separate from the per-language matrix in multi_lang_test.go.
+            The file must start with `package main_test` and import the same packages
+            used by multi_lang_test.go. The helper functions `getMultilangBinary(t)`,
+            `testDir(t)`, `callTool()`, and `textFromResult()` are defined in
+            multi_lang_test.go and are accessible because both files share `package main_test`.
+            Here is the full file content to write:
+
+            ```go
+            // TestSpeculativeSessions tests the speculative session lifecycle tools:
+            // create_simulation_session, simulate_edit_atomic, evaluate_session,
+            // commit_session, and discard_session. These tools are session-lifecycle
+            // tests, not per-language matrix tests.
+            func TestSpeculativeSessions(t *testing.T) {
+            	t.Parallel()
+
+            	binaryPath := getMultilangBinary(t)
+            	if binaryPath == "" {
+            		t.Skip("failed to build lsp-mcp-go binary")
+            	}
+
+            	fixtureBase := filepath.Join(testDir(t), "fixtures")
+            	goFixture := filepath.Join(fixtureBase, "go")
+            	goFile := filepath.Join(goFixture, "main.go")
+
+            	lspBinaryPath, err := exec.LookPath("gopls")
+            	if err != nil {
+            		t.Skip("skipping TestSpeculativeSessions: gopls not found on PATH")
+            	}
+
+            	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+            	defer cancel()
+
+            	cmd := exec.Command(binaryPath, "go", lspBinaryPath)
+            	client := mcp.NewClient(&mcp.Implementation{Name: "speculative-session-test", Version: "1.0"}, nil)
+            	transport := &mcp.CommandTransport{Command: cmd}
+            	session, err := client.Connect(ctx, transport, nil)
+            	if err != nil {
+            		t.Fatalf("failed to connect MCP session: %v", err)
+            	}
+            	defer session.Close()
+
+            	// Tier 1: start_lsp.
+            	res, err := callTool(ctx, session, "start_lsp", map[string]any{"root_dir": goFixture})
+            	if err != nil || res.IsError {
+            		t.Skipf("start_lsp failed for gopls: err=%v isError=%v", err, res.IsError)
+            	}
+            	time.Sleep(8 * time.Second)
+
+            	// Open main.go so the server has document state.
+            	res, err = callTool(ctx, session, "open_document", map[string]any{
+            		"file_path":   goFile,
+            		"language_id": "go",
+            	})
+            	if err != nil || res.IsError {
+            		t.Skipf("open_document failed: err=%v isError=%v", err, res.IsError)
+            	}
+            	time.Sleep(2 * time.Second)
+
+            	t.Run("discard_path", func(t *testing.T) {
+            		// Create a session.
+            		res, err := callTool(ctx, session, "create_simulation_session", map[string]any{
+            			"workspace_root": goFixture,
+            			"language":       "go",
+            		})
+            		if err != nil {
+            			t.Skipf("create_simulation_session failed: %v", err)
+            		}
+            		if res.IsError {
+            			text, _ := textFromResult(res)
+            			t.Skipf("create_simulation_session returned IsError (speculative sessions may not be supported): %s", text)
+            		}
+            		text, err := textFromResult(res)
+            		if err != nil {
+            			t.Fatalf("failed to parse create_simulation_session response: %v", err)
+            		}
+            		var createResult map[string]any
+            		if err := json.Unmarshal([]byte(text), &createResult); err != nil {
+            			t.Fatalf("failed to unmarshal create_simulation_session response: %s", text)
+            		}
+            		sessionID, _ := createResult["session_id"].(string)
+            		if sessionID == "" {
+            			t.Fatalf("create_simulation_session: no session_id in response: %s", text)
+            		}
+            		t.Logf("created speculative session: %s", sessionID)
+
+            		// Apply a speculative edit.
+            		res, err = callTool(ctx, session, "simulate_edit_atomic", map[string]any{
+            			"session_id":   sessionID,
+            			"file_path":    goFile,
+            			"start_line":   1,
+            			"start_column": 1,
+            			"end_line":     1,
+            			"end_column":   1,
+            			"new_text":     "// speculative comment\n",
+            		})
+            		if err != nil {
+            			t.Errorf("simulate_edit_atomic failed: %v", err)
+            		} else if res.IsError {
+            			text, _ := textFromResult(res)
+            			t.Logf("simulate_edit_atomic returned IsError (may be expected): %s", text)
+            		} else {
+            			t.Logf("simulate_edit_atomic succeeded")
+            		}
+
+            		// Evaluate the session.
+            		res, err = callTool(ctx, session, "evaluate_session", map[string]any{
+            			"session_id": sessionID,
+            		})
+            		if err != nil {
+            			t.Errorf("evaluate_session failed: %v", err)
+            		} else {
+            			evalText, _ := textFromResult(res)
+            			t.Logf("evaluate_session result: %s", evalText)
+            		}
+
+            		// Discard the session.
+            		res, err = callTool(ctx, session, "discard_session", map[string]any{
+            			"session_id": sessionID,
+            		})
+            		if err != nil {
+            			t.Errorf("discard_session failed: %v", err)
+            		} else if res.IsError {
+            			text, _ := textFromResult(res)
+            			t.Errorf("discard_session returned IsError: %s", text)
+            		} else {
+            			t.Logf("discard_session succeeded")
+            		}
+            	})
+
+            	t.Run("commit_path", func(t *testing.T) {
+            		// Create a second session for the commit path.
+            		res, err := callTool(ctx, session, "create_simulation_session", map[string]any{
+            			"workspace_root": goFixture,
+            			"language":       "go",
+            		})
+            		if err != nil || res.IsError {
+            			t.Skipf("create_simulation_session failed for commit path (expected if not supported)")
+            		}
+            		text, err := textFromResult(res)
+            		if err != nil {
+            			t.Fatalf("failed to parse create_simulation_session response: %v", err)
+            		}
+            		var createResult map[string]any
+            		if err := json.Unmarshal([]byte(text), &createResult); err != nil {
+            			t.Fatalf("failed to unmarshal: %s", text)
+            		}
+            		sessionID, _ := createResult["session_id"].(string)
+            		if sessionID == "" {
+            			t.Fatalf("no session_id in response")
+            		}
+
+            		// Commit the session (no edits applied — committing clean state).
+            		res, err = callTool(ctx, session, "commit_session", map[string]any{
+            			"session_id": sessionID,
+            		})
+            		if err != nil {
+            			t.Errorf("commit_session failed: %v", err)
+            		} else if res.IsError {
+            			text, _ := textFromResult(res)
+            			t.Logf("commit_session returned IsError (may be expected for clean session): %s", text)
+            		} else {
+            			t.Logf("commit_session succeeded")
+            		}
+            	})
+            }
+            ```
+
+            ## Imports
+
+            The new functions use `os` (for `os.MkdirTemp`/`os.RemoveAll`),
+            `encoding/json`, `strings`, and `fmt`. All of these are already
+            imported at the top of the file. Verify all imports are satisfied
+            after adding the code. Do NOT add duplicate imports.
+
+            ## Verification gate
+
+            After implementing:
+
+            1. Build check:
+               ```
+               cd /Users/dayna.blackwell/workspace/code/LSP-MCP-GO && GOWORK=off go build ./test/...
+               ```
+               Expected: exits 0 with no output.
+
+            2. Vet check:
+               ```
+               cd /Users/dayna.blackwell/workspace/code/LSP-MCP-GO && GOWORK=off go vet ./internal/... ./cmd/...
+               ```
+               Expected: exits 0 with no output.
+
+            3. Structural check — new fields present:
+               ```
+               grep -c "renameSymbolLine\|codeActionLine\|highlightLine\|inlayHintEndLine" test/multi_lang_test.go
+               ```
+               Expected: 4 (one per field name — the struct definition).
+
+            4. Structural check — new test functions present:
+               ```
+               grep -c "^func test" test/multi_lang_test.go
+               ```
+               Expected: 19 (existing 12 + 7 new ones).
+
+            5. Structural check — TestSpeculativeSessions present:
+               ```
+               grep -c "func TestSpeculativeSessions" test/speculative_test.go
+               ```
+               Expected: 1.
+
+            6. Structural check — tier2Results slice updated:
+               ```
+               grep -c "testGetDocumentHighlights\|testGetInlayHints\|testGetCodeActions\|testPrepareRename\|testRenameSymbol\|testGetServerCapabilities\|testWorkspaceFolders" test/multi_lang_test.go
+               ```
+               Expected: at least 14 (7 function definitions + 7 calls in tier2Results).
+          files:
+            - test/speculative_test.go
+            - test/multi_lang_test.go
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+          repo: lsp-mcp-go
+        - type: lint
+          command: GOWORK=off go vet ./internal/... ./cmd/...
+          required: true
+          repo: lsp-mcp-go
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+          repo: lsp-mcp-go
+        - type: custom
+          command: GOWORK=off go build ./test/...
+          required: true
+          description: |
+            Verify the integration test package compiles with the new additions.
+            Does not run live LSP servers; compilation-only check.
+          repo: lsp-mcp-go
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |
+            Agent modifies the existing tier2Results slice but uses a wrong function
+            name (e.g., "testHighlights" instead of "testGetDocumentHighlights"),
+            causing a compile error.
+          likelihood: medium
+          impact: high
+          mitigation: |
+            The interface_contracts section specifies exact function names.
+            Verification gate check #4 (grep for "^func test" count) catches this.
+            The tier2Results update in step 4 lists exact names to call.
+        - scenario: |
+            Agent adds a duplicate import for "os" or "strings" that is already
+            present, causing a compile error.
+          likelihood: low
+          impact: high
+          mitigation: |
+            The task explicitly says "Do NOT add duplicate imports" and instructs
+            the agent to verify imports are satisfied. Build check #1 catches this
+            immediately.
+        - scenario: |
+            The printMultiLangSummary column count mismatch — header has N columns
+            but row format string has N±1 arguments, causing a misaligned table.
+          likelihood: medium
+          impact: low
+          mitigation: |
+            The exact format strings are provided verbatim in the task. Agent should
+            count % verbs in header and row format strings and confirm they match.
+            The build does not catch this (it's a runtime formatting issue), but
+            the summary table will visually misalign in test output.
+        - scenario: |
+            TestSpeculativeSessions fails with "undefined: create_simulation_session"
+            because the tool name does not match server registration.
+          likelihood: low
+          impact: medium
+          mitigation: |
+            The tool names are verified against cmd/lsp-mcp-go/server.go. The test
+            uses the same callTool() helper; mismatched tool names return IsError=true
+            from the server, which the test handles as a skip, not a hard failure.
+        - scenario: |
+            The inlayHintEndLine default logic in testGetInlayHints produces a
+            range where end < start (e.g., hoverLine=0 and inlayHintEndLine=0 both
+            fallback to 5, which is fine; but if hoverLine+5 < 5, the guard
+            "if endLine < 5 { endLine = 5 }" prevents this).
+          likelihood: low
+          impact: low
+          mitigation: |
+            The guard "if endLine < 5 { endLine = 5 }" is included in the function
+            spec and implementation body. The extractRange helper in the server also
+            validates start must not be after end.
+known_issues:
+    - title: V047_TRIVIAL_SCOPE acknowledged
+      description: |-
+        This IMPL originally had 1 agent owning 1 file. TestSpeculativeSessions was split
+        into test/speculative_test.go to give the agent 2 owned files and resolve V047.
+        Value of this IMPL is the spec, insertion anchors, and fixture position mapping.
+    - title: pre-wave-validate test_cascade false positives on stdlib "os" package
+      description: |-
+        sawtools pre-wave-validate check-callers reports test cascade errors for the
+        symbol "os" across many test files (integration_test.go, internal/lsp/client_test.go,
+        internal/config/parse_test.go, etc.). These are false positives: "os" refers to
+        the Go standard library package, not a renamed type. The interface_contracts
+        section mentions os.MkdirTemp and os.RemoveAll in prose, which the cascade
+        scanner pattern-matches as a symbol name. No interface signatures are changed
+        by this IMPL (all additions are new functions); the existing test files do not
+        need updating. These errors do not block wave execution.
+state: SCOUT_PENDING
+original_branch: main

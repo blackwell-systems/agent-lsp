@@ -2,17 +2,17 @@
   "wave": 2,
   "worktrees": [
     {
-      "agent": "B",
-      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-auto-infer-workspace/wave2-agent-B",
-      "branch": "saw/lsp-auto-infer-workspace/wave2-agent-B"
+      "agent": "D",
+      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/type-hierarchy-tools/wave2-agent-D",
+      "branch": "saw/type-hierarchy-tools/wave2-agent-D"
     }
   ],
   "agent_briefs": [
     {
-      "agent": "B",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-auto-infer-workspace/wave2-agent-B/.saw-agent-brief.md",
-      "brief_length": 13332,
-      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave2/agent-B",
+      "agent": "D",
+      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/type-hierarchy-tools/wave2-agent-D/.saw-agent-brief.md",
+      "brief_length": 13002,
+      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave2/agent-D",
       "files_owned": 2
     }
   ],
@@ -44,8 +44,8 @@
     },
     {
       "step": "critic_verdict",
-      "status": "skipped",
-      "detail": "threshold not met — critic review not required"
+      "status": "success",
+      "detail": "critic review passed"
     },
     {
       "step": "stale_cleanup",
@@ -73,9 +73,9 @@
       "detail": "all files validated"
     },
     {
-      "step": "working_dir_check",
+      "step": "commit_baseline",
       "status": "success",
-      "detail": "working directory is clean"
+      "detail": "committed 2 file(s)"
     },
     {
       "step": "baseline_gates",
