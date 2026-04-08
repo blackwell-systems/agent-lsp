@@ -1,7 +1,7 @@
 # Speculative Execution for Code
 
-**Status:** Shipped (v0.x)
-**Feature:** Speculative code sessions — `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`
+**Status:** Shipped — all 8 tools implemented and CI-tested (`TestSpeculativeSessions` in `test/speculative_test.go`)
+**Tools:** `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`
 
 ---
 
@@ -224,7 +224,7 @@ Observes current session state. Calls `WaitForDiagnostics`, diffs against baseli
 
 A caller may call `simulate_edit` multiple times before calling `evaluate_session`. The evaluation reflects the cumulative state.
 
-**Atomic convenience wrapper:** `simulate_edit_atomic(edit)` is internally a create → apply → evaluate → discard cycle. Useful for callers that don't need session persistence.
+**Atomic convenience wrapper:** `simulate_edit_atomic` is internally a create → apply → evaluate → discard cycle. Accepts an optional `session_id` to reuse an existing session; if omitted, creates and destroys a temporary session automatically. Useful for single-edit what-if checks without managing session lifecycle.
 
 ---
 
@@ -645,45 +645,25 @@ Version must increment on each change. Tracked per open document on `SimulationS
 
 ### Open (ranked)
 
-**1. Isolation model: logical vs physical**
+**1. Isolation model: logical vs physical** ✅ Resolved
 
-Current design provides logical isolation (serialized shared LSP). This is correct but sequential — parallel sessions on the same server block each other.
+Shipped as logical isolation (serialized shared LSP). Constraint is documented. `SessionExecutor` interface is the upgrade seam for per-session LSP instances if workload justifies it.
 
-Decision needed: accept serialization permanently, or plan a per-session LSP instance upgrade path?
+**2. Workspace evaluation: best-effort or deterministic?** ✅ Resolved
 
-Recommendation: accept serialization, document the constraint explicitly, revisit only if parallel multi-agent simulation becomes a bottleneck in practice.
+Shipped as best-effort with `confidence: "eventual"` for workspace scope. Acceptable for planning use cases. Revisit if CI-grade guarantees become required.
 
-**2. Workspace evaluation: best-effort or deterministic?**
+**3. Session resource cost** ✅ Resolved by implementation
 
-Current design: `confidence: "eventual"` honestly flags that cross-file propagation may be incomplete within the timeout window.
+No session cap enforced. In-memory document buffers per touched file. Acceptable for current workloads; monitor if session counts scale significantly.
 
-Decision needed: is best-effort acceptable long-term, or do we need a stronger guarantee (e.g., wait for all pending `$/progress` tokens to clear before evaluating)?
+**4. Session storage** ✅ Resolved
 
-Recommendation: best-effort is fine for planning use cases. Agents can re-evaluate or fall back to file scope when `confidence: "eventual"`.
+Sessions are in-memory only — IDs become invalid on MCP server restart. This is the correct design. `commit_session` returns a portable `WorkspaceEdit` that callers can persist independently.
 
-**3. Session resource cost**
+**5. Dirty state recovery** ✅ Resolved
 
-Unknown until implemented: how many concurrent sessions can the system support before LSP memory becomes the bottleneck? Each session holds in-memory document buffers for its touched files.
-
-Decision needed: enforce a session cap (e.g., max 10 concurrent), or monitor and document?
-
-Recommendation: implement, measure, then decide. Don't prematurely optimize.
-
-**4. Session storage**
-
-Sessions are in-memory only. Session IDs become invalid on MCP server restart.
-
-Decision needed: is this acceptable for all consumers, or do some (e.g., CI pipelines) need persistent sessions across restarts?
-
-Recommendation: in-memory is fine. Document the constraint. Persistence adds significant complexity for a rarely-needed property.
-
-**5. Dirty state recovery**
-
-Current: dirty is terminal — destroy and reinitialize.
-
-Decision needed: is there ever a recovery path worth adding (partial rollback, rehydrate from baseline)?
-
-Recommendation: no. Dirty means the LSP state is unknown. Recovery would require replaying edits against an uncertain base, which is worse than reinitializing.
+Dirty is terminal — destroy and reinitialize. No recovery path. Dirty means LSP state is unknown; replaying edits against uncertain base is worse than reinitializing.
 
 ---
 
