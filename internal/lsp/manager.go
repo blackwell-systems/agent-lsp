@@ -83,6 +83,18 @@ func (m *ServerManager) StartAll(ctx context.Context, rootDir string) error {
 	var started []*LSPClient
 	for _, e := range m.entries {
 		if len(e.command) == 0 {
+			// Single-server mode: the client was pre-created by NewSingleServerManager
+			// with serverPath/serverArgs set. Initialize it in-place.
+			if e.client != nil && !e.client.IsInitialized() {
+				logging.Log(logging.LevelDebug, fmt.Sprintf("ServerManager.StartAll: initializing pre-created client %s", e.client.serverPath))
+				if err := e.client.Initialize(ctx, rootDir); err != nil {
+					for _, c := range started {
+						_ = c.Shutdown(context.Background())
+					}
+					return fmt.Errorf("initialize pre-created client: %w", err)
+				}
+				started = append(started, e.client)
+			}
 			continue
 		}
 		client := NewLSPClient(e.command[0], e.command[1:])
