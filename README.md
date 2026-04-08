@@ -114,25 +114,25 @@ Then use any of the 30 tools. The session persists — no need to restart when s
 
 ## Multi-Language Support
 
-Every language below is integration-tested on every CI run with a real language server binary and a real fixture codebase. The test harness verifies **Tier 1** (`start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`) and **Tier 2** (`get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`) for each language. No other MCP-LSP implementation has an equivalent test matrix — competitors list supported languages in config examples but do not run integration tests against them.
+Every language below is integration-tested on every CI run with a real language server binary and a real fixture codebase. The test harness verifies **Tier 1** (`start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`) and **Tier 2** (`get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`, `get_info_on_location`, `call_hierarchy`, `get_semantic_tokens`, `get_signature_help`) for each language. No other MCP-LSP implementation has an equivalent test matrix — competitors list supported languages in config examples but do not run integration tests against them.
 
 Tier 2 results per language from the latest CI run:
 
-| Language | Tier 1 | symbols | definition | references | completions | workspace | format | declaration | type_hierarchy |
-|----------|--------|---------|------------|------------|-------------|-----------|--------|-------------|----------------|
-| TypeScript | pass | pass | pass | pass | pass | pass | pass | pass | — |
-| Python | pass | pass | pass | pass | pass | pass | — | — | — |
-| Go | pass | pass | pass | pass | pass | pass | pass | — | — |
-| Rust | pass | pass | pass | pass | pass | pass | pass | — | — |
-| Java | pass | — | — | — | — | — | — | — | pass |
-| C | pass | pass | pass | pass | pass | pass | pass | pass | — |
-| PHP | pass | pass | pass | pass | pass | pass | — | — | — |
-| C++ | pass | pass | pass | pass | pass | pass | pass | pass | — |
-| JavaScript | pass | pass | pass | pass | pass | pass | pass | pass | — |
-| Ruby | pass | pass | pass | pass | pass | pass | pass | — | — |
-| YAML | pass | — | — | — | pass | pass | pass | — | — |
-| JSON | pass | — | — | — | pass | pass | pass | — | — |
-| Dockerfile | pass | — | — | — | pass | pass | — | — | — |
+| Language | Tier 1 | symbols | definition | references | completions | workspace | format | declaration | type_hierarchy | hover | call_hier | sem_tok | sig_help |
+|----------|--------|---------|------------|------------|-------------|-----------|--------|-------------|----------------|-------|-----------|---------|----------|
+| TypeScript | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | pass |
+| Python | pass | pass | pass | pass | pass | pass | — | — | — | pass | pass | pass | — |
+| Go | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
+| Rust | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | — |
+| Java | pass | — | — | — | — | — | — | — | pass | pass | pass | — | — |
+| C | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
+| PHP | pass | pass | pass | pass | pass | pass | — | — | — | pass | — | — | — |
+| C++ | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
+| JavaScript | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
+| Ruby | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
+| YAML | pass | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
+| JSON | pass | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
+| Dockerfile | pass | — | — | — | pass | pass | — | — | — | pass | — | — | — |
 
 Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout (a known jdtls cold-start characteristic, not a tool bug). `type_hierarchy` is tested on Java (jdtls) and TypeScript (typescript-language-server); TypeScript skips when the server does not return a hierarchy item at the configured position.
 
@@ -143,9 +143,9 @@ All tools require `start_lsp` to be called first.
 **CI coverage:** The following tools are end-to-end integration-tested against real language servers on every CI run across all 13 languages:
 
 - **Tier 1** (all 13): `start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`
-- **Tier 2** (all 13): `get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`
+- **Tier 2** (all 13): `get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`, `get_info_on_location`, `call_hierarchy`, `get_semantic_tokens`, `get_signature_help`
 
-All other tools are unit tested. End-to-end CI coverage for `call_hierarchy`, `get_semantic_tokens`, `get_inlay_hints`, and remaining tools is a known gap — tracked for expansion.
+All other tools (`get_inlay_hints`, `get_code_actions`, `rename_symbol`, `format_range`, etc.) are unit tested. End-to-end CI coverage for remaining tools is tracked for expansion.
 
 ### Session
 | Tool | Description |
