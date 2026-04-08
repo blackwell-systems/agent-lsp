@@ -7,9 +7,9 @@ on:
     branches: [main]
 
 jobs:
+  # Unit tests + binary smoke tests. No live LSP servers needed.
   test:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -24,15 +24,18 @@ jobs:
       - name: Vet
         run: GOWORK=off go vet ./...
 
+      - name: Unit tests
+        run: GOWORK=off go test ./internal/... ./cmd/...
+
       - name: Install TypeScript language server
         run: npm install -g typescript-language-server typescript
 
-      - name: Run unit tests
+      - name: Binary smoke tests
         run: GOWORK=off go test -run TestBinary ./...
 
-  multi-lang-test:
+  # Core languages: Go, TypeScript, Python, Rust, Java
+  multi-lang-core:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -49,20 +52,14 @@ jobs:
       - name: Build
         run: GOWORK=off go build ./...
 
+      - name: Install gopls
+        run: go install golang.org/x/tools/gopls@latest
+
       - name: Install TypeScript language server
         run: npm install -g typescript-language-server typescript
 
       - name: Install Pyright
         run: npm install -g pyright
-
-      - name: Install intelephense
-        run: npm install -g intelephense
-
-      - name: Install clangd
-        run: sudo apt-get install -y clangd
-
-      - name: Install gopls
-        run: go install golang.org/x/tools/gopls@latest
 
       - name: Install Rust toolchain + rust-analyzer
         uses: dtolnay/rust-toolchain@stable
@@ -79,6 +76,32 @@ jobs:
           printf '#!/bin/bash\nexec java \\\n  -Declipse.application=org.eclipse.jdt.ls.core.id1 \\\n  -Dosgi.bundles.defaultStartLevel=4 \\\n  -Declipse.product=org.eclipse.jdt.ls.core.product \\\n  -Dlog.level=ERROR \\\n  -Xmx1G \\\n  --add-modules=ALL-SYSTEM \\\n  --add-opens java.base/java.util=ALL-UNNAMED \\\n  --add-opens java.base/java.lang=ALL-UNNAMED \\\n  -jar %s \\\n  -configuration /opt/jdtls/config_linux \\\n  -data /tmp/jdtls-data "$@"\n' "$LAUNCHER" | sudo tee /usr/local/bin/jdtls > /dev/null
           sudo chmod +x /usr/local/bin/jdtls
 
+      - name: Run core language tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^(Go|TypeScript|Python|Rust|Java)$" ./test/ -timeout 20m
+
+  # Extended languages: C, C++, JavaScript, PHP, Ruby, YAML, JSON, Dockerfile, CSharp
+  multi-lang-extended:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install clangd
+        run: sudo apt-get install -y clangd
+
+      - name: Install TypeScript language server (for JavaScript)
+        run: npm install -g typescript-language-server typescript
+
+      - name: Install intelephense
+        run: npm install -g intelephense
+
       - name: Install solargraph (Ruby)
         run: sudo gem install solargraph
 
@@ -91,5 +114,28 @@ jobs:
       - name: Install dockerfile-language-server-nodejs
         run: npm install -g dockerfile-language-server-nodejs
 
-      - name: Run multi-language tests
-        run: GOWORK=off go test -v -run TestMultiLanguage ./test/ -timeout 15m
+      - name: Install csharp-ls
+        run: dotnet tool install -g csharp-ls
+
+      - name: Run extended language tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^(C|C\+\+|JavaScript|PHP|Ruby|YAML|JSON|Dockerfile|CSharp)$" ./test/ -timeout 20m
+
+  # Speculative session lifecycle (Go/gopls only)
+  speculative-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install gopls
+        run: go install golang.org/x/tools/gopls@latest
+
+      - name: Run speculative session tests
+        run: GOWORK=off go test -v -run TestSpeculativeSessions ./test/ -timeout 10m
