@@ -2,29 +2,17 @@
   "wave": 2,
   "worktrees": [
     {
-      "agent": "A",
-      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-mcp-go-audit-fixes/wave2-agent-A",
-      "branch": "saw/lsp-mcp-go-audit-fixes/wave2-agent-A"
-    },
-    {
-      "agent": "F",
-      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-mcp-go-audit-fixes/wave2-agent-F",
-      "branch": "saw/lsp-mcp-go-audit-fixes/wave2-agent-F"
+      "agent": "B",
+      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-auto-infer-workspace/wave2-agent-B",
+      "branch": "saw/lsp-auto-infer-workspace/wave2-agent-B"
     }
   ],
   "agent_briefs": [
     {
-      "agent": "A",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-mcp-go-audit-fixes/wave2-agent-A/.saw-agent-brief.md",
-      "brief_length": 13068,
-      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave2/agent-A",
-      "files_owned": 2
-    },
-    {
-      "agent": "F",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-mcp-go-audit-fixes/wave2-agent-F/.saw-agent-brief.md",
-      "brief_length": 8272,
-      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave2/agent-F",
+      "agent": "B",
+      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-auto-infer-workspace/wave2-agent-B/.saw-agent-brief.md",
+      "brief_length": 13332,
+      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave2/agent-B",
       "files_owned": 2
     }
   ],
@@ -132,7 +120,7 @@
     {
       "step": "create_worktrees",
       "status": "success",
-      "detail": "created 2 worktree(s)"
+      "detail": "created 1 worktree(s)"
     },
     {
       "step": "workspace_setup",
@@ -147,7 +135,7 @@
     {
       "step": "extract_briefs",
       "status": "success",
-      "detail": "prepared 2 agent(s)"
+      "detail": "prepared 1 agent(s)"
     }
   ],
   "success": false
