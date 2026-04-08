@@ -426,6 +426,33 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		return makeCallToolResult(r), nil, err
 	})
 
+	type WorkspaceFolderArgs struct {
+		Path string `json:"path"`
+	}
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "add_workspace_folder",
+		Description: "Add a directory to the LSP workspace, enabling cross-repo references, definitions, and diagnostics. Useful when working across a library and its consumers — after adding the consumer repo, get_references on a library function returns call sites in both repos. Requires start_lsp to have been called first. Language servers that support multi-root workspaces (gopls, rust-analyzer, typescript-language-server) will re-index the new folder automatically.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args WorkspaceFolderArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleAddWorkspaceFolder(ctx, cs.get(), toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "remove_workspace_folder",
+		Description: "Remove a directory from the LSP workspace. The language server will stop indexing that folder.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args WorkspaceFolderArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleRemoveWorkspaceFolder(ctx, cs.get(), toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "list_workspace_folders",
+		Description: "List all currently active workspace folders. Use this to see which roots the language server is indexing.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleListWorkspaceFolders(ctx, cs.get(), nil)
+		return makeCallToolResult(r), nil, err
+	})
+
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "open_document",
 		Description: "Open a file in the LSP server for analysis. Use this tool before performing operations like getting diagnostics, hover information, or completions for a file. The file remains open for continued analysis until explicitly closed. The language_id parameter tells the server which language service to use (e.g., 'typescript', 'javascript', 'haskell'). The LSP server starts automatically on MCP launch.",
