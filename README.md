@@ -25,7 +25,7 @@ Language servers are the intelligence layer behind IDE features — go-to-defini
 
 ## Skills
 
-Eight agent-native skills compose agent-lsp tools into single-command workflows:
+Nine agent-native skills compose agent-lsp tools into single-command workflows:
 
 | Skill | Purpose |
 |-------|---------|
@@ -33,10 +33,11 @@ Eight agent-native skills compose agent-lsp tools into single-command workflows:
 | `/lsp-edit-export` | Safe editing of exported symbols — finds all callers first |
 | `/lsp-edit-symbol` | Edit a named symbol without knowing its file or position |
 | `/lsp-rename` | Two-phase rename: preview all sites, confirm, then apply |
-| `/lsp-verify` | Full three-layer check: diagnostics + build + tests |
+| `/lsp-verify` | Full three-layer check: diagnostics + build + tests; apply code actions on errors |
 | `/lsp-simulate` | Speculative editing — test changes without touching the file |
 | `/lsp-impact` | Blast-radius analysis before renaming or deleting a symbol |
 | `/lsp-dead-code` | Detect zero-reference exports and unreachable symbols |
+| `/lsp-implement` | Find all concrete implementations of an interface or abstract type |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.
 

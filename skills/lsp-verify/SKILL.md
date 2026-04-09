@@ -1,7 +1,7 @@
 ---
 name: lsp-verify
 description: Full three-layer verification after any change — LSP diagnostics + compiler build + test suite, ranked by severity. Use after completing any edit, refactor, or feature to confirm nothing is broken before committing.
-allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests
+allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_code_actions mcp__lsp__apply_edit
 ---
 
 > Requires the agent-lsp MCP server.
@@ -128,3 +128,39 @@ Blocking issues: [errors that must be fixed before shipping]
 Build errors and test failures block shipping. LSP warnings and style
 suggestions are advisory — document them but do not treat as blockers unless
 they indicate logical errors.
+
+## When Errors Are Found: Applying Code Actions
+
+If Layer 1 returns errors, the LSP may offer quick fixes. For each error
+location, call `get_code_actions` to surface available fixes:
+
+```
+mcp__lsp__get_code_actions({
+  "file_path": "<file>",
+  "line": <error line>,
+  "column": <error column>
+})
+```
+
+Returns a list of available actions (e.g. "Add missing import", "Implement
+interface methods", "Remove unused variable"). Pick the most appropriate one
+and apply it:
+
+```
+mcp__lsp__apply_edit({
+  "file_path": "<file>",
+  "old_text": "<text to replace>",
+  "new_text": "<replacement>"
+})
+```
+
+Or if the code action returns a `workspace_edit`, pass it directly to
+`apply_edit` via the `workspace_edit` parameter.
+
+After applying, **re-run Layer 1** on the affected file to confirm the error
+is resolved before moving on. Do not apply multiple code actions in bulk
+without verifying each one — they may interact.
+
+**When to use:** Compile errors from missing imports, unimplemented interface
+methods, or type mismatches often have one-click fixes available. Manual
+reasoning is still required for logic errors.
