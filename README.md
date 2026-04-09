@@ -1,7 +1,7 @@
-# lsp-mcp-go
+# agent-lsp
 
 [![Blackwell Systems](https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg)](https://github.com/blackwell-systems)
-[![CI](https://github.com/blackwell-systems/lsp-mcp-go/actions/workflows/ci.yml/badge.svg)](https://github.com/blackwell-systems/lsp-mcp-go/actions)
+[![CI](https://github.com/blackwell-systems/agent-lsp/actions/workflows/ci.yml/badge.svg)](https://github.com/blackwell-systems/agent-lsp/actions)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 [![Languages](https://img.shields.io/badge/languages-22_CI--verified-brightgreen.svg)](#multi-language-support)
 [![Tools](https://img.shields.io/badge/tools-45-blue.svg)](#tools)
@@ -9,15 +9,15 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Agent Skills](assets/badge-agentskills.svg)](https://agentskills.io)
 
-lsp-mcp-go is a stateful runtime over real language servers — not a bridge. It maintains a persistent, warm session, reshapes LSP into agent-oriented workflows, and adds a transactional execution layer for safe speculative edits.
+agent-lsp is a stateful runtime over real language servers — not a bridge. It maintains a persistent, warm session, reshapes LSP into agent-oriented workflows, and adds a transactional execution layer for safe speculative edits.
 
 Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships.
 
 **45 tools** across navigation, analysis, refactoring, and formatting — **28 CI-verified** end-to-end against real language servers across **22 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
-**Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One lsp-mcp-go process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright — no reconfiguration when you switch projects.
+**Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One agent-lsp process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright — no reconfiguration when you switch projects.
 
-**Persistent session, warm index.** Unlike per-request bridges, lsp-mcp-go maintains a live language server session. `start_lsp` indexes the workspace once; every subsequent call hits the warm index. `get_references` returns all 12 call sites without loading files into context. `get_diagnostics` returns only the errors. `get_info_on_location` returns the type signature at one position without loading the module. The language server's index stays fresh automatically — lsp-mcp-go watches the workspace using kernel-level filesystem events (inotify/kqueue/FSEvents) and forwards changes to keep the session synchronized. High-churn directories (`.git/`, `node_modules/`, etc.) are excluded; rapid edits are debounced at 150ms. No `did_change_watched_files` calls required.
+**Persistent session, warm index.** Unlike per-request bridges, agent-lsp maintains a live language server session. `start_lsp` indexes the workspace once; every subsequent call hits the warm index. `get_references` returns all 12 call sites without loading files into context. `get_diagnostics` returns only the errors. `get_info_on_location` returns the type signature at one position without loading the module. The language server's index stays fresh automatically — agent-lsp watches the workspace using kernel-level filesystem events (inotify/kqueue/FSEvents) and forwards changes to keep the session synchronized. High-churn directories (`.git/`, `node_modules/`, etc.) are excluded; rapid edits are debounced at 150ms. No `did_change_watched_files` calls required.
 
 **Fuzzy position fallback.** When an AI assistant gets a line/column slightly wrong, `go_to_definition`, `get_references`, and `rename_symbol` fall back to workspace symbol search by hover name and retry — returning results instead of silently returning empty.
 
@@ -25,7 +25,7 @@ Language servers are the intelligence layer behind IDE features — go-to-defini
 
 ## Skills
 
-Eight agent-native skills compose lsp-mcp-go tools into single-command workflows:
+Eight agent-native skills compose agent-lsp tools into single-command workflows:
 
 | Skill | Purpose |
 |-------|---------|
@@ -56,10 +56,10 @@ for parameter details.
 **Requires Go 1.21+** — [install Go](https://go.dev/dl/) if needed.
 
 ```bash
-go install github.com/blackwell-systems/lsp-mcp-go@latest
+go install github.com/blackwell-systems/agent-lsp@latest
 ```
 
-If `lsp-mcp-go` isn't found after install, add Go's bin directory to your PATH:
+If `agent-lsp` isn't found after install, add Go's bin directory to your PATH:
 
 ```bash
 export PATH="$PATH:$(go env GOPATH)/bin"   # add to ~/.zshrc or ~/.bashrc to persist
@@ -69,7 +69,7 @@ export PATH="$PATH:$(go env GOPATH)/bin"   # add to ~/.zshrc or ~/.bashrc to per
 
 ### Step 1 — Install language servers for your stack
 
-lsp-mcp-go runs on top of real language servers — install the servers for your stack and lsp-mcp-go handles the rest.
+agent-lsp runs on top of real language servers — install the servers for your stack and agent-lsp handles the rest.
 
 | Language | Server | Install |
 |----------|--------|---------|
@@ -103,7 +103,7 @@ Add to `.mcp.json` (project) or your AI tool's global MCP config. List only the 
   "mcpServers": {
     "lsp": {
       "type": "stdio",
-      "command": "lsp-mcp-go",
+      "command": "agent-lsp",
       "args": [
         "go:gopls",
         "typescript:typescript-language-server,--stdio",
@@ -114,7 +114,7 @@ Add to `.mcp.json` (project) or your AI tool's global MCP config. List only the 
 }
 ```
 
-Each arg is `language:server-binary` (comma-separate server args). Single language? Use `"args": ["go", "gopls"]`. Complex setup with many servers or per-server options? Use `"args": ["--config", "/path/to/lsp-mcp.json"]`.
+Each arg is `language:server-binary` (comma-separate server args). Single language? Use `"args": ["go", "gopls"]`. Complex setup with many servers or per-server options? Use `"args": ["--config", "/path/to/agent-lsp.json"]`.
 
 ### Step 3 — Start working
 
@@ -126,9 +126,9 @@ start_lsp(root_dir="/your/project")
 
 Then use any of the 45 tools. The session persists — no need to restart when switching files.
 
-## Why lsp-mcp-go
+## Why agent-lsp
 
-| | lsp-mcp-go | other MCP-LSP implementations |
+| | agent-lsp | other MCP-LSP implementations |
 |--|---------|---------------------|
 | Languages (CI-verified) | **22** (end-to-end integration tests) | config-listed, untested |
 | Tools | **45** | 3–18 |
@@ -284,7 +284,7 @@ close_document(...)
 
 **Keeping the index fresh:**
 
-lsp-mcp-go watches the workspace root for file changes and automatically notifies the language server — no `did_change_watched_files` calls required after edits. The watcher skips high-churn directories (`.git/`, `node_modules/`, `target/`, etc.) and debounces rapid edits at 150ms.
+agent-lsp watches the workspace root for file changes and automatically notifies the language server — no `did_change_watched_files` calls required after edits. The watcher skips high-churn directories (`.git/`, `node_modules/`, `target/`, etc.) and debounces rapid edits at 150ms.
 
 `did_change_watched_files` is still available for cases where files are changed by an external process that the watcher may not see immediately, or for explicit control over change notifications.
 
@@ -320,7 +320,7 @@ The server sends `notifications/resources/updated` each time the language server
 
 ## LSP 3.17 Conformance
 
-lsp-mcp-go is implemented directly against the [LSP 3.17 specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/) and validated through integration testing against real language servers. Coverage includes:
+agent-lsp is implemented directly against the [LSP 3.17 specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/) and validated through integration testing against real language servers. Coverage includes:
 
 - Full lifecycle (`initialize` → `initialized` → `shutdown`) with graceful SIGINT/SIGTERM handling
 - Progress protocol — workspace-ready detection waits for all `$/progress` tokens to complete before sending references
@@ -342,8 +342,8 @@ To add an extension, create `extensions/<language-id>/` implementing any subset 
 ## Development
 
 ```bash
-git clone https://github.com/blackwell-systems/lsp-mcp-go.git
-cd lsp-mcp-go && go build ./...
+git clone https://github.com/blackwell-systems/agent-lsp.git
+cd agent-lsp && go build ./...
 go test ./...                   # all unit test suites
 go test ./... -tags integration # integration tests (requires language servers)
 ```
