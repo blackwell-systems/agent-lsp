@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // capabilityToolEntry maps an LSP capability key to the MCP tools it enables.
@@ -17,7 +17,7 @@ type capabilityToolEntry struct {
 }
 
 // capabilityToolMap is the canonical mapping from LSP capability keys to
-// lsp-mcp-go tool names. Order determines output order in the response.
+// agent-lsp tool names. Order determines output order in the response.
 var capabilityToolMap = []capabilityToolEntry{
 	{"hoverProvider", []string{"get_info_on_location"}},
 	{"completionProvider", []string{"get_completions"}},
@@ -64,7 +64,7 @@ type ServerCapabilitiesResult struct {
 }
 
 // HandleGetServerCapabilities returns the language server's capability map
-// and classifies every lsp-mcp-go tool as supported or unsupported based on
+// and classifies every agent-lsp tool as supported or unsupported based on
 // what the server advertised during initialization.
 //
 // This lets the AI skip tools that will return empty results and avoid

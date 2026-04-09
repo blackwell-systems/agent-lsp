@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // HandleGetInlayHints returns inlay hints for a range within a document.

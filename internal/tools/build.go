@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/config"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/config"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // HandleRunBuild is an MCP tool handler for run_build. It runs the language's

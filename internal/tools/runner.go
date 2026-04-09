@@ -1,6 +1,6 @@
 package tools
 
-import "github.com/blackwell-systems/lsp-mcp-go/internal/types"
+import "github.com/blackwell-systems/agent-lsp/internal/types"
 
 // BuildError is a single compilation error or diagnostic returned by run_build.
 type BuildError struct {
