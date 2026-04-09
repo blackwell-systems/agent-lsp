@@ -5,7 +5,7 @@ argument-hint: "[file-path]"
 allowed-tools: mcp__lsp__get_document_symbols mcp__lsp__get_references mcp__lsp__open_document
 ---
 
-> Requires the lsp-mcp-go MCP server.
+> Requires the agent-lsp MCP server.
 
 # lsp-dead-code
 
@@ -45,7 +45,7 @@ workspace root first:
 mcp__lsp__start_lsp({ "root_dir": "/your/workspace" })
 ```
 
-lsp-mcp-go supports auto-inference from file paths, so explicit start is
+agent-lsp supports auto-inference from file paths, so explicit start is
 only required when switching workspaces or on a cold session.
 
 ## Step 0 — Verify indexing is complete (mandatory)

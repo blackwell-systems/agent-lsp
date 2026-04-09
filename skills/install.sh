@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# lsp-mcp-go skills installer
+# agent-lsp skills installer
 # Installs Agent Skills directories to ~/.claude/skills/
 # macOS/Linux: full support. Windows WSL: use --copy. Windows native: not supported.
 
@@ -15,7 +15,7 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Install lsp-mcp-go skills to ~/.claude/skills/
+Install agent-lsp skills to ~/.claude/skills/
 
 Each skill is a directory containing a SKILL.md file (Agent Skills format).
 Skills are installed as symlinks by default (idempotent, non-destructive).

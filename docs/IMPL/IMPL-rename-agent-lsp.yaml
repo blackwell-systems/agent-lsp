@@ -984,6 +984,7 @@ waves:
             - docs/speculative-execution.md
             - docs/lsp-spec-compliance.md
             - docs/tools.md
+      base_commit: ca8190158104158b5a0f517c28ca810dc022aaf4
 quality_gates:
     level: standard
     gates:
@@ -999,6 +1000,154 @@ quality_gates:
           command: env GOWORK=off go test ./internal/... ./cmd/...
           required: true
           repo: LSP-MCP-GO
+completion_reports:
+    A:
+        status: complete
+        branch: saw/rename-agent-lsp/wave1-agent-A
+        commit: aa51b05
+        files_changed:
+            - go.mod
+            - cmd/agent-lsp/main.go
+            - cmd/agent-lsp/server.go
+        files_created:
+            - cmd/agent-lsp/main.go
+            - cmd/agent-lsp/server.go
+        verification: PASS
+        notes: Module path updated to github.com/blackwell-systems/agent-lsp. cmd/lsp-mcp-go renamed to cmd/agent-lsp via git mv. All import paths and string literals updated in both cmd files. Scoped build fails only because other agents (B/C/C2/D/D2) have not yet updated internal package imports — expected parallel wave state.
+    B:
+        status: complete
+        branch: saw/rename-agent-lsp/wave1-agent-B
+        commit: 081b3f5
+        files_changed:
+            - internal/lsp/client.go
+            - internal/lsp/client_test.go
+            - internal/lsp/diagnostics.go
+            - internal/lsp/diagnostics_test.go
+            - internal/lsp/manager.go
+            - internal/lsp/manager_test.go
+            - internal/lsp/normalize.go
+            - internal/lsp/normalize_test.go
+        verification: PASS
+        notes: 'Import path replacement complete. Build fails in isolation (GOWORK=off) because go.mod still has old module name — that is Agent A''s file. Grep gates pass: 0 matches for old module path, 0 matches for old string literal. Committed with --no-verify per parallel wave protocol.'
+    C:
+        status: complete
+        branch: saw/rename-agent-lsp/wave1-agent-C
+        commit: 1a53521
+        files_changed:
+            - internal/tools/analysis.go
+            - internal/tools/build.go
+            - internal/tools/callhierarchy.go
+            - internal/tools/capabilities.go
+            - internal/tools/detect.go
+            - internal/tools/fuzzy.go
+            - internal/tools/helpers.go
+            - internal/tools/highlights.go
+            - internal/tools/inlayhints.go
+            - internal/tools/navigation.go
+            - internal/tools/runner.go
+        verification: PASS
+        notes: 'Replaced all import paths and bare lsp-mcp-go strings in 11 owned files. grep gate: 0 matches. Using --no-verify because parallel agents are mid-edit on other files.'
+    C2:
+        status: complete
+        branch: saw/rename-agent-lsp/wave1-agent-C2
+        commit: e8a2be9
+        files_changed:
+            - internal/tools/semantic_tokens.go
+            - internal/tools/session.go
+            - internal/tools/simulation.go
+            - internal/tools/symbol_path.go
+            - internal/tools/symbol_path_test.go
+            - internal/tools/tools_test.go
+            - internal/tools/typehierarchy.go
+            - internal/tools/utilities.go
+            - internal/tools/workspace.go
+            - internal/tools/workspace_folders.go
+            - internal/tools/workspace_symbols_test.go
+            - internal/tools/workspace_test.go
+        verification: PASS
+        notes: 'Replaced all occurrences of github.com/blackwell-systems/lsp-mcp-go with github.com/blackwell-systems/agent-lsp in 12 files. Verification gate: grep found 0 matches.'
+    D:
+        status: complete
+        branch: saw/rename-agent-lsp/wave1-agent-D
+        commit: 1815da3
+        files_changed:
+            - internal/config/autodetect.go
+            - internal/config/parse.go
+            - internal/config/parse_test.go
+            - internal/extensions/registry.go
+            - internal/extensions/registry_test.go
+            - internal/logging/logging.go
+        verification: PASS
+        notes: 'All 6 files updated: import paths changed from github.com/blackwell-systems/lsp-mcp-go to github.com/blackwell-systems/agent-lsp. Bare string literals in parse.go (comments, usage error strings) and logging.go (log message identifier) also updated. Zero grep matches for lsp-mcp-go in owned files. Build fails only because go.mod module declaration is Agent A scope (expected in parallel wave). Committed with --no-verify per parallel wave protocol.'
+    D2:
+        status: complete
+        branch: saw/rename-agent-lsp/wave1-agent-D2
+        commit: cf04a69
+        files_changed:
+            - internal/resources/resources.go
+            - internal/resources/resources_test.go
+            - internal/resources/subscriptions.go
+            - internal/session/differ.go
+            - internal/session/differ_test.go
+            - internal/session/manager.go
+            - internal/session/manager_test.go
+            - internal/session/types.go
+        verification: PASS
+        notes: 'All 8 files updated: replaced github.com/blackwell-systems/lsp-mcp-go with github.com/blackwell-systems/agent-lsp in import blocks. Zero old-path matches confirmed. Build fails only because go.mod still has old module name (owned by another agent — expected in parallel wave). Committed with --no-verify per parallel wave protocol.'
+    E:
+        status: complete
+        branch: saw/rename-agent-lsp/wave1-agent-E
+        commit: fe65b97
+        files_changed:
+            - extensions/haskell/haskell.go
+            - integration_test.go
+            - test/multi_lang_test.go
+            - test/speculative_test.go
+        verification: PASS
+        notes: All 4 owned files updated. Import paths changed from lsp-mcp-go to agent-lsp. Binary name, cmd path, and temp dir patterns updated in test files. grep gate passes (0 old import matches). Build gate requires go.mod module rename (another agent scope) to pass fully.
+    F:
+        status: complete
+        branch: saw/rename-agent-lsp/wave1-agent-F
+        commit: 806b2ca
+        files_changed:
+            - .goreleaser.yml
+            - saw.config.json
+            - README.md
+            - CHANGELOG.md
+            - DOCKER.md
+        verification: PASS
+        notes: All 5 tracked files updated. CI workflows (ci.yml, release.yml) had no lsp-mcp-go occurrences and were left unchanged. .mcp.json is gitignored so cannot be committed — user must update /Users/dayna.blackwell/go/bin/lsp-mcp-go to agent-lsp locally after binary is renamed. saw.config.json path retains LSP-MCP-GO (filesystem directory name, intentionally kept). Build, vet, and tests all pass.
+    G:
+        status: complete
+        branch: saw/rename-agent-lsp/wave1-agent-G
+        commit: 647945f
+        files_changed:
+            - skills/install.sh
+            - skills/lsp-dead-code/SKILL.md
+            - skills/lsp-edit-export/SKILL.md
+            - skills/lsp-edit-export/references/patterns.md
+            - skills/lsp-impact/SKILL.md
+            - skills/lsp-rename/SKILL.md
+            - skills/lsp-rename/references/patterns.md
+            - skills/lsp-safe-edit/SKILL.md
+            - skills/lsp-safe-edit/references/patterns.md
+            - skills/lsp-simulate/SKILL.md
+            - skills/lsp-simulate/references/patterns.md
+            - skills/lsp-verify/SKILL.md
+        verification: PASS
+        notes: 'All lsp-mcp-go/LSP-MCP-GO occurrences replaced with agent-lsp in 12 skills directory files. lsp-edit-symbol/SKILL.md had no occurrences (confirmed by grep). Verification gates: 0 grep matches, install.sh has 2 agent-lsp occurrences.'
+    G2:
+        status: complete
+        branch: saw/rename-agent-lsp/wave1-agent-G2
+        commit: f95daff
+        files_changed:
+            - docs/REQUIREMENTS.md
+            - docs/architecture.md
+            - docs/CONTEXT.md
+            - docs/speculative-execution.md
+            - docs/tools.md
+        verification: PASS
+        notes: All 6 docs files updated. Zero lsp-mcp-go/LSP-MCP-GO occurrences remain in the 5 primary files. lsp-spec-compliance.md had no bare lsp-mcp-go references (only filesystem path /code/LSP-MCP-GO which is correctly preserved). Build, vet, and tests all pass.
 pre_mortem:
     overall_risk: low
     rows:
@@ -1056,6 +1205,6 @@ critic_report:
     summary: Skipped by operator
     reviewed_at: "2026-04-09T17:34:33Z"
     issue_count: 0
-state: "REVIEWED"
+state: REVIEWED
 original_branch: develop
 injection_method: manual-fallback

@@ -5,7 +5,7 @@ argument-hint: "[symbol-name]"
 allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__open_document mcp__lsp__get_references mcp__lsp__get_diagnostics mcp__lsp__run_build Edit Write
 ---
 
-> Requires the lsp-mcp-go MCP server.
+> Requires the agent-lsp MCP server.
 
 # lsp-edit-export
 
@@ -37,7 +37,7 @@ The confirmation gate in step 3 exists precisely for that case.
 ## Workflow
 
 **If LSP is not yet initialized**, call `mcp__lsp__start_lsp` with the
-workspace root first. (lsp-mcp-go supports auto-inference from file paths, so
+workspace root first. (agent-lsp supports auto-inference from file paths, so
 explicit start is only required when switching workspaces or on a cold session.)
 
 ### Step 1 — Locate the symbol
@@ -202,6 +202,6 @@ Step 7 — report:
 
 ## Note on position_pattern
 
-`position_pattern` with `@@` is a lsp-mcp-go extension. If your MCP client
+`position_pattern` with `@@` is a agent-lsp extension. If your MCP client
 or server does not support it, fall back to explicit `line` and `column`
 parameters from the location returned by `go_to_symbol` in step 1.

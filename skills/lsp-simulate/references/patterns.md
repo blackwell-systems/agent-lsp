@@ -111,7 +111,7 @@ All position parameters are **1-indexed** throughout the simulation API:
 - `start_line`, `end_line`: line numbers matching `cat -n` output and editor line numbers
 - `start_column`, `end_column`: column numbers, 1 = first character on the line
 
-This matches the lsp-mcp-go convention used by all position-based tools
+This matches the agent-lsp convention used by all position-based tools
 (`get_references`, `get_info_on_location`, `call_hierarchy`, etc.).
 
 Example: to replace text on line 10, columns 5–15:

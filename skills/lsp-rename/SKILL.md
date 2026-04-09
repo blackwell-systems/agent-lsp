@@ -5,7 +5,7 @@ argument-hint: "[old-name] [new-name]"
 allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__get_references mcp__lsp__rename_symbol mcp__lsp__apply_edit mcp__lsp__get_diagnostics
 ---
 
-> Requires the lsp-mcp-go MCP server.
+> Requires the agent-lsp MCP server.
 
 # lsp-rename: Safe Symbol Rename
 

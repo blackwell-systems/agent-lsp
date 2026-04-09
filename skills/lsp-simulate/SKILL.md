@@ -4,7 +4,7 @@ description: Speculative code editing session — simulate changes in memory bef
 allowed-tools: mcp__lsp__start_lsp mcp__lsp__create_simulation_session mcp__lsp__simulate_edit mcp__lsp__simulate_chain mcp__lsp__evaluate_session mcp__lsp__commit_session mcp__lsp__discard_session mcp__lsp__destroy_session mcp__lsp__simulate_edit_atomic
 ---
 
-> Requires the lsp-mcp-go MCP server.
+> Requires the agent-lsp MCP server.
 
 # lsp-simulate
 
@@ -21,7 +21,7 @@ LSP must be running for the target workspace. If not yet initialized, call
 mcp__lsp__start_lsp(root_dir: "/your/workspace")
 ```
 
-Auto-init note: lsp-mcp-go supports workspace auto-inference from file paths.
+Auto-init note: agent-lsp supports workspace auto-inference from file paths.
 Explicit `start_lsp` is only needed when switching workspace roots.
 
 ## Quick Start (single edit)

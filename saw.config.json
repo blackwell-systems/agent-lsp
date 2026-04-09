@@ -3,6 +3,6 @@
   "lintCommand": "env GOWORK=off go vet ./...",
   "buildCommand": "env GOWORK=off go build ./...",
   "repos": [
-    {"name": "lsp-mcp-go", "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO"}
+    {"name": "agent-lsp", "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO"}
   ]
 }
