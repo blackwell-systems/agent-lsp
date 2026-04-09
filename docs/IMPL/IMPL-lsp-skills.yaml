@@ -854,6 +854,7 @@ waves:
             - A
             - B
             - E
+      base_commit: ee8e3a5e0dd9bc1dda48bf64cf40178f8ac6833d
     - number: 4
       agents:
         - id: I
@@ -1081,6 +1082,15 @@ completion_reports:
             - skills/lsp-verify.md
         verification: PASS
         notes: lsp-verify.md created with correct frontmatter, three-layer workflow (get_diagnostics, run_build, run_tests), output format template, blocking vs advisory table, and MCP compatibility note. All verification gate checks passed.
+    G:
+        status: complete
+        branch: saw/lsp-skills/wave3-agent-G
+        commit: 2556fb8
+        files_changed:
+            - cmd/lsp-mcp-go/server.go
+            - internal/tools/workspace.go
+        verification: PASS
+        notes: Registered go_to_symbol tool (GoToSymbolArgs + HandleGoToSymbol call). Added PositionPattern field to GetInfoOnLocationArgs, GetReferencesArgs, GoToDefinitionArgs. Added PositionPattern + DryRun to RenameSymbolArgs. Updated rename_symbol description. Added dry_run envelope handling in HandleRenameSymbol. All 4 verification checks pass. Build, vet, and all tests green.
     H:
         status: complete
         branch: saw/lsp-skills/wave2-agent-H
@@ -1090,6 +1100,17 @@ completion_reports:
         files_created:
             - skills/install.sh
         verification: PASS
+integration_reports:
+    wave2:
+        wave: 2
+        gaps: []
+        valid: true
+        summary: 'Wave 2: all exports are integrated (no gaps detected)'
+    wave3:
+        wave: 3
+        gaps: []
+        valid: true
+        summary: 'Wave 3: all exports are integrated (no gaps detected)'
 pre_mortem:
     overall_risk: medium
     rows:
@@ -1159,9 +1180,3 @@ critic_report:
 state: REVIEWED
 original_branch: develop
 injection_method: hook
-integration_reports:
-    wave2:
-        wave: 2
-        gaps: []
-        valid: true
-        summary: 'Wave 2: all exports are integrated (no gaps detected)'
