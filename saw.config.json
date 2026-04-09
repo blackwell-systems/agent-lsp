@@ -1,5 +1,8 @@
 {
   "testCommand": "env GOWORK=off go test ./internal/... ./cmd/... ./extensions/... .",
   "lintCommand": "env GOWORK=off go vet ./...",
-  "buildCommand": "env GOWORK=off go build ./..."
+  "buildCommand": "env GOWORK=off go build ./...",
+  "repos": [
+    {"name": "lsp-mcp-go", "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO"}
+  ]
 }

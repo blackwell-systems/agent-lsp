@@ -259,7 +259,7 @@ waves:
 
             - If symbolPath has no ".": return &candidates[0] (first match)
             - If symbolPath has ".": split on ".", parent = everything before last dot
-              Prefer first candidate whose ContainerName == parent (case-sensitive)
+              Prefer first candidate where sym.ContainerName != nil && *sym.ContainerName == parent (case-sensitive)
               If no ContainerName match: return &candidates[0]
 
             Imports needed: `context`, `fmt`, `strings`,
@@ -456,7 +456,7 @@ waves:
             - `/Users/dayna.blackwell/.claude/skills/saw/SKILL.md` — frontmatter format
             - `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/PATTERNS.md` — shared conventions
 
-            Note: Wave 2 Agent G registers the go_to_symbol tool. Use it in this skill.
+            Note: Wave 3 Agent G registers the go_to_symbol tool. Use it in this skill.
 
             ### Frontmatter
 
@@ -523,7 +523,7 @@ waves:
             - `/Users/dayna.blackwell/.claude/skills/saw/SKILL.md` — frontmatter format
             - `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/PATTERNS.md` — shared conventions
 
-            Note: Wave 2 Agent G adds dry_run to rename_symbol. Use dry_run=true in Phase 1.
+            Note: Wave 3 Agent G adds dry_run to rename_symbol. Use dry_run=true in Phase 1.
 
             ### Frontmatter
 
@@ -1034,5 +1034,55 @@ pre_mortem:
           impact: high
           mitigation: |
             Agent E brief calls the two-phase structure "NOT optional." Verification gate checks for Phase/phase occurrences >= 2 and dry_run mention >= 1.
+critic_report:
+    verdict: ISSUES
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: ISSUES
+            issues:
+                - check: symbol_accuracy
+                  severity: error
+                  description: 'bestSymbolMatch description says to compare sym.ContainerName == parent, but ContainerName is *string in types.SymbolInformation (line 147 of internal/types/types.go). Comparing *string to string is a compile error in Go. The agent must nil-check and dereference: sym.ContainerName != nil && *sym.ContainerName == parent.'
+                  file: internal/tools/symbol_path.go
+                  symbol: ContainerName
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: ISSUES
+            issues:
+                - check: pattern_accuracy
+                  severity: warning
+                  description: Brief says "Wave 2 Agent G registers the go_to_symbol tool" but Agent G is in wave 3 (file_ownership line 69). This does not affect execution order (the dependency chain is correct) but the wave number reference is wrong and could confuse the agent.
+                  file: skills/lsp-edit-export.md
+        E:
+            agent_id: E
+            verdict: ISSUES
+            issues:
+                - check: pattern_accuracy
+                  severity: warning
+                  description: Brief says "Wave 2 Agent G adds dry_run to rename_symbol" but Agent G is in wave 3 (file_ownership line 69). The dependency ordering in file_ownership is correct; only the wave label in the brief text is inaccurate.
+                  file: skills/lsp-rename.md
+        F:
+            agent_id: F
+            verdict: PASS
+        G:
+            agent_id: G
+            verdict: PASS
+        H:
+            agent_id: H
+            verdict: PASS
+        I:
+            agent_id: I
+            verdict: PASS
+    summary: 'One error found in Agent A''s brief: ContainerName is typed as *string in types.SymbolInformation, but the bestSymbolMatch algorithm description compares it directly to a string (ContainerName == parent), which is a compile error in Go. The agent must dereference and nil-check the pointer. Two warnings for Agents D and E: their briefs refer to ''Wave 2 Agent G'' but G is in wave 3. All other checks pass: file existence, import paths, interface contracts, disjoint ownership, and pattern accuracy are all verified and accurate.'
+    reviewed_at: "2026-04-09T04:30:02Z"
+    issue_count: 3
 state: SCOUT_PENDING
+original_branch: develop
 injection_method: hook
