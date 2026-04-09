@@ -5,6 +5,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (2026-04-09) — Skills expansion (continued)
+- **`/lsp-test-correlation` skill** — find and run only the tests covering an edited source file; `get_tests_for_file` maps source → test files, `get_workspace_symbols` enumerates specific test functions within those files, `run_tests` executes the scoped set; fallback to workspace symbol search when `get_tests_for_file` returns no mapping; multi-file workflow deduplicates test files across all changed sources; `[correlated / unrelated]` classification guides where to investigate failures first
+- **`/lsp-verify` `get_tests_for_file` pre-step** — when `changed_files` is known, `get_tests_for_file` runs before the three parallel layers to build a source→test map; Layer 3 failure report now tags each failing test as correlated (covers changed code) or unrelated (collateral failure) to narrow debugging scope
+
 ### Added (2026-04-09) — Skills expansion
 - **`/lsp-cross-repo` skill** — multi-root workspace analysis for library + consumer workflows; orchestrates `add_workspace_folder` → `list_workspace_folders` (verify indexing) → `get_workspace_symbols` → `get_references` / `call_hierarchy` / `go_to_implementation` across both repos; solves the "agent doesn't know to add a second workspace folder" discoverability gap; output separates library-internal from consumer references
 - **`/lsp-local-symbols` skill** — file-scoped symbol analysis without workspace-wide search; composes `get_document_symbols` (symbol tree for the file) → `get_document_highlights` (all usages within the file, classified as read/write/text) → `get_info_on_location` (type signature); faster than `get_references` for local-scope questions; explicit "when NOT to use" guidance prevents misuse as a cross-file search

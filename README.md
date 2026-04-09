@@ -31,7 +31,7 @@ agent-lsp solves both problems. It is a **stateful runtime** over real language 
 
 The skill layer is the behavioral reliability layer. Raw tools get ignored; skills get used. Each skill encodes the correct tool sequence for a workflow — the agent reads the skill, follows the steps, and uses the tools in the right order without per-prompt orchestration instructions. This is the difference between tools that are available and workflows that actually happen.
 
-Twelve skills ship with agent-lsp:
+Thirteen skills ship with agent-lsp:
 
 | Skill | Purpose |
 |-------|---------|
@@ -47,6 +47,7 @@ Twelve skills ship with agent-lsp:
 | `/lsp-docs` | Three-tier documentation lookup: hover → offline toolchain (`go doc`, `pydoc`) → source |
 | `/lsp-cross-repo` | Multi-root workspace analysis — add a consumer repo and find all cross-repo callers, references, and implementations of a library symbol |
 | `/lsp-local-symbols` | File-scoped analysis — list all symbols in a file, find all usages of a symbol within the file, get type info; faster than workspace search for local queries |
+| `/lsp-test-correlation` | Find and run only the tests that cover an edited file — faster than the full suite for targeted post-edit verification |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.
 
