@@ -2519,7 +2519,7 @@ passing the line/column manually, but robust to line number drift.
 
 ## Skills
 
-Thirteen agent-native skills compose agent-lsp tools into single-command
+Fourteen agent-native skills compose agent-lsp tools into single-command
 workflows. Install with `cd skills && ./install.sh`.
 
 | Skill | Tools used | Purpose |
@@ -2537,5 +2537,6 @@ workflows. Install with `cd skills && ./install.sh`.
 | `/lsp-cross-repo` | `add_workspace_folder`, `list_workspace_folders`, `get_references`, `go_to_implementation`, `call_hierarchy` | Multi-root cross-repo analysis — add a consumer repo and find all callers, references, and implementations of a library symbol across both repos |
 | `/lsp-local-symbols` | `get_document_symbols`, `get_document_highlights`, `get_info_on_location` | File-scoped analysis — list all symbols in a file, find all usages of a symbol within the file (faster than workspace search), get type info |
 | `/lsp-test-correlation` | `get_tests_for_file`, `get_workspace_symbols`, `run_tests` | Find and run only the tests covering an edited file; multi-file deduplication; fallback to workspace symbol search when mapping is absent |
+| `/lsp-format-code` | `format_document`, `format_range`, `apply_edit`, `get_diagnostics` | Format a file or selection via the language server formatter; full-file or range; verifies no diagnostics introduced after applying |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.

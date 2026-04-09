@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Added (2026-04-09) — Skills expansion (continued)
+- **`/lsp-format-code` skill** — format a file or selection via the language server's formatter (`gofmt` via gopls, `prettier` via tsserver, `rustfmt` via rust-analyzer, etc.); `format_document` for full file, `format_range` for selection; both return `TextEdit[]` applied via `apply_edit`; optional `get_server_capabilities` pre-check for `documentFormattingProvider`; post-apply `get_diagnostics` guard; multi-file protocol runs format calls in parallel then applies per-file sequentially; language notes table covers Go/TypeScript/Rust/Python/C
+
+### Added (2026-04-09) — Skills expansion (continued)
 - **`/lsp-test-correlation` skill** — find and run only the tests covering an edited source file; `get_tests_for_file` maps source → test files, `get_workspace_symbols` enumerates specific test functions within those files, `run_tests` executes the scoped set; fallback to workspace symbol search when `get_tests_for_file` returns no mapping; multi-file workflow deduplicates test files across all changed sources; `[correlated / unrelated]` classification guides where to investigate failures first
 - **`/lsp-verify` `get_tests_for_file` pre-step** — when `changed_files` is known, `get_tests_for_file` runs before the three parallel layers to build a source→test map; Layer 3 failure report now tags each failing test as correlated (covers changed code) or unrelated (collateral failure) to narrow debugging scope
 
