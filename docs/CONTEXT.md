@@ -29,3 +29,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-rename-agent-lsp.yaml
 - **get-symbol-source**: completed 2026-04-09, 1 waves, 2 agents
   - IMPL doc: docs/IMPL/complete/IMPL-get-symbol-source.yaml
+- **offline-documentation**: completed 2026-04-09, 2 waves, 3 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-offline-documentation.yaml

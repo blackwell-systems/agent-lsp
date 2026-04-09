@@ -1,3 +1,4 @@
+completion_date: "2026-04-09"
 title: Offline Symbol Documentation
 feature_slug: offline-documentation
 verdict: SUITABLE
@@ -614,6 +615,7 @@ waves:
             - test/documentation_test.go
           dependencies:
             - A
+      base_commit: 5fc0e8dbacc5e82c8be65494b9365e874d16f845
 quality_gates:
     level: standard
     gates:
@@ -663,6 +665,18 @@ completion_reports:
             - skills/lsp-docs/SKILL.md
         verification: PASS
         notes: All three files complete. Skill frontmatter uses space-delimited allowed-tools. tools.md has get_symbol_documentation section with parameters, algorithm, example, output, and notes; lsp-docs row added to skills table. CHANGELOG appended to existing Added (2026-04-09) section. All verification gates pass (4 commits, build/vet/test clean).
+    C:
+        status: complete
+        branch: saw/offline-documentation/wave2-agent-C
+        commit: 0120e6d
+        files_created:
+            - test/documentation_test.go
+        tests_added:
+            - TestGetSymbolDocumentation
+            - TestGetSymbolDocumentation/go_toolchain_path
+            - TestGetSymbolDocumentation/unsupported_language_returns_error_source
+            - TestGetSymbolDocumentation/missing_symbol_field_returns_is_error
+        verification: PASS
 pre_mortem:
     overall_risk: low
     rows:
@@ -720,6 +734,6 @@ pre_mortem:
             or "const " rather than assuming the first line is always a signature. This
             handles the common go doc preamble pattern. The doc field returns the full output
             regardless, so the agent always gets complete information even if signature is empty.
-state: REVIEWED
+state: COMPLETE
 original_branch: main
 injection_method: hook
