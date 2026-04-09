@@ -506,5 +506,5 @@ known_issues:
         test_cascade, wave_structure).
       status: known
       workaround: Proceed with wave execution. The symbols will exist after Agent B merges.
-state: SCOUT_PENDING
+state: "REVIEWED"
 original_branch: develop
