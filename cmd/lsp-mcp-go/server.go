@@ -229,10 +229,11 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		FilePath string `json:"file_path,omitempty"`
 	}
 	type GetInfoOnLocationArgs struct {
-		FilePath   string `json:"file_path"`
-		LanguageID string `json:"language_id,omitempty"`
-		Line       int    `json:"line"`
-		Column     int    `json:"column"`
+		FilePath        string `json:"file_path"`
+		LanguageID      string `json:"language_id,omitempty"`
+		Line            int    `json:"line"`
+		Column          int    `json:"column"`
+		PositionPattern string `json:"position_pattern,omitempty"`
 	}
 	type GetCompletionsArgs struct {
 		FilePath   string `json:"file_path"`
@@ -270,12 +271,14 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Line               int    `json:"line"`
 		Column             int    `json:"column"`
 		IncludeDeclaration bool   `json:"include_declaration,omitempty"`
+		PositionPattern    string `json:"position_pattern,omitempty"`
 	}
 	type GoToDefinitionArgs struct {
-		FilePath   string `json:"file_path"`
-		LanguageID string `json:"language_id,omitempty"`
-		Line       int    `json:"line"`
-		Column     int    `json:"column"`
+		FilePath        string `json:"file_path"`
+		LanguageID      string `json:"language_id,omitempty"`
+		Line            int    `json:"line"`
+		Column          int    `json:"column"`
+		PositionPattern string `json:"position_pattern,omitempty"`
 	}
 	type GoToTypeDefinitionArgs struct {
 		FilePath   string `json:"file_path"`
@@ -296,11 +299,13 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Column     int    `json:"column"`
 	}
 	type RenameSymbolArgs struct {
-		FilePath   string `json:"file_path"`
-		LanguageID string `json:"language_id,omitempty"`
-		Line       int    `json:"line"`
-		Column     int    `json:"column"`
-		NewName    string `json:"new_name"`
+		FilePath        string `json:"file_path"`
+		LanguageID      string `json:"language_id,omitempty"`
+		Line            int    `json:"line"`
+		Column          int    `json:"column"`
+		NewName         string `json:"new_name"`
+		PositionPattern string `json:"position_pattern,omitempty"`
+		DryRun          bool   `json:"dry_run,omitempty"`
 	}
 	type PrepareRenameArgs struct {
 		FilePath   string `json:"file_path"`
@@ -592,7 +597,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "rename_symbol",
-		Description: "Get a WorkspaceEdit for renaming a symbol across the entire workspace via LSP. Returns the edit object describing all files and positions that need to change — it is NOT applied automatically. Inspect the returned WorkspaceEdit to understand the full scope of a rename before applying it.",
+		Description: "Get a WorkspaceEdit for renaming a symbol across the entire workspace via LSP. Returns the edit object — NOT applied automatically. Use dry_run=true to preview what would change (returns workspace_edit + note). Use position_pattern with @@ marker for reliable position targeting instead of line/column. Inspect the returned WorkspaceEdit then call apply_edit to commit.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args RenameSymbolArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleRenameSymbol(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
@@ -811,6 +816,19 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Description: "One-shot atomic operation: create session, apply edit, evaluate, and destroy. Returns evaluation result. Use for quick what-if checks without managing session lifecycle manually. Requires start_lsp to be called first. All line/column positions are 1-indexed. net_delta: 0 means the edit is safe to apply.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args SimulateEditAtomicArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleSimulateEditAtomic(ctx, sessionMgr, toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
+	type GoToSymbolArgs struct {
+		SymbolPath    string `json:"symbol_path"`
+		WorkspaceRoot string `json:"workspace_root,omitempty"`
+		Language      string `json:"language,omitempty"`
+	}
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "go_to_symbol",
+		Description: "Navigate to a symbol definition by dot-notation name (e.g. \"LSPClient.GetReferences\", \"http.Handler\") without needing file_path or line/column. Uses workspace symbol search to locate the definition. Useful when you know the symbol name but not its location.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args GoToSymbolArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleGoToSymbol(ctx, cs.get(), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 

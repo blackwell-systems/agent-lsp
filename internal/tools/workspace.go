@@ -54,6 +54,22 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 		return types.ErrorResult(fmt.Sprintf("rename_symbol: %s", wErr)), nil
 	}
 
+	dryRun, _ := args["dry_run"].(bool)
+	if dryRun {
+		type previewEnvelope struct {
+			WorkspaceEdit interface{} `json:"workspace_edit"`
+			Preview       struct {
+				Note string `json:"note"`
+			} `json:"preview"`
+		}
+		env := previewEnvelope{WorkspaceEdit: result}
+		env.Preview.Note = "dry_run=true: inspect workspace_edit and call apply_edit to commit"
+		data, mErr := json.Marshal(env)
+		if mErr != nil {
+			return types.ErrorResult(fmt.Sprintf("marshaling dry_run result: %s", mErr)), nil
+		}
+		return types.TextResult(string(data)), nil
+	}
 	data, mErr := json.Marshal(result)
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling rename result: %s", mErr)), nil
