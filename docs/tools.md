@@ -2394,7 +2394,7 @@ passing the line/column manually, but robust to line number drift.
 
 ## Skills
 
-Four agent-native skills compose lsp-mcp-go tools into single-command
+Seven agent-native skills compose lsp-mcp-go tools into single-command
 workflows. Install with `cd skills && ./install.sh`.
 
 | Skill | Tools used | Purpose |
@@ -2403,5 +2403,8 @@ workflows. Install with `cd skills && ./install.sh`.
 | `/lsp-edit-export` | `get_references`, `get_info_on_location`, `simulate_edit_atomic` | Safe editing of exported symbols — finds all callers first, then validates the edit |
 | `/lsp-rename` | `prepare_rename`, `rename_symbol` (dry_run), `apply_edit` | Two-phase rename: preview all rename sites, confirm, then apply atomically |
 | `/lsp-verify` | `get_diagnostics`, `run_build`, `run_tests` | Full three-layer check: LSP diagnostics + build + tests — summarizes pass/fail |
+| `/lsp-simulate` | `create_simulation_session`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session` | Speculative editing — test changes without touching the file; supports single edits, sessions, and chained multi-edit sequences |
+| `/lsp-impact` | `get_references`, `call_hierarchy`, `type_hierarchy` | Blast-radius analysis before renaming or deleting — maps all callers, implementors, and subtypes |
+| `/lsp-dead-code` | `get_document_symbols`, `get_references` | Detect zero-reference exports and unreachable symbols across a file or workspace |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.
