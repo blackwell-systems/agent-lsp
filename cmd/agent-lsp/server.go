@@ -845,6 +845,13 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		PositionPattern string `json:"position_pattern,omitempty"`
 	}
 
+	type GetSymbolDocumentationArgs struct {
+		Symbol     string `json:"symbol"`
+		LanguageID string `json:"language_id"`
+		FilePath   string `json:"file_path,omitempty"`
+		Format     string `json:"format,omitempty"`
+	}
+
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "go_to_symbol",
 		Description: "Navigate to a symbol definition by dot-notation name (e.g. \"LSPClient.GetReferences\", \"http.Handler\") without needing file_path or line/column. Uses workspace symbol search to locate the definition. Useful when you know the symbol name but not its location.",
@@ -858,6 +865,14 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Description: "Return the source code of the innermost symbol (function, method, class, struct, etc.) whose range contains the given cursor position. Calls textDocument/documentSymbol, walks the symbol tree to find the smallest enclosing symbol, then slices the file at that symbol's range. Returns symbol_name, symbol_kind, start_line (1-based), end_line (1-based), and source text. Use line+character or position_pattern (@@-syntax) to specify the cursor. character defaults to 1.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetSymbolSourceArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleGetSymbolSource(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_symbol_documentation",
+		Description: "Fetch authoritative documentation for a named symbol from local toolchain sources (go doc, pydoc, cargo doc) without requiring an LSP hover response. Works on transitive dependencies not indexed by the language server. Returns the full doc text, extracted signature, and source tag. Falls back gracefully when the toolchain command fails or the language is unsupported.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetSymbolDocumentationArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleGetSymbolDocumentation(ctx, toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
