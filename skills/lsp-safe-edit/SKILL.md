@@ -1,7 +1,7 @@
 ---
 name: lsp-safe-edit
 description: Wrap any code edit with before/after diagnostic comparison. Speculatively previews the change first (simulate_edit_atomic), then applies to disk only if the error delta is acceptable. If post-edit errors appear, surfaces code actions for quick fixes. Handles single and multi-file edits.
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_diagnostics mcp__lsp__simulate_edit_atomic mcp__lsp__get_code_actions mcp__lsp__apply_edit Edit Write Bash
+allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_diagnostics mcp__lsp__simulate_edit_atomic mcp__lsp__get_code_actions mcp__lsp__format_document mcp__lsp__apply_edit Edit Write Bash
 ---
 
 > Requires the agent-lsp MCP server.
@@ -149,7 +149,25 @@ Apply code actions? [y/n/select]
 If the user accepts, apply the code action's `WorkspaceEdit` via
 `mcp__lsp__apply_edit`, then re-collect diagnostics and re-diff.
 
-### Step 8 — Report using DiagnosticDiffFormat
+### Step 8 — Format (optional)
+
+If the diagnostic diff is clean (net change ≤ 0), offer to format the edited
+file via the language server:
+
+```
+mcp__lsp__format_document({ "file_path": "/abs/path/to/file" })
+```
+
+Returns `TextEdit[]`. If non-empty, apply immediately:
+
+```
+mcp__lsp__apply_edit({ "workspace_edit": <TextEdit[]> })
+```
+
+Skip if the user did not ask for formatting, or if there are unresolved errors
+(fix errors before formatting).
+
+### Step 9 — Report using DiagnosticDiffFormat
 
 Output the final summary:
 

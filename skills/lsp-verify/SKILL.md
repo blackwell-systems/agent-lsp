@@ -1,7 +1,7 @@
 ---
 name: lsp-verify
 description: Full three-layer verification after any change — LSP diagnostics + compiler build + test suite, ranked by severity. Use after completing any edit, refactor, or feature to confirm nothing is broken before committing.
-allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__get_code_actions mcp__lsp__apply_edit
+allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__get_code_actions mcp__lsp__format_document mcp__lsp__apply_edit
 ---
 
 > Requires the agent-lsp MCP server.
@@ -153,6 +153,20 @@ Blocking issues: [errors that must be fixed before shipping]
 Build errors and test failures block shipping. LSP warnings and style
 suggestions are advisory — document them but do not treat as blockers unless
 they indicate logical errors.
+
+## When Verification Passes: Optional Format
+
+If all three layers are CLEAN and `changed_files` is known, offer to format
+the changed files before committing:
+
+```
+mcp__lsp__format_document({ "file_path": "<changed-file>" })
+```
+
+Apply the returned `TextEdit[]` via `apply_edit` if non-empty. Run once per
+changed file. Skip if the user did not request formatting.
+
+---
 
 ## When Errors Are Found: Applying Code Actions
 
