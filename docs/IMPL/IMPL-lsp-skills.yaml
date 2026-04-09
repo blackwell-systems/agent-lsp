@@ -711,6 +711,7 @@ waves:
             ```
           files:
             - skills/install.sh
+      base_commit: c9b01c0b490f962da11ebbc1a387c0b424c4bd28
     - number: 3
       agents:
         - id: G
@@ -1040,6 +1041,55 @@ completion_reports:
             - TestExtractPositionWithPattern_Fallback
         verification: PASS
         notes: All 7 tests pass. Full build and vet clean. No existing files modified.
+    C:
+        status: complete
+        branch: saw/lsp-skills/wave2-agent-C
+        commit: a28ef4a
+        files_changed:
+            - skills/lsp-safe-edit.md
+        files_created:
+            - skills/lsp-safe-edit.md
+        verification: PASS
+        notes: lsp-safe-edit skill created with 6-step workflow, DiagnosticDiffFormat output, decision guide, and MCP compatibility note. All verification checks pass (5 get_diagnostics mentions, DiagnosticDiffFormat present). Build/vet/test gates clean.
+    D:
+        status: complete
+        branch: saw/lsp-skills/wave2-agent-D
+        commit: 20aba5a
+        files_changed:
+            - skills/lsp-edit-export.md
+        files_created:
+            - skills/lsp-edit-export.md
+        verification: PASS
+        notes: 'lsp-edit-export skill created with all required sections: when-to-use, 7-step workflow, confirmation gate, output format, example, MCP client compatibility note. All verification checks pass. Build/vet/test gates pass.'
+    E:
+        status: complete
+        branch: saw/lsp-skills/wave2-agent-E
+        commit: c99d225
+        files_changed:
+            - skills/lsp-rename.md
+        files_created:
+            - skills/lsp-rename.md
+        verification: PASS
+        notes: 'lsp-rename skill created with two-phase structure (preview then confirm then execute). All verification checks pass: EXISTS, name frontmatter, dry_run references, >=2 Phase/phase matches, [y/n] confirm prompt. Build/vet/test all clean.'
+    F:
+        status: complete
+        branch: saw/lsp-skills/wave2-agent-F
+        commit: ce2c54a
+        files_changed:
+            - skills/lsp-verify.md
+        files_created:
+            - skills/lsp-verify.md
+        verification: PASS
+        notes: lsp-verify.md created with correct frontmatter, three-layer workflow (get_diagnostics, run_build, run_tests), output format template, blocking vs advisory table, and MCP compatibility note. All verification gate checks passed.
+    H:
+        status: complete
+        branch: saw/lsp-skills/wave2-agent-H
+        commit: 85626c5
+        files_changed:
+            - skills/install.sh
+        files_created:
+            - skills/install.sh
+        verification: PASS
 pre_mortem:
     overall_risk: medium
     rows:
@@ -1109,3 +1159,9 @@ critic_report:
 state: REVIEWED
 original_branch: develop
 injection_method: hook
+integration_reports:
+    wave2:
+        wave: 2
+        gaps: []
+        valid: true
+        summary: 'Wave 2: all exports are integrated (no gaps detected)'
