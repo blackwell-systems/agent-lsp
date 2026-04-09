@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -299,6 +300,100 @@ func TestHandleApplyEdit_MissingWorkspaceEdit(t *testing.T) {
 	}
 	if !r.IsError {
 		t.Error("expected IsError=true for missing workspace_edit")
+	}
+}
+
+// --- findText ---
+
+// TestFindText_ExactMatch verifies that an exact substring is found.
+func TestFindText_ExactMatch(t *testing.T) {
+	src := "line one\nfunc Foo() {\n\treturn nil\n}\n"
+	start, end, ok := findText(src, "func Foo() {")
+	if !ok {
+		t.Fatal("expected match, got not found")
+	}
+	if src[start:end] != "func Foo() {" {
+		t.Errorf("got %q, want %q", src[start:end], "func Foo() {")
+	}
+}
+
+// TestFindText_NormalisedMatch verifies that a pattern with different indentation
+// is found via the whitespace-normalised fallback.
+func TestFindText_NormalisedMatch(t *testing.T) {
+	src := "line one\n\tfunc Foo() {\n\t\treturn nil\n\t}\n"
+	// Pattern has no indentation; file has tabs.
+	start, end, ok := findText(src, "func Foo() {\n\treturn nil\n}")
+	if !ok {
+		t.Fatal("expected normalised match, got not found")
+	}
+	got := src[start:end]
+	if !strings.Contains(got, "func Foo()") {
+		t.Errorf("matched region %q does not contain expected content", got)
+	}
+}
+
+// TestFindText_NotFound verifies that a non-existent pattern returns false.
+func TestFindText_NotFound(t *testing.T) {
+	_, _, ok := findText("hello world", "xyz")
+	if ok {
+		t.Error("expected not found")
+	}
+}
+
+// --- textMatchApply ---
+
+// TestTextMatchApply_ExactMatch verifies that exact-match mode produces a
+// WorkspaceEdit with the correct newText.
+func TestTextMatchApply_ExactMatch(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := "package main\n\nfunc Foo() {\n\treturn\n}\n"
+	if _, err := f.WriteString(content); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	edit, err := textMatchApply(f.Name(), "func Foo() {", "func Foo() error {")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	m, ok := edit.(map[string]interface{})
+	if !ok {
+		t.Fatal("edit is not map[string]interface{}")
+	}
+	changes, ok := m["changes"].(map[string]interface{})
+	if !ok {
+		t.Fatal("missing changes key")
+	}
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 file in changes, got %d", len(changes))
+	}
+	for _, v := range changes {
+		edits, ok := v.([]interface{})
+		if !ok || len(edits) != 1 {
+			t.Fatal("expected 1 text edit")
+		}
+		te := edits[0].(map[string]interface{})
+		if te["newText"] != "func Foo() error {" {
+			t.Errorf("got newText %q", te["newText"])
+		}
+	}
+}
+
+// TestTextMatchApply_NotFound verifies an error is returned when old_text is absent.
+func TestTextMatchApply_NotFound(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("package main\n")
+	f.Close()
+
+	_, err = textMatchApply(f.Name(), "func Missing() {}", "func Missing() error {}")
+	if err == nil {
+		t.Error("expected error for missing old_text")
 	}
 }
 

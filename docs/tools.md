@@ -2394,13 +2394,14 @@ passing the line/column manually, but robust to line number drift.
 
 ## Skills
 
-Seven agent-native skills compose lsp-mcp-go tools into single-command
+Eight agent-native skills compose lsp-mcp-go tools into single-command
 workflows. Install with `cd skills && ./install.sh`.
 
 | Skill | Tools used | Purpose |
 |-------|-----------|---------|
 | `/lsp-safe-edit` | `create_simulation_session`, `simulate_edit_atomic`, `get_diagnostics` | Wrap any edit with a before/after diagnostic diff — shows errors introduced or resolved |
 | `/lsp-edit-export` | `get_references`, `get_info_on_location`, `simulate_edit_atomic` | Safe editing of exported symbols — finds all callers first, then validates the edit |
+| `/lsp-edit-symbol` | `get_workspace_symbols`, `get_document_symbols`, `apply_edit` | Edit a named symbol without knowing its file or position — resolves name to definition, retrieves full range, applies edit |
 | `/lsp-rename` | `prepare_rename`, `rename_symbol` (dry_run), `apply_edit` | Two-phase rename: preview all rename sites, confirm, then apply atomically |
 | `/lsp-verify` | `get_diagnostics`, `run_build`, `run_tests` | Full three-layer check: LSP diagnostics + build + tests — summarizes pass/fail |
 | `/lsp-simulate` | `create_simulation_session`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session` | Speculative editing — test changes without touching the file; supports single edits, sessions, and chained multi-edit sequences |

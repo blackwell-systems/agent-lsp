@@ -5,6 +5,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (2026-04-09)
+- **`apply_edit` text-match mode** — new `file_path` + `old_text` + `new_text` parameter mode; finds `old_text` in the file (exact byte match first, then whitespace-normalised line match that tolerates indentation differences) and applies the replacement without requiring line/column positions; positional `workspace_edit` mode unchanged
+- **`lsp-edit-symbol` skill** — edit a named symbol without knowing its file or position; composes `get_workspace_symbols` → `get_document_symbols` → `apply_edit` to resolve the symbol name to its definition range and apply the edit; decision guide covers signature-only edits, full-body replacements, and ambiguous symbol disambiguation
+
 ### Changed (2026-04-09)
 - **Skill descriptions updated with trigger conditions** — all four skill `description` fields now include explicit "use when" clauses per the Claude Code skills spec, enabling automatic invocation when relevant. Descriptions trimmed to ≤250 chars (spec cap). Non-spec `compatibility` field moved to markdown body. `argument-hint` added to `lsp-rename` and `lsp-edit-export` for autocomplete UX.
 - **Skills migrated to Agent Skills directory format** — each skill is now a self-contained directory (`lsp-rename/SKILL.md`, `lsp-safe-edit/SKILL.md`, `lsp-edit-export/SKILL.md`, `lsp-verify/SKILL.md`) conforming to the [Agent Skills open spec](https://agentskills.io/specification). Flat `.md` files and shared `PATTERNS.md` removed. `patterns.md` duplicated into each skill's `references/` directory (spec requires self-contained skills). Frontmatter updated: `user-invocable` removed (not in spec), `allowed-tools` fixed to space-delimited, `compatibility` field added. `install.sh` updated to symlink skill directories to `~/.claude/skills/` instead of flat files.

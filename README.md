@@ -25,12 +25,13 @@ Language servers are the intelligence layer behind IDE features — go-to-defini
 
 ## Skills
 
-Seven agent-native skills compose lsp-mcp-go tools into single-command workflows:
+Eight agent-native skills compose lsp-mcp-go tools into single-command workflows:
 
 | Skill | Purpose |
 |-------|---------|
 | `/lsp-safe-edit` | Wrap any edit with before/after diagnostic diff |
 | `/lsp-edit-export` | Safe editing of exported symbols — finds all callers first |
+| `/lsp-edit-symbol` | Edit a named symbol without knowing its file or position |
 | `/lsp-rename` | Two-phase rename: preview all sites, confirm, then apply |
 | `/lsp-verify` | Full three-layer check: diagnostics + build + tests |
 | `/lsp-simulate` | Speculative editing — test changes without touching the file |

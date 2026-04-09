@@ -330,7 +330,10 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		InsertSpaces *bool `json:"insert_spaces,omitempty"`
 	}
 	type ApplyEditArgs struct {
-		Edit map[string]interface{} `json:"workspace_edit"`
+		Edit     map[string]interface{} `json:"workspace_edit,omitempty"`
+		FilePath string                 `json:"file_path,omitempty"`
+		OldText  string                 `json:"old_text,omitempty"`
+		NewText  string                 `json:"new_text,omitempty"`
 	}
 	type ExecuteCommandArgs struct {
 		Command   string        `json:"command"`
@@ -645,7 +648,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "apply_edit",
-		Description: "Apply a WorkspaceEdit to the workspace by writing file changes to disk. Pass the WorkspaceEdit object returned by rename_symbol or format_document. Edits are applied in reverse order to preserve offsets, then the LSP server is notified of each changed file via didChange. Use this after inspecting the edit returned by rename_symbol or format_document to commit the changes.",
+		Description: "Apply an edit to a file. Two modes: (1) WorkspaceEdit mode — pass workspace_edit with positional changes returned by rename_symbol or format_document; (2) Text-match mode — pass file_path + old_text + new_text to find and replace text without needing line/column positions. Text-match tries exact match first, then whitespace-normalised line match (handles indentation differences). Use text-match when AI-generated positions would be imprecise.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args ApplyEditArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleApplyEdit(ctx, cs.get(), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
