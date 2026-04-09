@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 )
 
 // ValidateFilePath resolves filePath to a clean absolute path and, when rootDir

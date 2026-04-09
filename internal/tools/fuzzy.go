@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/logging"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+	"github.com/blackwell-systems/agent-lsp/internal/logging"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // fuzzyPositionFallback retries a position-based lookup using workspace symbol

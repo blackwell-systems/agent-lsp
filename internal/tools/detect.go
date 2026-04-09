@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // lspServerDef describes a known language server.
@@ -142,7 +142,7 @@ type DetectedServer struct {
 	Language    string `json:"language"`
 	Server      string `json:"server"`
 	Path        string `json:"path"`
-	ConfigEntry string `json:"config_entry"` // ready-to-use arg for lsp-mcp-go
+	ConfigEntry string `json:"config_entry"` // ready-to-use arg for agent-lsp
 }
 
 // DetectResult is the response from HandleDetectLspServers.
@@ -157,7 +157,7 @@ type DetectResult struct {
 // HandleDetectLspServers scans the workspace for source languages and checks
 // PATH for the corresponding LSP server binaries. Returns the detected languages,
 // installed servers with their paths, and a suggested_config array ready to paste
-// into the lsp-mcp-go MCP server args.
+// into the agent-lsp MCP server args.
 //
 // Does not require start_lsp to have been called — the client parameter is unused.
 func HandleDetectLspServers(_ context.Context, _ *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
@@ -275,7 +275,7 @@ func HandleDetectLspServers(_ context.Context, _ *lsp.LSPClient, args map[string
 	return types.TextResult(string(data)), nil
 }
 
-// buildConfigEntry returns the lsp-mcp-go args string for a server definition.
+// buildConfigEntry returns the agent-lsp args string for a server definition.
 // Format: "language:binary" or "language:binary,arg1,arg2"
 func buildConfigEntry(def lspServerDef) string {
 	if len(def.Args) == 0 {
