@@ -5,6 +5,9 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed (2026-04-09)
+- **Skills migrated to Agent Skills directory format** — each skill is now a self-contained directory (`lsp-rename/SKILL.md`, `lsp-safe-edit/SKILL.md`, `lsp-edit-export/SKILL.md`, `lsp-verify/SKILL.md`) conforming to the [Agent Skills open spec](https://agentskills.io/specification). Flat `.md` files and shared `PATTERNS.md` removed. `patterns.md` duplicated into each skill's `references/` directory (spec requires self-contained skills). Frontmatter updated: `user-invocable` removed (not in spec), `allowed-tools` fixed to space-delimited, `compatibility` field added. `install.sh` updated to symlink skill directories to `~/.claude/skills/` instead of flat files.
+
 ### Added (2026-04-08) — LSP Skills wave
 
 - **`go_to_symbol` MCP tool** — navigate to any symbol by dot-notation path (e.g. `"MyClass.method"`, `"pkg.Function"`) without needing a file path or line/column; uses `GetWorkspaceSymbols` to find candidates and resolves to the definition location; supports optional `workspace_root` and `language` filters
