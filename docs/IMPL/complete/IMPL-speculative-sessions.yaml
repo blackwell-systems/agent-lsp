@@ -1,3 +1,4 @@
+completion_date: "2026-04-09"
 title: Speculative Code Sessions for lsp-mcp-go
 feature_slug: speculative-sessions
 verdict: SUITABLE
@@ -1024,5 +1025,5 @@ critic_report:
     summary: Skipped by operator
     reviewed_at: "2026-04-06T22:23:00Z"
     issue_count: 0
-state: REVIEWED
+state: COMPLETE
 injection_method: hook

@@ -31,3 +31,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-get-symbol-source.yaml
 - **offline-documentation**: completed 2026-04-09, 2 waves, 3 agents
   - IMPL doc: docs/IMPL/complete/IMPL-offline-documentation.yaml
+- **speculative-sessions**: completed 2026-04-09, 2 waves, 4 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-speculative-sessions.yaml
