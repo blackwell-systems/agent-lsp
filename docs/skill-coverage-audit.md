@@ -16,7 +16,9 @@
 
 **Sprint completed (P0):** `/lsp-cross-repo` shipped, `/lsp-local-symbols` shipped, `/lsp-rename` `prepare_rename` gate added, `/lsp-safe-edit` enhanced with `simulate_edit_atomic` pre-flight + `get_code_actions` on errors + multi-file protocol.
 
-**Remaining key gaps:** `format_document`/`format_range` (no skill drives formatting), `get_tests_for_file` (no test correlation skill), `go_to_type_definition` (no type introspection skill).
+**Sprint completed (P1):** `/lsp-verify` `get_tests_for_file` pre-step added, `/lsp-test-correlation` skill shipped, `/lsp-format-code` skill shipped, `format_document` folded into `/lsp-safe-edit` (post-edit) and `/lsp-verify` (post-verification).
+
+**Remaining key gaps:** `go_to_type_definition` (no type introspection skill), `get_signature_help` (no parameter discovery skill).
 
 ---
 
@@ -62,8 +64,8 @@
 |------|--------------|---------|-----|
 | `prepare_rename` | ~~(none)~~ → `lsp-rename` **(shipped)** | Safety gate before rename attempt | **Fixed:** `prepare_rename` is now Step 2 in `/lsp-rename`, before reference enumeration — validates position is renameable, catches built-ins and external packages |
 | `get_workspace_symbols` | `lsp-edit-symbol` | Symbol search by name | Mentioned only for Step 1; not the primary skill purpose |
-| `format_document` | (none) | Document formatting | No skill drives agent toward this |
-| `format_range` | (none) | Range formatting | No skill drives agent toward this |
+| ~~`format_document`~~ | ~~(none)~~ → `lsp-format-code`, `lsp-safe-edit`, `lsp-verify` **(shipped)** | Document formatting | **Fixed:** standalone `/lsp-format-code` skill + folded into `/lsp-safe-edit` post-edit and `/lsp-verify` post-verification |
+| ~~`format_range`~~ | ~~(none)~~ → `lsp-format-code` **(shipped)** | Range formatting | **Fixed:** covered by `/lsp-format-code` standalone skill |
 | `get_completions` | (none) | Code completion | No skill drives agent toward this |
 | `get_signature_help` | (none) | Function signature info | No skill drives agent toward this |
 | `simulate_chain` | `lsp-simulate` | Chained edits with per-step evaluation | Covered but as advanced workflow, not promoted |
@@ -544,22 +546,9 @@ Arguments: file_path, line, column (cursor inside argument list)
 
 ### High (P1)
 
-5. **Enhance `/lsp-verify`** to include `get_tests_for_file` correlation.
-   - Shows which tests cover the changed files
-   - Estimated effort: 2 hours
-   - Impact: Easier test debugging
-
-6. **Create `/lsp-test-correlation` skill**.
-   - Use case: "After editing file X, which tests do I need to run?"
-   - Tools: `get_tests_for_file`, `run_tests`, `get_workspace_symbols`
-   - Estimated effort: 3 hours
-   - Impact: Automates test selection for edited files
-
-7. **Create `/lsp-format-code` skill**.
-   - Use case: "Format this file / selection"
-   - Tools: `format_document`, `format_range`, `apply_edit`
-   - Estimated effort: 2 hours
-   - Impact: No agent workflow currently drives formatting
+5. ✅ **Enhance `/lsp-verify`** — `get_tests_for_file` pre-step added; correlated/unrelated failure tagging in Layer 3 output.
+6. ✅ **Create `/lsp-test-correlation` skill** — shipped; source→test mapping, `get_workspace_symbols` fallback, multi-file deduplication, scoped `run_tests`.
+7. ✅ **Create `/lsp-format-code` skill** — shipped; `format_document` and `format_range` → `apply_edit`; also folded as optional step into `/lsp-safe-edit` (post-edit) and `/lsp-verify` (post-verification).
 
 ### Medium (P2)
 
@@ -601,11 +590,10 @@ Arguments: file_path, line, column (cursor inside argument list)
 
 **Post-sprint state:** ~70% of tools covered by 12 skills. P0 sprint completed all four items: `/lsp-cross-repo`, `/lsp-local-symbols`, `/lsp-rename` `prepare_rename` gate, and full `/lsp-safe-edit` enhancement.
 
-**Remaining gaps (P1–P2):**
-1. Test correlation — `get_tests_for_file` still uncovered; `/lsp-test-correlation` skill or `/lsp-verify` enhancement
-2. Code formatting — `format_document`/`format_range` still uncovered; `/lsp-format-code` skill
-3. Type introspection — `go_to_type_definition` still uncovered; `/lsp-type-info` skill or `/lsp-docs` enhancement
-4. Document low-level utilities (`close_document`, `restart_lsp_server`, `set_log_level`, etc.) without promoting to skills
+**P1 complete.** Remaining gaps (P2):
+1. Type introspection — `go_to_type_definition` still uncovered; `/lsp-type-info` skill or `/lsp-docs` enhancement
+2. Parameter discovery — `get_signature_help` still uncovered; `/lsp-signature-help` skill (narrow but useful)
+3. Document low-level utilities (`close_document`, `restart_lsp_server`, `set_log_level`, etc.) without promoting to skills
 
-**Remaining skills to ship:** 3–4 (P1: test correlation, formatting; P2: type info, signature help).
+**Remaining skills to ship:** 1–2 (P2: type info, optional signature help).
 
