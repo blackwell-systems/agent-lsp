@@ -1,3 +1,4 @@
+completion_date: "2026-04-08"
 title: Agent-Native Skills and Improved Primitives for lsp-mcp-go
 feature_slug: lsp-skills
 verdict: SUITABLE
@@ -1188,6 +1189,6 @@ critic_report:
     summary: 'All issues corrected by Orchestrator before wave launch: (1) Agent A brief updated to use sym.ContainerName != nil && *sym.ContainerName == parent for correct *string comparison. (2) Agent D and E briefs corrected from "Wave 2 Agent G" to "Wave 3 Agent G". All checks pass.'
     reviewed_at: "2026-04-09T04:30:02Z"
     issue_count: 0
-state: REVIEWED
+state: COMPLETE
 original_branch: develop
 injection_method: hook

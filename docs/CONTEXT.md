@@ -21,3 +21,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-build-tool-integration.yaml
 - **build-tool-dispatch-expansion**: completed 2026-04-08, 1 waves, 3 agents
   - IMPL doc: docs/IMPL/complete/IMPL-build-tool-dispatch-expansion.yaml
+- **lsp-skills**: completed 2026-04-08, 4 waves, 9 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-lsp-skills.yaml
