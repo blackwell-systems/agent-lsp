@@ -1049,6 +1049,6 @@ critic_report:
     summary: Skipped by operator (--skip-critic)
     reviewed_at: "2026-04-09T15:04:20Z"
     issue_count: 0
-state: SCOUT_PENDING
+state: "REVIEWED"
 original_branch: develop
 injection_method: manual-fallback
