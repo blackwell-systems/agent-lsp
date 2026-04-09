@@ -2519,20 +2519,22 @@ passing the line/column manually, but robust to line number drift.
 
 ## Skills
 
-Ten agent-native skills compose agent-lsp tools into single-command
+Twelve agent-native skills compose agent-lsp tools into single-command
 workflows. Install with `cd skills && ./install.sh`.
 
 | Skill | Tools used | Purpose |
 |-------|-----------|---------|
-| `/lsp-safe-edit` | `create_simulation_session`, `simulate_edit_atomic`, `get_diagnostics` | Wrap any edit with a before/after diagnostic diff — shows errors introduced or resolved |
+| `/lsp-safe-edit` | `simulate_edit_atomic`, `get_diagnostics`, `get_code_actions`, `apply_edit` | Speculative preview before disk write (`simulate_edit_atomic`); before/after diagnostic diff; surfaces code actions on introduced errors; handles multi-file edits |
 | `/lsp-edit-export` | `get_references`, `get_info_on_location`, `simulate_edit_atomic` | Safe editing of exported symbols — finds all callers first, then validates the edit |
 | `/lsp-edit-symbol` | `get_workspace_symbols`, `get_document_symbols`, `apply_edit` | Edit a named symbol without knowing its file or position — resolves name to definition, retrieves full range, applies edit |
-| `/lsp-rename` | `prepare_rename`, `rename_symbol` (dry_run), `apply_edit` | Two-phase rename: preview all rename sites, confirm, then apply atomically |
+| `/lsp-rename` | `prepare_rename`, `rename_symbol` (dry_run), `apply_edit`, `get_diagnostics` | Two-phase rename: `prepare_rename` validates position first, then preview all sites, confirm, apply atomically |
 | `/lsp-verify` | `get_diagnostics`, `run_build`, `run_tests` | Full three-layer check: LSP diagnostics + build + tests — summarizes pass/fail |
 | `/lsp-simulate` | `create_simulation_session`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session` | Speculative editing — test changes without touching the file; supports single edits, sessions, and chained multi-edit sequences |
 | `/lsp-impact` | `get_references`, `call_hierarchy`, `type_hierarchy` | Blast-radius analysis before renaming or deleting — maps all callers, implementors, and subtypes |
 | `/lsp-dead-code` | `get_document_symbols`, `get_references` | Detect zero-reference exports and unreachable symbols across a file or workspace |
 | `/lsp-implement` | `go_to_implementation`, `type_hierarchy` | Find all concrete implementations of an interface or abstract type — capability pre-check, risk assessment (0 = likely unused, >10 = breaking API change) |
 | `/lsp-docs` | `get_info_on_location`, `get_symbol_documentation`, `go_to_definition`, `get_symbol_source` | Three-tier documentation lookup: hover → offline toolchain doc → source definition |
+| `/lsp-cross-repo` | `add_workspace_folder`, `list_workspace_folders`, `get_references`, `go_to_implementation`, `call_hierarchy` | Multi-root cross-repo analysis — add a consumer repo and find all callers, references, and implementations of a library symbol across both repos |
+| `/lsp-local-symbols` | `get_document_symbols`, `get_document_highlights`, `get_info_on_location` | File-scoped analysis — list all symbols in a file, find all usages of a symbol within the file (faster than workspace search), get type info |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.
