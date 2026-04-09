@@ -1,6 +1,6 @@
-# lsp-mcp Tool Reference
+# agent-lsp Tool Reference
 
-All 45 tools exposed by the lsp-mcp MCP server. Coordinates are **1-based** for
+All 47 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
 both `line` and `column` in every tool call; the server converts internally to
 the 0-based values the LSP spec requires.
 
@@ -21,6 +21,7 @@ workspace root at runtime.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `root_dir` | string | yes | Absolute path to the workspace root (directory containing `package.json`, `go.mod`, `go.work`, etc.) |
+| `language_id` | string | no | In multi-server mode, selects a specific configured server (e.g. `"go"` targets gopls, `"typescript"` targets tsserver). Without this, all configured servers are started. Use `get_server_capabilities` to diagnose which server is active. |
 
 **Example call**
 
@@ -551,6 +552,7 @@ methods, etc.) via `textDocument/documentSymbol`. Returns a hierarchical
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
 | `language_id` | string | yes | Language identifier |
+| `format` | string | no | `"json"` (default) returns the full DocumentSymbol tree. `"outline"` returns a compact Markdown representation (`name [Kind] :line`, indented for children) — ~5x fewer tokens; useful for structural surveys before targeted navigation. |
 
 **Example call**
 
@@ -605,8 +607,7 @@ Symbol `kind` values: `4`=Constructor, `5`=Class, `6`=Method, `7`=Property,
 **Notes**
 
 - Returns `[]` if the server does not declare `documentSymbolProvider`.
-- Coordinates in the output are 0-based (LSP native); add 1 when passing them
-  to other tools.
+- Coordinates in the output are **1-based** — the tool shifts all `range` and `selectionRange` values by +1 before returning, including in nested `children`. Pass them directly to other tools without adjustment.
 
 ---
 
@@ -1188,7 +1189,12 @@ Pass the object returned by `rename_symbol`, `format_document`, or
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `workspace_edit` | object | yes | A `WorkspaceEdit` with either `changes` (Record&lt;uri, TextEdit[]&gt;) or `documentChanges` (TextDocumentEdit[]) |
+| `workspace_edit` | object | — | A `WorkspaceEdit` with either `changes` (Record&lt;uri, TextEdit[]&gt;) or `documentChanges` (TextDocumentEdit[]). Required when using positional mode. |
+| `file_path` | string | — | **Text-match mode:** absolute path to the file to edit. Use with `old_text`+`new_text` instead of `workspace_edit`. |
+| `old_text` | string | — | **Text-match mode:** exact text to find and replace. First tries exact byte match; falls back to whitespace-normalised line match (tolerates indentation differences). |
+| `new_text` | string | — | **Text-match mode:** replacement text. |
+
+Use either `workspace_edit` (positional mode, for edits returned by `rename_symbol`/`format_document`) or the `file_path`+`old_text`+`new_text` triple (text-match mode, for AI-generated edits where exact line/column are unknown).
 
 **Example call** — applying a rename edit
 
@@ -1376,6 +1382,10 @@ Log level set to: warning
   Useful in production to reduce noise.
 - This affects the MCP server's own logging only, not the underlying language
   server's verbosity.
+- Log messages are delivered as MCP `notifications/message` events to the connected
+  client (not just stderr) — you will see LSP lifecycle events, tool dispatch errors,
+  and indexing state directly in the session. Before session init, messages fall back
+  to stderr.
 
 ---
 
@@ -2336,6 +2346,54 @@ line/column required. Useful when you know a symbol name but not its location.
 
 ---
 
+### `get_symbol_source`
+
+Return the source code of the innermost symbol (function, method, struct, class,
+etc.) whose range contains a given cursor position. Composes
+`textDocument/documentSymbol` + file read — no new LSP methods required.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | Absolute path to the file |
+| `language_id` | string | no | Language identifier (used for document open) |
+| `line` | number | no | 1-based line number of the cursor position |
+| `character` | number | no | 1-based character offset of the cursor (aliased from `column`) |
+| `position_pattern` | string | no | `@@`-syntax pattern for cursor placement (see Position-pattern section) |
+
+**Example call**
+
+```json
+{
+  "file_path": "/Users/dayna.blackwell/code/myproject/main.go",
+  "language_id": "go",
+  "line": 12,
+  "character": 5
+}
+```
+
+**Actual output**
+
+```json
+{
+  "symbol_name": "handleRequest",
+  "symbol_kind": "Function",
+  "start_line": 10,
+  "end_line": 18,
+  "source": "func handleRequest(w http.ResponseWriter, r *http.Request) {\n\t// ...\n}"
+}
+```
+
+**Notes**
+
+- `findInnermostSymbol` walks the DocumentSymbol tree recursively and returns the deepest symbol whose range contains the cursor — so clicking inside a method body returns the method, not the enclosing class.
+- `start_line` and `end_line` are 1-based.
+- Provide `line`+`character`, or `position_pattern` with `@@` — at least one position input is required.
+- CI-verified across all 22 languages via `testGetSymbolSource`.
+
+---
+
 ### `get_symbol_documentation`
 
 Fetch authoritative documentation for a named symbol from local toolchain
@@ -2461,7 +2519,7 @@ passing the line/column manually, but robust to line number drift.
 
 ## Skills
 
-Eight agent-native skills compose agent-lsp tools into single-command
+Ten agent-native skills compose agent-lsp tools into single-command
 workflows. Install with `cd skills && ./install.sh`.
 
 | Skill | Tools used | Purpose |
@@ -2474,6 +2532,7 @@ workflows. Install with `cd skills && ./install.sh`.
 | `/lsp-simulate` | `create_simulation_session`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session` | Speculative editing — test changes without touching the file; supports single edits, sessions, and chained multi-edit sequences |
 | `/lsp-impact` | `get_references`, `call_hierarchy`, `type_hierarchy` | Blast-radius analysis before renaming or deleting — maps all callers, implementors, and subtypes |
 | `/lsp-dead-code` | `get_document_symbols`, `get_references` | Detect zero-reference exports and unreachable symbols across a file or workspace |
+| `/lsp-implement` | `go_to_implementation`, `type_hierarchy` | Find all concrete implementations of an interface or abstract type — capability pre-check, risk assessment (0 = likely unused, >10 = breaking API change) |
 | `/lsp-docs` | `get_info_on_location`, `get_symbol_documentation`, `go_to_definition`, `get_symbol_source` | Three-tier documentation lookup: hover → offline toolchain doc → source definition |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.

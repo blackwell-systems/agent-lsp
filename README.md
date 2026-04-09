@@ -4,8 +4,8 @@
 [![CI](https://github.com/blackwell-systems/agent-lsp/actions/workflows/ci.yml/badge.svg)](https://github.com/blackwell-systems/agent-lsp/actions)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 [![Languages](https://img.shields.io/badge/languages-22_CI--verified-brightgreen.svg)](#multi-language-support)
-[![Tools](https://img.shields.io/badge/tools-45-blue.svg)](#tools)
-[![CI Coverage](https://img.shields.io/badge/CI--verified_tools-28%2F45-brightgreen.svg)](#tools)
+[![Tools](https://img.shields.io/badge/tools-47-blue.svg)](#tools)
+[![CI Coverage](https://img.shields.io/badge/CI--verified_tools-28%2F47-brightgreen.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Agent Skills](assets/badge-agentskills.svg)](https://agentskills.io)
 
@@ -13,7 +13,7 @@ agent-lsp is a stateful runtime over real language servers — not a bridge. It 
 
 Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships.
 
-**45 tools** across navigation, analysis, refactoring, and formatting — **28 CI-verified** end-to-end against real language servers across **22 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+**47 tools** across navigation, analysis, refactoring, and formatting — **28 CI-verified** end-to-end against real language servers across **22 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
 **Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One agent-lsp process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright — no reconfiguration when you switch projects.
 
@@ -25,7 +25,7 @@ Language servers are the intelligence layer behind IDE features — go-to-defini
 
 ## Skills
 
-Nine agent-native skills compose agent-lsp tools into single-command workflows:
+Ten agent-native skills compose agent-lsp tools into single-command workflows:
 
 | Skill | Purpose |
 |-------|---------|
@@ -38,6 +38,7 @@ Nine agent-native skills compose agent-lsp tools into single-command workflows:
 | `/lsp-impact` | Blast-radius analysis before renaming or deleting a symbol |
 | `/lsp-dead-code` | Detect zero-reference exports and unreachable symbols |
 | `/lsp-implement` | Find all concrete implementations of an interface or abstract type |
+| `/lsp-docs` | Three-tier documentation lookup: hover → offline toolchain (`go doc`, `pydoc`) → source |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.
 
@@ -45,12 +46,9 @@ Skills work with any MCP client that supports tool use, not just Claude Code.
 cd skills && ./install.sh
 ```
 
-### New tools
+### Recent additions
 
-Three new features were added to the MCP tools in this wave:
-a symbol-path navigation tool, a position-pattern cursor syntax using @@,
-and a dry-run preview mode for the rename tool. See docs/tools.md
-for parameter details.
+`get_symbol_source` returns the full source text of the innermost symbol at a position — functions, methods, structs, and classes — directly from the language server index without reading files into context. `get_symbol_documentation` dispatches to the language toolchain (`go doc`, `pydoc`, `cargo doc`) for offline documentation when hover results are incomplete. MCP log notifications are now forwarded to the connected client via `notifications/message` using the standard logging level protocol. See [docs/tools.md](./docs/tools.md) for parameter details.
 
 ## Installation
 
@@ -125,14 +123,14 @@ Once your AI session opens, call `start_lsp` with your project root to initializ
 start_lsp(root_dir="/your/project")
 ```
 
-Then use any of the 45 tools. The session persists — no need to restart when switching files.
+Then use any of the 47 tools. The session persists — no need to restart when switching files.
 
 ## Why agent-lsp
 
 | | agent-lsp | other MCP-LSP implementations |
 |--|---------|---------------------|
 | Languages (CI-verified) | **22** (end-to-end integration tests) | config-listed, untested |
-| Tools | **45** | 3–18 |
+| Tools | **47** | 3–18 |
 | Multi-server routing | **✓** (one process, many languages) | varies |
 | LSP spec compliance | **3.17, built to spec** | ad hoc |
 | Connection model | **persistent** (warm index) | per-request or cold-start |
@@ -158,7 +156,7 @@ Then use any of the 45 tools. The session persists — no need to restart when s
 
 ## Multi-Language Support
 
-Every language below is integration-tested on every CI run with a real language server binary and a real fixture codebase. The test harness verifies **Tier 1** (`start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`) and **Tier 2** (26 tools including navigation, analysis, refactoring, workspace, and session lifecycle) for each language. No other MCP-LSP implementation has an equivalent test matrix — competitors list supported languages in config examples but do not run integration tests against them.
+Every language below is integration-tested on every CI run with a real language server binary and a real fixture codebase. The test harness verifies **Tier 1** (`start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`) and **Tier 2** (27 tools including navigation, analysis, refactoring, workspace, and session lifecycle) for each language. No other MCP-LSP implementation has an equivalent test matrix — competitors list supported languages in config examples but do not run integration tests against them.
 
 Tier 2 results per language from the latest CI run:
 
