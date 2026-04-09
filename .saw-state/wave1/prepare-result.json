@@ -3,31 +3,41 @@
   "worktrees": [
     {
       "agent": "A",
-      "path": "/Users/dayna.blackwell/workspace/code/lsp-mcp-go/.claude/worktrees/saw/lsp-skills/wave1-agent-A",
-      "branch": "saw/lsp-skills/wave1-agent-A"
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-skills-wave2/wave1-agent-A",
+      "branch": "saw/lsp-skills-wave2/wave1-agent-A"
     },
     {
       "agent": "B",
-      "path": "/Users/dayna.blackwell/workspace/code/lsp-mcp-go/.claude/worktrees/saw/lsp-skills/wave1-agent-B",
-      "branch": "saw/lsp-skills/wave1-agent-B"
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-skills-wave2/wave1-agent-B",
+      "branch": "saw/lsp-skills-wave2/wave1-agent-B"
+    },
+    {
+      "agent": "C",
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-skills-wave2/wave1-agent-C",
+      "branch": "saw/lsp-skills-wave2/wave1-agent-C"
     }
   ],
   "agent_briefs": [
     {
       "agent": "A",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/lsp-mcp-go/.claude/worktrees/saw/lsp-skills/wave1-agent-A/.saw-agent-brief.md",
-      "brief_length": 7133,
-      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave1/agent-A",
-      "files_owned": 2,
-      "repo": "lsp-mcp-go"
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-skills-wave2/wave1-agent-A/.saw-agent-brief.md",
+      "brief_length": 14781,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-A",
+      "files_owned": 2
     },
     {
       "agent": "B",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/lsp-mcp-go/.claude/worktrees/saw/lsp-skills/wave1-agent-B/.saw-agent-brief.md",
-      "brief_length": 7015,
-      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave1/agent-B",
-      "files_owned": 2,
-      "repo": "lsp-mcp-go"
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-skills-wave2/wave1-agent-B/.saw-agent-brief.md",
+      "brief_length": 14559,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-B",
+      "files_owned": 2
+    },
+    {
+      "agent": "C",
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-skills-wave2/wave1-agent-C/.saw-agent-brief.md",
+      "brief_length": 15349,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-C",
+      "files_owned": 2
     }
   ],
   "steps": [
@@ -53,8 +63,8 @@
     },
     {
       "step": "critic_verdict",
-      "status": "skipped",
-      "detail": "threshold not met — critic review not required"
+      "status": "success",
+      "detail": "critic review passed"
     },
     {
       "step": "stale_cleanup",
@@ -124,7 +134,7 @@
     {
       "step": "create_worktrees",
       "status": "success",
-      "detail": "created 2 worktree(s)"
+      "detail": "created 3 worktree(s)"
     },
     {
       "step": "workspace_setup",
@@ -139,7 +149,7 @@
     {
       "step": "extract_briefs",
       "status": "success",
-      "detail": "prepared 2 agent(s)"
+      "detail": "prepared 3 agent(s)"
     }
   ],
   "success": false

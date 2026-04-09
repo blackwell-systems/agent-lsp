@@ -8,16 +8,16 @@
  */
 class Person {
 public:
-    std::string name;
-    int age;
+  std::string name;
+  int age;
 
-    Person(const std::string& name, int age);
+  Person(const std::string &name, int age);
 };
 
 /**
  * Create a person with the given name and age.
  */
-Person create_person(const std::string& name, int age);
+Person create_person(const std::string &name, int age);
 
 int add(int x, int y);
 

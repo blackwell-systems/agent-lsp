@@ -1,7 +1,7 @@
 package main
 
 import "fmt"
-   
+
 // Person represents a person with a name and age.
 type Person struct {
 	Name string
