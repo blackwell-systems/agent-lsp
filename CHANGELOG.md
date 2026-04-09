@@ -27,7 +27,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - **`go_to_symbol` MCP tool** — navigate to any symbol by dot-notation path (e.g. `"MyClass.method"`, `"pkg.Function"`) without needing a file path or line/column; uses `GetWorkspaceSymbols` to find candidates and resolves to the definition location; supports optional `workspace_root` and `language` filters
 - **Position-pattern parameter (`position_pattern`)** — `@@` cursor marker syntax for position-based tools; `ResolvePositionPattern` searches file content for the pattern and returns the 1-indexed line/col of the character immediately after `@@`; `ExtractPositionWithPattern` integrates with existing `extractPosition` fallback; field added to `GetInfoOnLocationArgs`, `GetReferencesArgs`, `GoToDefinitionArgs`, and `RenameSymbolArgs`
 - **Dry-run preview mode for `rename_symbol`** — `dry_run: true` returns a preview envelope `{ "workspace_edit": {...}, "preview": { "note": "..." } }` without writing to disk; existing behavior unchanged when `dry_run` is omitted or false
-- **Four agent-native skills** — `lsp-safe-edit`, `lsp-edit-export`, `lsp-rename`, `lsp-verify`; compose lsp-mcp-go tools into single-command workflows for safe editing, exported-symbol refactoring, two-phase rename, and full diagnostic+build+test verification
+- **Four agent-native skills** — `lsp-safe-edit`, `lsp-edit-export`, `lsp-rename`, `lsp-verify`; compose agent-lsp tools into single-command workflows for safe editing, exported-symbol refactoring, two-phase rename, and full diagnostic+build+test verification
 - **`skills/install.sh`** — executable install script for registering skills with MCP clients
 
 ## [Unreleased]
@@ -72,7 +72,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ### Added
 - Auto-infer workspace root from file path — all per-file `mcp__lsp__*` tools now automatically walk up from the file path to find a workspace root marker (`go.mod`, `package.json`, `Cargo.toml`, `pyproject.toml`, `setup.py`, `.git`) and initialize the correct LSP client if none is active; `start_lsp` is no longer required before first use
   - `internal/config.InferWorkspaceRoot(filePath)` — exported helper, walks directory tree upward checking markers in priority order
-  - `cmd/lsp-mcp-go/server.go` — all 17 per-file tool handlers wrapped with `clientForFileWithAutoInit`; double-checked locking ensures thread-safe single initialization per workspace root
+  - `cmd/agent-lsp/server.go` — all 17 per-file tool handlers wrapped with `clientForFileWithAutoInit`; double-checked locking ensures thread-safe single initialization per workspace root
 
 
 - Tests for `Destroy` (session removal + not-found error), `ApplyEdit` terminal and dirty guards, and `languageToExtension` (all 10 named cases + default fallback) — previously only the `"go"` case was exercised
@@ -119,7 +119,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - Test error logging for `open_document` and `get_diagnostics` now extracts text from `Content[0]` instead of printing the raw slice address
 
 ### Added
-- Multi-server routing — single `lsp-mcp-go` process manages multiple language servers; routes tool calls to the correct server by file extension. Supports inline arg-pairs (`go:gopls typescript:tsserver,--stdio`) and `--config lsp-mcp.json`; backward-compatible with existing single-server invocation
+- Multi-server routing — single `agent-lsp` process manages multiple language servers; routes tool calls to the correct server by file extension. Supports inline arg-pairs (`go:gopls typescript:tsserver,--stdio`) and `--config agent-lsp.json`; backward-compatible with existing single-server invocation
 - `call_hierarchy` tool — single tool with `direction: "incoming" | "outgoing" | "both"` (default: both); hides the two-step LSP prepare/query protocol behind one call; returns typed JSON with `items`, `incoming`, `outgoing`
 - Fuzzy position fallback for `go_to_definition` and `get_references` — when a direct position lookup returns empty, falls back to workspace symbol search by hover name and retries at each candidate; handles AI assistant position imprecision without correctness regression
 - Path traversal prevention — `ValidateFilePath` in `WithDocument` resolves all `..` components and verifies the result is within the workspace root; stores `rootDir` on `LSPClient` (set during `Initialize`)
@@ -150,7 +150,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - Initial Go port of LSP-MCP — full 1:1 implementation with TypeScript reference
 - All 24 tools: session (4), analysis (7), navigation (5), refactoring (6), utilities (2)
 - `WithDocument[T]` generic helper — Go equivalent of the TypeScript `withDocument` pattern
-- Single binary distribution via `go install github.com/blackwell-systems/lsp-mcp-go@latest`
+- Single binary distribution via `go install github.com/blackwell-systems/agent-lsp@latest`
 - Buffer-based LSP message framing with byte-accurate `Content-Length` parsing (no UTF-8/UTF-16 mismatch)
 - `WaitForDiagnostics` with 500ms stabilisation window
 - `WaitForFileIndexed` with 1500ms stability window — lets gopls finish cross-package indexing before issuing `get_references`
