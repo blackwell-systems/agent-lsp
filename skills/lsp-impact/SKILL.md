@@ -1,0 +1,181 @@
+---
+name: lsp-impact
+description: Blast-radius analysis for a symbol — shows all callers, type supertypes/subtypes, and reference count before you change it. Use when refactoring, deleting, or changing the signature of any function, type, or method.
+argument-hint: "[symbol-name]"
+allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__call_hierarchy mcp__lsp__type_hierarchy mcp__lsp__get_references mcp__lsp__get_server_capabilities
+---
+
+> Requires the lsp-mcp-go MCP server.
+
+# lsp-impact
+
+Blast-radius analysis for any symbol. Discovers all direct references, callers
+(via call hierarchy), and type relationships before you touch anything.
+Read-only — does not modify any files.
+
+Run this skill **before** lsp-edit-export: impact tells you what exists and how
+widespread the change is; lsp-edit-export tells you how to execute the change safely.
+
+**Invocation:** User provides `symbol_name` in dot notation (e.g. `"codec.Encode"`,
+`"Buffer.Reset"`). Optionally provide `workspace_root` to scope the search.
+
+---
+
+## Prerequisites
+
+If LSP is not yet initialized, call `mcp__lsp__start_lsp` with the workspace
+root first.
+
+Check what the server supports before proceeding — `call_hierarchy` and
+`type_hierarchy` are optional LSP features not implemented by all servers:
+
+```
+mcp__lsp__get_server_capabilities()
+```
+
+Note which tools appear in `supported_tools`. Steps 3 and 4 below depend on
+this result.
+
+---
+
+## Step 1 — Locate the symbol
+
+Use `go_to_symbol` with the symbol name provided by the user:
+
+```
+mcp__lsp__go_to_symbol({
+  "symbol_path": "Package.SymbolName",
+  "workspace_root": "/abs/path"   // optional, narrows scope
+})
+→ returns: file, line, column (1-indexed)
+```
+
+`symbol_path` uses dot notation. For a top-level function `Encode` in package
+`codec`, use `"codec.Encode"`. For a method `Reset` on type `Buffer`, use
+`"Buffer.Reset"`.
+
+Record the returned `file`, `line`, and `column` — you will pass them to
+every subsequent step.
+
+---
+
+## Step 2 — Enumerate all direct references (always available)
+
+Call `get_references` with `include_declaration: false` to find every usage
+site across the workspace:
+
+```
+mcp__lsp__get_references({
+  "file_path": "<file from Step 1>",
+  "position_pattern": "func @@SymbolName(",   // adjust prefix for symbol kind
+  "include_declaration": false
+})
+```
+
+Collect all reference locations. Group results by file. Record the total count
+and list of files — these feed the Impact Report.
+
+See [references/patterns.md](references/patterns.md) for `position_pattern`
+examples by language and symbol kind.
+
+---
+
+## Step 3 — Call hierarchy (callers and callees)
+
+Only if `call_hierarchy` appears in `supported_tools` from Step 0.
+
+```
+mcp__lsp__call_hierarchy({
+  "file_path": "<file from Step 1>",
+  "line": <line from Step 1>,
+  "column": <column from Step 1>,
+  "direction": "incoming"   // use "both" if callees are also needed
+})
+```
+
+If `call_hierarchy` is **not** in `supported_tools`, skip this step entirely.
+Note `"call hierarchy not supported by this server"` in the Impact Report.
+
+---
+
+## Step 4 — Type hierarchy (supertypes and subtypes)
+
+Only applicable when the symbol is a **type, interface, or class** (not a
+plain function or method). Only if `type_hierarchy` appears in `supported_tools`.
+
+```
+mcp__lsp__type_hierarchy({
+  "file_path": "<file from Step 1>",
+  "line": <line from Step 1>,
+  "column": <column from Step 1>,
+  "direction": "both"
+})
+```
+
+If the symbol is a **function or method**: skip this step; note
+`"not applicable (function)"` in the report.
+
+If `type_hierarchy` is **not** in `supported_tools`: skip this step; note
+`"not supported by this server"` in the report.
+
+---
+
+## Step 5 — Report impact surface
+
+Produce the Impact Report using the format defined in
+[references/patterns.md](references/patterns.md).
+
+Include:
+
+- Symbol name, kind, and definition location
+- Reference count and list of files containing references
+- Callers from `call_hierarchy` incoming (or skip note)
+- Supertypes and subtypes from `type_hierarchy` (or skip note)
+- Blast radius: count of distinct files affected
+
+Then apply the decision guide:
+
+| Blast radius | Recommendation |
+|---|---|
+| 0 references | Likely dead code. Confirm with lsp-dead-code before deleting. |
+| 1–5 files | Low risk. Proceed. Update all callers. |
+| 6–20 files | Medium risk. Plan changes carefully. Stage in waves. |
+| > 20 files | High risk. Consider a deprecation path or feature flag. |
+
+---
+
+## Example
+
+```
+Goal: assess blast radius of exported function `ParseConfig` in pkg/config
+
+Prerequisites — get_server_capabilities:
+  → supported_tools: [go_to_symbol, get_references, call_hierarchy, ...]
+  → type_hierarchy: not in supported_tools
+
+Step 1 — go_to_symbol: symbol_path="config.ParseConfig"
+  → pkg/config/parser.go:42:6
+
+Step 2 — get_references: position_pattern="func @@ParseConfig("
+  → 7 references in 4 files
+  → cmd/main.go, internal/app.go, internal/loader.go, pkg/config/parser_test.go
+
+Step 3 — call_hierarchy: direction="incoming"
+  → callers: cmd.main (cmd/main.go:14), app.Start (internal/app.go:31), ...
+
+Step 4 — type_hierarchy: skipped (function), also not supported by server
+
+Step 5 — Impact Report:
+  ## Impact Report: ParseConfig
+  - Kind:         function
+  - Definition:   pkg/config/parser.go:42:6
+  - References:   7 across 4 files
+  ...
+  - Risk level:   low
+```
+
+## Note on position_pattern
+
+`position_pattern` with `@@` is a lsp-mcp-go extension. If your MCP client
+does not support it, fall back to explicit `line` and `column` parameters from
+the location returned by `go_to_symbol` in Step 1.
