@@ -35,10 +35,10 @@ Twelve skills ship with agent-lsp:
 
 | Skill | Purpose |
 |-------|---------|
-| `/lsp-safe-edit` | Wrap any edit with before/after diagnostic diff |
+| `/lsp-safe-edit` | Speculative preview before disk write, then before/after diagnostic diff; surfaces code actions on introduced errors; multi-file aware |
 | `/lsp-edit-export` | Safe editing of exported symbols — finds all callers first |
 | `/lsp-edit-symbol` | Edit a named symbol without knowing its file or position |
-| `/lsp-rename` | Two-phase rename: preview all sites, confirm, then apply |
+| `/lsp-rename` | `prepare_rename` safety gate, preview all sites, confirm, then apply atomically |
 | `/lsp-verify` | Full three-layer check: diagnostics + build + tests; apply code actions on errors |
 | `/lsp-simulate` | Speculative editing — test changes without touching the file |
 | `/lsp-impact` | Blast-radius analysis before renaming or deleting a symbol |
@@ -56,7 +56,11 @@ cd skills && ./install.sh
 
 ### Recent additions
 
-`get_symbol_source` returns the full source text of the innermost symbol at a position — functions, methods, structs, and classes — directly from the language server index without reading files into context. `get_symbol_documentation` dispatches to the language toolchain (`go doc`, `pydoc`, `cargo doc`) for offline documentation when hover results are incomplete. MCP log notifications are now forwarded to the connected client via `notifications/message` using the standard logging level protocol. See [docs/tools.md](./docs/tools.md) for parameter details.
+**Tools:** `get_symbol_source` (source text of the innermost symbol at a position without loading files into context), `get_symbol_documentation` (offline toolchain docs via `go doc`, `pydoc`, `cargo doc` for dependencies not indexed by LSP), MCP log notifications forwarded to the client via `notifications/message`.
+
+**Skills:** `/lsp-cross-repo` (multi-root workspace analysis for library + consumer workflows), `/lsp-local-symbols` (file-scoped symbol search and type info, faster than workspace-wide references). `prepare_rename` safety gate added to `/lsp-rename`. `/lsp-safe-edit` now previews changes speculatively before touching disk and surfaces code actions on introduced errors.
+
+See [docs/tools.md](./docs/tools.md) for full parameter details.
 
 ## Installation
 
