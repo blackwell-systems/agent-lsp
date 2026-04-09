@@ -7,6 +7,7 @@
 [![Tools](https://img.shields.io/badge/tools-45-blue.svg)](#tools)
 [![CI Coverage](https://img.shields.io/badge/CI--verified_tools-28%2F45-brightgreen.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Agent Skills](assets/badge-agentskills.svg)](https://agentskills.io)
 
 Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships.
 
