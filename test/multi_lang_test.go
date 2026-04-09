@@ -92,16 +92,16 @@ func testDir(t *testing.T) string {
 	return filepath.Dir(filename)
 }
 
-// getMultilangBinary builds the lsp-mcp-go binary once and returns its path.
+// getMultilangBinary builds the agent-lsp binary once and returns its path.
 // Returns empty string if build fails.
 func getMultilangBinary(t *testing.T) string {
 	t.Helper()
 	multilangBinaryOnce.Do(func() {
-		tmp, err := os.MkdirTemp("", "lsp-mcp-go-multi-*")
+		tmp, err := os.MkdirTemp("", "agent-lsp-multi-*")
 		if err != nil {
 			return
 		}
-		p := filepath.Join(tmp, "lsp-mcp-go")
+		p := filepath.Join(tmp, "agent-lsp")
 		// test/multi_lang_test.go → test/ → repo root (two levels up)
 		_, filename, _, ok := runtime.Caller(0)
 		if !ok {
@@ -109,12 +109,12 @@ func getMultilangBinary(t *testing.T) string {
 		}
 		testFileDir := filepath.Dir(filename)
 		repoRoot := filepath.Dir(testFileDir)
-		cmd := exec.Command("go", "build", "-o", p, "./cmd/lsp-mcp-go")
+		cmd := exec.Command("go", "build", "-o", p, "./cmd/agent-lsp")
 		cmd.Env = append(os.Environ(), "GOWORK=off")
 		cmd.Dir = repoRoot
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to build lsp-mcp-go: %v\n%s\n", err, out)
+			fmt.Fprintf(os.Stderr, "failed to build agent-lsp: %v\n%s\n", err, out)
 			return
 		}
 		multilangBinaryPath = p
@@ -2040,7 +2040,7 @@ func TestMultiLanguage(t *testing.T) {
 	fixtureBase := filepath.Join(testDir(t), "fixtures")
 	binaryPath := getMultilangBinary(t)
 	if binaryPath == "" {
-		t.Skip("failed to build lsp-mcp-go binary")
+		t.Skip("failed to build agent-lsp binary")
 	}
 
 	languages := buildLanguageConfigs(fixtureBase)

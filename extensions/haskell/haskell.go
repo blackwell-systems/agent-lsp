@@ -1,8 +1,8 @@
 package haskell
 
 import (
-	"github.com/blackwell-systems/lsp-mcp-go/internal/extensions"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/extensions"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 func init() {

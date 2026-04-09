@@ -9,13 +9,13 @@ import (
 	"testing"
 )
 
-// buildBinary builds the lsp-mcp-go binary and returns its path.
+// buildBinary builds the agent-lsp binary and returns its path.
 // Returns empty string and skips the test if the build fails.
 func buildBinary(t *testing.T) string {
 	t.Helper()
 
-	binaryPath := filepath.Join(t.TempDir(), "lsp-mcp-go")
-	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/lsp-mcp-go")
+	binaryPath := filepath.Join(t.TempDir(), "agent-lsp")
+	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/agent-lsp")
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
