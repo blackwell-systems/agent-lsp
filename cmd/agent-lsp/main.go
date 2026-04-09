@@ -13,8 +13,6 @@ import (
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
 
-	// Compile-time extension registration.
-	_ "github.com/blackwell-systems/agent-lsp/extensions/haskell"
 )
 
 const gracefulShutdownTimeout = 5 * time.Second
