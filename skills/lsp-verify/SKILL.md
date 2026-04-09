@@ -1,7 +1,7 @@
 ---
 name: lsp-verify
 description: Full three-layer verification after any change — LSP diagnostics + compiler build + test suite, ranked by severity. Use after completing any edit, refactor, or feature to confirm nothing is broken before committing.
-allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_code_actions mcp__lsp__apply_edit
+allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__get_code_actions mcp__lsp__apply_edit
 ---
 
 > Requires the agent-lsp MCP server.
@@ -23,6 +23,19 @@ Run this skill after any significant change to verify correctness at every level
 - `changed_files` (optional): list of files you edited — used for targeted diagnostics
 
 ## Execution
+
+### Pre-step: Test correlation (when `changed_files` is provided)
+
+Before running the three layers, call `get_tests_for_file` for each changed
+source file to build a source → test file map:
+
+```
+mcp__lsp__get_tests_for_file({ "file_path": "<changed/source/file>" })
+```
+
+Returns the test files that correspond to each source file. Store this map —
+it is used in Layer 3 to focus failure analysis. If `changed_files` is unknown,
+skip this step.
 
 **Run all three layers in parallel** — they are independent and do not need to
 be sequenced. Issue all three calls in the same message to minimize wall time.
@@ -69,11 +82,18 @@ Instead, search it for failures:
 grep -E "^(FAIL|--- FAIL)" <output_file>
 ```
 
-Or run tests directly on just the changed package to avoid the size issue:
+Or scope tests to the correlated test files from the pre-step to avoid the
+size issue entirely:
 
 ```bash
 GOWORK=off go test -count=1 -short ./internal/mypackage/... 2>&1 | grep -E "FAIL|ok"
 ```
+
+**Using test correlation:** If the pre-step produced a source → test file map,
+cross-reference failing test names against that map. For each failure, note
+whether it is in a correlated test file (directly covers the changed code) or
+an unrelated test file (collateral failure from a shared dependency). This
+distinction guides where to investigate first.
 
 Test failures are blocking — they indicate regressions or unmet contracts.
 
@@ -106,8 +126,13 @@ Warnings:
 [PASSED / FAILED - N failures]
 
 <details if FAILED>
-- test name: message (file:line)
+- test name: message (file:line) [correlated / unrelated]
 </details>
+
+<if test correlation map exists>
+Test files covering changed source:
+  changed/source/file.go → test/source_file_test.go
+</if>
 
 ### Summary
 Overall: CLEAN / NEEDS ATTENTION
