@@ -1,6 +1,6 @@
 # Docker
 
-Run lsp-mcp-go in a container with a fixed Go version, resource limits, and
+Run agent-lsp in a container with a fixed Go version, resource limits, and
 no dependency on your local environment. The Go binary is statically linked —
 the final image only needs the language server binaries, not a Go runtime.
 
@@ -28,13 +28,13 @@ Point your MCP client at the running container:
       "command": "docker",
       "args": [
         "compose",
-        "-f", "/path/to/lsp-mcp-go/docker-compose.yml",
-        "run", "--rm", "lsp-mcp-go"
+        "-f", "/path/to/agent-lsp/docker-compose.yml",
+        "run", "--rm", "agent-lsp"
       ],
       "env": {
         "WORKSPACE_DIR": "/path/to/your/project"
       },
-      "workingDirectory": "/path/to/lsp-mcp-go"
+      "workingDirectory": "/path/to/agent-lsp"
     }
   }
 }
@@ -47,20 +47,20 @@ language server, override `CMD` at runtime:
 
 ```bash
 # Go (gopls must be installed in the container or on PATH)
-docker run --rm -i -v /your/project:/workspace lsp-mcp-go go gopls
+docker run --rm -i -v /your/project:/workspace agent-lsp go gopls
 
 # Rust (rust-analyzer must be installed in the container or on PATH)
-docker run --rm -i -v /your/project:/workspace lsp-mcp-go rust rust-analyzer
+docker run --rm -i -v /your/project:/workspace agent-lsp rust rust-analyzer
 
 # Python
-docker run --rm -i -v /your/project:/workspace lsp-mcp-go python pyright-langserver --stdio
+docker run --rm -i -v /your/project:/workspace agent-lsp python pyright-langserver --stdio
 ```
 
 Or extend the Dockerfile to bake in your language server:
 
 ```dockerfile
 FROM debian:bookworm-slim
-# copy the lsp-mcp-go binary from a build stage, then add:
+# copy the agent-lsp binary from a build stage, then add:
 RUN apt-get install -y rust-analyzer
 CMD ["rust", "rust-analyzer"]
 ```
@@ -81,5 +81,5 @@ Note: No heap size configuration needed — the Go binary has no managed heap tu
 ## Notes
 
 - The workspace is mounted read-write so code actions (quick fixes, auto-imports) can modify files
-- The `lsp-mcp-go` binary is statically linked — the container image only needs language server binaries installed, not a Go runtime
+- The `agent-lsp` binary is statically linked — the container image only needs language server binaries installed, not a Go runtime
 - File change detection behavior depends on the language server; no container-specific watcher configuration is needed for the MCP server itself
