@@ -25,3 +25,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-lsp-skills.yaml
 - **lsp-skills-wave2**: completed 2026-04-09, 1 waves, 3 agents
   - IMPL doc: docs/IMPL/complete/IMPL-lsp-skills-wave2.yaml
+- **rename-agent-lsp**: completed 2026-04-09, 1 waves, 10 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-rename-agent-lsp.yaml

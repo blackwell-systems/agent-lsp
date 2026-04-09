@@ -3,41 +3,125 @@
   "worktrees": [
     {
       "agent": "A",
-      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-skills-wave2/wave1-agent-A",
-      "branch": "saw/lsp-skills-wave2/wave1-agent-A"
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-A",
+      "branch": "saw/rename-agent-lsp/wave1-agent-A"
     },
     {
       "agent": "B",
-      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-skills-wave2/wave1-agent-B",
-      "branch": "saw/lsp-skills-wave2/wave1-agent-B"
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-B",
+      "branch": "saw/rename-agent-lsp/wave1-agent-B"
     },
     {
       "agent": "C",
-      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-skills-wave2/wave1-agent-C",
-      "branch": "saw/lsp-skills-wave2/wave1-agent-C"
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-C",
+      "branch": "saw/rename-agent-lsp/wave1-agent-C"
+    },
+    {
+      "agent": "C2",
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-C2",
+      "branch": "saw/rename-agent-lsp/wave1-agent-C2"
+    },
+    {
+      "agent": "D",
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-D",
+      "branch": "saw/rename-agent-lsp/wave1-agent-D"
+    },
+    {
+      "agent": "D2",
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-D2",
+      "branch": "saw/rename-agent-lsp/wave1-agent-D2"
+    },
+    {
+      "agent": "E",
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-E",
+      "branch": "saw/rename-agent-lsp/wave1-agent-E"
+    },
+    {
+      "agent": "F",
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-F",
+      "branch": "saw/rename-agent-lsp/wave1-agent-F"
+    },
+    {
+      "agent": "G",
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-G",
+      "branch": "saw/rename-agent-lsp/wave1-agent-G"
+    },
+    {
+      "agent": "G2",
+      "path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-G2",
+      "branch": "saw/rename-agent-lsp/wave1-agent-G2"
     }
   ],
   "agent_briefs": [
     {
       "agent": "A",
-      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-skills-wave2/wave1-agent-A/.saw-agent-brief.md",
-      "brief_length": 14781,
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-A/.saw-agent-brief.md",
+      "brief_length": 4431,
       "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-A",
-      "files_owned": 2
+      "files_owned": 3
     },
     {
       "agent": "B",
-      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-skills-wave2/wave1-agent-B/.saw-agent-brief.md",
-      "brief_length": 14559,
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-B/.saw-agent-brief.md",
+      "brief_length": 4098,
       "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-B",
-      "files_owned": 2
+      "files_owned": 8
     },
     {
       "agent": "C",
-      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/lsp-skills-wave2/wave1-agent-C/.saw-agent-brief.md",
-      "brief_length": 15349,
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-C/.saw-agent-brief.md",
+      "brief_length": 4315,
       "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-C",
-      "files_owned": 2
+      "files_owned": 11
+    },
+    {
+      "agent": "C2",
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-C2/.saw-agent-brief.md",
+      "brief_length": 4187,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-C2",
+      "files_owned": 12
+    },
+    {
+      "agent": "D",
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-D/.saw-agent-brief.md",
+      "brief_length": 4204,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-D",
+      "files_owned": 6
+    },
+    {
+      "agent": "D2",
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-D2/.saw-agent-brief.md",
+      "brief_length": 3785,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-D2",
+      "files_owned": 8
+    },
+    {
+      "agent": "E",
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-E/.saw-agent-brief.md",
+      "brief_length": 3306,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-E",
+      "files_owned": 4
+    },
+    {
+      "agent": "F",
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-F/.saw-agent-brief.md",
+      "brief_length": 4307,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-F",
+      "files_owned": 8
+    },
+    {
+      "agent": "G",
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-G/.saw-agent-brief.md",
+      "brief_length": 4325,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-G",
+      "files_owned": 13
+    },
+    {
+      "agent": "G2",
+      "brief_path": "/Users/dayna.blackwell/code/LSP-MCP-GO/.claude/worktrees/saw/rename-agent-lsp/wave1-agent-G2/.saw-agent-brief.md",
+      "brief_length": 3935,
+      "journal_dir": "/Users/dayna.blackwell/code/LSP-MCP-GO/.saw-state/wave1/agent-G2",
+      "files_owned": 6
     }
   ],
   "steps": [
@@ -82,9 +166,9 @@
       "detail": "all files validated"
     },
     {
-      "step": "working_dir_check",
+      "step": "commit_baseline",
       "status": "success",
-      "detail": "working directory is clean"
+      "detail": "committed 10 file(s)"
     },
     {
       "step": "baseline_gates",
@@ -134,7 +218,7 @@
     {
       "step": "create_worktrees",
       "status": "success",
-      "detail": "created 3 worktree(s)"
+      "detail": "created 10 worktree(s)"
     },
     {
       "step": "workspace_setup",
@@ -149,7 +233,7 @@
     {
       "step": "extract_briefs",
       "status": "success",
-      "detail": "prepared 3 agent(s)"
+      "detail": "prepared 10 agent(s)"
     }
   ],
   "success": false

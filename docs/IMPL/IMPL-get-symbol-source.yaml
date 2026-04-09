@@ -1,0 +1,510 @@
+title: Add get_symbol_source MCP Tool
+feature_slug: get-symbol-source
+verdict: SUITABLE
+suitability_assessment: |-
+    File decomposition: 2 files change with disjoint ownership — new handler file
+    (Agent A owns symbol_source.go + symbol_source_test.go), server registration
+    (Agent B owns server.go). No two agents touch the same file.
+
+    The optional Tier 2 integration test addition (test/multi_lang_test.go) is excluded
+    from wave agents because multi_lang_test.go has 2065 lines, exceeding the 2000-line
+    per-agent file budget (V048). It is recorded in post_merge_checklist for manual
+    addition after Wave 1 completes.
+
+    Interface discoverability: All contracts are fully specifiable now. The new handler
+    composes existing primitives (GetDocumentSymbols, os.ReadFile, ExtractPositionWithPattern)
+    with no new LSP methods required. All referenced helpers confirmed in internal/tools/.
+
+    Investigation-first: No root cause analysis required; this is a new additive feature.
+
+    Pre-implementation status: No part of get_symbol_source exists yet. All items are TODO.
+
+    Parallelization value: Agents A and B are fully independent (disjoint files, zero
+    shared symbols at write time). Build/test cycle (GOWORK=off go test ./internal/... ./cmd/...)
+    runs in parallel. Clear speedup over sequential for 2 independent agents plus the
+    coordination value of pinning the position-conversion convention (1-based in, 0-based
+    comparison) and response shape before agents start.
+
+    Estimated times:
+    - Scout phase: ~10 min
+    - Agent execution: ~2 agents x ~10 min avg, fully parallel = ~10 min
+    - Merge and verification: ~3 min
+    Total SAW time: ~23 min
+
+    Sequential baseline: ~2 agents x 12 min = ~24 min
+    Time savings: ~1 min (marginal speed; coordination and audit trail are primary value)
+
+    Recommendation: Proceed. The interface contracts pin the character-to-column aliasing
+    convention and the containsPosition semantics before agents start, preventing the most
+    likely divergence between handler logic and server wiring.
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: internal/tools/symbol_source.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/tools/symbol_source_test.go
+      agent: A
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/server.go
+      agent: B
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: HandleGetSymbolSource
+      description: |-
+        Top-level MCP tool handler. Resolves file path, reads document symbols via LSP,
+        finds the innermost symbol containing the cursor (1-based input), slices file
+        content to that symbol's range, and returns structured JSON.
+      definition: |
+        func HandleGetSymbolSource(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+      location: internal/tools/symbol_source.go
+    - name: findInnermostSymbol
+      description: |-
+        Recursively walks a DocumentSymbol tree (0-based LSP ranges) and returns the
+        deepest symbol whose Range contains the given 0-based (line, character) position.
+        Returns nil if no symbol contains the position.
+      definition: |
+        func findInnermostSymbol(symbols []types.DocumentSymbol, line, character int) *types.DocumentSymbol
+      location: internal/tools/symbol_source.go
+    - name: containsPosition
+      description: |-
+        Reports whether a 0-based LSP Range contains the given 0-based (line, character)
+        position. Inclusive on both start and end (a cursor on the closing brace of a
+        function is still "inside" the function symbol).
+      definition: |
+        func containsPosition(r types.Range, line, character int) bool
+      location: internal/tools/symbol_source.go
+    - name: SymbolSourceResult
+      description: |-
+        JSON-serializable response shape returned by HandleGetSymbolSource.
+        All line numbers are 1-based (matching MCP convention used by all other tools).
+      definition: |
+        type SymbolSourceResult struct {
+            SymbolName string `json:"symbol_name"`
+            SymbolKind string `json:"symbol_kind"`
+            StartLine  int    `json:"start_line"`
+            EndLine    int    `json:"end_line"`
+            Source     string `json:"source"`
+        }
+      location: internal/tools/symbol_source.go
+    - name: GetSymbolSourceArgs
+      description: |-
+        Args struct defined locally inside server.go's setup function (matching the
+        pattern used by all other tools). PositionPattern is the @@-syntax alternative.
+        Character defaults to 1 if omitted.
+      definition: |
+        type GetSymbolSourceArgs struct {
+            FilePath        string `json:"file_path"`
+            LanguageID      string `json:"language_id,omitempty"`
+            Line            int    `json:"line,omitempty"`
+            Character       int    `json:"character,omitempty"`
+            PositionPattern string `json:"position_pattern,omitempty"`
+        }
+      location: cmd/agent-lsp/server.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |-
+            ## Role
+            Implement the `get_symbol_source` handler in a new file `internal/tools/symbol_source.go`,
+            plus unit tests in `internal/tools/symbol_source_test.go`.
+
+            ## What to implement
+
+            ### internal/tools/symbol_source.go
+
+            New file in `package tools`. Implement the following in order:
+
+            **1. SymbolSourceResult struct** (JSON response shape):
+            ```go
+            type SymbolSourceResult struct {
+                SymbolName string `json:"symbol_name"`
+                SymbolKind string `json:"symbol_kind"`
+                StartLine  int    `json:"start_line"`
+                EndLine    int    `json:"end_line"`
+                Source     string `json:"source"`
+            }
+            ```
+
+            **2. containsPosition(r types.Range, line, character int) bool**
+            - All parameters are 0-based (LSP convention).
+            - A position (line, char) is contained if:
+              - line > r.Start.Line OR (line == r.Start.Line AND char >= r.Start.Character)
+              - AND: line < r.End.Line OR (line == r.End.Line AND char <= r.End.Character)
+            - End is inclusive for containment (a cursor on the closing brace of a function
+              is still "inside" the function symbol).
+
+            **3. findInnermostSymbol(symbols []types.DocumentSymbol, line, character int) *types.DocumentSymbol**
+            - Recursively walks the tree.
+            - At each node, if containsPosition(s.Range, line, character) is true:
+              - Recurse into s.Children. If a child returns non-nil, return that (more specific).
+              - Otherwise return &local (current node is the innermost match).
+            - Return nil if no symbol in the slice contains the position.
+            - IMPORTANT: assign s to a local variable before taking its address to avoid
+              referencing the range-loop variable:
+              ```go
+              for _, s := range symbols {
+                  if containsPosition(s.Range, line, character) {
+                      sym := s  // copy, not loop variable reference
+                      if child := findInnermostSymbol(sym.Children, line, character); child != nil {
+                          return child
+                      }
+                      return &sym
+                  }
+              }
+              return nil
+              ```
+
+            **4. HandleGetSymbolSource(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)**
+
+            Algorithm:
+            a. CheckInitialized(client) — return ErrorResult if nil.
+
+            b. Extract and validate file_path:
+               ```go
+               filePath, ok := args["file_path"].(string)
+               if !ok || filePath == "" {
+                   return types.ErrorResult("file_path is required"), nil
+               }
+               cleanPath, err := ValidateFilePath(filePath, client.RootDir())
+               if err != nil {
+                   return types.ErrorResult(err.Error()), nil
+               }
+               ```
+
+            c. Resolve position using ExtractPositionWithPattern. IMPORTANT: that helper reads
+               args["column"], but this tool's MCP parameter is named "character". Alias before
+               calling:
+               ```go
+               if ch, ok := args["character"]; ok {
+                   if args["column"] == nil {
+                       args["column"] = ch
+                   }
+               }
+               if args["column"] == nil {
+                   args["column"] = float64(1)
+               }
+               line1, col1, posErr := ExtractPositionWithPattern(args, cleanPath)
+               if posErr != nil {
+                   return types.ErrorResult(fmt.Sprintf("position: %s", posErr)), nil
+               }
+               ```
+               line1 and col1 are 1-based.
+
+            d. Convert to 0-based: `line0 := line1 - 1`, `char0 := col1 - 1`
+
+            e. Extract language ID (default "plaintext"):
+               ```go
+               languageID, _ := args["language_id"].(string)
+               if languageID == "" {
+                   languageID = "plaintext"
+               }
+               ```
+
+            f. Get document symbols via WithDocument:
+               ```go
+               symbols, wErr := WithDocument[[]types.DocumentSymbol](ctx, client, cleanPath, languageID, func(fileURI string) ([]types.DocumentSymbol, error) {
+                   return client.GetDocumentSymbols(ctx, fileURI)
+               })
+               if wErr != nil {
+                   return types.ErrorResult(fmt.Sprintf("get_symbol_source: %s", wErr)), nil
+               }
+               ```
+
+            g. Find innermost symbol:
+               ```go
+               sym := findInnermostSymbol(symbols, line0, char0)
+               if sym == nil {
+                   return types.ErrorResult("no symbol found at the given position"), nil
+               }
+               ```
+
+            h. Read file and slice to symbol range:
+               ```go
+               content, err := os.ReadFile(cleanPath)
+               if err != nil {
+                   return types.ErrorResult(fmt.Sprintf("reading file: %s", err)), nil
+               }
+               lines := strings.Split(string(content), "\n")
+               start := sym.Range.Start.Line  // 0-based
+               end := sym.Range.End.Line      // 0-based, inclusive
+               if start < 0 { start = 0 }
+               if end >= len(lines) { end = len(lines) - 1 }
+               source := strings.Join(lines[start:end+1], "\n")
+               ```
+
+            i. Build and return result:
+               ```go
+               result := SymbolSourceResult{
+                   SymbolName: sym.Name,
+                   SymbolKind: symbolKindName(int(sym.Kind)),
+                   StartLine:  sym.Range.Start.Line + 1,
+                   EndLine:    sym.Range.End.Line + 1,
+                   Source:     source,
+               }
+               data, mErr := json.Marshal(result)
+               if mErr != nil {
+                   return types.ErrorResult(fmt.Sprintf("marshaling result: %s", mErr)), nil
+               }
+               return types.TextResult(string(data)), nil
+               ```
+
+            Note: symbolKindName is defined in analysis.go in the same package — call it
+            directly (unexported, same package, no import needed).
+
+            ### Required imports for symbol_source.go
+            ```go
+            import (
+                "context"
+                "encoding/json"
+                "fmt"
+                "os"
+                "strings"
+
+                "github.com/blackwell-systems/agent-lsp/internal/lsp"
+                "github.com/blackwell-systems/agent-lsp/internal/types"
+            )
+            ```
+
+            ### internal/tools/symbol_source_test.go
+
+            New file in `package tools`. Pure unit tests — no live LSP server, no real client.
+            Follow the pattern in tools_test.go (call helpers and handler directly, use newNilClient()
+            for nil-client paths).
+
+            Test cases:
+
+            **TestContainsPosition** — table-driven:
+            - position before range start → false
+            - position at exact range start → true
+            - position inside range (middle line) → true
+            - position at exact range end → true
+            - position after range end → false
+            - same line as start but character before start.Character → false
+            - same line as end but character after end.Character → false
+
+            **TestFindInnermostSymbol_Empty** — empty slice returns nil.
+
+            **TestFindInnermostSymbol_OuterOnly** — single symbol containing cursor → returns that symbol by name.
+
+            **TestFindInnermostSymbol_Nested** — parent with one child; cursor inside child range → returns child.
+
+            **TestFindInnermostSymbol_ParentNotChild** — cursor inside parent but outside child → returns parent.
+
+            **TestFindInnermostSymbol_NoMatch** — cursor outside all symbols → returns nil.
+
+            **TestHandleGetSymbolSource_NilClient** — call with nil client, expect IsError=true.
+
+            ## Verification gate
+            ```bash
+            GOWORK=off go build ./internal/tools/...
+            GOWORK=off go vet ./internal/tools/...
+            GOWORK=off go test ./internal/tools/ -run TestContainsPosition -v
+            GOWORK=off go test ./internal/tools/ -run TestFindInnermostSymbol -v
+            GOWORK=off go test ./internal/tools/ -run TestHandleGetSymbolSource -v
+            ```
+
+            Postconditions:
+            ```bash
+            # HandleGetSymbolSource exported
+            grep -c "func HandleGetSymbolSource" /Users/dayna.blackwell/code/agent-lsp/internal/tools/symbol_source.go
+            # expected: 1
+
+            # findInnermostSymbol defined
+            grep -c "func findInnermostSymbol" /Users/dayna.blackwell/code/agent-lsp/internal/tools/symbol_source.go
+            # expected: 1
+
+            # containsPosition defined
+            grep -c "func containsPosition" /Users/dayna.blackwell/code/agent-lsp/internal/tools/symbol_source.go
+            # expected: 1
+
+            # symbolKindName NOT redefined in symbol_source.go (it lives in analysis.go)
+            grep -c "func symbolKindName" /Users/dayna.blackwell/code/agent-lsp/internal/tools/symbol_source.go
+            # expected: 0
+            ```
+
+            ## Constraints
+            - Do NOT define symbolKindName — it already exists in analysis.go (same package).
+            - Do NOT define toInt, toIntOpt, extractPosition, WithDocument, CheckInitialized,
+              ValidateFilePath, or ExtractPositionWithPattern — all exist in analysis.go /
+              helpers.go / position_pattern.go in the same package.
+            - Do NOT modify any file outside your ownership list (symbol_source.go and
+              symbol_source_test.go only).
+          files:
+            - internal/tools/symbol_source.go
+            - internal/tools/symbol_source_test.go
+        - id: B
+          task: |-
+            ## Role
+            Wire `get_symbol_source` into the MCP server by adding the Args struct and
+            mcp.AddTool call in `cmd/agent-lsp/server.go`.
+
+            ## What to implement
+
+            ### cmd/agent-lsp/server.go — two edits
+
+            **Edit 1: Add GetSymbolSourceArgs struct.**
+
+            All Args structs are defined in a block near the top of the RegisterTools
+            function. Find the GoToSymbolArgs struct (the last one in the block) using
+            this exact text anchor:
+
+            ```go
+            	type GoToSymbolArgs struct {
+            		Query string `json:"query"`
+            	}
+            ```
+
+            Insert immediately after the closing `}` of GoToSymbolArgs:
+
+            ```go
+            	type GetSymbolSourceArgs struct {
+            		FilePath        string `json:"file_path"`
+            		LanguageID      string `json:"language_id,omitempty"`
+            		Line            int    `json:"line,omitempty"`
+            		Character       int    `json:"character,omitempty"`
+            		PositionPattern string `json:"position_pattern,omitempty"`
+            	}
+            ```
+
+            **Edit 2: Add mcp.AddTool registration.**
+
+            The last tool registered before the resources section is go_to_symbol. Find
+            this exact text anchor:
+
+            ```go
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args GoToSymbolArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleGoToSymbol(ctx, cs.get(), toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	// ------- Register resources -------
+            ```
+
+            Insert a new mcp.AddTool call between the closing `})` of go_to_symbol and the
+            `// ------- Register resources -------` comment:
+
+            ```go
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "get_symbol_source",
+            		Description: "Return the source code of the innermost symbol (function, method, class, struct, etc.) whose range contains the given cursor position. Calls textDocument/documentSymbol, walks the symbol tree to find the smallest enclosing symbol, then slices the file at that symbol's range. Returns symbol_name, symbol_kind, start_line (1-based), end_line (1-based), and source text. Use line+character or position_pattern (@@-syntax) to specify the cursor. character defaults to 1.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetSymbolSourceArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleGetSymbolSource(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+            ```
+
+            No new imports are required.
+
+            ## Verification gate
+            ```bash
+            GOWORK=off go vet ./cmd/agent-lsp/...
+            ```
+
+            Note: `GOWORK=off go build ./cmd/agent-lsp/...` will fail with
+            "undefined: tools.HandleGetSymbolSource" until Agent A's file is merged.
+            That is expected for isolated verification. Use go vet instead of go build
+            to verify your structural changes are syntactically correct without requiring
+            Agent A's output.
+
+            Postconditions:
+            ```bash
+            # Registration present in server.go
+            grep -c '"get_symbol_source"' /Users/dayna.blackwell/code/agent-lsp/cmd/agent-lsp/server.go
+            # expected: 1
+
+            # Args struct present (appears twice: definition + usage in AddTool call)
+            grep -c "GetSymbolSourceArgs" /Users/dayna.blackwell/code/agent-lsp/cmd/agent-lsp/server.go
+            # expected: 2
+            ```
+
+            ## Constraints
+            - Do NOT define HandleGetSymbolSource in this file — it lives in
+              internal/tools/symbol_source.go (Agent A's file).
+            - Do NOT modify any file outside your ownership list (server.go only).
+            - Do NOT reorder existing tool registrations.
+            - The isolated build failure (undefined: tools.HandleGetSymbolSource) is expected —
+              do not add a stub or workaround in server.go.
+          files:
+            - cmd/agent-lsp/server.go
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+post_merge_checklist:
+    groups:
+        - title: Integration test matrix
+          items:
+            - description: |-
+                Add testGetSymbolSource to test/multi_lang_test.go. The file has 2065 lines
+                (exceeds V048 agent file budget), so this is done manually post-merge.
+                Steps: (1) Add testGetSymbolSource function after testDocumentSymbols using
+                lang.hoverLine/hoverColumn as cursor; validate symbol_name, symbol_kind, source,
+                start_line, end_line in response. (2) Add testGetSymbolSource(t, ctx, session, lang)
+                to the tier2Results slice after testDocumentSymbols. (3) Add sym_source column
+                to printMultiLangSummary header and per-row t.Logf.
+              command: GOWORK=off go test ./test/... -run TestMultiLanguage -list '.*'
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |-
+            Agent A duplicates symbolKindName. The function is unexported and defined in
+            analysis.go (same package). If Agent A defines it again in symbol_source.go,
+            the package will fail to compile with "symbolKindName redeclared".
+          likelihood: medium
+          impact: high
+          mitigation: |-
+            Task brief explicitly states "Do NOT define symbolKindName". Postcondition grep
+            checks that the function does NOT appear in symbol_source.go.
+        - scenario: |-
+            Agent A misses the character-to-column alias. ExtractPositionWithPattern reads
+            args["column"], but the MCP parameter is "character". If Agent A calls
+            ExtractPositionWithPattern without aliasing, character input is silently ignored
+            and the handler always defaults to column=1 regardless of input.
+          likelihood: medium
+          impact: medium
+          mitigation: |-
+            Task brief includes the exact aliasing code block with explanation. The aliasing
+            pattern is explicitly required in step (c) of the algorithm.
+        - scenario: |-
+            Agent B's isolated build fails because HandleGetSymbolSource is undefined
+            (Agent A's file not yet merged). Agent B modifies analysis.go to add a stub.
+          likelihood: low
+          impact: high
+          mitigation: |-
+            Constraints section explicitly warns Agent B that the undefined-symbol build
+            error is expected. Agent B is instructed to use go vet (not go build) for
+            isolated verification.
+        - scenario: |-
+            findInnermostSymbol returns a pointer to the range-loop variable, causing
+            the returned symbol to always reflect the last element evaluated.
+          likelihood: medium
+          impact: medium
+          mitigation: |-
+            Task brief includes the explicit copy pattern with comment "copy, not loop
+            variable reference" and shows the correct local variable assignment.
+known_issues:
+    - title: finalize-scout validate_briefs false positives for Agent B
+      description: |-
+        validate_briefs reports GoToSymbolArgs, GetSymbolSourceArgs, and get_symbol_source
+        as missing from server.go. GoToSymbolArgs is defined inside the RegisterTools function
+        body (not a top-level symbol), so the validator does not find it. GetSymbolSourceArgs
+        and get_symbol_source are new symbols that Agent B will CREATE; they do not
+        exist yet by design. All other finalize-scout gates passed (schema, e35_gaps,
+        test_cascade, wave_structure).
+      status: known
+      workaround: Proceed with wave execution. The symbols will exist after Agent B merges.
+state: SCOUT_PENDING
+original_branch: develop

@@ -1,3 +1,4 @@
+completion_date: "2026-04-09"
 title: Rename project from lsp-mcp-go to agent-lsp
 feature_slug: rename-agent-lsp
 verdict: SUITABLE
@@ -1205,6 +1206,6 @@ critic_report:
     summary: Skipped by operator
     reviewed_at: "2026-04-09T17:34:33Z"
     issue_count: 0
-state: REVIEWED
+state: COMPLETE
 original_branch: develop
 injection_method: manual-fallback
