@@ -1,4 +1,4 @@
-module github.com/blackwell-systems/lsp-mcp-go
+module github.com/blackwell-systems/agent-lsp
 
 go 1.25.0
 

@@ -8,13 +8,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/config"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/extensions"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/logging"
+	"github.com/blackwell-systems/agent-lsp/internal/config"
+	"github.com/blackwell-systems/agent-lsp/internal/extensions"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+	"github.com/blackwell-systems/agent-lsp/internal/logging"
 
 	// Compile-time extension registration.
-	_ "github.com/blackwell-systems/lsp-mcp-go/extensions/haskell"
+	_ "github.com/blackwell-systems/agent-lsp/extensions/haskell"
 )
 
 const gracefulShutdownTimeout = 5 * time.Second
@@ -23,10 +23,10 @@ func main() {
 	parsed, err := config.ParseArgs(os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
-		fmt.Fprintln(os.Stderr, "usage (single-server): lsp-mcp-go <language-id> <lsp-server-binary> [args...]")
-		fmt.Fprintln(os.Stderr, "usage (multi-server):   lsp-mcp-go go:gopls typescript:tsserver,--stdio")
-		fmt.Fprintln(os.Stderr, "usage (config file):    lsp-mcp-go --config /path/to/lsp-mcp.json")
-		fmt.Fprintln(os.Stderr, "usage (auto-detect):    lsp-mcp-go")
+		fmt.Fprintln(os.Stderr, "usage (single-server): agent-lsp <language-id> <lsp-server-binary> [args...]")
+		fmt.Fprintln(os.Stderr, "usage (multi-server):   agent-lsp go:gopls typescript:tsserver,--stdio")
+		fmt.Fprintln(os.Stderr, "usage (config file):    agent-lsp --config /path/to/lsp-mcp.json")
+		fmt.Fprintln(os.Stderr, "usage (auto-detect):    agent-lsp")
 		os.Exit(1)
 	}
 
