@@ -1635,7 +1635,7 @@ do not trigger a workspace-wide reference search.
 
 ### `get_server_capabilities`
 
-Return the language server's capability map and classify every lsp-mcp-go tool
+Return the language server's capability map and classify every agent-lsp tool
 as supported or unsupported based on what the server advertised during
 initialization. Useful for discovering which tools will return meaningful results
 before making analysis calls.
@@ -1706,7 +1706,7 @@ None. The tool takes no arguments.
 Scan a workspace directory for source languages and check PATH for the
 corresponding LSP server binaries. Returns the detected languages, installed
 servers with their executable paths, and a `suggested_config` array ready to
-paste into the lsp-mcp-go MCP server args.
+paste into the agent-lsp MCP server args.
 
 Does not require `start_lsp` to have been called — it works standalone.
 
@@ -1762,7 +1762,7 @@ Does not require `start_lsp` to have been called — it works standalone.
 - `not_installed` lists languages detected in the workspace whose server binary
   was not found on PATH.
 - `suggested_config` entries use the format `language:binary` or
-  `language:binary,arg1,arg2` and can be passed directly as lsp-mcp-go MCP
+  `language:binary,arg1,arg2` and can be passed directly as agent-lsp MCP
   server args.
 
 ---
@@ -2316,7 +2316,7 @@ line/column required. Useful when you know a symbol name but not its location.
 ```json
 {
   "symbol_path": "LSPClient.GetDefinition",
-  "workspace_root": "/Users/you/code/lsp-mcp-go"
+  "workspace_root": "/Users/you/code/agent-lsp"
 }
 ```
 
@@ -2325,7 +2325,7 @@ line/column required. Useful when you know a symbol name but not its location.
 ```json
 [
   {
-    "file": "/Users/you/code/lsp-mcp-go/internal/lsp/client.go",
+    "file": "/Users/you/code/agent-lsp/internal/lsp/client.go",
     "line": 142,
     "column": 1,
     "end_line": 142,
@@ -2394,7 +2394,7 @@ passing the line/column manually, but robust to line number drift.
 
 ## Skills
 
-Eight agent-native skills compose lsp-mcp-go tools into single-command
+Eight agent-native skills compose agent-lsp tools into single-command
 workflows. Install with `cd skills && ./install.sh`.
 
 | Skill | Tools used | Purpose |

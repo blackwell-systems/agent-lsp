@@ -1,6 +1,6 @@
 # Architecture
 
-lsp-mcp-go is a [Model Context Protocol](https://modelcontextprotocol.io/) server that wraps a Language Server Protocol subprocess. This document describes the package structure, key patterns, and internal design decisions.
+agent-lsp is a [Model Context Protocol](https://modelcontextprotocol.io/) server that wraps a Language Server Protocol subprocess. This document describes the package structure, key patterns, and internal design decisions.
 
 ---
 

@@ -1,4 +1,4 @@
-# LSP-MCP-GO Requirements
+# agent-lsp Requirements
 
 ## Project
 
@@ -9,13 +9,13 @@ schemas, and response formats must be identical so existing MCP clients work wit
 ## Language & Runtime
 
 - Go 1.22+
-- Single compiled binary: `lsp-mcp-go`
+- Single compiled binary: `agent-lsp`
 - No runtime dependencies (language servers are external processes)
 
 ## CLI Interface
 
 ```
-lsp-mcp-go <language-id> <lsp-server-binary> [lsp-server-args...]
+agent-lsp <language-id> <lsp-server-binary> [lsp-server-args...]
 ```
 
 Same as the TypeScript version. Binary validates the LSP server path exists before starting.
@@ -132,7 +132,7 @@ Extensions take precedence over core handlers on name conflict.
 
 ## Module
 
-`github.com/blackwell-systems/lsp-mcp-go`
+`github.com/blackwell-systems/agent-lsp`
 
 ## Tests
 
