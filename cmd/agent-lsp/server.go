@@ -7,14 +7,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/config"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/extensions"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/logging"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/resources"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/session"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/tools"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/config"
+	"github.com/blackwell-systems/agent-lsp/internal/extensions"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+	"github.com/blackwell-systems/agent-lsp/internal/logging"
+	"github.com/blackwell-systems/agent-lsp/internal/resources"
+	"github.com/blackwell-systems/agent-lsp/internal/session"
+	"github.com/blackwell-systems/agent-lsp/internal/tools"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -202,7 +202,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	sessionMgr := session.NewSessionManager(&csResolver{cs: cs, delegate: resolver})
 
 	server := mcp.NewServer(&mcp.Implementation{
-		Name:    "lsp-mcp-go",
+		Name:    "agent-lsp",
 		Version: "0.1.0",
 	}, nil)
 	// TODO(W3): logging.SetServer needs a logSender implementation wrapping
@@ -681,7 +681,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_server_capabilities",
-		Description: "Return the language server's capability map and classify every lsp-mcp-go tool as supported or unsupported based on what the server advertised during initialization. Use this to determine which tools will return results before calling them — saves round trips on servers that don't support certain LSP features (e.g. not all servers support type_hierarchy or inlay_hints). Requires start_lsp to have been called first.",
+		Description: "Return the language server's capability map and classify every agent-lsp tool as supported or unsupported based on what the server advertised during initialization. Use this to determine which tools will return results before calling them — saves round trips on servers that don't support certain LSP features (e.g. not all servers support type_hierarchy or inlay_hints). Requires start_lsp to have been called first.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleGetServerCapabilities(ctx, cs.get(), nil)
 		return makeCallToolResult(r), nil, err
@@ -705,7 +705,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "detect_lsp_servers",
-		Description: "Scan a workspace directory for source languages and check PATH for the corresponding LSP server binaries. Returns detected workspace languages (ranked by prevalence), installed servers with their paths, and a suggested_config array ready to paste into the lsp-mcp-go MCP server args. Use this to set up lsp-mcp-go for a new project or verify your configuration.",
+		Description: "Scan a workspace directory for source languages and check PATH for the corresponding LSP server binaries. Returns detected workspace languages (ranked by prevalence), installed servers with their paths, and a suggested_config array ready to paste into the agent-lsp MCP server args. Use this to set up agent-lsp for a new project or verify your configuration.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args DetectLspServersArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleDetectLspServers(ctx, cs.get(), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
@@ -952,7 +952,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	// Mark server as initialized and start on stdio transport.
 	logging.MarkServerInitialized()
-	logging.Log(logging.LevelInfo, "lsp-mcp-go server starting")
+	logging.Log(logging.LevelInfo, "agent-lsp server starting")
 
 	transport := &mcp.StdioTransport{}
 	return server.Run(ctx, transport)
