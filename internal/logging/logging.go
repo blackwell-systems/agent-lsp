@@ -7,6 +7,8 @@ import (
 )
 
 // Level constants matching the MCP logging/message severity levels.
+// All eight levels are valid inputs for set_log_level; only Debug/Info/Warning/Error/Critical
+// are emitted internally. Notice/Alert/Emergency are accepted but never self-generated.
 const (
 	LevelDebug     = "debug"
 	LevelInfo      = "info"

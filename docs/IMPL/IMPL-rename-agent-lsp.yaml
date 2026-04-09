@@ -1,0 +1,1061 @@
+title: Rename project from lsp-mcp-go to agent-lsp
+feature_slug: rename-agent-lsp
+verdict: SUITABLE
+suitability_assessment: |
+    The rename touches ~55 Go source files (import path strings), 7 non-Go config/release
+    files, 13 skill files, and 6 documentation files. All changes are mechanical string
+    replacements with no logic changes. File decomposition is clean: Go packages are
+    independent — each file contains import path strings to replace but packages do not
+    depend on each other for this rename — so agents can work in parallel on disjoint
+    package groups.
+
+    The cmd/ rename + go.mod update are coupled (must happen together) and are assigned
+    to a single agent. All other Go files only need import path string replacement. No
+    interface contracts are changing. No root-cause investigation needed.
+
+    Estimated times:
+    - Scout phase: ~10 min
+    - Agent execution: ~9 agents x ~5 min avg, accounting for parallelism in Wave 1 = ~8 min
+    - Merge and verification: ~5 min
+    Total SAW time: ~23 min
+
+    Sequential baseline: ~9 agents x 5 min = ~45 min
+    Time savings: ~22 min (~49% faster)
+
+    Recommendation: Clear speedup for parallel import-path replacement across many files.
+test_command: env GOWORK=off go test ./internal/... ./cmd/...
+lint_command: env GOWORK=off go vet ./...
+file_ownership:
+    - file: go.mod
+      agent: A
+      wave: 1
+      action: modify
+    - file: cmd/lsp-mcp-go/main.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: cmd/lsp-mcp-go/server.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: internal/lsp/client.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/lsp/client_test.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/lsp/diagnostics.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/lsp/diagnostics_test.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/lsp/manager.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/lsp/manager_test.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/lsp/normalize.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/lsp/normalize_test.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/tools/analysis.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/tools/build.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/tools/callhierarchy.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/tools/capabilities.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/tools/detect.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/tools/fuzzy.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/tools/helpers.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/tools/highlights.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/tools/inlayhints.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/tools/navigation.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/tools/runner.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/tools/semantic_tokens.go
+      agent: C2
+      wave: 1
+      action: modify
+    - file: internal/tools/session.go
+      agent: C2
+      wave: 1
+      action: modify
+    - file: internal/tools/simulation.go
+      agent: C2
+      wave: 1
+      action: modify
+    - file: internal/tools/symbol_path.go
+      agent: C2
+      wave: 1
+      action: modify
+    - file: internal/tools/symbol_path_test.go
+      agent: C2
+      wave: 1
+      action: modify
+    - file: internal/tools/tools_test.go
+      agent: C2
+      wave: 1
+      action: modify
+    - file: internal/tools/typehierarchy.go
+      agent: C2
+      wave: 1
+      action: modify
+    - file: internal/tools/utilities.go
+      agent: C2
+      wave: 1
+      action: modify
+    - file: internal/tools/workspace.go
+      agent: C2
+      wave: 1
+      action: modify
+    - file: internal/tools/workspace_folders.go
+      agent: C2
+      wave: 1
+      action: modify
+    - file: internal/tools/workspace_symbols_test.go
+      agent: C2
+      wave: 1
+      action: modify
+    - file: internal/tools/workspace_test.go
+      agent: C2
+      wave: 1
+      action: modify
+    - file: internal/config/autodetect.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/config/parse.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/config/parse_test.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/extensions/registry.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/extensions/registry_test.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/logging/logging.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/resources/resources.go
+      agent: D2
+      wave: 1
+      action: modify
+    - file: internal/resources/resources_test.go
+      agent: D2
+      wave: 1
+      action: modify
+    - file: internal/resources/subscriptions.go
+      agent: D2
+      wave: 1
+      action: modify
+    - file: internal/session/differ.go
+      agent: D2
+      wave: 1
+      action: modify
+    - file: internal/session/differ_test.go
+      agent: D2
+      wave: 1
+      action: modify
+    - file: internal/session/manager.go
+      agent: D2
+      wave: 1
+      action: modify
+    - file: internal/session/manager_test.go
+      agent: D2
+      wave: 1
+      action: modify
+    - file: internal/session/types.go
+      agent: D2
+      wave: 1
+      action: modify
+    - file: extensions/haskell/haskell.go
+      agent: E
+      wave: 1
+      action: modify
+    - file: integration_test.go
+      agent: E
+      wave: 1
+      action: modify
+    - file: test/multi_lang_test.go
+      agent: E
+      wave: 1
+      action: modify
+    - file: test/speculative_test.go
+      agent: E
+      wave: 1
+      action: modify
+    - file: .goreleaser.yml
+      agent: F
+      wave: 1
+      action: modify
+    - file: .mcp.json
+      agent: F
+      wave: 1
+      action: modify
+    - file: saw.config.json
+      agent: F
+      wave: 1
+      action: modify
+    - file: .github/workflows/ci.yml
+      agent: F
+      wave: 1
+      action: modify
+    - file: .github/workflows/release.yml
+      agent: F
+      wave: 1
+      action: modify
+    - file: README.md
+      agent: F
+      wave: 1
+      action: modify
+    - file: CHANGELOG.md
+      agent: F
+      wave: 1
+      action: modify
+    - file: DOCKER.md
+      agent: F
+      wave: 1
+      action: modify
+    - file: skills/install.sh
+      agent: G
+      wave: 1
+      action: modify
+    - file: skills/lsp-dead-code/SKILL.md
+      agent: G
+      wave: 1
+      action: modify
+    - file: skills/lsp-edit-export/SKILL.md
+      agent: G
+      wave: 1
+      action: modify
+    - file: skills/lsp-edit-export/references/patterns.md
+      agent: G
+      wave: 1
+      action: modify
+    - file: skills/lsp-edit-symbol/SKILL.md
+      agent: G
+      wave: 1
+      action: modify
+    - file: skills/lsp-impact/SKILL.md
+      agent: G
+      wave: 1
+      action: modify
+    - file: skills/lsp-rename/SKILL.md
+      agent: G
+      wave: 1
+      action: modify
+    - file: skills/lsp-rename/references/patterns.md
+      agent: G
+      wave: 1
+      action: modify
+    - file: skills/lsp-safe-edit/SKILL.md
+      agent: G
+      wave: 1
+      action: modify
+    - file: skills/lsp-safe-edit/references/patterns.md
+      agent: G
+      wave: 1
+      action: modify
+    - file: skills/lsp-simulate/SKILL.md
+      agent: G
+      wave: 1
+      action: modify
+    - file: skills/lsp-simulate/references/patterns.md
+      agent: G
+      wave: 1
+      action: modify
+    - file: skills/lsp-verify/SKILL.md
+      agent: G
+      wave: 1
+      action: modify
+    - file: docs/REQUIREMENTS.md
+      agent: G2
+      wave: 1
+      action: modify
+    - file: docs/architecture.md
+      agent: G2
+      wave: 1
+      action: modify
+    - file: docs/CONTEXT.md
+      agent: G2
+      wave: 1
+      action: modify
+    - file: docs/speculative-execution.md
+      agent: G2
+      wave: 1
+      action: modify
+    - file: docs/lsp-spec-compliance.md
+      agent: G2
+      wave: 1
+      action: modify
+    - file: docs/tools.md
+      agent: G2
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: ModulePath
+      description: |
+        The Go module path changes from the old value to the new value. All import
+        strings in every .go file that reference internal packages must be updated
+        to match the new module path declared in go.mod.
+      definition: |
+        Old: github.com/blackwell-systems/lsp-mcp-go
+        New: github.com/blackwell-systems/agent-lsp
+
+        Example old import block:
+          import (
+            "github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
+            "github.com/blackwell-systems/lsp-mcp-go/internal/types"
+          )
+
+        Example new import block:
+          import (
+            "github.com/blackwell-systems/agent-lsp/internal/lsp"
+            "github.com/blackwell-systems/agent-lsp/internal/types"
+          )
+      location: go.mod
+    - name: CmdDirectoryRename
+      description: |
+        The cmd entry-point directory is renamed from cmd/lsp-mcp-go to cmd/agent-lsp.
+        Agent A must perform this as a git mv before editing the files within it.
+      definition: |
+        git mv cmd/lsp-mcp-go cmd/agent-lsp
+        # Then update import paths inside cmd/agent-lsp/main.go and cmd/agent-lsp/server.go
+      location: cmd/lsp-mcp-go/
+    - name: BinaryName
+      description: |
+        The compiled binary name changes from lsp-mcp-go to agent-lsp. References in
+        .goreleaser.yml, .mcp.json, saw.config.json, and docs must all be updated.
+      definition: |
+        Old binary name: lsp-mcp-go
+        New binary name: agent-lsp
+
+        .goreleaser.yml changes (all occurrences):
+          project_name: lsp-mcp-go  ->  project_name: agent-lsp
+          id: lsp-mcp-go            ->  id: agent-lsp
+          main: ./cmd/lsp-mcp-go    ->  main: ./cmd/agent-lsp
+          binary: lsp-mcp-go        ->  binary: agent-lsp
+          archives ids: lsp-mcp-go  ->  agent-lsp
+          release name: lsp-mcp-go  ->  name: agent-lsp
+
+        .mcp.json:
+          "command": "/Users/dayna.blackwell/go/bin/lsp-mcp-go"
+          -> "command": "/Users/dayna.blackwell/go/bin/agent-lsp"
+
+        saw.config.json:
+          "name": "lsp-mcp-go"  ->  "name": "agent-lsp"
+      location: .goreleaser.yml
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Role
+            Module path + cmd/ directory rename agent for the lsp-mcp-go -> agent-lsp rename.
+
+            ## Repo
+            Work in `/Users/dayna.blackwell/code/LSP-MCP-GO`.
+
+            ## What to implement
+
+            ### Step 1: Update go.mod module path
+            Run these commands in the repo root:
+              go mod edit -module github.com/blackwell-systems/agent-lsp
+              env GOWORK=off go mod tidy
+
+            ### Step 2: Rename the cmd directory
+            Run:
+              git mv cmd/lsp-mcp-go cmd/agent-lsp
+
+            This moves the files to `cmd/agent-lsp/main.go` and `cmd/agent-lsp/server.go`.
+
+            ### Step 3: Update import paths inside cmd/agent-lsp/main.go and cmd/agent-lsp/server.go
+            In both files, replace every occurrence of:
+              github.com/blackwell-systems/lsp-mcp-go
+            with:
+              github.com/blackwell-systems/agent-lsp
+
+            Use text-match (string search) mode.
+
+            ### Step 4: Update bare string literals in cmd/agent-lsp/server.go and cmd/agent-lsp/main.go
+            These files contain bare `"lsp-mcp-go"` string literals (not import paths) that must
+            also be renamed. Examples:
+            - `Name: "lsp-mcp-go"` in a struct literal (clientInfo or similar)
+            - Log message strings containing `lsp-mcp-go`
+            - Usage/description strings containing `lsp-mcp-go`
+            - main.go usage message strings (4 occurrences around lines 26-29)
+
+            For each file, after replacing the import path, also run:
+              grep -n '"lsp-mcp-go"' cmd/agent-lsp/server.go cmd/agent-lsp/main.go
+            Replace every remaining `"lsp-mcp-go"` occurrence with `"agent-lsp"`.
+
+            ### Step 4: Scoped build check
+            Run only the scoped build — NOT ./... — other agents are mid-edit on other packages:
+              env GOWORK=off go build ./cmd/agent-lsp/...
+
+            ## Verification gate
+            ```
+            grep "module github.com/blackwell-systems/agent-lsp" go.mod
+            # Expect: 1 match
+
+            grep -r "blackwell-systems/lsp-mcp-go" cmd/agent-lsp/
+            # Expect: 0 matches
+
+            ls cmd/
+            # Expect: agent-lsp listed, lsp-mcp-go NOT present
+
+            env GOWORK=off go build ./cmd/agent-lsp/...
+            # Expect: exit 0
+            ```
+
+            ## Constraints
+            - Do NOT modify any files outside: go.mod, cmd/agent-lsp/main.go, cmd/agent-lsp/server.go
+            - Do NOT touch internal/ packages — those are owned by Agents B, C, C2, D, D2
+            - Do NOT run go build ./... — other agents have not finished their import updates
+          files:
+            - go.mod
+            - cmd/lsp-mcp-go/main.go
+            - cmd/lsp-mcp-go/server.go
+        - id: B
+          task: |
+            ## Role
+            Import path update agent for the `internal/lsp` package.
+
+            ## Repo
+            Work in `/Users/dayna.blackwell/code/LSP-MCP-GO`.
+
+            ## What to implement
+            In each file listed below, replace every occurrence of:
+              github.com/blackwell-systems/lsp-mcp-go
+            with:
+              github.com/blackwell-systems/agent-lsp
+
+            Use text-match (string search) mode. Only import block strings change;
+            no logic changes.
+
+            Files to update:
+            - internal/lsp/client.go
+            - internal/lsp/client_test.go
+            - internal/lsp/diagnostics.go
+            - internal/lsp/diagnostics_test.go
+            - internal/lsp/manager.go
+            - internal/lsp/manager_test.go
+            - internal/lsp/normalize.go
+            - internal/lsp/normalize_test.go
+
+            Note: framing.go, framing_test.go, resolver.go do not import the module path
+            — they are pure same-package files. Leave them untouched.
+
+            ### Additional: bare string literal in internal/lsp/client.go
+            `internal/lsp/client.go` contains a `clientInfo.name` value set to the bare
+            string `"lsp-mcp-go"` (around line 531, in the LSP initialize request). This is
+            NOT an import path — it is a string literal. After replacing import paths, also:
+              grep -n '"lsp-mcp-go"' internal/lsp/client.go
+            Replace it with `"agent-lsp"`. This is the most functionally significant fix:
+            every LSP server will identify this client by this name.
+
+            ## Verification gate
+            ```
+            grep -r "blackwell-systems/lsp-mcp-go" internal/lsp/
+            # Expect: 0 matches
+
+            grep -r '"lsp-mcp-go"' internal/lsp/
+            # Expect: 0 matches
+
+            env GOWORK=off go build ./internal/lsp/...
+            # Expect: exit 0
+            ```
+
+            ## Constraints
+            - Do NOT modify any files outside internal/lsp/
+            - Do NOT run env GOWORK=off go build ./... — build only ./internal/lsp/...
+          files:
+            - internal/lsp/client.go
+            - internal/lsp/client_test.go
+            - internal/lsp/diagnostics.go
+            - internal/lsp/diagnostics_test.go
+            - internal/lsp/manager.go
+            - internal/lsp/manager_test.go
+            - internal/lsp/normalize.go
+            - internal/lsp/normalize_test.go
+        - id: C
+          task: |
+            ## Role
+            Import path update agent for the `internal/tools` package (first half).
+
+            ## Repo
+            Work in `/Users/dayna.blackwell/code/LSP-MCP-GO`.
+
+            ## What to implement
+            In each file listed below, replace every occurrence of:
+              github.com/blackwell-systems/lsp-mcp-go
+            with:
+              github.com/blackwell-systems/agent-lsp
+
+            Use text-match (string search) mode. Only import block strings change;
+            no logic changes.
+
+            Files to update:
+            - internal/tools/analysis.go
+            - internal/tools/build.go
+            - internal/tools/callhierarchy.go
+            - internal/tools/capabilities.go
+            - internal/tools/detect.go
+            - internal/tools/fuzzy.go
+            - internal/tools/helpers.go
+            - internal/tools/highlights.go
+            - internal/tools/inlayhints.go
+            - internal/tools/navigation.go
+            - internal/tools/runner.go
+
+            ### Additional: bare string literals in capabilities.go and detect.go
+            These files contain bare `lsp-mcp-go` occurrences in comments and string values
+            (not import paths). After replacing import paths, also run:
+              grep -n 'lsp-mcp-go' internal/tools/capabilities.go internal/tools/detect.go
+            Replace all remaining occurrences (comments, json tag comments, string values)
+            with `agent-lsp`.
+
+            ## Verification gate
+            ```
+            grep "lsp-mcp-go" \
+              internal/tools/analysis.go internal/tools/build.go internal/tools/callhierarchy.go \
+              internal/tools/capabilities.go internal/tools/detect.go internal/tools/fuzzy.go \
+              internal/tools/helpers.go internal/tools/highlights.go internal/tools/inlayhints.go \
+              internal/tools/navigation.go internal/tools/runner.go
+            # Expect: 0 matches
+            ```
+
+            ## Constraints
+            - Do NOT modify any files outside your ownership list
+            - Do NOT modify semantic_tokens.go through workspace_test.go — those are owned by Agent C2
+            - Do NOT run env GOWORK=off go build ./... — other agents are mid-edit
+          files:
+            - internal/tools/analysis.go
+            - internal/tools/build.go
+            - internal/tools/callhierarchy.go
+            - internal/tools/capabilities.go
+            - internal/tools/detect.go
+            - internal/tools/fuzzy.go
+            - internal/tools/helpers.go
+            - internal/tools/highlights.go
+            - internal/tools/inlayhints.go
+            - internal/tools/navigation.go
+            - internal/tools/runner.go
+        - id: C2
+          task: |
+            ## Role
+            Import path update agent for the `internal/tools` package (second half).
+
+            ## Repo
+            Work in `/Users/dayna.blackwell/code/LSP-MCP-GO`.
+
+            ## What to implement
+            In each file listed below, replace every occurrence of:
+              github.com/blackwell-systems/lsp-mcp-go
+            with:
+              github.com/blackwell-systems/agent-lsp
+
+            Use text-match (string search) mode. Only import block strings change;
+            no logic changes.
+
+            Files to update:
+            - internal/tools/semantic_tokens.go
+            - internal/tools/session.go
+            - internal/tools/simulation.go
+            - internal/tools/symbol_path.go
+            - internal/tools/symbol_path_test.go
+            - internal/tools/tools_test.go
+            - internal/tools/typehierarchy.go
+            - internal/tools/utilities.go
+            - internal/tools/workspace.go
+            - internal/tools/workspace_folders.go
+            - internal/tools/workspace_symbols_test.go
+            - internal/tools/workspace_test.go
+
+            ## Verification gate
+            ```
+            grep "blackwell-systems/lsp-mcp-go" \
+              internal/tools/semantic_tokens.go internal/tools/session.go \
+              internal/tools/simulation.go internal/tools/symbol_path.go \
+              internal/tools/symbol_path_test.go internal/tools/tools_test.go \
+              internal/tools/typehierarchy.go internal/tools/utilities.go \
+              internal/tools/workspace.go internal/tools/workspace_folders.go \
+              internal/tools/workspace_symbols_test.go internal/tools/workspace_test.go
+            # Expect: 0 matches
+            ```
+
+            ## Constraints
+            - Do NOT modify any files outside your ownership list
+            - Do NOT modify analysis.go through runner.go — those are owned by Agent C
+            - Do NOT run env GOWORK=off go build ./... — other agents are mid-edit
+          files:
+            - internal/tools/semantic_tokens.go
+            - internal/tools/session.go
+            - internal/tools/simulation.go
+            - internal/tools/symbol_path.go
+            - internal/tools/symbol_path_test.go
+            - internal/tools/tools_test.go
+            - internal/tools/typehierarchy.go
+            - internal/tools/utilities.go
+            - internal/tools/workspace.go
+            - internal/tools/workspace_folders.go
+            - internal/tools/workspace_symbols_test.go
+            - internal/tools/workspace_test.go
+        - id: D
+          task: |
+            ## Role
+            Import path update agent for internal support packages: config, extensions, logging.
+
+            ## Repo
+            Work in `/Users/dayna.blackwell/code/LSP-MCP-GO`.
+
+            ## What to implement
+            In each file listed below, replace every occurrence of:
+              github.com/blackwell-systems/lsp-mcp-go
+            with:
+              github.com/blackwell-systems/agent-lsp
+
+            Use text-match (string search) mode. Only import block strings change;
+            no logic changes.
+
+            Files to update:
+            - internal/config/autodetect.go
+            - internal/config/parse.go
+            - internal/config/parse_test.go
+            - internal/extensions/registry.go
+            - internal/extensions/registry_test.go
+            - internal/logging/logging.go
+
+            Note: internal/config/infer.go and internal/config/infer_test.go do not import
+            the module path — leave those untouched.
+
+            ### Additional: bare string literals in parse.go and logging.go
+            These files contain bare `lsp-mcp-go` in comments, usage error strings, and log
+            message identifiers (not import paths). After replacing import paths, also run:
+              grep -n 'lsp-mcp-go' internal/config/parse.go internal/logging/logging.go
+            Replace all remaining occurrences with `agent-lsp`.
+            Specific locations:
+            - internal/config/parse.go lines ~46, 50, 54, 68-71 (comments and usage error strings)
+            - internal/logging/logging.go lines ~60 and 129 (log message identifier strings)
+
+            ## Verification gate
+            ```
+            grep -r "lsp-mcp-go" internal/config/ internal/extensions/ internal/logging/
+            # Expect: 0 matches
+
+            env GOWORK=off go build ./internal/config/... ./internal/extensions/... ./internal/logging/...
+            # Expect: exit 0
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside internal/config/, internal/extensions/, internal/logging/
+            - Do NOT modify resources/ or session/ — those are owned by Agent D2
+            - Do NOT run env GOWORK=off go build ./... — other agents are mid-edit
+          files:
+            - internal/config/autodetect.go
+            - internal/config/parse.go
+            - internal/config/parse_test.go
+            - internal/extensions/registry.go
+            - internal/extensions/registry_test.go
+            - internal/logging/logging.go
+        - id: D2
+          task: |
+            ## Role
+            Import path update agent for internal support packages: resources, session.
+
+            ## Repo
+            Work in `/Users/dayna.blackwell/code/LSP-MCP-GO`.
+
+            ## What to implement
+            In each file listed below, replace every occurrence of:
+              github.com/blackwell-systems/lsp-mcp-go
+            with:
+              github.com/blackwell-systems/agent-lsp
+
+            Use text-match (string search) mode. Only import block strings change;
+            no logic changes.
+
+            Files to update:
+            - internal/resources/resources.go
+            - internal/resources/resources_test.go
+            - internal/resources/subscriptions.go
+            - internal/session/differ.go
+            - internal/session/differ_test.go
+            - internal/session/manager.go
+            - internal/session/manager_test.go
+            - internal/session/types.go
+
+            Note: internal/session/executor.go and internal/session/executor_test.go
+            do not import the module path — leave those untouched.
+
+            ## Verification gate
+            ```
+            grep -r "blackwell-systems/lsp-mcp-go" internal/resources/ internal/session/
+            # Expect: 0 matches
+
+            env GOWORK=off go build ./internal/resources/... ./internal/session/...
+            # Expect: exit 0
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside internal/resources/ and internal/session/
+            - Do NOT modify config/, extensions/, or logging/ — those are owned by Agent D
+            - Do NOT run env GOWORK=off go build ./... — other agents are mid-edit
+          files:
+            - internal/resources/resources.go
+            - internal/resources/resources_test.go
+            - internal/resources/subscriptions.go
+            - internal/session/differ.go
+            - internal/session/differ_test.go
+            - internal/session/manager.go
+            - internal/session/manager_test.go
+            - internal/session/types.go
+        - id: E
+          task: |
+            ## Role
+            Import path update agent for extensions/, integration_test.go, and test/ package.
+
+            ## Repo
+            Work in `/Users/dayna.blackwell/code/LSP-MCP-GO`.
+
+            ## What to implement
+            In each file listed below, replace every occurrence of:
+              github.com/blackwell-systems/lsp-mcp-go
+            with:
+              github.com/blackwell-systems/agent-lsp
+
+            Use text-match (string search) mode.
+
+            Files to update:
+            - extensions/haskell/haskell.go
+            - integration_test.go
+            - test/multi_lang_test.go
+            - test/speculative_test.go
+
+            ## Verification gate
+            ```
+            grep "blackwell-systems/lsp-mcp-go" extensions/haskell/haskell.go \
+              integration_test.go test/multi_lang_test.go test/speculative_test.go
+            # Expect: 0 matches
+
+            env GOWORK=off go build ./extensions/...
+            # Expect: exit 0
+            ```
+
+            ## Constraints
+            - Do NOT modify any files outside extensions/, integration_test.go, and test/
+            - Do NOT touch test/fixtures/ — those are test data, not source files
+            - Do NOT run env GOWORK=off go build ./... — other agents are mid-edit
+          files:
+            - extensions/haskell/haskell.go
+            - integration_test.go
+            - test/multi_lang_test.go
+            - test/speculative_test.go
+        - id: F
+          task: |
+            ## Role
+            Non-Go config, CI, and top-level documentation rename agent.
+
+            ## Repo
+            Work in `/Users/dayna.blackwell/code/LSP-MCP-GO`.
+
+            ## What to implement
+            Replace the old project/binary name in each file below.
+            Primary replacements:
+            - `lsp-mcp-go` -> `agent-lsp`
+            - `LSP-MCP-GO` -> `agent-lsp` (uppercase variant in prose)
+
+            ### .goreleaser.yml
+            Current occurrences (all must be replaced):
+            - `project_name: lsp-mcp-go`
+            - `id: lsp-mcp-go` (under builds:)
+            - `main: ./cmd/lsp-mcp-go`
+            - `binary: lsp-mcp-go`
+            - `id: lsp-mcp-go` (under archives:)
+            - `- lsp-mcp-go` (in archives.ids array)
+            - `name: lsp-mcp-go` (in release.github section)
+
+            ### .mcp.json
+            Current command line to match and replace:
+            ```
+            "command": "/Users/dayna.blackwell/go/bin/lsp-mcp-go",
+            ```
+            Replace with:
+            ```
+            "command": "/Users/dayna.blackwell/go/bin/agent-lsp",
+            ```
+
+            ### saw.config.json
+            Current line to match and replace:
+            ```
+            {"name": "lsp-mcp-go", "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO"}
+            ```
+            Replace name value:
+            ```
+            {"name": "agent-lsp", "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO"}
+            ```
+
+            ### .github/workflows/ci.yml and .github/workflows/release.yml
+            Check for any occurrence of `lsp-mcp-go` and replace. If none found, leave unchanged.
+
+            ### README.md, CHANGELOG.md, DOCKER.md
+            Replace all occurrences of `lsp-mcp-go` with `agent-lsp`.
+            Replace any uppercase `LSP-MCP-GO` references with `agent-lsp`.
+
+            ## Verification gate
+            ```
+            grep -l "lsp-mcp-go\|LSP-MCP-GO" .goreleaser.yml .mcp.json saw.config.json \
+              .github/workflows/ci.yml .github/workflows/release.yml README.md CHANGELOG.md DOCKER.md
+            # Expect: no files listed
+
+            grep "project_name:" .goreleaser.yml
+            # Expect: project_name: agent-lsp
+
+            grep "command" .mcp.json
+            # Expect: contains agent-lsp, not lsp-mcp-go
+            ```
+
+            ## Constraints
+            - Do NOT modify any Go source files (*.go)
+            - Do NOT modify docs/ or skills/ — owned by Agents G and G2
+            - Do NOT modify go.mod — owned by Agent A
+          files:
+            - .goreleaser.yml
+            - .mcp.json
+            - saw.config.json
+            - .github/workflows/ci.yml
+            - .github/workflows/release.yml
+            - README.md
+            - CHANGELOG.md
+            - DOCKER.md
+        - id: G
+          task: |
+            ## Role
+            Skills directory rename agent.
+
+            ## Repo
+            Work in `/Users/dayna.blackwell/code/LSP-MCP-GO`.
+
+            ## What to implement
+            Replace all occurrences of `lsp-mcp-go` (and `LSP-MCP-GO`) with `agent-lsp`
+            in the skills/ directory files below.
+
+            IMPORTANT: Do NOT rename the skill subdirectories themselves (lsp-dead-code,
+            lsp-edit-export, etc.) — only update string content inside the files.
+
+            Files to update and confirmed occurrences:
+            - skills/install.sh — 2 occurrences:
+                "# lsp-mcp-go skills installer" -> "# agent-lsp skills installer"
+                "Install lsp-mcp-go skills to ~/.claude/skills/" -> "Install agent-lsp skills to ~/.claude/skills/"
+            - skills/lsp-dead-code/SKILL.md — 2 occurrences (MCP server name references)
+            - skills/lsp-edit-export/SKILL.md — 2 occurrences
+            - skills/lsp-edit-export/references/patterns.md — 1 occurrence
+            - skills/lsp-edit-symbol/SKILL.md — check and replace if present
+            - skills/lsp-impact/SKILL.md — 2 occurrences
+            - skills/lsp-rename/SKILL.md — 1 occurrence
+            - skills/lsp-rename/references/patterns.md — 1 occurrence
+            - skills/lsp-safe-edit/SKILL.md — 2 occurrences
+            - skills/lsp-safe-edit/references/patterns.md — 1 occurrence
+            - skills/lsp-simulate/SKILL.md — 2 occurrences
+            - skills/lsp-simulate/references/patterns.md — 1 occurrence
+            - skills/lsp-verify/SKILL.md — 1 occurrence
+
+            ## Verification gate
+            ```
+            grep -r "lsp-mcp-go\|LSP-MCP-GO" skills/
+            # Expect: 0 matches
+
+            grep -c "agent-lsp" skills/install.sh
+            # Expect: >= 2
+            ```
+
+            ## Constraints
+            - Do NOT rename skill subdirectory names (lsp-dead-code/, lsp-rename/, etc.)
+            - Do NOT modify docs/ — owned by Agent G2
+            - Do NOT modify any Go source files (*.go)
+          files:
+            - skills/install.sh
+            - skills/lsp-dead-code/SKILL.md
+            - skills/lsp-edit-export/SKILL.md
+            - skills/lsp-edit-export/references/patterns.md
+            - skills/lsp-edit-symbol/SKILL.md
+            - skills/lsp-impact/SKILL.md
+            - skills/lsp-rename/SKILL.md
+            - skills/lsp-rename/references/patterns.md
+            - skills/lsp-safe-edit/SKILL.md
+            - skills/lsp-safe-edit/references/patterns.md
+            - skills/lsp-simulate/SKILL.md
+            - skills/lsp-simulate/references/patterns.md
+            - skills/lsp-verify/SKILL.md
+        - id: G2
+          task: |
+            ## Role
+            Documentation files rename agent.
+
+            ## Repo
+            Work in `/Users/dayna.blackwell/code/LSP-MCP-GO`.
+
+            ## What to implement
+            Replace all occurrences of `lsp-mcp-go` (and `LSP-MCP-GO`) with `agent-lsp`
+            in the docs/ files listed below.
+
+            Files to update and confirmed occurrences:
+            - docs/REQUIREMENTS.md — 4 occurrences (binary name, CLI usage example, module path)
+            - docs/architecture.md — 1 occurrence (project description)
+            - docs/CONTEXT.md — 2 occurrences (feature history entries reference old name)
+            - docs/speculative-execution.md — 1 occurrence
+            - docs/lsp-spec-compliance.md — check for `lsp-mcp-go` occurrences BUT do NOT
+              replace any filesystem path references like `/Users/dayna.blackwell/code/LSP-MCP-GO`
+              — those are valid absolute paths and must not be altered. Only replace bare
+              `lsp-mcp-go` project name strings.
+            - docs/tools.md — 6 occurrences
+
+            ## Verification gate
+            ```
+            grep "lsp-mcp-go\|LSP-MCP-GO" docs/REQUIREMENTS.md docs/architecture.md \
+              docs/CONTEXT.md docs/speculative-execution.md docs/tools.md
+            # Expect: 0 matches
+
+            # lsp-spec-compliance.md may still contain the filesystem path — that is acceptable:
+            grep "lsp-mcp-go" docs/lsp-spec-compliance.md | grep -v "/code/LSP-MCP-GO"
+            # Expect: 0 matches (only the filesystem path may remain)
+            ```
+
+            ## Constraints
+            - Do NOT modify docs/IMPL/ — those are historical IMPL records
+            - Do NOT modify docs/language-support.md or docs/lsp-conformance.md unless
+              you find lsp-mcp-go references (verify before editing)
+            - Do NOT modify skills/ — owned by Agent G
+            - Do NOT modify any Go source files (*.go)
+          files:
+            - docs/REQUIREMENTS.md
+            - docs/architecture.md
+            - docs/CONTEXT.md
+            - docs/speculative-execution.md
+            - docs/lsp-spec-compliance.md
+            - docs/tools.md
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: env GOWORK=off go build ./...
+          required: true
+          repo: LSP-MCP-GO
+        - type: lint
+          command: env GOWORK=off go vet ./...
+          required: true
+          repo: LSP-MCP-GO
+        - type: test
+          command: env GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+          repo: LSP-MCP-GO
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |
+            Agent A runs go build ./... before other agents have updated their import paths.
+            The build fails because internal packages still reference the old module path.
+            Agent A may then try to fix other packages, stomping on other agents' ownership.
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Agent A task explicitly instructs: build only ./cmd/agent-lsp/... not ./...
+            The verification gate uses the scoped build command. The full ./... build runs
+            only post-merge as a quality gate.
+        - scenario: |
+            Agent A creates cmd/agent-lsp/ manually instead of using git mv, leaving the
+            old cmd/lsp-mcp-go/ directory still present. This would cause a duplicate
+            binary build configuration in .goreleaser.yml until Agent F updates it.
+          likelihood: low
+          impact: medium
+          mitigation: |
+            Agent A task explicitly specifies `git mv cmd/lsp-mcp-go cmd/agent-lsp` as
+            the required rename step. Postcondition check verifies `ls cmd/` does not
+            list lsp-mcp-go.
+        - scenario: |
+            Agent G modifies docs/IMPL/ historical records, corrupting completed IMPL
+            records for earlier features.
+          likelihood: low
+          impact: low
+          mitigation: |
+            Agent G task explicitly states "Do NOT modify docs/IMPL/".
+            Agent G2 task includes the same constraint.
+        - scenario: |
+            Agent F updates .goreleaser.yml but misses the `ids:` array entry
+            (- lsp-mcp-go under archives) leaving a mismatched build/archive reference
+            that breaks GoReleaser.
+          likelihood: medium
+          impact: low
+          mitigation: |
+            Agent F task lists every specific occurrence to replace in .goreleaser.yml
+            including the ids array entry. The verification gate greps for any remaining
+            occurrences across all owned files.
+        - scenario: |
+            After all agents complete, go build ./... fails because a file was missed
+            — for example a test helper file in internal/tools that imports the module
+            path but was not confirmed in the grep scan.
+          likelihood: low
+          impact: low
+          mitigation: |
+            The post-merge quality gate runs env GOWORK=off go build ./... and will
+            immediately surface any missed import path replacement. Per-agent grep
+            postcondition checks also provide early detection within each package scope.
+critic_report:
+    verdict: PASS
+    agent_reviews: {}
+    summary: Skipped by operator
+    reviewed_at: "2026-04-09T17:34:33Z"
+    issue_count: 0
+state: SCOUT_PENDING
+original_branch: develop
+injection_method: manual-fallback

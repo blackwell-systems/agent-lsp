@@ -1,0 +1,115 @@
+title: 'Wire MCP Resource Subscription Layer'
+feature_slug: resources-wiring
+verdict: NOT_SUITABLE
+suitability_assessment: |
+  ## Pre-implementation audit findings
+
+  The dead code audit report was PARTIALLY INCORRECT. The three resource READ
+  handlers are ALREADY wired into server.go (lines 848-941):
+
+    - server.AddResource for lsp-diagnostics:// (line 848) — calls HandleDiagnosticsResource
+    - server.AddResource for lsp-hover://       (line 877) — calls HandleHoverResource
+    - server.AddResource for lsp-completions:// (line 904) — calls HandleCompletionsResource
+    - server.AddResourceTemplate loop           (lines 932-941) — registers URI templates
+
+  The internal/resources package import is already present. All three handlers
+  and resource templates are correctly wired.
+
+  ## What is actually missing
+
+  The MCP subscription layer is not wired:
+
+    - HandleSubscribeDiagnostics (internal/resources/subscriptions.go) — never called
+    - HandleUnsubscribeDiagnostics (internal/resources/subscriptions.go) — never called
+    - mcp.NewServer is called with nil ServerOptions, so SubscribeHandler and
+      UnsubscribeHandler are not registered
+    - server.ResourceUpdated() is never invoked, so clients receive no push
+      notifications when LSP diagnostics change
+
+  ## Why NOT_SUITABLE for SAW
+
+  The subscription wiring is confined to a single function in a single file:
+  cmd/lsp-mcp-go/server.go (the Run function). The change is:
+
+    1. Declare a subKey struct and a map[subKey]*resources.SubscriptionContext
+       guarded by sync.Mutex, inside Run() before mcp.NewServer.
+    2. Replace the nil second argument of mcp.NewServer with &mcp.ServerOptions{
+       SubscribeHandler: ..., UnsubscribeHandler: ...}.
+    3. SubscribeHandler: for lsp-diagnostics:// URIs, call HandleSubscribeDiagnostics
+       with a NotifyFunc that calls server.ResourceUpdated(context.Background(), ...).
+       Store the returned *SubscriptionContext in the map.
+    4. UnsubscribeHandler: look up and delete the SubscriptionContext, call
+       HandleUnsubscribeDiagnostics.
+
+  This is a single-agent, single-file change. SAW validation (V047_TRIVIAL_SCOPE)
+  confirms: 1 agent owning 1 file adds no parallelization value. Implement directly.
+
+  ## Implementation notes for direct implementation
+
+  File to change: cmd/lsp-mcp-go/server.go
+
+  No new imports needed — the file already imports:
+    - "sync" (used elsewhere in the file)
+    - "github.com/blackwell-systems/lsp-mcp-go/internal/resources"
+    - "github.com/blackwell-systems/lsp-mcp-go/internal/logging"
+    - "github.com/modelcontextprotocol/go-sdk/mcp"
+    - "context"
+
+  Key constraints:
+    - Use context.Background() inside NotifyFunc (the callback fires from an
+      async LSP goroutine; the subscribe request context is long gone by then).
+    - SubscribeHandler and UnsubscribeHandler must both be set — SDK panics if
+      only one is provided.
+    - Only lsp-diagnostics:// URIs support push notifications. Hover and
+      completions are request-pull only; silently no-op for those URIs.
+    - server variable is safely captured by the SubscribeHandler closure
+      (the closure only fires after server is fully initialized).
+
+  Insertion anchor in server.go — exact text to edit:
+
+      server := mcp.NewServer(&mcp.Implementation{
+          Name:    "lsp-mcp-go",
+          Version: "0.1.0",
+      }, nil)
+
+  Verification after implementation:
+    GOWORK=off go build ./...
+    GOWORK=off go vet ./cmd/lsp-mcp-go/...
+    GOWORK=off go test ./...
+    grep -c "SubscribeHandler:" cmd/lsp-mcp-go/server.go   # expect 1
+    grep -c "UnsubscribeHandler:" cmd/lsp-mcp-go/server.go # expect 1
+    grep -c "ResourceUpdated" cmd/lsp-mcp-go/server.go     # expect 1
+    grep -c "NewServer.*nil)" cmd/lsp-mcp-go/server.go     # expect 0
+test_command: GOWORK=off go test ./...
+lint_command: GOWORK=off go vet ./...
+state: NOT_SUITABLE
+
+waves: []
+file_ownership: []
+interface_contracts: []
+scaffolds: []
+
+quality_gates:
+  level: standard
+  gates:
+    - type: build
+      command: GOWORK=off go build ./...
+      required: true
+    - type: test
+      command: GOWORK=off go test ./...
+      required: true
+
+pre_mortem:
+  overall_risk: low
+  rows:
+    - scenario: |
+        SubscribeHandler added without UnsubscribeHandler. SDK panics at startup.
+      likelihood: low
+      impact: high
+      mitigation: Both handlers must be set together per SDK contract.
+    - scenario: |
+        NotifyFunc uses request ctx instead of context.Background(). Async
+        notifications fail silently after the subscribe RPC completes.
+      likelihood: medium
+      impact: medium
+      mitigation: Always use context.Background() inside the notify closure.

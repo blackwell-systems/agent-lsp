@@ -81,6 +81,7 @@ No position needed. Tolerates indentation differences.
 
 - `get_workspace_symbols` returns declaration sites, not all references. The
   first non-test result is usually the definition.
-- Positions in `get_document_symbols` are 0-based (LSP convention). `apply_edit`
-  expects 0-based in `workspace_edit`.
+- Positions in `get_document_symbols` are **1-based** (shifted from LSP convention).
+  `apply_edit` `workspace_edit` expects **0-based** — subtract 1 when using positional
+  mode (Option B). Text-match mode (Option A) requires no position math.
 - For renames (not edits), use `/lsp-rename` instead — it updates all call sites.

@@ -259,6 +259,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	type GetDocumentSymbolsArgs struct {
 		FilePath   string `json:"file_path"`
 		LanguageID string `json:"language_id,omitempty"`
+		Format     string `json:"format,omitempty"` // "outline" for compact markdown; default returns JSON
 	}
 	type GetWorkspaceSymbolsArgs struct {
 		Query       string `json:"query,omitempty"`
@@ -538,7 +539,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_document_symbols",
-		Description: "Get all symbols defined in a document via LSP (functions, classes, variables, methods, etc.). Returns a hierarchical DocumentSymbol tree or flat SymbolInformation list depending on server support. Use this to get a structural overview of a file.",
+		Description: "Get all symbols defined in a document via LSP (functions, classes, variables, methods, etc.). Returns a hierarchical DocumentSymbol tree or flat SymbolInformation list depending on server support. Use this to get a structural overview of a file. Pass format: \"outline\" for compact markdown output (name [Kind] :line) optimized for LLM consumption — ~5x fewer tokens than JSON for the same structural information.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetDocumentSymbolsArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleGetDocumentSymbols(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err

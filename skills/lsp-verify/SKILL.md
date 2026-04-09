@@ -20,54 +20,66 @@ Run this skill after any significant change to verify correctness at every level
 ## Input
 
 - `workspace_dir` (required): absolute path to the workspace root (e.g. `/Users/you/code/myproject`)
+- `changed_files` (optional): list of files you edited — used for targeted diagnostics
 
-## Verification Layers
+## Execution
+
+**Run all three layers in parallel** — they are independent and do not need to
+be sequenced. Issue all three calls in the same message to minimize wall time.
 
 ### Layer 1: LSP Diagnostics
 
-Call `mcp__lsp__get_diagnostics` with the workspace directory.
+Call `mcp__lsp__get_diagnostics` with `file_path` set to each changed file.
+`get_diagnostics` takes a file path, not a workspace directory.
 
-Note: `get_diagnostics` requires LSP to be initialized. If not yet running, call
-`start_lsp` with the workspace root first. Auto-inference is supported when file
-paths are provided, but explicit initialization ensures complete workspace coverage.
+Note: requires LSP to be initialized. If not yet running, call `start_lsp`
+with the workspace root first.
 
 ```
-mcp__lsp__get_diagnostics({ "workspace_dir": "<workspace_dir>" })
+mcp__lsp__get_diagnostics({ "file_path": "<path/to/changed/file>" })
 ```
 
-Rank results by severity: list errors first, then warnings.
+Call once per changed file. If you don't know which files changed, call it on
+the primary files touched in this session. Rank results by severity: errors
+first, then warnings.
 
 ### Layer 2: Build
-
-Call `mcp__lsp__run_build` with the workspace directory.
 
 ```
 mcp__lsp__run_build({ "workspace_dir": "<workspace_dir>" })
 ```
 
-Returns `{ "success": bool, "errors": [...] }`. A failed build means the
-code does not compile. Build errors are blocking — they must be resolved before
-the change can ship.
+Returns `{ "success": bool, "errors": [...] }`. A failed build means the code
+does not compile. Build errors are blocking — must be resolved before shipping.
 
 ### Layer 3: Tests
-
-Call `mcp__lsp__run_tests` with the workspace directory.
 
 ```
 mcp__lsp__run_tests({ "workspace_dir": "<workspace_dir>" })
 ```
 
-Note: `run_tests` does NOT require `start_lsp` to be called first. The
-`workspace_dir` parameter is required.
+Does NOT require `start_lsp`. Returns `{ "passed": bool, "failures": [...] }`.
 
-Returns `{ "passed": bool, "failures": [...] }`. Each failure includes a
-`file:line` location. Test failures are blocking — they indicate regressions
-or unmet contracts.
+**Large output warning:** `run_tests` on large repos can return hundreds of
+thousands of characters and exceed the context window. If the result is saved
+to a file rather than returned inline, do NOT attempt to read the whole file.
+Instead, search it for failures:
+
+```bash
+grep -E "^(FAIL|--- FAIL)" <output_file>
+```
+
+Or run tests directly on just the changed package to avoid the size issue:
+
+```bash
+GOWORK=off go test -count=1 -short ./internal/mypackage/... 2>&1 | grep -E "FAIL|ok"
+```
+
+Test failures are blocking — they indicate regressions or unmet contracts.
 
 ## Output Format
 
-After running all three layers, produce a structured report using progressive
-disclosure: summary first, then details.
+After running all three layers, produce a structured report:
 
 ```
 ## Verification Report
@@ -78,11 +90,9 @@ disclosure: summary first, then details.
 <details if N > 0 or M > 0>
 Errors:
 - file:line - message
-...
 
 Warnings:
 - file:line - message
-...
 </details>
 
 ### Layer 2: Build
@@ -90,7 +100,6 @@ Warnings:
 
 <details if FAILED>
 - error message (file:line)
-...
 </details>
 
 ### Layer 3: Tests
@@ -98,7 +107,6 @@ Warnings:
 
 <details if FAILED>
 - test name: message (file:line)
-...
 </details>
 
 ### Summary

@@ -48,10 +48,27 @@ mcp__lsp__start_lsp({ "root_dir": "/your/workspace" })
 lsp-mcp-go supports auto-inference from file paths, so explicit start is
 only required when switching workspaces or on a cold session.
 
-**Indexing note:** `get_references` waits for workspace indexing to complete.
-If it returns `[]` for ALL symbols, the workspace may not be fully indexed
-yet — wait 2–3 seconds and retry the first symbol before concluding there
-are no references.
+## Step 0 — Verify indexing is complete (mandatory)
+
+**Do not skip this step.** An under-indexed workspace returns `[]` for
+symbols that ARE referenced, producing false dead-code candidates.
+
+Pick one symbol you know is actively used (e.g. the primary constructor,
+a widely-called utility function). Call `get_references` on it:
+
+```
+mcp__lsp__get_references({
+  "file_path": "/abs/path/to/file.go",
+  "line": <known-active symbol line>,
+  "column": <known-active symbol column>,
+  "include_declaration": false
+})
+```
+
+**If this returns `[]`:** the workspace is not indexed. Wait 3–5 seconds
+and retry. Do not proceed until a known-active symbol returns ≥1 reference.
+If it never returns results after 15 seconds, restart the LSP server with
+`mcp__lsp__restart_lsp_server` and re-open the target file.
 
 ## Step 1 — Open the file and enumerate symbols
 
@@ -66,17 +83,22 @@ mcp__lsp__get_document_symbols({ "file_path": "/abs/path/to/file.go" })
 Collect the full symbol list. Filter to **exported symbols only** using the
 language-appropriate rule from the table above.
 
-**Coordinate note:** `get_document_symbols` returns 0-based coordinates
-(LSP native). You must add 1 to both line and character before passing them
-to `get_references`:
+**Coordinate note:** `get_document_symbols` returns 1-based coordinates.
+Pass `selectionRange.start.line` and `selectionRange.start.character`
+directly to `get_references` — no conversion needed.
+
+**"no identifier found" error:** This means the column points to whitespace
+or a keyword rather than the identifier name. This happens with methods
+whose receiver prefix shifts the name rightward (e.g. `func (c *Client) MethodName`
+— the name starts at column 21, not column 1). Fix: grep the declaration
+line for the symbol name to find its exact column:
 
 ```
-line_for_refs = symbol.selectionRange.start.line + 1
-col_for_refs  = symbol.selectionRange.start.character + 1
+grep -n "MethodName" file.go
+# count characters to find the 1-based column of the name
 ```
 
-This conversion is required. Omitting it causes off-by-one errors that
-produce incorrect reference results.
+Then retry `get_references` with the corrected column.
 
 ## Step 2 — Check references for each exported symbol
 
@@ -87,8 +109,8 @@ from the count. A count of 0 means no callers, not no occurrences.
 ```
 mcp__lsp__get_references({
   "file_path": "/abs/path/to/file.go",
-  "line": <selectionRange.start.line + 1>,      // convert 0-based to 1-based
-  "column": <selectionRange.start.character + 1>,
+  "line": <selectionRange.start.line>,
+  "column": <selectionRange.start.character>,
   "include_declaration": false
 })
 ```
@@ -99,17 +121,29 @@ Record the result for each symbol:
 ```
 
 **Batching note:** For files with many exported symbols (>20), process in
-batches of 5–10 to avoid overwhelming the LSP server. The workspace
-indexing is shared state — rapid-fire calls may return stale results.
-Between batches, check if any `get_references` returned `[]` unexpectedly.
-If the first symbol returns `[]` but is clearly used, wait 2–3 seconds and
-retry before trusting the result.
+batches of 5–10 to avoid overwhelming the LSP server.
+
+**Zero-reference cross-check (required before classifying as dead):**
+When `get_references` returns `[]` for a symbol that looks foundational
+(a handler, a constructor, a type used as a field), do not trust LSP alone.
+LSP can miss references made through value-passing, interface satisfaction,
+or function registration patterns (e.g. `server.AddResource(HandleFoo)`).
+Before classifying as dead, run a text search in the primary wiring files:
+
+```
+grep -r "SymbolName" main.go server.go cmd/ internal/
+```
+
+If grep finds the name in a registration or assignment context, the symbol
+is active — LSP just couldn't resolve the indirect reference. Update your
+classification accordingly.
 
 ## Step 3 — Classify and report
 
 Classify each exported symbol by reference count:
 
-- **Zero references** — candidate for removal. Flag with WARNING.
+- **Zero references (LSP + grep)** — confirmed dead candidate. Flag with WARNING.
+- **Zero LSP, found by grep** — active via registration/value pattern. Mark as ACTIVE.
 - **1–2 references** — review manually. May be test-only usage.
 - **3+ references** — active symbol. Not dead code.
 
@@ -128,33 +162,39 @@ manual review:
 
 1. **Incomplete indexing.** `get_references` only searches files open or
    indexed by the language server. If the workspace is partially indexed,
-   results may be incomplete.
+   results may be incomplete. The Step 0 warm-up check catches this.
 
-2. **Reflection and dynamic dispatch.** Symbols used via reflection
+2. **Registration patterns.** Symbols passed as values to registration
+   functions (e.g. `server.AddTool(HandleFoo)`, `http.HandleFunc("/", handler)`)
+   appear as zero LSP references from the *definition site* because gopls
+   tracks the call to the registrar, not the handler name. Always grep
+   wiring files for zero-reference handlers before classifying as dead.
+
+3. **Reflection and dynamic dispatch.** Symbols used via reflection
    (`reflect.TypeOf` in Go, `Class.forName` in Java) or dynamic dispatch
    have no static call sites visible to the LSP.
 
-3. **`//go:linkname` and assembly.** Go symbols linked via `//go:linkname`
+4. **`//go:linkname` and assembly.** Go symbols linked via `//go:linkname`
    or referenced from assembly files will show zero LSP references.
 
-4. **Library public API.** Exported symbols called from external packages
+5. **Library public API.** Exported symbols called from external packages
    not present in the workspace will show zero references even if
    consumers exist.
 
-5. **Declaration excluded from count.** The definition site is not counted
+6. **Declaration excluded from count.** The definition site is not counted
    (`include_declaration: false`). A count of 0 means no callers found,
    not that the symbol never appears in the source tree.
 
-6. **Always review before deleting.** Zero LSP references is a signal to
+7. **Always review before deleting.** Zero LSP references is a signal to
    investigate, not a guarantee the symbol is unused.
 
 ## Step 4 — Next steps
 
 After generating the report:
 
-- **For each zero-reference symbol:** Run `lsp-impact` on the symbol to
-  confirm. If `lsp-impact` also finds zero references, it is safe to
-  consider for removal. Still check the Caveats section above.
+- **For each zero-reference symbol (confirmed by grep):** Run `lsp-impact`
+  on the symbol to confirm. If `lsp-impact` also finds zero references, it
+  is safe to consider for removal. Still check the Caveats section above.
 
 - **For symbols with only test-file references:** Mark as "test-only" in
   the report. These may be candidates for removal if the tests themselves

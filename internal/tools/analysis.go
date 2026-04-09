@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
 	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
@@ -212,6 +213,8 @@ func HandleGetDocumentSymbols(ctx context.Context, client *lsp.LSPClient, args m
 		languageID = "plaintext"
 	}
 
+	format, _ := args["format"].(string)
+
 	result, wErr := WithDocument[[]types.DocumentSymbol](ctx, client, filePath, languageID, func(fileURI string) ([]types.DocumentSymbol, error) {
 		return client.GetDocumentSymbols(ctx, fileURI)
 	})
@@ -219,7 +222,16 @@ func HandleGetDocumentSymbols(ctx context.Context, client *lsp.LSPClient, args m
 		return types.ErrorResult(fmt.Sprintf("get_document_symbols: %s", wErr)), nil
 	}
 
-	data, mErr := json.Marshal(result)
+	shifted := make([]types.DocumentSymbol, len(result))
+	for i, s := range result {
+		shifted[i] = shiftDocumentSymbol(s)
+	}
+
+	if format == "outline" {
+		return types.TextResult(renderOutline(shifted, 0)), nil
+	}
+
+	data, mErr := json.Marshal(shifted)
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling document symbols: %s", mErr)), nil
 	}
@@ -413,6 +425,53 @@ func extractRange(args map[string]interface{}) (types.Range, error) {
 		Start: types.Position{Line: startLine - 1, Character: startCol - 1},
 		End:   types.Position{Line: endLine - 1, Character: endCol - 1},
 	}, nil
+}
+
+// shiftDocumentSymbol converts all positions in a DocumentSymbol (and its children)
+// from 0-based LSP convention to 1-based for MCP tool output.
+func shiftDocumentSymbol(s types.DocumentSymbol) types.DocumentSymbol {
+	s.Range = shiftRange(s.Range)
+	s.SelectionRange = shiftRange(s.SelectionRange)
+	for i, c := range s.Children {
+		s.Children[i] = shiftDocumentSymbol(c)
+	}
+	return s
+}
+
+func shiftRange(r types.Range) types.Range {
+	return types.Range{
+		Start: types.Position{Line: r.Start.Line + 1, Character: r.Start.Character + 1},
+		End:   types.Position{Line: r.End.Line + 1, Character: r.End.Character + 1},
+	}
+}
+
+// renderOutline renders a DocumentSymbol tree as compact markdown for LLM consumption.
+// Each symbol appears as "name [Kind] :line", indented two spaces per depth level.
+// Children are rendered recursively beneath their parent.
+func renderOutline(symbols []types.DocumentSymbol, depth int) string {
+	var b strings.Builder
+	indent := strings.Repeat("  ", depth)
+	for _, s := range symbols {
+		fmt.Fprintf(&b, "%s%s [%s] :%d\n", indent, s.Name, symbolKindName(int(s.Kind)), s.Range.Start.Line)
+		if len(s.Children) > 0 {
+			b.WriteString(renderOutline(s.Children, depth+1))
+		}
+	}
+	return b.String()
+}
+
+// symbolKindName maps LSP SymbolKind integers to readable names.
+func symbolKindName(kind int) string {
+	names := map[int]string{
+		1: "File", 2: "Module", 3: "Namespace", 4: "Package", 5: "Class",
+		6: "Method", 7: "Property", 8: "Field", 9: "Constructor", 10: "Enum",
+		11: "Interface", 12: "Function", 13: "Variable", 14: "Constant",
+		22: "EnumMember", 23: "Struct", 26: "TypeParameter",
+	}
+	if n, ok := names[kind]; ok {
+		return n
+	}
+	return fmt.Sprintf("Kind%d", kind)
 }
 
 // toInt extracts an integer from args[key]. Handles float64 (JSON default) and int.
