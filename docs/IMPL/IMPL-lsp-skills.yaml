@@ -1000,7 +1000,7 @@ scaffolds:
         that supports tool use can execute these skills by following the workflow steps
         and calling the listed tools.
       import_path: N/A (reference only)
-      status: pending
+      status: committed (7b986ac)
 pre_mortem:
     overall_risk: medium
     rows:
