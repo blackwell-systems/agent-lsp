@@ -683,4 +683,5 @@ pre_mortem:
             handles the common go doc preamble pattern. The doc field returns the full output
             regardless, so the agent always gets complete information even if signature is empty.
 state: SCOUT_PENDING
+original_branch: main
 injection_method: hook
