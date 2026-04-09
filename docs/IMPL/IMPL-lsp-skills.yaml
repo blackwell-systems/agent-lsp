@@ -944,6 +944,7 @@ waves:
             - F
             - H
             - G
+      base_commit: ad1e56f4b1f4c88f47a4c7610c43b390ac958d69
 quality_gates:
     level: standard
     gates:
@@ -1100,12 +1101,27 @@ completion_reports:
         files_created:
             - skills/install.sh
         verification: PASS
+    I:
+        status: complete
+        branch: saw/lsp-skills/wave4-agent-I
+        commit: bf99037
+        files_changed:
+            - README.md
+            - docs/tools.md
+            - CHANGELOG.md
+        verification: PASS
+        notes: 'README.md: Skills section inserted before Installation. docs/tools.md: New tools section appended (go_to_symbol, position_pattern, dry-run rename, Skills table). CHANGELOG.md: New Unreleased entry at top covering all wave additions. Build/vet/tests all pass.'
 integration_reports:
     wave2:
         wave: 2
         gaps: []
         valid: true
         summary: 'Wave 2: all exports are integrated (no gaps detected)'
+    wave4:
+        wave: 4
+        gaps: []
+        valid: true
+        summary: 'Wave 4: all exports are integrated (no gaps detected)'
 pre_mortem:
     overall_risk: medium
     rows:
