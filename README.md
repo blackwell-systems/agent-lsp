@@ -9,17 +9,15 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Agent Skills](assets/badge-agentskills.svg)](https://agentskills.io)
 
-Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships.
-
 lsp-mcp-go is a stateful runtime over real language servers — not a bridge. It maintains a persistent, warm session, reshapes LSP into agent-oriented workflows, and adds a transactional execution layer for safe speculative edits.
+
+Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships.
 
 **45 tools** across navigation, analysis, refactoring, and formatting — **28 CI-verified** end-to-end against real language servers across **22 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
 **Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One lsp-mcp-go process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright — no reconfiguration when you switch projects.
 
-**Persistent session, warm index.** Unlike per-request bridges, lsp-mcp-go maintains a live language server session. `start_lsp` indexes the workspace once; every subsequent call hits the warm index. `get_references` returns all 12 call sites without loading files into context. `get_diagnostics` returns only the errors. `get_info_on_location` returns the type signature at one position without loading the module. The index stays fresh automatically — lsp-mcp-go watches the workspace for file changes and notifies the language server in the background. No restart, no manual calls needed.
-
-**Auto-watch keeps the index fresh.** lsp-mcp-go watches the workspace root for file changes using kernel-level filesystem events (inotify/kqueue/FSEvents). Every file edit, creation, or deletion is automatically forwarded to the language server — `get_references`, `get_diagnostics`, and hover info always reflect the current state on disk. No `did_change_watched_files` calls required. High-churn directories (`.git/`, `node_modules/`, etc.) are excluded at the watcher level; rapid edits are debounced at 150ms.
+**Persistent session, warm index.** Unlike per-request bridges, lsp-mcp-go maintains a live language server session. `start_lsp` indexes the workspace once; every subsequent call hits the warm index. `get_references` returns all 12 call sites without loading files into context. `get_diagnostics` returns only the errors. `get_info_on_location` returns the type signature at one position without loading the module. The language server's index stays fresh automatically — lsp-mcp-go watches the workspace using kernel-level filesystem events (inotify/kqueue/FSEvents) and forwards changes to keep the session synchronized. High-churn directories (`.git/`, `node_modules/`, etc.) are excluded; rapid edits are debounced at 150ms. No `did_change_watched_files` calls required.
 
 **Fuzzy position fallback.** When an AI assistant gets a line/column slightly wrong, `go_to_definition`, `get_references`, and `rename_symbol` fall back to workspace symbol search by hover name and retry — returning results instead of silently returning empty.
 
@@ -192,8 +190,8 @@ All tools require `start_lsp` to be called first.
 
 **CI coverage:** The following tools are end-to-end integration-tested against real language servers on every CI run across all 22 languages:
 
-- **Tier 1** (all 13): `start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`
-- **Tier 2** (all 13): `get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`, `get_info_on_location`, `call_hierarchy`, `get_semantic_tokens`, `get_signature_help`, `get_document_highlights`, `get_inlay_hints`, `get_code_actions`, `prepare_rename`, `rename_symbol`, `get_server_capabilities`, `add_workspace_folder`, `go_to_type_definition`, `go_to_implementation`, `format_range`, `apply_edit`, `detect_lsp_servers`, `close_document`, `did_change_watched_files`, `run_build`, `run_tests`
+- **Tier 1** (4 tools, all 22 languages): `start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`
+- **Tier 2** (28 tools): `get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`, `get_info_on_location`, `call_hierarchy`, `get_semantic_tokens`, `get_signature_help`, `get_document_highlights`, `get_inlay_hints`, `get_code_actions`, `prepare_rename`, `rename_symbol`, `get_server_capabilities`, `add_workspace_folder`, `go_to_type_definition`, `go_to_implementation`, `format_range`, `apply_edit`, `detect_lsp_servers`, `close_document`, `did_change_watched_files`, `run_build`, `run_tests`
 
 Speculative session tools (`create_simulation_session`, `simulate_edit`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session`, `commit_session`, `discard_session`, `destroy_session`) are covered by `TestSpeculativeSessions` in `test/speculative_test.go`. Remaining tools (`restart_lsp_server`, `execute_command`, `set_log_level`) are unit tested.
 
