@@ -63,7 +63,7 @@ The valuable primitive is not "preview one edit." It is:
 
 > create an isolated semantic future of the codebase
 
-This is the first agent-native primitive in lsp-mcp-go. Everything else (navigation, diagnostics, hover) is LSP exposed. This is new capability: **isolated state → mutation → evaluation → commit or discard**.
+This is the first agent-native primitive in agent-lsp. Everything else (navigation, diagnostics, hover) is LSP exposed. This is new capability: **isolated state → mutation → evaluation → commit or discard**.
 
 ---
 
