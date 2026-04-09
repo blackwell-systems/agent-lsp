@@ -17,3 +17,10 @@ go.work.sum
 .saw-state/
 lsp-mcp-go
 lsp-mcp-go-test
+
+# Build artifacts from local test runs
+test/fixtures/go/hello
+test/fixtures/kotlin/.gradle/
+test/fixtures/kotlin/.project
+test/fixtures/kotlin/.settings/
+test/fixtures/swift/.build/

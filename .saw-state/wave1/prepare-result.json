@@ -3,41 +3,44 @@
   "worktrees": [
     {
       "agent": "A",
-      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/build-tool-integration/wave1-agent-A",
-      "branch": "saw/build-tool-integration/wave1-agent-A"
+      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/build-tool-dispatch-expansion/wave1-agent-A",
+      "branch": "saw/build-tool-dispatch-expansion/wave1-agent-A"
+    },
+    {
+      "agent": "B",
+      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/build-tool-dispatch-expansion/wave1-agent-B",
+      "branch": "saw/build-tool-dispatch-expansion/wave1-agent-B"
     },
     {
       "agent": "C",
-      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/build-tool-integration/wave1-agent-C",
-      "branch": "saw/build-tool-integration/wave1-agent-C"
-    },
-    {
-      "agent": "D",
-      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/build-tool-integration/wave1-agent-D",
-      "branch": "saw/build-tool-integration/wave1-agent-D"
+      "path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/build-tool-dispatch-expansion/wave1-agent-C",
+      "branch": "saw/build-tool-dispatch-expansion/wave1-agent-C"
     }
   ],
   "agent_briefs": [
     {
       "agent": "A",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/build-tool-integration/wave1-agent-A/.saw-agent-brief.md",
-      "brief_length": 12047,
+      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/build-tool-dispatch-expansion/wave1-agent-A/.saw-agent-brief.md",
+      "brief_length": 14101,
       "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave1/agent-A",
-      "files_owned": 0
+      "files_owned": 2,
+      "repo": "LSP-MCP-GO"
+    },
+    {
+      "agent": "B",
+      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/build-tool-dispatch-expansion/wave1-agent-B/.saw-agent-brief.md",
+      "brief_length": 13257,
+      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave1/agent-B",
+      "files_owned": 1,
+      "repo": "LSP-MCP-GO"
     },
     {
       "agent": "C",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/build-tool-integration/wave1-agent-C/.saw-agent-brief.md",
-      "brief_length": 5817,
+      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/build-tool-dispatch-expansion/wave1-agent-C/.saw-agent-brief.md",
+      "brief_length": 7535,
       "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave1/agent-C",
-      "files_owned": 0
-    },
-    {
-      "agent": "D",
-      "brief_path": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.claude/worktrees/saw/build-tool-integration/wave1-agent-D/.saw-agent-brief.md",
-      "brief_length": 9699,
-      "journal_dir": "/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/.saw-state/wave1/agent-D",
-      "files_owned": 0
+      "files_owned": 1,
+      "repo": "LSP-MCP-GO"
     }
   ],
   "steps": [
@@ -84,7 +87,7 @@
     {
       "step": "commit_state",
       "status": "success",
-      "detail": "committed 1 SAW state file(s)"
+      "detail": "committed 7 SAW state file(s)"
     },
     {
       "step": "baseline_gates",
