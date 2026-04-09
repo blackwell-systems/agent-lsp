@@ -1,10 +1,8 @@
 ---
 name: lsp-rename
-description: "Two-phase safe rename: preview all sites with dry_run, confirm, then execute atomically. Never renames without showing impact first."
-user-invocable: true
-allowed-tools: |
-  mcp__lsp__go_to_symbol, mcp__lsp__get_references, mcp__lsp__rename_symbol,
-  mcp__lsp__apply_edit, mcp__lsp__get_diagnostics
+description: Two-phase safe rename — preview all sites with dry_run, confirm, then execute atomically. Never renames without showing impact first.
+compatibility: Requires lsp-mcp-go MCP server
+allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__get_references mcp__lsp__rename_symbol mcp__lsp__apply_edit mcp__lsp__get_diagnostics
 ---
 
 # lsp-rename: Safe Symbol Rename
@@ -160,7 +158,7 @@ mcp__lsp__get_diagnostics
 ```
 
 Compute introduced vs. resolved errors and display the Diagnostic Summary (see
-Output Format below).
+[references/patterns.md](references/patterns.md)).
 
 ---
 
@@ -177,14 +175,8 @@ After Phase 2 completes, display:
 - Post-rename errors: 0
 ```
 
-Follow with the Diagnostic Summary if any errors changed:
-
-```
-## Diagnostic Summary
-- Errors introduced:   N  (each as: file:line - message)
-- Errors resolved:     N  (each as: file:line - message)
-- Net change:         +N / -N / 0
-```
+Follow with the Diagnostic Summary if any errors changed (format in
+[references/patterns.md](references/patterns.md)).
 
 Only show Diagnostic Summary sections where N > 0. A net change of 0 means the
 rename is safe.
@@ -202,11 +194,3 @@ The following language servers support `rename_symbol`:
 Other LSP-compliant servers that implement `textDocument/rename` also work.
 Check your server's capability list via `mcp__lsp__get_server_capabilities` if
 you are unsure.
-
----
-
-## MCP Client Compatibility
-
-This skill uses MCP tool calls directly and is not Claude Code-specific. Any MCP
-client that supports tool use can execute this skill by following the workflow
-steps above and calling the listed tools in sequence.

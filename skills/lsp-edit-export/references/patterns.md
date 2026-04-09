@@ -28,9 +28,3 @@ Explicit start_lsp only needed when switching workspace roots.
     - Warnings resolved:   N (only if N > 0)
 
 Rules: only show sections where N > 0. Net change of 0 = safe to proceed.
-
-## MCP Client Compatibility Note
-
-Skills use MCP tool calls directly. Not Claude-Code-specific. Any MCP client
-that supports tool use can execute these skills by following the workflow steps
-and calling the listed tools.

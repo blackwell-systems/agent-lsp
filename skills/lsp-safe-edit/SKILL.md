@@ -1,10 +1,8 @@
 ---
 name: lsp-safe-edit
-description: "Wrap any code edit with before/after diagnostic comparison. Captures baseline errors, makes the edit, then reports errors introduced vs. resolved."
-user-invocable: true
-allowed-tools: |
-  mcp__lsp__start_lsp, mcp__lsp__open_document, mcp__lsp__get_diagnostics,
-  Edit, Write, Bash
+description: Wrap any code edit with before/after diagnostic comparison. Captures baseline errors, makes the edit, then reports errors introduced vs. resolved.
+compatibility: Requires lsp-mcp-go MCP server
+allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_diagnostics Edit Write Bash
 ---
 
 # lsp-safe-edit
@@ -81,19 +79,7 @@ line-number shifts. Severity: treat `error` and `warning` separately.
 
 **Step 6 — Report using DiagnosticDiffFormat**
 
-Output the summary in the shared format from PATTERNS.md:
-
-```
-## Diagnostic Summary
-- Errors introduced:   N  (each as: file:line - message)
-- Errors resolved:     N  (each as: file:line - message)
-- Net change:         +N / -N / 0
-- Warnings introduced: N (only if N > 0)
-- Warnings resolved:   N (only if N > 0)
-```
-
-Only include lines where N > 0. List each introduced or resolved diagnostic
-on its own line in the format `file:line - message`.
+Output the summary using the format in [references/patterns.md](references/patterns.md).
 
 ## Decision Guide
 
@@ -110,9 +96,3 @@ When net change > 0:
 3. Wait for user decision before proceeding.
 
 Do not commit or stage files when net change > 0.
-
-## MCP Client Compatibility Note
-
-This skill uses MCP tool calls directly. It is not Claude-Code-specific. Any
-MCP client that supports tool use can execute this workflow by following the
-steps above and calling the listed tools in order.

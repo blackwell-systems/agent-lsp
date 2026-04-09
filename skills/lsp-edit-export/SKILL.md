@@ -1,10 +1,8 @@
 ---
 name: lsp-edit-export
-description: "Safe workflow for editing exported symbols. Finds all callers via go_to_symbol + get_references before making any change, then verifies with diagnostics + build."
-user-invocable: true
-allowed-tools: |
-  mcp__lsp__go_to_symbol, mcp__lsp__open_document, mcp__lsp__get_references,
-  mcp__lsp__get_diagnostics, mcp__lsp__run_build, Edit, Write
+description: Safe workflow for editing exported symbols. Finds all callers via go_to_symbol + get_references before making any change, then verifies with diagnostics + build.
+compatibility: Requires lsp-mcp-go MCP server
+allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__open_document mcp__lsp__get_references mcp__lsp__get_diagnostics mcp__lsp__run_build Edit Write
 ---
 
 # lsp-edit-export
@@ -136,20 +134,8 @@ Then apply the edit and collect diagnostics again after.
 
 ### Step 5 — Check diagnostics
 
-Compare before and after diagnostic snapshots using the shared format (see
-PATTERNS.md):
-
-```
-## Diagnostic Summary
-- Errors introduced:   N  (each as: file:line - message)
-- Errors resolved:     N  (each as: file:line - message)
-- Net change:         +N / -N / 0
-- Warnings introduced: N (only if N > 0)
-- Warnings resolved:   N (only if N > 0)
-```
-
-Only show sections where N > 0. A net change of 0 means no new problems were
-introduced.
+Compare before and after diagnostic snapshots using the format in
+[references/patterns.md](references/patterns.md).
 
 If new errors appear, fix them before proceeding. Do not run the build with
 known diagnostic errors outstanding.
@@ -212,11 +198,7 @@ Step 7 — report:
   - Build: PASSED
 ```
 
-## MCP Client Compatibility Note
-
-Skills use MCP tool calls directly. Not Claude-Code-specific. Any MCP client
-that supports tool use can execute this skill by following the workflow steps
-and calling the listed tools in order.
+## Note on position_pattern
 
 `position_pattern` with `@@` is a lsp-mcp-go extension. If your MCP client
 or server does not support it, fall back to explicit `line` and `column`

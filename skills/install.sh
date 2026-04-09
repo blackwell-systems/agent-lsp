@@ -2,86 +2,57 @@
 set -euo pipefail
 
 # lsp-mcp-go skills installer
+# Installs Agent Skills directories to ~/.claude/skills/
 # macOS/Linux: full support. Windows WSL: use --copy. Windows native: not supported.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEST_DIR="${HOME}/.claude/skills/lsp"
+DEST_DIR="${HOME}/.claude/skills"
 USE_COPY=false
 FORCE=false
 DRY_RUN=false
-
-# Files to exclude from installation
-EXCLUDE=("PATTERNS.md" "install.sh")
 
 usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Install lsp-mcp-go skill files to ~/.claude/skills/lsp/
+Install lsp-mcp-go skills to ~/.claude/skills/
+
+Each skill is a directory containing a SKILL.md file (Agent Skills format).
+Skills are installed as symlinks by default (idempotent, non-destructive).
 
 Options:
-  --copy      Copy files instead of creating symlinks
-  --force     Overwrite existing files/symlinks
+  --copy      Copy directories instead of creating symlinks
+  --force     Overwrite existing links/directories
   --dry-run   Show what would be done without making changes
   --help      Show this help message
-
-By default, skill files are installed as symlinks (idempotent, non-destructive).
-Running this script twice produces the same result.
-
-Exclusions: PATTERNS.md and install.sh are not installed.
 
 Examples:
   $(basename "$0")              # Symlink all skills
   $(basename "$0") --copy       # Copy all skills
   $(basename "$0") --dry-run    # Preview what would happen
-  $(basename "$0") --force      # Replace existing links/files
+  $(basename "$0") --force      # Replace existing links/directories
 EOF
-}
-
-is_excluded() {
-    local file="$1"
-    local basename
-    basename="$(basename "$file")"
-    for excluded in "${EXCLUDE[@]}"; do
-        if [[ "$basename" == "$excluded" ]]; then
-            return 0
-        fi
-    done
-    return 1
 }
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --copy)
-            USE_COPY=true
-            shift
-            ;;
-        --force)
-            FORCE=true
-            shift
-            ;;
-        --dry-run)
-            DRY_RUN=true
-            shift
-            ;;
-        --help|-h)
-            usage
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $1" >&2
-            usage >&2
-            exit 1
-            ;;
+        --copy)   USE_COPY=true; shift ;;
+        --force)  FORCE=true; shift ;;
+        --dry-run) DRY_RUN=true; shift ;;
+        --help|-h) usage; exit 0 ;;
+        *) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
     esac
 done
 
-# Collect skill files
-mapfile -t skill_files < <(find "$SCRIPT_DIR" -maxdepth 1 -name "*.md" | sort)
+# Collect skill directories (those containing a SKILL.md)
+skill_dirs=()
+while IFS= read -r skillmd; do
+    skill_dirs+=("${skillmd%/SKILL.md}")
+done < <(find "$SCRIPT_DIR" -maxdepth 2 -name "SKILL.md" | sort)
 
-if [[ ${#skill_files[@]} -eq 0 ]]; then
-    echo "No .md skill files found in $SCRIPT_DIR"
+if [[ ${#skill_dirs[@]} -eq 0 ]]; then
+    echo "No skill directories found in $SCRIPT_DIR"
     exit 0
 fi
 
@@ -96,48 +67,42 @@ installed=0
 skipped=0
 errors=0
 
-for src in "${skill_files[@]}"; do
-    if is_excluded "$src"; then
-        continue
-    fi
+for src in "${skill_dirs[@]}"; do
+    skill_name="$(basename "$src")"
+    dest="$DEST_DIR/$skill_name"
 
-    filename="$(basename "$src")"
-    dest="$DEST_DIR/$filename"
-
-    # Check if destination already exists
     if [[ -e "$dest" || -L "$dest" ]]; then
         if [[ "$FORCE" == false ]]; then
-            echo "  skip  $filename (already exists; use --force to overwrite)"
+            echo "  skip  $skill_name (already exists; use --force to overwrite)"
             ((skipped++)) || true
             continue
         fi
-        # Force mode: remove existing
         if [[ "$DRY_RUN" == false ]]; then
-            rm -f "$dest"
+            rm -rf "$dest"
         fi
     fi
 
     if [[ "$USE_COPY" == true ]]; then
         if [[ "$DRY_RUN" == true ]]; then
-            echo "[dry-run] Would copy: $filename -> $dest"
+            echo "[dry-run] Would copy: $skill_name/ -> $dest/"
         else
-            if cp "$src" "$dest"; then
-                echo "  copy  $filename"
+            if cp -r "$src" "$dest"; then
+                echo "  copy  $skill_name/"
                 ((installed++)) || true
             else
-                echo "  ERROR copying $filename" >&2
+                echo "  ERROR copying $skill_name/" >&2
                 ((errors++)) || true
             fi
         fi
     else
         if [[ "$DRY_RUN" == true ]]; then
-            echo "[dry-run] Would symlink: $filename -> $dest"
+            echo "[dry-run] Would symlink: $skill_name/ -> $dest"
         else
             if ln -s "$src" "$dest"; then
-                echo "  link  $filename"
+                echo "  link  $skill_name/"
                 ((installed++)) || true
             else
-                echo "  ERROR symlinking $filename" >&2
+                echo "  ERROR symlinking $skill_name/" >&2
                 ((errors++)) || true
             fi
         fi
@@ -149,7 +114,5 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "Dry run complete. No changes made."
 else
     echo "Done. Installed: $installed, Skipped: $skipped, Errors: $errors"
-    if [[ $errors -gt 0 ]]; then
-        exit 1
-    fi
+    [[ $errors -gt 0 ]] && exit 1
 fi

@@ -1,9 +1,8 @@
 ---
 name: lsp-verify
-description: "Full three-layer verification after any change: LSP diagnostics + compiler build + test suite. Ranked by severity."
-user-invocable: true
-allowed-tools: |
-  mcp__lsp__get_diagnostics, mcp__lsp__run_build, mcp__lsp__run_tests
+description: Full three-layer verification after any change — LSP diagnostics + compiler build + test suite, ranked by severity.
+compatibility: Requires lsp-mcp-go MCP server
+allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests
 ---
 
 # lsp-verify: Three-Layer Verification
@@ -120,9 +119,3 @@ Blocking issues: [errors that must be fixed before shipping]
 Build errors and test failures block shipping. LSP warnings and style
 suggestions are advisory — document them but do not treat as blockers unless
 they indicate logical errors.
-
-## MCP Client Compatibility Note
-
-This skill uses MCP tool calls directly. Not Claude-Code-specific. Any MCP
-client that supports tool use can execute this skill by following the workflow
-steps above and calling the listed tools.
