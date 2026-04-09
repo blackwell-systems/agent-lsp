@@ -57,7 +57,7 @@ func init() {
 		if _, ok := logLevelPriority[envLevel]; ok {
 			currentLevel = envLevel
 		} else {
-			initWarning = fmt.Sprintf("lsp-mcp-go: invalid LOG_LEVEL %q, defaulting to \"info\"\n", envLevel)
+			initWarning = fmt.Sprintf("agent-lsp: invalid LOG_LEVEL %q, defaulting to \"info\"\n", envLevel)
 		}
 	}
 }
@@ -126,7 +126,7 @@ func Log(level, message string) {
 
 	if initialized && sender != nil {
 		if ls, ok := sender.(logSender); ok {
-			_ = ls.LogMessage(level, "lsp-mcp-go", message)
+			_ = ls.LogMessage(level, "agent-lsp", message)
 			return
 		}
 	}

@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"sort"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/logging"
+	"github.com/blackwell-systems/agent-lsp/internal/logging"
 )
 
 // ServerSpec describes a language server's binary name and default args.
