@@ -1,6 +1,6 @@
 package session
 
-import "github.com/blackwell-systems/lsp-mcp-go/internal/types"
+import "github.com/blackwell-systems/agent-lsp/internal/types"
 
 // DiagnosticsEqual reports whether two LSP diagnostics are semantically identical.
 // Two diagnostics are equal if they have matching:

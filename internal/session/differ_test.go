@@ -3,7 +3,7 @@ package session
 import (
 	"testing"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 func TestDiagnosticsEqual_Match(t *testing.T) {
