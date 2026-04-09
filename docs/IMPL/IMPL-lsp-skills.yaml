@@ -1,0 +1,1038 @@
+title: Agent-Native Skills and Improved Primitives for lsp-mcp-go
+feature_slug: lsp-skills
+verdict: SUITABLE
+suitability_assessment: |
+    All five suitability questions resolve cleanly.
+
+    1. File decomposition: The feature has two distinct layers:
+       - Layer 1 (Wave 1): Two new Go tool handlers + tests, fully independent.
+       - Layer 2 (Wave 2): Three new Go registrations/modifications (server.go,
+         workspace.go) + five independent skill/script files.
+       - Layer 3 (Wave 3): Doc updates.
+       All waves have disjoint file ownership within each wave.
+
+    2. No investigation-first items. Tool signatures match existing handler patterns
+       exactly. All handler conventions (extractPosition, WithDocument, locationsResult,
+       CheckInitialized) are well-established in the codebase.
+
+    3. Interface contracts: go_to_symbol, ResolvePositionPattern, dry_run on rename_symbol
+       are fully specifiable before implementation. All call existing client methods.
+
+    4. Pre-implementation status: skills/ directory does not exist. No prior implementation.
+       All items are TODO.
+
+    5. Parallelization value: 9 total agents across 3 waves. Wave 1 has 2 independent Go
+       agents. Wave 2 has 6 independent agents (server.go+workspace.go wiring + 5 skills).
+       Build cycle ~30s (Go). Clear speedup.
+
+    Cross-repo note: IMPL doc lives in scout-and-wave; all implementation files land in
+    lsp-mcp-go (develop branch). Every file_ownership entry carries repo: lsp-mcp-go;
+    every quality gate carries its repo.
+
+    Coordinator clarifications incorporated:
+    - Position marker uses @@ syntax (not <|> which is lsp-skill syntax)
+    - dry_run parameter on rename_symbol (not a new preview_id scheme)
+    - go_to_symbol as a single combined lookup tool
+
+    Estimated times:
+    - Scout phase: ~15 min
+    - Agent execution: 9 agents, 3 waves, parallel within wave: ~22 min total
+    - Merge and verification: ~10 min
+    Total SAW time: ~47 min
+    Sequential baseline: 9 x 20 min = 180 min
+    Time savings: ~133 min (~74% faster)
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: internal/tools/symbol_path.go
+      agent: A
+      wave: 1
+      action: new
+      repo: lsp-mcp-go
+    - file: internal/tools/symbol_path_test.go
+      agent: A
+      wave: 1
+      action: new
+      repo: lsp-mcp-go
+    - file: internal/tools/position_pattern.go
+      agent: B
+      wave: 1
+      action: new
+      repo: lsp-mcp-go
+    - file: internal/tools/position_pattern_test.go
+      agent: B
+      wave: 1
+      action: new
+      repo: lsp-mcp-go
+    - file: cmd/lsp-mcp-go/server.go
+      agent: G
+      wave: 3
+      action: modify
+      depends_on:
+        - A
+        - B
+        - E
+      repo: lsp-mcp-go
+    - file: internal/tools/workspace.go
+      agent: G
+      wave: 3
+      action: modify
+      depends_on:
+        - B
+      repo: lsp-mcp-go
+    - file: skills/lsp-safe-edit.md
+      agent: C
+      wave: 2
+      action: new
+      repo: lsp-mcp-go
+    - file: skills/lsp-edit-export.md
+      agent: D
+      wave: 2
+      action: new
+      repo: lsp-mcp-go
+    - file: skills/lsp-rename.md
+      agent: E
+      wave: 2
+      action: new
+      repo: lsp-mcp-go
+    - file: skills/lsp-verify.md
+      agent: F
+      wave: 2
+      action: new
+      repo: lsp-mcp-go
+    - file: skills/install.sh
+      agent: H
+      wave: 2
+      action: new
+      repo: lsp-mcp-go
+    - file: README.md
+      agent: I
+      wave: 4
+      action: modify
+      depends_on:
+        - C
+        - D
+        - E
+        - F
+        - H
+        - G
+      repo: lsp-mcp-go
+    - file: docs/tools.md
+      agent: I
+      wave: 4
+      action: modify
+      depends_on:
+        - A
+        - B
+        - G
+      repo: lsp-mcp-go
+    - file: CHANGELOG.md
+      agent: I
+      wave: 4
+      action: modify
+      depends_on:
+        - A
+        - B
+        - C
+        - D
+        - E
+        - F
+        - G
+        - H
+      repo: lsp-mcp-go
+interface_contracts:
+    - name: HandleGoToSymbol
+      description: Resolve a symbol path to its definition location without needing file_path or line/column
+      definition: |
+        func HandleGoToSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+
+        // args["symbol_path"]: string, dot notation e.g. "MyClass.method", "pkg.Function"
+        // args["workspace_root"]: string, optional scope
+        // args["language"]: string, optional filter
+        //
+        // Algorithm:
+        //   1. Split symbol_path on "." to get leaf name (last component)
+        //   2. client.GetWorkspaceSymbols(ctx, leafName) -> candidates
+        //   3. Filter: if dotted, prefer where ContainerName matches parent; else use first
+        //   4. For best match: open file via WithDocument, call client.GetDefinition
+        //      at candidate position; if empty, use candidate Location directly
+        //   5. Return locationsResult (1-indexed FormattedLocation)
+      location: internal/tools/symbol_path.go
+    - name: ResolvePositionPattern
+      description: Resolve @@ cursor marker in a text pattern to 1-indexed line/col in a file
+      definition: |
+        func ResolvePositionPattern(filePath, pattern string) (line, col int, err error)
+
+        // pattern must contain "@@" — the cursor position marker.
+        // Returns 1-indexed line and col of the character immediately after @@.
+        // Error if pattern lacks "@@" or searchText not found in file.
+
+        func ExtractPositionWithPattern(args map[string]interface{}, filePath string) (line, col int, err error)
+
+        // If args["position_pattern"] is non-empty: calls ResolvePositionPattern.
+        // Otherwise: falls through to extractPosition(args).
+      location: internal/tools/position_pattern.go
+    - name: GoToSymbolArgs
+      description: Server-side arg struct for go_to_symbol tool
+      definition: |
+        type GoToSymbolArgs struct {
+            SymbolPath    string `json:"symbol_path"`
+            WorkspaceRoot string `json:"workspace_root,omitempty"`
+            Language      string `json:"language,omitempty"`
+        }
+      location: cmd/lsp-mcp-go/server.go
+    - name: position_pattern field on existing arg structs
+      description: New optional field added to three arg structs in server.go
+      definition: |
+        // Added to GetInfoOnLocationArgs, GetReferencesArgs, GoToDefinitionArgs:
+        PositionPattern string `json:"position_pattern,omitempty"`
+
+        // Note: handlers do not yet call ExtractPositionWithPattern in this wave.
+        // The field documents the parameter; handler wiring is a follow-up task.
+      location: cmd/lsp-mcp-go/server.go
+    - name: RenameSymbolArgs with dry_run
+      description: Updated arg struct for rename_symbol with dry_run and position_pattern
+      definition: |
+        type RenameSymbolArgs struct {
+            FilePath        string `json:"file_path"`
+            LanguageID      string `json:"language_id,omitempty"`
+            Line            int    `json:"line"`
+            Column          int    `json:"column"`
+            NewName         string `json:"new_name"`
+            PositionPattern string `json:"position_pattern,omitempty"`
+            DryRun          bool   `json:"dry_run,omitempty"`
+        }
+
+        // dry_run=true: HandleRenameSymbol wraps result in preview envelope:
+        //   { "workspace_edit": {...}, "preview": { "note": "..." } }
+        // dry_run=false (default): existing behavior unchanged.
+      location: cmd/lsp-mcp-go/server.go and internal/tools/workspace.go
+    - name: DiagnosticDiffFormat
+      description: Shared output format for before/after diagnostic comparison
+      definition: |
+        ## Diagnostic Summary
+        - Errors introduced:   N  (each as: file:line - message)
+        - Errors resolved:     N  (each as: file:line - message)
+        - Net change:         +N / -N / 0
+      location: skills/PATTERNS.md
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Role: go_to_symbol handler author
+
+            Create `internal/tools/symbol_path.go` and `internal/tools/symbol_path_test.go`
+            in `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO`. Work on the `develop` branch.
+
+            ### Read first (before implementing)
+
+            - `internal/tools/analysis.go` lines 252-325 — HandleGetWorkspaceSymbols pattern
+            - `internal/tools/navigation.go` lines 1-88 — HandleGetReferences, locationsResult
+            - `internal/tools/fuzzy.go` — extractSymbolName helper function
+            - `internal/tools/helpers.go` — CheckInitialized, WithDocument, CreateFileURI
+            - `internal/tools/tools_test.go` — newNilClient() mock pattern for tests
+            - `internal/tools/workspace_symbols_test.go` — test structure to follow
+
+            ### symbol_path.go
+
+            Package: `tools`. New file — do NOT modify existing files.
+
+            Implement:
+
+            1. `HandleGoToSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)`
+
+            Algorithm:
+            - CheckInitialized(client) guard
+            - Extract symbol_path from args; error if empty
+            - Extract leaf name: last component after splitting on "."
+            - Call client.GetWorkspaceSymbols(ctx, leafName)
+            - Call bestSymbolMatch(syms, symbolPath) to pick best candidate
+            - If no match: return "no symbols found for symbol_path: <path>"
+            - Open candidate file with WithDocument, call client.GetDefinition at
+              candidate position (0-indexed: sym.Location.Range.Start.Line,
+              sym.Location.Range.Start.Character)
+            - If GetDefinition returns non-empty locs: return locationsResult(locs)
+            - Else: format candidate Location as FormattedLocation (1-indexed) and return
+
+            2. `bestSymbolMatch(candidates []types.SymbolInformation, symbolPath string) *types.SymbolInformation`
+
+            - If symbolPath has no ".": return &candidates[0] (first match)
+            - If symbolPath has ".": split on ".", parent = everything before last dot
+              Prefer first candidate whose ContainerName == parent (case-sensitive)
+              If no ContainerName match: return &candidates[0]
+
+            Imports needed: `context`, `fmt`, `strings`,
+            `github.com/blackwell-systems/lsp-mcp-go/internal/lsp`,
+            `github.com/blackwell-systems/lsp-mcp-go/internal/types`
+
+            ### symbol_path_test.go
+
+            Package: `tools`. Follow the `newNilClient()` pattern from tools_test.go.
+
+            Tests:
+            1. `TestHandleGoToSymbol_NilClient` — nil client -> error result containing "not initialized"
+            2. `TestHandleGoToSymbol_EmptySymbolPath` — empty symbol_path -> error result
+            3. `TestBestSymbolMatch_NoDots` — two candidates, no dot in path -> returns first
+            4. `TestBestSymbolMatch_WithDots` — candidates with ContainerName, dotted path ->
+               returns the one where ContainerName matches parent component
+
+            ### Constraints
+            - Do NOT modify any existing files.
+            - Do NOT create position_pattern.go — that is Agent B's file.
+            - Do NOT modify server.go — that is Agent G's file (Wave 2).
+            - Stay within the `internal/tools` package conventions.
+
+            ### Verification
+
+            ```bash
+            cd /Users/dayna.blackwell/workspace/code/LSP-MCP-GO
+            GOWORK=off go build ./internal/tools/
+            # expected: EXIT 0
+
+            GOWORK=off go test ./internal/tools/ -run "TestHandleGoToSymbol|TestBestSymbolMatch" -v
+            # expected: 4 tests PASS
+
+            grep "func HandleGoToSymbol" internal/tools/symbol_path.go
+            # expected: 1 match
+
+            grep "func bestSymbolMatch" internal/tools/symbol_path.go
+            # expected: 1 match
+            ```
+          files:
+            - internal/tools/symbol_path.go
+            - internal/tools/symbol_path_test.go
+        - id: B
+          task: |
+            ## Role: position_pattern utility author
+
+            Create `internal/tools/position_pattern.go` and `internal/tools/position_pattern_test.go`
+            in `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO`. Work on the `develop` branch.
+
+            ### Read first
+
+            - `internal/tools/helpers.go` — package conventions, no panic style
+            - `internal/tools/analysis.go` lines 352-370 — extractPosition for fallback reference
+
+            ### position_pattern.go
+
+            Package: `tools`. New file — do NOT modify existing files.
+
+            The `@@` string is the cursor position marker. It indicates that the cursor
+            is placed at the character immediately following `@@` in the pattern.
+
+            Implement:
+
+            1. `ResolvePositionPattern(filePath, pattern string) (line, col int, err error)`
+
+            Algorithm:
+            - Validate pattern contains "@@"; if not: return error "position_pattern must contain @@ marker"
+            - Read file content with os.ReadFile(filePath)
+            - Split pattern on "@@" -> prefix, suffix. searchText = prefix + suffix
+            - Find searchText in fileContent using strings.Index
+            - If not found: return error fmt.Errorf("position_pattern not found in file: %q", pattern)
+            - offset = matchStart + len(prefix)  // byte offset of the @@ cursor position
+            - Count lines: line = strings.Count(fileContent[:offset], "\n") + 1  (1-indexed)
+            - Col = offset - strings.LastIndex(fileContent[:offset], "\n") (1-indexed; handle no newline case)
+            - Return line, col, nil
+
+            2. `ExtractPositionWithPattern(args map[string]interface{}, filePath string) (line, col int, err error)`
+
+            - pp, _ := args["position_pattern"].(string)
+            - If pp != "": return ResolvePositionPattern(filePath, pp)
+            - Else: return extractPosition(args)
+
+            Imports: `fmt`, `os`, `strings`
+
+            ### position_pattern_test.go
+
+            Package: `tools`. Use t.TempDir() and os.WriteFile for temp files.
+
+            Tests:
+            1. `TestResolvePositionPattern_Basic` — single-line file "hello world@@end",
+               pattern "hello world@@end", expect line=1, col=12
+            2. `TestResolvePositionPattern_MultiLine` — 3-line file, pattern on line 2,
+               verify correct line/col
+            3. `TestResolvePositionPattern_NoMarker` — pattern without "@@" -> error
+            4. `TestResolvePositionPattern_NotFound` — pattern not in file -> error
+            5. `TestResolvePositionPattern_MarkerAtStart` — pattern "@@firstword" -> col=1
+            6. `TestExtractPositionWithPattern_WithPattern` — args has position_pattern,
+               expect ResolvePositionPattern result (write temp file, put pattern in args)
+            7. `TestExtractPositionWithPattern_Fallback` — args has line=5, column=3 (no pattern),
+               expect line=5, col=3
+
+            ### Constraints
+            - Do NOT modify any existing files.
+            - Do NOT create symbol_path.go — that is Agent A's file.
+            - Do NOT modify server.go — that is Agent G's file.
+            - Pure file I/O — no LSP client interaction.
+
+            ### Verification
+
+            ```bash
+            cd /Users/dayna.blackwell/workspace/code/LSP-MCP-GO
+            GOWORK=off go build ./internal/tools/
+            # expected: EXIT 0
+
+            GOWORK=off go test ./internal/tools/ -run "TestResolvePositionPattern|TestExtractPositionWithPattern" -v
+            # expected: 7 tests PASS
+
+            grep "func ResolvePositionPattern" internal/tools/position_pattern.go
+            # expected: 1 match
+
+            grep "func ExtractPositionWithPattern" internal/tools/position_pattern.go
+            # expected: 1 match
+            ```
+          files:
+            - internal/tools/position_pattern.go
+            - internal/tools/position_pattern_test.go
+    - number: 2
+      agents:
+        - id: C
+          task: |
+            ## Role: lsp-safe-edit skill author
+
+            Create `skills/lsp-safe-edit.md` in `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO`.
+            Work on the `develop` branch.
+
+            ### Read first
+
+            - `/Users/dayna.blackwell/.claude/skills/saw/SKILL.md` — exact frontmatter format
+            - `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/PATTERNS.md` — shared conventions
+
+            ### Frontmatter
+
+            ```yaml
+            ---
+            name: lsp-safe-edit
+            description: "Wrap any code edit with before/after diagnostic comparison. Captures baseline errors, makes the edit, then reports errors introduced vs. resolved."
+            user-invocable: true
+            allowed-tools: |
+              mcp__lsp__start_lsp, mcp__lsp__open_document, mcp__lsp__get_diagnostics,
+              Edit, Write, Bash
+            ---
+            ```
+
+            ### Body must include
+
+            1. **Prerequisites** section: LSP running check, auto-init note.
+            2. **Input** section: target file(s) and description of change.
+            3. **Numbered workflow** (6 steps):
+               - open_document for target file(s)
+               - get_diagnostics (baseline) — store as BEFORE
+               - make the edit with Edit/Write tool
+               - get_diagnostics (post-edit) — store as AFTER
+               - compute diff (introduced = in AFTER not in BEFORE; resolved = in BEFORE not in AFTER)
+               - report using DiagnosticDiffFormat (copy format from PATTERNS.md)
+            4. **Decision guide**: net_change > 0 = do NOT commit, offer to revert.
+            5. **MCP client compatibility note**.
+
+            ### Constraints
+            - Do NOT modify Go source files.
+            - Do NOT create other skill files — each is owned by its agent.
+            - Do NOT create skills/install.sh — that is Agent H.
+
+            ### Verification
+
+            ```bash
+            test -f /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-safe-edit.md && echo "EXISTS"
+            grep "name: lsp-safe-edit" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-safe-edit.md
+            grep -c "get_diagnostics" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-safe-edit.md
+            # expected: >= 3
+            grep "Diagnostic Summary\|Errors introduced" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-safe-edit.md
+            # expected: at least 1 match
+            ```
+          files:
+            - skills/lsp-safe-edit.md
+        - id: D
+          task: |
+            ## Role: lsp-edit-export skill author
+
+            Create `skills/lsp-edit-export.md` in `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO`.
+            Work on the `develop` branch.
+
+            ### Read first
+
+            - `/Users/dayna.blackwell/.claude/skills/saw/SKILL.md` — frontmatter format
+            - `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/PATTERNS.md` — shared conventions
+
+            Note: Wave 2 Agent G registers the go_to_symbol tool. Use it in this skill.
+
+            ### Frontmatter
+
+            ```yaml
+            ---
+            name: lsp-edit-export
+            description: "Safe workflow for editing exported symbols. Finds all callers via go_to_symbol + get_references before making any change, then verifies with diagnostics + build."
+            user-invocable: true
+            allowed-tools: |
+              mcp__lsp__go_to_symbol, mcp__lsp__open_document, mcp__lsp__get_references,
+              mcp__lsp__get_diagnostics, mcp__lsp__run_build, Edit, Write
+            ---
+            ```
+
+            ### Body must include
+
+            1. **When to use**: define "exported symbol" per language.
+            2. **Workflow** (7 steps):
+               - go_to_symbol to find symbol by name
+               - get_references with position_pattern using @@ for caller discovery
+               - confirmation gate: show caller count + file list, ask [y/n]
+               - make the edit
+               - get_diagnostics
+               - run_build
+               - report
+            3. **Confirmation gate** (REQUIRED): do NOT skip even if 0 callers.
+            4. **Output format**:
+               ```
+               ## Edit Summary
+               - Symbol: <name> (<kind>)
+               - Callers found: N in M files
+               - Diagnostics: net +N/-N
+               - Build: PASSED / FAILED
+               ```
+            5. **MCP client compatibility note**.
+
+            ### Constraints
+            - Do NOT modify Go source files.
+            - Do NOT create other skill files.
+
+            ### Verification
+
+            ```bash
+            test -f /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-edit-export.md && echo "EXISTS"
+            grep "name: lsp-edit-export" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-edit-export.md
+            grep "go_to_symbol" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-edit-export.md
+            # expected: at least 1 match
+            grep "confirm\|Proceed\|\[y/n\]" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-edit-export.md
+            # expected: at least 1 match
+            grep "run_build" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-edit-export.md
+            # expected: at least 1 match
+            ```
+          files:
+            - skills/lsp-edit-export.md
+        - id: E
+          task: |
+            ## Role: lsp-rename skill author
+
+            Create `skills/lsp-rename.md` in `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO`.
+            Work on the `develop` branch.
+
+            ### Read first
+
+            - `/Users/dayna.blackwell/.claude/skills/saw/SKILL.md` — frontmatter format
+            - `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/PATTERNS.md` — shared conventions
+
+            Note: Wave 2 Agent G adds dry_run to rename_symbol. Use dry_run=true in Phase 1.
+
+            ### Frontmatter
+
+            ```yaml
+            ---
+            name: lsp-rename
+            description: "Two-phase safe rename: preview all sites with dry_run, confirm, then execute atomically. Never renames without showing impact first."
+            user-invocable: true
+            allowed-tools: |
+              mcp__lsp__go_to_symbol, mcp__lsp__get_references, mcp__lsp__rename_symbol,
+              mcp__lsp__apply_edit, mcp__lsp__get_diagnostics
+            ---
+            ```
+
+            ### Body must include
+
+            1. **Invocation**: user provides old name and new name.
+            2. **Phase 1 (Preview)** section:
+               - go_to_symbol to find the symbol
+               - get_references to enumerate call sites
+               - rename_symbol with dry_run=true -> WorkspaceEdit preview
+               - Show user: "Rename X -> Y affects N locations in M files"
+               - REQUIRED hard stop: "Proceed? [y/n]"
+            3. **0 references edge case**: warn, ask to proceed.
+            4. **Phase 2 (Execute)** section (only after [y]):
+               - rename_symbol (dry_run=false or omit)
+               - apply_edit
+               - get_diagnostics
+            5. **Output format**:
+               ```
+               ## Rename Summary
+               - Old name: X
+               - New name: Y
+               - Files changed: N
+               - Locations updated: M
+               - Post-rename errors: 0
+               ```
+            6. **Language support note**: gopls, tsserver, rust-analyzer support rename.
+            7. **MCP client compatibility note**.
+
+            ### Constraints
+            - Two-phase structure (preview then confirm then execute) is NOT optional.
+            - Do NOT modify Go source files.
+            - Do NOT create other skill files.
+
+            ### Verification
+
+            ```bash
+            test -f /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-rename.md && echo "EXISTS"
+            grep "name: lsp-rename" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-rename.md
+            grep "dry_run" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-rename.md
+            # expected: at least 1 match (Phase 1 uses dry_run=true)
+            grep -c "Phase\|phase" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-rename.md
+            # expected: >= 2
+            grep "confirm\|\[y/n\]" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-rename.md
+            # expected: at least 1 match
+            ```
+          files:
+            - skills/lsp-rename.md
+        - id: F
+          task: |
+            ## Role: lsp-verify skill author
+
+            Create `skills/lsp-verify.md` in `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO`.
+            Work on the `develop` branch.
+
+            ### Read first
+
+            - `/Users/dayna.blackwell/.claude/skills/saw/SKILL.md` — frontmatter format
+            - `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/PATTERNS.md` — shared conventions
+
+            ### Frontmatter
+
+            ```yaml
+            ---
+            name: lsp-verify
+            description: "Full three-layer verification after any change: LSP diagnostics + compiler build + test suite. Ranked by severity."
+            user-invocable: true
+            allowed-tools: |
+              mcp__lsp__get_diagnostics, mcp__lsp__run_build, mcp__lsp__run_tests
+            ---
+            ```
+
+            ### Body must include
+
+            1. **When to use**: after any significant change, after merges, after refactors.
+            2. **Input**: workspace_dir (absolute path).
+            3. **Layer 1** (get_diagnostics): list errors then warnings.
+            4. **Layer 2** (run_build): { success, errors }.
+            5. **Layer 3** (run_tests): { passed, failures } with file:line locations.
+            6. **Output format**:
+               ```
+               ## Verification Report
+
+               ### Layer 1: LSP Diagnostics
+               [CLEAN / N errors, M warnings]
+
+               ### Layer 2: Build
+               [PASSED / FAILED - N errors]
+
+               ### Layer 3: Tests
+               [PASSED / FAILED - N failures]
+
+               ### Summary
+               Overall: CLEAN / NEEDS ATTENTION
+               Blocking issues: [errors that must be fixed]
+               ```
+            7. **Progressive disclosure**: summary first, then details.
+            8. **Blocking vs advisory**: build errors and test failures block shipping.
+            9. **run_tests note**: does not require start_lsp; workspace_dir required.
+            10. **MCP client compatibility note**.
+
+            ### Constraints
+            - Do NOT modify Go source files.
+            - Do NOT create other skill files.
+
+            ### Verification
+
+            ```bash
+            test -f /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-verify.md && echo "EXISTS"
+            grep "name: lsp-verify" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-verify.md
+            grep "run_build\|run_tests\|get_diagnostics" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-verify.md | wc -l
+            # expected: >= 3
+            grep -c "Layer" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-verify.md
+            # expected: >= 3
+            grep "CLEAN\|NEEDS ATTENTION" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/lsp-verify.md
+            # expected: at least 1 match
+            ```
+          files:
+            - skills/lsp-verify.md
+        - id: H
+          task: |
+            ## Role: Skills install script author
+
+            Create `skills/install.sh` in `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO`.
+            Work on the `develop` branch.
+
+            ### Behavior
+
+            Installs *.md skill files (EXCEPT PATTERNS.md) to ~/.claude/skills/lsp/
+            via symlink (default) or copy. Flags: --copy, --force, --dry-run, --help.
+
+            Idempotent (running twice = same result). Non-destructive by default.
+
+            Script skeleton:
+            ```bash
+            #!/usr/bin/env bash
+            set -euo pipefail
+
+            # lsp-mcp-go skills installer
+            # macOS/Linux: full support. Windows WSL: use --copy. Windows native: not supported.
+
+            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            DEST_DIR="${HOME}/.claude/skills/lsp"
+            USE_COPY=false
+            FORCE=false
+            DRY_RUN=false
+
+            # ... arg parsing, mkdir, install loop, summary ...
+            ```
+
+            Exclusions: skip PATTERNS.md and install.sh itself.
+
+            After writing, make executable:
+            ```bash
+            chmod +x /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/install.sh
+            ```
+
+            ### Constraints
+            - Do NOT modify Go source files.
+            - PATTERNS.md and install.sh must be excluded from installation.
+            - Idempotent and non-destructive by default.
+
+            ### Verification
+
+            ```bash
+            test -f /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/install.sh && echo "EXISTS"
+            test -x /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/install.sh && echo "EXECUTABLE"
+            bash -n /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/install.sh && echo "SYNTAX OK"
+            grep "PATTERNS.md" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/install.sh
+            # expected: PATTERNS.md in exclusion logic
+            grep "dry.run\|DRY_RUN" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/install.sh
+            # expected: at least 1 match
+            ```
+          files:
+            - skills/install.sh
+    - number: 3
+      agents:
+        - id: G
+          task: |
+            ## Role: server.go integration and rename_symbol dry_run author
+
+            Modify `cmd/lsp-mcp-go/server.go` and `internal/tools/workspace.go` in
+            `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO`.
+
+            Wave 1 has already merged. internal/tools/symbol_path.go (HandleGoToSymbol) and
+            internal/tools/position_pattern.go (ResolvePositionPattern, ExtractPositionWithPattern)
+            now exist.
+
+            READ BOTH FILES BEFORE EDITING:
+            - `cmd/lsp-mcp-go/server.go` (full file)
+            - `internal/tools/workspace.go` (full file)
+
+            ### Change 1: Register go_to_symbol in server.go
+
+            Insert a new arg struct + tool registration immediately before the
+            `// ------- Register resources -------` comment. The exact anchor text is:
+
+            ```go
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args SimulateEditAtomicArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleSimulateEditAtomic(ctx, sessionMgr, toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	// ------- Register resources -------
+            ```
+
+            Insert between these two blocks. The new code to add:
+            - A Go struct with three JSON fields: symbol_path (required), workspace_root (optional), language (optional)
+            - An mcp.AddTool call with Name "go_to_symbol" and Description explaining it navigates to
+              a symbol definition by dot-notation name (e.g. "LSPClient.GetReferences", "http.Handler")
+              without needing file_path or line/column
+            - The tool handler calls tools.HandleGoToSymbol(ctx, cs.get(), toolArgsToMap(args))
+
+            Follow the exact same pattern as the other tool registrations in the file
+            (e.g., simulate_edit_atomic registration just above). Read those for the
+            exact formatting conventions.
+
+            ### Change 2: Add position_pattern field to three arg structs in server.go
+
+            In server.go, find the three arg structs for the hover-info, references, and
+            go-to-definition tools. Each struct has a "file_path", "line", and "column" field.
+            Add a new optional field to each:
+                PositionPattern string `json:"position_pattern,omitempty"`
+
+            Read server.go to identify each struct by its fields, then use the Edit tool
+            with the existing struct body as the exact match anchor. Add the new field
+            after the Column field in each struct.
+
+            ### Change 3: Add dry_run + position_pattern to the rename_symbol arg struct in server.go
+
+            Find the rename_symbol arg struct in server.go (search for `json:"new_name"`).
+            Add two new fields after NewName:
+                PositionPattern string `json:"position_pattern,omitempty"`
+                DryRun          bool   `json:"dry_run,omitempty"`
+
+            Use the Edit tool with the existing struct body (including `json:"new_name"` line)
+            as the exact match anchor.
+
+            Also update the rename_symbol tool description. Find:
+            ```
+            		Description: "Get a WorkspaceEdit for renaming a symbol across the entire workspace via LSP. Returns the edit object describing all files and positions that need to change — it is NOT applied automatically. Inspect the returned WorkspaceEdit to understand the full scope of a rename before applying it.",
+            ```
+            Replace with:
+            ```
+            		Description: "Get a WorkspaceEdit for renaming a symbol across the entire workspace via LSP. Returns the edit object — NOT applied automatically. Use dry_run=true to preview what would change (returns workspace_edit + note). Use position_pattern with @@ marker for reliable position targeting instead of line/column. Inspect the returned WorkspaceEdit then call apply_edit to commit.",
+            ```
+
+            ### Change 4: Add dry_run handling to HandleRenameSymbol in workspace.go
+
+            Read workspace.go HandleRenameSymbol. Find the final marshal block:
+            ```go
+            	data, mErr := json.Marshal(result)
+            	if mErr != nil {
+            		return types.ErrorResult(fmt.Sprintf("marshaling rename result: %s", mErr)), nil
+            	}
+            	return types.TextResult(string(data)), nil
+            ```
+            Replace with:
+            ```go
+            	dryRun, _ := args["dry_run"].(bool)
+            	if dryRun {
+            		type previewEnvelope struct {
+            			WorkspaceEdit interface{} `json:"workspace_edit"`
+            			Preview       struct {
+            				Note string `json:"note"`
+            			} `json:"preview"`
+            		}
+            		env := previewEnvelope{WorkspaceEdit: result}
+            		env.Preview.Note = "dry_run=true: inspect workspace_edit and call apply_edit to commit"
+            		data, mErr := json.Marshal(env)
+            		if mErr != nil {
+            			return types.ErrorResult(fmt.Sprintf("marshaling dry_run result: %s", mErr)), nil
+            		}
+            		return types.TextResult(string(data)), nil
+            	}
+            	data, mErr := json.Marshal(result)
+            	if mErr != nil {
+            		return types.ErrorResult(fmt.Sprintf("marshaling rename result: %s", mErr)), nil
+            	}
+            	return types.TextResult(string(data)), nil
+            ```
+
+            ### Constraints
+            - Do NOT modify analysis.go or navigation.go — handler wiring of position_pattern
+              is deferred (arg structs document the field; handlers ignore it for now).
+            - Only modify server.go and workspace.go.
+            - Do NOT create new files.
+
+            ### Verification
+
+            ```bash
+            cd /Users/dayna.blackwell/workspace/code/LSP-MCP-GO
+            GOWORK=off go build ./...
+            # expected: EXIT 0 (new tool compiles, handlers unchanged)
+
+            GOWORK=off go vet ./...
+            # expected: no issues
+
+            grep "go_to_symbol" cmd/lsp-mcp-go/server.go
+            # expected: at least 1 match
+
+            grep "PositionPattern" cmd/lsp-mcp-go/server.go | wc -l
+            # expected: >= 4 (3 arg structs + RenameSymbolArgs)
+
+            grep "dry_run\|dryRun\|DryRun" internal/tools/workspace.go
+            # expected: at least 1 match
+
+            GOWORK=off go test ./internal/tools/ -run TestHandleRenameSymbol -v 2>&1 | tail -5
+            # expected: PASS (dry_run=false path unchanged by existing tests)
+            ```
+          files:
+            - cmd/lsp-mcp-go/server.go
+            - internal/tools/workspace.go
+          dependencies:
+            - A
+            - B
+            - E
+    - number: 4
+      agents:
+        - id: I
+          task: |
+            ## Role: Documentation updater
+
+            Update README.md, docs/tools.md, and CHANGELOG.md. Wave 2 is complete.
+            All skill files and Go tool changes are merged. Read each file before editing.
+
+            ### README.md
+
+            Read `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/README.md`.
+            Find `## Installation` heading. Insert a new `## Skills` section
+            immediately before that heading using Edit tool with exact anchor text.
+
+            Skills section content:
+            ```markdown
+            ## Skills
+
+            Four agent-native skills compose lsp-mcp-go tools into single-command workflows:
+
+            | Skill | Purpose |
+            |-------|---------|
+            | `/lsp-safe-edit` | Wrap any edit with before/after diagnostic diff |
+            | `/lsp-edit-export` | Safe editing of exported symbols — finds all callers first |
+            | `/lsp-rename` | Two-phase rename: preview all sites, confirm, then apply |
+            | `/lsp-verify` | Full three-layer check: diagnostics + build + tests |
+
+            Skills work with any MCP client that supports tool use, not just Claude Code.
+
+            ```bash
+            cd skills && ./install.sh
+            ```
+
+            ### New tools
+
+            Three new features were added to the MCP tools in this wave:
+            a symbol-path navigation tool, a position-pattern cursor syntax using @@,
+            and a dry-run preview mode for the rename tool. See docs/tools.md
+            for parameter details.
+
+            ```
+
+            ### docs/tools.md
+
+            Read `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/docs/tools.md`.
+            Append at the very end of the file a section covering the new tools added
+            in this wave: the symbol-path navigation tool (with dot-notation examples),
+            the position-pattern convention using the @@ cursor marker, the dry-run
+            preview mode for rename, and a Skills table listing the 4 skills with their
+            respective tools.
+
+            ### CHANGELOG.md
+
+            Read `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO/CHANGELOG.md`.
+            Insert at the very top (find the file's first line and use it as anchor)
+            a new `## [Unreleased]` entry listing the new tools and skills added in this wave:
+            the symbol-path navigation tool, the position pattern parameter for position-based tools,
+            the dry-run preview mode for rename, the four agent-native skills, and the install script.
+
+            ### Constraints
+            - Do NOT modify Go source files or skill files.
+            - Only modify README.md, docs/tools.md, CHANGELOG.md.
+            - Read each file before editing. Use Edit tool with exact text anchors.
+            - Do NOT use line numbers as anchors.
+
+            ### Verification
+
+            ```bash
+            grep "lsp-safe-edit\|Skills" /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/README.md
+            # expected: at least 2 matches
+
+            tail -15 /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/docs/tools.md | grep "Skills"
+            # expected: at least 1 match (Skills section present at end)
+
+            head -10 /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/CHANGELOG.md | grep "Unreleased"
+            # expected: Unreleased entry present near top
+            ```
+          files:
+            - README.md
+            - docs/tools.md
+            - CHANGELOG.md
+          dependencies:
+            - C
+            - D
+            - E
+            - F
+            - H
+            - G
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+          repo: lsp-mcp-go
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+          repo: lsp-mcp-go
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+          repo: lsp-mcp-go
+        - type: custom
+          command: test -x /Users/dayna.blackwell/workspace/code/LSP-MCP-GO/skills/install.sh && echo "install.sh is executable"
+          required: false
+          repo: lsp-mcp-go
+scaffolds:
+    - file_path: skills/PATTERNS.md
+      contents: |
+        # Shared LSP Skill Patterns
+
+        ## @@ Position Marker
+
+        When calling position-based tools (get_info_on_location, go_to_definition,
+        get_references), prefer the position_pattern parameter over line/column:
+
+            "position_pattern": "func (c *LSPClient) Initiali@@ze"
+
+        The @@ marker indicates cursor position (character immediately after @@).
+        More reliable than coordinate math. line/column still work as fallback.
+
+        ## start_lsp Guard Pattern
+
+        Every skill that calls LSP tools SHOULD include a guard:
+        "If LSP is not yet initialized, call start_lsp with the workspace root first."
+
+        Auto-init note: lsp-mcp-go supports workspace auto-inference from file paths.
+        Explicit start_lsp only needed when switching workspace roots.
+
+        ## Diagnostic Diff Output Format
+
+            ## Diagnostic Summary
+            - Errors introduced:   N  (each as: file:line - message)
+            - Errors resolved:     N  (each as: file:line - message)
+            - Net change:         +N / -N / 0
+            - Warnings introduced: N (only if N > 0)
+            - Warnings resolved:   N (only if N > 0)
+
+        Rules: only show sections where N > 0. Net change of 0 = safe to proceed.
+
+        ## MCP Client Compatibility Note
+
+        Skills use MCP tool calls directly. Not Claude-Code-specific. Any MCP client
+        that supports tool use can execute these skills by following the workflow steps
+        and calling the listed tools.
+      import_path: N/A (reference only)
+      status: pending
+pre_mortem:
+    overall_risk: medium
+    rows:
+        - scenario: |
+            Agent G modifies analysis.go or navigation.go to wire ExtractPositionWithPattern, violating I1 (those files are not in its ownership). Causes conflict on merge.
+          likelihood: medium
+          impact: high
+          mitigation: |
+            Agent G brief explicitly says "Do NOT modify analysis.go or navigation.go." Position_pattern wiring in handlers is explicitly deferred. Agent G only adds PositionPattern fields to arg structs in server.go (structural documentation) and dry_run logic to workspace.go.
+        - scenario: |
+            HandleGoToSymbol (Agent A) fails to open the candidate file before calling GetDefinition, causing "document not open" errors at runtime.
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Agent A brief specifies opening via WithDocument before calling GetDefinition, and falling back to candidate Location if GetDefinition returns empty. The pattern is identical to HandleGoToDefinition in navigation.go.
+        - scenario: |
+            position_pattern line counting uses byte offsets incorrectly for multibyte UTF-8 characters, returning wrong column values.
+          likelihood: low
+          impact: low
+          mitigation: |
+            ResolvePositionPattern algorithm uses strings.Count and strings.LastIndex which operate on bytes. Col calculation: offset - strings.LastIndex(content[:offset], "\n"). This is consistent with how LSP character offsets work in ASCII/ASCII-dominant code. Brief specifies this algorithm explicitly.
+        - scenario: |
+            PATTERNS.md not present when Wave 2 skill agents read it (scaffold agent not yet run). Agents fail to reference the shared format.
+          likelihood: low
+          impact: low
+          mitigation: |
+            PATTERNS.md is a scaffold file. The scaffold agent runs before Wave 1 is launched (per SAW protocol). If scaffold agent fails, wave launch is blocked until scaffold is committed.
+        - scenario: |
+            lsp-rename skill written as single-phase (no dry_run preview), missing the defining safety property.
+          likelihood: low
+          impact: high
+          mitigation: |
+            Agent E brief calls the two-phase structure "NOT optional." Verification gate checks for Phase/phase occurrences >= 2 and dry_run mention >= 1.
+state: SCOUT_PENDING
+injection_method: hook
