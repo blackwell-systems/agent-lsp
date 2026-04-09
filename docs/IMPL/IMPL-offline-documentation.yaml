@@ -1,0 +1,686 @@
+title: Offline Symbol Documentation
+feature_slug: offline-documentation
+verdict: SUITABLE
+suitability_assessment: |
+    All five suitability criteria clear:
+
+    1. File decomposition: At least 6 files change across disjoint ownership boundaries.
+       Core dispatcher (internal/tools/documentation.go), server registration
+       (cmd/agent-lsp/server.go), docs update (docs/tools.md), changelog
+       (CHANGELOG.md), skill (skills/lsp-docs/SKILL.md), and integration test
+       (test/documentation_test.go). No two tasks require conflicting modifications
+       to the same file in the same wave.
+
+    2. No investigation-first items: The pattern is established — exec-based language
+       dispatch exactly mirrors run_build/run_tests in runner.go. No root-cause
+       analysis needed.
+
+    3. Interface discoverability: The DocResult struct and HandleGetSymbolDocumentation
+       signature can be fully specified before any agent begins. The MCP args struct
+       follows the established GetSymbolSourceArgs pattern verbatim.
+
+    4. Pre-implementation status: Feature does not yet exist. No items are DONE or
+       PARTIAL. The tools.md has no get_symbol_documentation entry; CHANGELOG has no
+       mention of it; skills/ has no lsp-docs directory.
+
+    5. Parallelization value: Go build + test cycle is ~10s (GOWORK=off go build + test
+       ./internal/... ./cmd/...). Agent A (core tool, 2 files) and Agent B (docs +
+       skill, 2 files) are fully independent — no shared types between them. Wave 1
+       runs 2 agents in parallel. Agent C (integration test, 1 new file) waits for
+       Wave 1 to confirm the tool is registered. Clear speedup vs sequential.
+
+    Estimated times:
+    - Scout phase: ~15 min
+    - Agent execution: Wave 1 ~15 min (2 agents x ~15 min each, parallel);
+      Wave 2 ~10 min (1 agent)
+    - Merge and verification: ~5 min
+    Total SAW time: ~30 min
+    Sequential baseline: ~40 min (3 agents x ~13 min avg sequential)
+    Time savings: ~10 min (25% faster)
+    Recommendation: Clear speedup. The two Wave 1 agents are fully independent and
+    benefit from parallel execution.
+
+    multi_lang_test.go assessment: At 2106 lines, adding to it would push it further
+    into unmaintainability. The new test belongs in test/documentation_test.go as a
+    dedicated file. It shares the package (main_test), uses the same helpers
+    (callTool, textFromResult, getMultilangBinary), and avoids the already-oversized
+    multi_lang_test.go. This is consistent with how build_tools_test.go was split out.
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: internal/tools/documentation.go
+      agent: A
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/server.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: internal/tools/documentation_test.go
+      agent: A
+      wave: 1
+      action: new
+    - file: docs/tools.md
+      agent: B
+      wave: 1
+      action: modify
+    - file: CHANGELOG.md
+      agent: B
+      wave: 1
+      action: modify
+    - file: skills/lsp-docs/SKILL.md
+      agent: B
+      wave: 1
+      action: new
+    - file: test/documentation_test.go
+      agent: C
+      wave: 2
+      action: new
+      depends_on:
+        - A
+interface_contracts:
+    - name: DocResult
+      description: |
+        JSON-serializable response returned by HandleGetSymbolDocumentation.
+        Represents the authoritative documentation for a named symbol.
+      definition: |
+        // DocResult is the JSON-serializable response returned by HandleGetSymbolDocumentation.
+        type DocResult struct {
+            Symbol    string `json:"symbol"`
+            Language  string `json:"language"`
+            Source    string `json:"source"`    // "toolchain" or "error"
+            Doc       string `json:"doc"`       // full documentation text (ANSI-stripped)
+            Signature string `json:"signature"` // extracted signature line, may be empty
+            Error     string `json:"error,omitempty"` // set when Source == "error"
+        }
+      location: internal/tools/documentation.go
+    - name: HandleGetSymbolDocumentation
+      description: |
+        MCP tool handler for get_symbol_documentation. Dispatches to per-language
+        toolchain commands to fetch canonical documentation for a named symbol.
+        No *lsp.LSPClient parameter — runs shell commands independently of any LSP session,
+        matching the same pattern as HandleRunBuild and HandleRunTests.
+      definition: |
+        func HandleGetSymbolDocumentation(ctx context.Context, args map[string]interface{}) (types.ToolResult, error)
+      location: internal/tools/documentation.go
+    - name: GetSymbolDocumentationArgs
+      description: |
+        Typed args struct for the get_symbol_documentation MCP tool, registered in server.go.
+        Follows the same pattern as GetSymbolSourceArgs.
+      definition: |
+        type GetSymbolDocumentationArgs struct {
+            Symbol     string `json:"symbol"`
+            LanguageID string `json:"language_id"`
+            FilePath   string `json:"file_path,omitempty"`
+            Format     string `json:"format,omitempty"` // "text" (default) or "markdown"
+        }
+      location: cmd/agent-lsp/server.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Role
+            Implement the `get_symbol_documentation` tool: the core dispatcher file and
+            its MCP registration in server.go.
+
+            ## Files
+            - `internal/tools/documentation.go` — CREATE (new file)
+            - `cmd/agent-lsp/server.go` — MODIFY (add args struct + AddTool call)
+
+            ## What to implement
+
+            ### internal/tools/documentation.go
+
+            Create a new file in `package tools`. This file provides offline symbol
+            documentation by dispatching to per-language toolchain commands.
+
+            **Package-level type: DocResult**
+            ```go
+            // DocResult is the JSON-serializable response returned by HandleGetSymbolDocumentation.
+            type DocResult struct {
+                Symbol    string `json:"symbol"`
+                Language  string `json:"language"`
+                Source    string `json:"source"`    // "toolchain" or "error"
+                Doc       string `json:"doc"`
+                Signature string `json:"signature"` // may be empty
+                Error     string `json:"error,omitempty"`
+            }
+            ```
+
+            **Language dispatcher table** — follow the exact same pattern as `runners` in
+            `internal/tools/runner.go`. Define a `docDispatcher` struct and a `docDispatchers`
+            map[string] for per-language commands:
+
+            | Language    | Command          | Args template                                |
+            |-------------|------------------|----------------------------------------------|
+            | `go`        | `go`             | `["doc", "{pkg_or_symbol}"]`                 |
+            | `rust`      | `cargo`          | `["doc", "--no-deps", "--message-format", "short"]` |
+            | `python`    | `python3`        | `["-m", "pydoc", "{symbol}"]`                |
+            | `typescript`| not supported    | return structured error immediately          |
+            | `javascript`| not supported    | return structured error immediately          |
+
+            For Go, the symbol argument logic:
+            - If `file_path` is provided, extract the module/package context by walking up to
+              find the nearest `go.mod`, then use the package import path relative to that module.
+              Example: `/home/user/mymod/pkg/util/file.go` → derive `mymod/pkg/util` and call
+              `go doc mymod/pkg/util <symbol>`.
+            - If no `file_path`, pass `symbol` directly to `go doc` (e.g., `go doc fmt.Println`).
+
+            **HandleGetSymbolDocumentation** — the MCP handler:
+            1. Extract `symbol`, `language_id`, `file_path`, `format` from args map.
+            2. `symbol` and `language_id` are required; return `types.ErrorResult` if missing.
+            3. Look up `language_id` in `docDispatchers`. If not found, return a structured
+               error result (not a Go error): `DocResult{Source: "error", Error: "unsupported language: <lang>"}`.
+            4. Build the command args (substituting `{pkg_or_symbol}` / `{symbol}` as appropriate).
+            5. Use `exec.CommandContext` with a **10-second timeout** (use `context.WithTimeout`
+               on the incoming ctx).
+            6. Set `cmd.Dir` to the workspace root when available (derive from `file_path` if
+               provided, else leave empty).
+            7. Capture `cmd.CombinedOutput()`. If the command fails (exit non-zero or exec error),
+               return a structured `DocResult{Source: "error", Error: "<stderr>"}` marshaled as
+               `types.TextResult`, NOT as `types.ErrorResult`. This lets callers detect the failure
+               and fall back to LSP hover without treating it as an MCP error.
+            8. Strip ANSI escape codes from the output before returning. Use a regex:
+               ```go
+               var reANSI = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+               ```
+               Apply with `reANSI.ReplaceAllString(raw, "")`.
+            9. Extract the signature line: for Go, the first non-blank line of output that starts
+               with `func `, `type `, `var `, or `const ` is the signature. For Python, the first
+               line of pydoc output. For Rust, leave empty (cargo doc output is HTML-oriented).
+            10. Apply `format` wrapping: if `format == "markdown"`, wrap the signature line in a
+                fenced code block using the language ID as the fence lang. The `doc` field always
+                returns plain text regardless of format.
+            11. Marshal the `DocResult` to JSON and return `types.TextResult(string(data))`.
+
+            **Imports needed:**
+            ```go
+            import (
+                "context"
+                "encoding/json"
+                "fmt"
+                "os"
+                "os/exec"
+                "path/filepath"
+                "regexp"
+                "strings"
+
+                "github.com/blackwell-systems/agent-lsp/internal/types"
+            )
+            ```
+
+            ### cmd/agent-lsp/server.go — two additions
+
+            **1. Add the args struct** — add this near the existing `GetSymbolSourceArgs` struct
+            (around line 840). Insert after this exact text:
+            ```go
+            	type GetSymbolSourceArgs struct {
+            		FilePath        string `json:"file_path"`
+            		LanguageID      string `json:"language_id,omitempty"`
+            		Line            int    `json:"line,omitempty"`
+            		Character       int    `json:"character,omitempty"`
+            		PositionPattern string `json:"position_pattern,omitempty"`
+            	}
+            ```
+            Insert immediately after the closing `}` of that struct:
+            ```go
+
+            	type GetSymbolDocumentationArgs struct {
+            		Symbol     string `json:"symbol"`
+            		LanguageID string `json:"language_id"`
+            		FilePath   string `json:"file_path,omitempty"`
+            		Format     string `json:"format,omitempty"`
+            	}
+            ```
+
+            **2. Register the tool** — add a new `mcp.AddTool` call immediately after the
+            existing `get_symbol_source` registration. The existing block ends with:
+            ```go
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "get_symbol_source",
+            		Description: "Return the source code of the innermost symbol (function, method, class, struct, etc.) whose range contains the given cursor position. Calls textDocument/documentSymbol, walks the symbol tree to find the smallest enclosing symbol, then slices the file at that symbol's range. Returns symbol_name, symbol_kind, start_line (1-based), end_line (1-based), and source text. Use line+character or position_pattern (@@-syntax) to specify the cursor. character defaults to 1.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetSymbolSourceArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleGetSymbolSource(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+            ```
+            Add immediately after the closing `})` of that block:
+            ```go
+
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "get_symbol_documentation",
+            		Description: "Fetch authoritative documentation for a named symbol from local toolchain sources (go doc, pydoc, cargo doc) without requiring an LSP hover response. Works on transitive dependencies not indexed by the language server. Returns the full doc text, extracted signature, and source tag. Falls back gracefully when the toolchain command fails or the language is unsupported.",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetSymbolDocumentationArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleGetSymbolDocumentation(ctx, toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+            ```
+
+            Note: `HandleGetSymbolDocumentation` takes only `(ctx, args)` — no LSP client
+            parameter. This is intentional: the tool runs independently of any LSP session,
+            matching the same pattern as `HandleRunBuild` and `HandleRunTests`.
+
+            ## Tests
+            Add `internal/tools/documentation_test.go` with unit tests for:
+            - `TestDocResultMarshal` — DocResult marshals to expected JSON keys
+            - `TestStripANSI` — verifies the ANSI regex strips escape codes correctly
+            - `TestGoDocDispatch_MissingSymbol` — calling with empty symbol returns ErrorResult
+            - `TestGoDocDispatch_UnsupportedLang` — returns DocResult with Source="error"
+            - `TestGoDocDispatch_Integration` (skip if `go` binary not in PATH) — calls
+              `go doc fmt.Println` and verifies doc contains "Println" and signature is non-empty
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./internal/tools/...
+            GOWORK=off go test ./internal/tools/... -run TestDoc -v
+            ```
+
+            Postconditions:
+            ```bash
+            # DocResult type exists in documentation.go
+            grep -c "type DocResult struct" internal/tools/documentation.go
+            # Expected: 1
+
+            # HandleGetSymbolDocumentation exists and takes correct signature
+            grep -c "func HandleGetSymbolDocumentation" internal/tools/documentation.go
+            # Expected: 1
+
+            # get_symbol_documentation registered in server
+            grep -c '"get_symbol_documentation"' cmd/agent-lsp/server.go
+            # Expected: 1
+
+            # GetSymbolDocumentationArgs struct registered
+            grep -c "GetSymbolDocumentationArgs" cmd/agent-lsp/server.go
+            # Expected: 2 (struct definition + usage)
+            ```
+
+            ## Constraints
+            - Do NOT add stub definitions for any type that is not owned by this agent.
+            - Do NOT use types.ErrorResult for toolchain command failures — return a structured
+              DocResult{Source: "error"} as types.TextResult so callers can programmatically
+              detect the failure without treating it as an MCP-level error.
+            - Do NOT add an *lsp.LSPClient parameter to HandleGetSymbolDocumentation — this
+              tool is LSP-independent by design.
+            - Do NOT modify any file not in your ownership list.
+          files:
+            - internal/tools/documentation.go
+            - cmd/agent-lsp/server.go
+            - internal/tools/documentation_test.go
+        - id: B
+          task: |
+            ## Role
+            Write the `lsp-docs` skill file and update docs/tools.md and CHANGELOG.md.
+            No Go code required — this is documentation and skill authoring.
+
+            ## Files
+            - `skills/lsp-docs/SKILL.md` — CREATE (new skill directory + file)
+            - `docs/tools.md` — MODIFY (add get_symbol_documentation entry)
+            - `CHANGELOG.md` — MODIFY (add entry)
+
+            ## What to implement
+
+            ### skills/lsp-docs/SKILL.md
+
+            Create `skills/lsp-docs/SKILL.md` following the exact frontmatter and section
+            format of `skills/lsp-impact/SKILL.md` and `skills/lsp-verify/SKILL.md`.
+
+            The skill file must have this frontmatter (exact format, space-delimited tools):
+            ```yaml
+            ---
+            name: lsp-docs
+            description: Three-tier documentation lookup for any symbol — hover → offline toolchain doc → source definition. Use when hover text is absent, insufficient, or the symbol is in an unindexed dependency.
+            argument-hint: "[symbol-name]"
+            allowed-tools: mcp__lsp__get_info_on_location mcp__lsp__get_symbol_documentation mcp__lsp__go_to_definition mcp__lsp__get_symbol_source
+            ---
+            ```
+
+            The skill body must describe a three-tier lookup protocol:
+
+            **Tier 1 — LSP hover (fast, live, position-based)**
+            Call `get_info_on_location` with the file path and cursor position (1-based).
+            If the result contains a non-empty `contents` field with useful type/doc information,
+            stop here and return it. Hover is the fastest path and should always be tried first.
+            If hover returns empty contents or the language server is not initialized, proceed
+            to Tier 2.
+
+            **Tier 2 — Offline toolchain documentation (authoritative, name-based)**
+            Call `get_symbol_documentation` with the fully-qualified symbol name and
+            language_id. This fetches documentation from the local toolchain
+            (go doc, pydoc, cargo doc) without requiring an LSP session. Works for
+            transitive dependencies that the language server does not index.
+            ```
+            mcp__lsp__get_symbol_documentation({
+              "symbol": "fmt.Println",
+              "language_id": "go",
+              "file_path": "/abs/path/to/any/file/in/the/module.go",  // optional, improves Go pkg resolution
+              "format": "markdown"   // optional: wraps signature in code fence
+            })
+            ```
+            If `source == "toolchain"`, return the doc and signature to the user.
+            If `source == "error"`, note the failure reason and proceed to Tier 3.
+
+            **Tier 3 — Source definition (last resort)**
+            Call `go_to_definition` to navigate to the symbol definition, then call
+            `get_symbol_source` to extract the source text. This always works when the
+            symbol exists in the workspace or module cache, even without a language server.
+
+            The skill should include a decision table:
+            | Situation | Recommended tier |
+            |-----------|-----------------|
+            | Symbol in current workspace | Tier 1 (hover) |
+            | Symbol in direct dependency | Tier 2 (toolchain doc) |
+            | Symbol in transitive dep (not indexed by LSP) | Tier 2 |
+            | No LSP server available | Tier 2 → Tier 3 |
+            | No toolchain installed (e.g., Rust without cargo) | Tier 3 |
+
+            Also include an **lsp-impact integration note**: when running `lsp-impact` on
+            a symbol, calling `get_symbol_documentation` first gives the caller type signature
+            context that helps interpret the blast radius report. The note should say:
+            "Before running lsp-impact on an unfamiliar symbol, call get_symbol_documentation
+            to understand its signature and semantics. This prevents misinterpreting the
+            impact report due to incorrect assumptions about what the symbol does."
+
+            Follow the same formatting style as lsp-impact/SKILL.md: use `##` headers for
+            each tier, code blocks for tool calls, and a concrete end-to-end example at the
+            bottom showing all three tiers applied to a real symbol.
+
+            ### docs/tools.md — add get_symbol_documentation entry
+
+            Add a new subsection for `get_symbol_documentation` in the `## New tools (LSP Skills wave)`
+            section, after the `### go_to_symbol` subsection. Insert after this exact text
+            (end of the go_to_symbol section):
+            ```
+            ---
+
+            ### Position-pattern parameter (`position_pattern`)
+            ```
+            Insert a new `### \`get_symbol_documentation\`` section BEFORE the
+            `### Position-pattern parameter` section. Use the same format as the
+            `go_to_symbol` entry: description paragraph, Parameters table, Algorithm
+            section, Example call (JSON), Actual output (JSON), and a Notes section.
+
+            The Parameters table:
+            | Name | Type | Required | Description |
+            |------|------|----------|-------------|
+            | `symbol` | string | yes | Fully-qualified symbol name (e.g. `fmt.Println`, `std::vec::Vec::new`) |
+            | `language_id` | string | yes | Language identifier: `go`, `rust`, `python` |
+            | `file_path` | string | no | Absolute path to any file in the module/project — used to infer package context for Go |
+            | `format` | string | no | `"text"` (default) or `"markdown"` — wraps signature in a fenced code block |
+
+            The Algorithm section should describe the dispatch table (Go → go doc, Python → pydoc,
+            Rust → cargo doc) and the structured-error fallback behavior.
+
+            Example call:
+            ```json
+            {
+              "symbol": "fmt.Println",
+              "language_id": "go"
+            }
+            ```
+
+            Actual output:
+            ```json
+            {
+              "symbol": "fmt.Println",
+              "language": "go",
+              "source": "toolchain",
+              "doc": "func Println(a ...any) (n int, err error)\n\nPrintln formats using the default formats...",
+              "signature": "func Println(a ...any) (n int, err error)",
+              "error": ""
+            }
+            ```
+
+            Notes:
+            - All dispatchers use a 10-second timeout. Cold module cache (first `go doc` call)
+              may approach this limit; subsequent calls are fast.
+            - Output is ANSI-stripped — safe for MCP transport.
+            - When the toolchain command fails, `source` is `"error"` and `error` contains the
+              stderr. This is a structured result, not an MCP error — callers can detect it and
+              fall back to `get_info_on_location`.
+            - TypeScript and JavaScript are not supported; return `source: "error"` with an
+              appropriate message.
+
+            Also update the Skills table at the bottom of docs/tools.md to add the lsp-docs row.
+            The table currently ends with:
+            ```
+            | `/lsp-dead-code` | `get_document_symbols`, `get_references` | Detect zero-reference exports and unreachable symbols across a file or workspace |
+            ```
+            Add this row after it:
+            ```
+            | `/lsp-docs` | `get_info_on_location`, `get_symbol_documentation`, `go_to_definition`, `get_symbol_source` | Three-tier documentation lookup: hover → offline toolchain doc → source definition |
+            ```
+
+            ### CHANGELOG.md — add entry
+
+            Add to the `## [Unreleased]` section, under a new `### Added (2026-04-09)` entry
+            (or append to an existing one for today's date if present). The entry:
+
+            ```
+            - **`get_symbol_documentation` tool** — fetch authoritative documentation for a named
+              symbol from local toolchain sources (go doc, pydoc, cargo doc) without requiring an
+              LSP hover response. Works on transitive dependencies not indexed by the language
+              server. Returns `{ symbol, language, source, doc, signature }`. Dispatches to
+              per-language toolchain commands with a 10-second timeout; strips ANSI escape codes;
+              returns a structured error (not MCP error) when the toolchain fails so callers can
+              fall back to LSP hover.
+            - **`lsp-docs` skill** — three-tier documentation lookup: (1) `get_info_on_location`
+              (hover, fast, live); (2) `get_symbol_documentation` (offline, authoritative, works on
+              unindexed deps); (3) `go_to_definition` + `get_symbol_source` (source fallback). Use
+              when hover text is absent or the symbol is in a transitive dependency.
+            ```
+
+            ## Verification gate
+            ```
+            # Skill file exists and has correct frontmatter
+            grep -c "name: lsp-docs" skills/lsp-docs/SKILL.md
+            # Expected: 1
+
+            grep -c "get_symbol_documentation" skills/lsp-docs/SKILL.md
+            # Expected: >= 2
+
+            # tools.md entry added
+            grep -c "get_symbol_documentation" docs/tools.md
+            # Expected: >= 3 (heading, table, description)
+
+            # CHANGELOG entry added
+            grep -c "get_symbol_documentation" CHANGELOG.md
+            # Expected: >= 1
+
+            # skills table updated in tools.md
+            grep -c "lsp-docs" docs/tools.md
+            # Expected: >= 1
+            ```
+
+            ## Constraints
+            - Do NOT write any Go code — this agent owns only documentation and skill files.
+            - Do NOT invent tool parameters that are not in the interface_contracts section.
+            - Do NOT modify any file not in your ownership list.
+            - The `allowed-tools` frontmatter field in SKILL.md must be space-delimited
+              (not comma-separated) — this is the agent skills spec requirement.
+          files:
+            - skills/lsp-docs/SKILL.md
+            - docs/tools.md
+            - CHANGELOG.md
+    - number: 2
+      agents:
+        - id: C
+          task: |
+            ## Role
+            Write the integration test for `get_symbol_documentation` in a new dedicated
+            test file. Agent A's Wave 1 work must be merged before this wave begins.
+
+            ## Files
+            - `test/documentation_test.go` — CREATE (new file)
+
+            ## What to implement
+
+            Create `test/documentation_test.go` in `package main_test`. This file follows
+            the same pattern as `test/build_tools_test.go` — it uses the same package,
+            imports the same helpers (`callTool`, `textFromResult`, `getMultilangBinary`),
+            and runs against the compiled agent-lsp binary.
+
+            **Required imports** (match build_tools_test.go exactly):
+            ```go
+            package main_test
+
+            import (
+                "context"
+                "encoding/json"
+                "fmt"
+                "testing"
+
+                "github.com/modelcontextprotocol/go-sdk/mcp"
+            )
+            ```
+
+            **Test: TestGetSymbolDocumentation**
+
+            This is a standalone test (not a subtest of TestMultiLanguage) that:
+            1. Builds or finds the agent-lsp binary using `getMultilangBinary(t)`. Skip
+               if binary unavailable.
+            2. Starts the MCP server and creates a session (follow the pattern from
+               TestSpeculativeSessions in test/speculative_test.go for server startup —
+               use `startServer` / `newSession` pattern from that file).
+            3. Calls `get_symbol_documentation` with:
+               ```json
+               {
+                 "symbol": "fmt.Println",
+                 "language_id": "go"
+               }
+               ```
+            4. Asserts `res.IsError == false`.
+            5. Parses the JSON response into a map and asserts:
+               - `source` field equals `"toolchain"` (go doc is guaranteed available in CI)
+               - `symbol` field equals `"fmt.Println"`
+               - `language` field equals `"go"`
+               - `doc` field is non-empty and contains the substring `"Println"`
+               - `signature` field is non-empty and contains `"func Println"`
+            6. Also test the structured-error path: call with `language_id: "typescript"` and
+               assert `source == "error"` (TypeScript is not supported).
+            7. Also test missing required field: call with empty `symbol` and assert
+               `res.IsError == true`.
+
+            **Helper: testGetSymbolDocumentation**
+
+            Extract the core test logic into a helper function so it can be called from
+            other tests in the future:
+            ```go
+            // testGetSymbolDocumentation calls the get_symbol_documentation tool and returns
+            // the parsed DocResult fields as a map. Fails the test if the call or parsing fails.
+            func testGetSymbolDocumentation(
+                t *testing.T,
+                ctx context.Context,
+                session *mcp.ClientSession,
+                symbol, languageID string,
+            ) map[string]any
+            ```
+
+            Read `test/speculative_test.go` carefully before writing this file to understand
+            how `startServer`, `newSession`, and binary startup work in this test package.
+            The server setup must match the pattern there exactly.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./cmd/... ./test/...
+            GOWORK=off go test ./cmd/... -run TestGetSymbolDocumentation -v -timeout 60s
+            ```
+
+            Postconditions:
+            ```bash
+            # Test file exists with correct package
+            grep -c "package main_test" test/documentation_test.go
+            # Expected: 1
+
+            # TestGetSymbolDocumentation function exists
+            grep -c "func TestGetSymbolDocumentation" test/documentation_test.go
+            # Expected: 1
+
+            # Helper function exists
+            grep -c "func testGetSymbolDocumentation" test/documentation_test.go
+            # Expected: 1
+            ```
+
+            ## Constraints
+            - Do NOT add code to multi_lang_test.go — the new test belongs in documentation_test.go.
+            - Do NOT hardcode an absolute binary path — use `getMultilangBinary(t)` to resolve it.
+            - Do NOT add the test to the langConfig struct or runLanguageTest flow — this is a
+              standalone test, not a subtest of TestMultiLanguage.
+            - Do NOT modify any file not in your ownership list.
+          files:
+            - test/documentation_test.go
+          dependencies:
+            - A
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |
+            Agent A adds a Go package-level function `goModuleForFile` (to derive module
+            context from file_path) that conflicts with an unexported function already
+            defined in another file in package tools (e.g., helpers.go or build.go).
+          likelihood: low
+          impact: medium
+          mitigation: |
+            Before writing the function, run:
+              grep -rn "func goModuleForFile\|func moduleFor\|func inferModule" internal/tools/
+            If found, reuse the existing function rather than redefining it. The package
+            has ~35 files; name collision is unlikely but possible.
+        - scenario: |
+            Agent A uses a command timeout pattern that differs from the established
+            exec.CommandContext usage in build.go, causing inconsistent behavior (e.g.,
+            forgetting to pass context to CommandContext, or using time.After instead of
+            context.WithTimeout).
+          likelihood: medium
+          impact: low
+          mitigation: |
+            The task brief explicitly specifies context.WithTimeout on the incoming ctx
+            and exec.CommandContext(ctx, ...). Agent should not use a hardcoded time.After
+            or time.Sleep pattern — test coverage in documentation_test.go will catch a
+            missing timeout if the cold cache test hangs.
+        - scenario: |
+            Agent C writes documentation_test.go using an incompatible server startup
+            pattern (e.g., directly calling exec.Command instead of using the startServer
+            helper from speculative_test.go) causing the test to fail or conflict with
+            other tests.
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            The task brief explicitly instructs Agent C to read speculative_test.go before
+            writing the file, and to match its server startup pattern exactly. The test
+            file belongs to package main_test and must share helpers with the other test files.
+        - scenario: |
+            Agent B formats the SKILL.md `allowed-tools` field with commas instead of spaces,
+            violating the agent skills spec and causing the skill to not register correctly.
+          likelihood: low
+          impact: low
+          mitigation: |
+            The task brief calls this out explicitly: "space-delimited (not comma-separated)".
+            The existing skill files in skills/ use space-delimited format and Agent B is
+            instructed to match them exactly.
+        - scenario: |
+            The go doc command for some symbols returns output starting with a disclaimer
+            ("// Package X is...") rather than the function signature, causing the
+            signature extraction heuristic to return the wrong line.
+          likelihood: medium
+          impact: low
+          mitigation: |
+            The signature extraction looks for lines starting with "func ", "type ", "var ",
+            or "const " rather than assuming the first line is always a signature. This
+            handles the common go doc preamble pattern. The doc field returns the full output
+            regardless, so the agent always gets complete information even if signature is empty.
+state: SCOUT_PENDING
+injection_method: hook
