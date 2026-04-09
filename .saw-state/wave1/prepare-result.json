@@ -3,31 +3,31 @@
   "worktrees": [
     {
       "agent": "A",
-      "path": "/Users/dayna.blackwell/code/agent-lsp/.claude/worktrees/saw/get-symbol-source/wave1-agent-A",
-      "branch": "saw/get-symbol-source/wave1-agent-A"
+      "path": "/Users/dayna.blackwell/code/agent-lsp/.claude/worktrees/saw/offline-documentation/wave1-agent-A",
+      "branch": "saw/offline-documentation/wave1-agent-A"
     },
     {
       "agent": "B",
-      "path": "/Users/dayna.blackwell/code/agent-lsp/.claude/worktrees/saw/get-symbol-source/wave1-agent-B",
-      "branch": "saw/get-symbol-source/wave1-agent-B"
+      "path": "/Users/dayna.blackwell/code/agent-lsp/.claude/worktrees/saw/offline-documentation/wave1-agent-B",
+      "branch": "saw/offline-documentation/wave1-agent-B"
     }
   ],
   "agent_briefs": [
     {
       "agent": "A",
-      "brief_path": "/Users/dayna.blackwell/code/agent-lsp/.claude/worktrees/saw/get-symbol-source/wave1-agent-A/.saw-agent-brief.md",
-      "brief_length": 10330,
+      "brief_path": "/Users/dayna.blackwell/code/agent-lsp/.claude/worktrees/saw/offline-documentation/wave1-agent-A/.saw-agent-brief.md",
+      "brief_length": 10794,
       "journal_dir": "/Users/dayna.blackwell/code/agent-lsp/.saw-state/wave1/agent-A",
-      "files_owned": 2,
-      "worktree_env_path": "/Users/dayna.blackwell/code/agent-lsp/.claude/worktrees/saw/get-symbol-source/wave1-agent-A/.saw-worktree-env"
+      "files_owned": 3,
+      "worktree_env_path": "/Users/dayna.blackwell/code/agent-lsp/.claude/worktrees/saw/offline-documentation/wave1-agent-A/.saw-worktree-env"
     },
     {
       "agent": "B",
-      "brief_path": "/Users/dayna.blackwell/code/agent-lsp/.claude/worktrees/saw/get-symbol-source/wave1-agent-B/.saw-agent-brief.md",
-      "brief_length": 5917,
+      "brief_path": "/Users/dayna.blackwell/code/agent-lsp/.claude/worktrees/saw/offline-documentation/wave1-agent-B/.saw-agent-brief.md",
+      "brief_length": 10313,
       "journal_dir": "/Users/dayna.blackwell/code/agent-lsp/.saw-state/wave1/agent-B",
-      "files_owned": 1,
-      "worktree_env_path": "/Users/dayna.blackwell/code/agent-lsp/.claude/worktrees/saw/get-symbol-source/wave1-agent-B/.saw-worktree-env"
+      "files_owned": 3,
+      "worktree_env_path": "/Users/dayna.blackwell/code/agent-lsp/.claude/worktrees/saw/offline-documentation/wave1-agent-B/.saw-worktree-env"
     }
   ],
   "steps": [
@@ -72,9 +72,9 @@
       "detail": "all files validated"
     },
     {
-      "step": "commit_state",
+      "step": "working_dir_check",
       "status": "success",
-      "detail": "committed 7 SAW state file(s)"
+      "detail": "working directory is clean"
     },
     {
       "step": "baseline_gates",

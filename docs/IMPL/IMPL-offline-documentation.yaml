@@ -503,6 +503,7 @@ waves:
             - skills/lsp-docs/SKILL.md
             - docs/tools.md
             - CHANGELOG.md
+      base_commit: dfab538e95667d6d3e6eadd3c11a6cf3029dd5f8
     - number: 2
       agents:
         - id: C
@@ -625,6 +626,43 @@ quality_gates:
         - type: test
           command: GOWORK=off go test ./internal/... ./cmd/...
           required: true
+post_merge_checklist:
+    groups:
+        - title: Background Service Initialization
+          items:
+            - description: Verify if documentation_test.go needs initialization in Server constructor
+completion_reports:
+    A:
+        status: complete
+        branch: saw/offline-documentation/wave1-agent-A
+        commit: 5904b60
+        files_changed:
+            - internal/tools/documentation.go
+            - internal/tools/documentation_test.go
+            - cmd/agent-lsp/server.go
+        files_created:
+            - internal/tools/documentation.go
+            - internal/tools/documentation_test.go
+        tests_added:
+            - TestDocResultMarshal
+            - TestStripANSI
+            - TestGoDocDispatch_MissingSymbol
+            - TestGoDocDispatch_UnsupportedLang
+            - TestGoDocDispatch_Integration
+        verification: PASS
+        notes: All 5 tests pass. Build and vet clean. DocResult type, HandleGetSymbolDocumentation, GetSymbolDocumentationArgs struct, and get_symbol_documentation MCP registration complete. Integration test calls go doc fmt.Println successfully.
+    B:
+        status: complete
+        branch: saw/offline-documentation/wave1-agent-B
+        commit: d8d1e73
+        files_changed:
+            - skills/lsp-docs/SKILL.md
+            - docs/tools.md
+            - CHANGELOG.md
+        files_created:
+            - skills/lsp-docs/SKILL.md
+        verification: PASS
+        notes: All three files complete. Skill frontmatter uses space-delimited allowed-tools. tools.md has get_symbol_documentation section with parameters, algorithm, example, output, and notes; lsp-docs row added to skills table. CHANGELOG appended to existing Added (2026-04-09) section. All verification gates pass (4 commits, build/vet/test clean).
 pre_mortem:
     overall_risk: low
     rows:
@@ -682,6 +720,6 @@ pre_mortem:
             or "const " rather than assuming the first line is always a signature. This
             handles the common go doc preamble pattern. The doc field returns the full output
             regardless, so the agent always gets complete information even if signature is empty.
-state: "REVIEWED"
+state: REVIEWED
 original_branch: main
 injection_method: hook
