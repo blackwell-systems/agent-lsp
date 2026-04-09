@@ -1,0 +1,1093 @@
+completion_date: "2026-04-09"
+title: 'LSP Skills Wave 2: lsp-simulate, lsp-impact, lsp-dead-code'
+feature_slug: lsp-skills-wave2
+verdict: SUITABLE
+suitability_assessment: |
+    Three new skill directories, each fully independent:
+    - Agent A creates skills/lsp-simulate/ (SKILL.md + references/)
+    - Agent B creates skills/lsp-impact/ (SKILL.md + references/)
+    - Agent C creates skills/lsp-dead-code/ (SKILL.md + references/)
+
+    File decomposition: disjoint by construction — different directories, no
+    shared files, no Go code changes. All five suitability questions resolve
+    cleanly.
+
+    Investigation status: No root-cause analysis needed. Tool parameters and
+    return shapes were verified directly from server.go and docs/tools.md.
+
+    Parallelization value: Moderate. Three parallel agents writing documentation
+    and skill workflows is faster than sequential authoring, and the IMPL doc
+    provides an interface spec ensuring consistent style. Value is primarily
+    coordination (consistent output format) rather than raw speed.
+
+    Estimated times:
+    - Scout phase: ~10 min (existing skill analysis, tool parameter verification)
+    - Agent execution: ~15 min (3 agents x ~5 min avg, full parallel)
+    - Merge & verification: ~2 min
+    Total SAW time: ~27 min
+
+    Sequential baseline: ~15 min (3 x 5 min sequential)
+    Time savings: coordination and consistency value, marginal speed gain.
+
+    Recommendation: Proceed. Primary value is consistent skill style and
+    verified tool parameter accuracy across all three outputs.
+test_command: none
+lint_command: none
+file_ownership:
+    - file: skills/lsp-simulate/SKILL.md
+      agent: A
+      wave: 1
+      action: new
+    - file: skills/lsp-simulate/references/patterns.md
+      agent: A
+      wave: 1
+      action: new
+    - file: skills/lsp-impact/SKILL.md
+      agent: B
+      wave: 1
+      action: new
+    - file: skills/lsp-impact/references/patterns.md
+      agent: B
+      wave: 1
+      action: new
+    - file: skills/lsp-dead-code/SKILL.md
+      agent: C
+      wave: 1
+      action: new
+    - file: skills/lsp-dead-code/references/patterns.md
+      agent: C
+      wave: 1
+      action: new
+interface_contracts:
+    - name: skill-frontmatter
+      description: YAML frontmatter schema for all skill SKILL.md files
+      definition: |
+        ---
+        name: <skill-name>
+        description: <one-sentence description ≤250 chars, starting "Use when ...">
+        argument-hint: "[optional argument hint]"   # omit if not needed
+        allowed-tools: mcp__lsp__tool1 mcp__lsp__tool2 ...
+        ---
+      location: skills/lsp-safe-edit/SKILL.md
+    - name: create_simulation_session-params
+      description: Parameters for create_simulation_session tool
+      definition: |
+        create_simulation_session(
+          workspace_root: string,  # absolute path to workspace root
+          language: string         # language identifier, e.g. "go", "typescript"
+        ) -> { session_id: string }
+      location: cmd/lsp-mcp-go/server.go
+    - name: simulate_edit-params
+      description: Parameters for simulate_edit tool (all positions 1-indexed)
+      definition: |
+        simulate_edit(
+          session_id: string,
+          file_path: string,
+          start_line: int,    # 1-indexed
+          start_column: int,  # 1-indexed
+          end_line: int,      # 1-indexed
+          end_column: int,    # 1-indexed
+          new_text: string
+        ) -> { session_id: string, edit_applied: bool, version_after: int }
+      location: cmd/lsp-mcp-go/server.go
+    - name: evaluate_session-params
+      description: Parameters for evaluate_session tool
+      definition: |
+        evaluate_session(
+          session_id: string,
+          scope: string,      # optional: "file" (default) or "workspace"
+          timeout_ms: int     # optional: default 3000 (file), 8000 (workspace)
+        ) -> {
+          session_id: string,
+          errors_introduced: [{ line, col, message, severity }],
+          errors_resolved: [{ line, col, message, severity }],
+          net_delta: int,
+          affected_symbols: [string],
+          edit_risk_score: float,
+          scope: string,
+          confidence: "high" | "partial" | "stale" | "eventual",
+          timeout: bool,
+          duration_ms: int
+        }
+      location: cmd/lsp-mcp-go/server.go
+    - name: simulate_chain-params
+      description: Parameters for simulate_chain tool
+      definition: |
+        simulate_chain(
+          session_id: string,
+          edits: [{ file_path, start_line, start_column, end_line, end_column, new_text }],
+          timeout_ms: int  # optional
+        ) -> {
+          steps: [{ step: int, net_delta: int, errors_introduced: [...] }],
+          safe_to_apply_through_step: int,
+          cumulative_delta: int
+        }
+      location: cmd/lsp-mcp-go/server.go
+    - name: commit_session-params
+      description: Parameters for commit_session tool
+      definition: |
+        commit_session(
+          session_id: string,
+          target: string,  # optional: path to write to
+          apply: bool      # optional: if true, writes to disk; default false (returns patch)
+        ) -> workspace_edit patch
+      location: cmd/lsp-mcp-go/server.go
+    - name: discard_session-params
+      description: Parameters for discard_session tool
+      definition: |
+        discard_session(session_id: string) -> ok
+      location: cmd/lsp-mcp-go/server.go
+    - name: destroy_session-params
+      description: Parameters for destroy_session tool
+      definition: |
+        destroy_session(session_id: string) -> ok
+      location: cmd/lsp-mcp-go/server.go
+    - name: simulate_edit_atomic-params
+      description: Parameters for simulate_edit_atomic one-shot tool
+      definition: |
+        simulate_edit_atomic(
+          session_id: string,      # optional: reuse existing session
+          workspace_root: string,  # optional if session_id provided
+          language: string,        # optional if session_id provided
+          file_path: string,
+          start_line: int,         # 1-indexed
+          start_column: int,       # 1-indexed
+          end_line: int,           # 1-indexed
+          end_column: int,         # 1-indexed
+          new_text: string,
+          scope: string,           # optional: "file" or "workspace"
+          timeout_ms: int          # optional
+        ) -> evaluation_result (same shape as evaluate_session)
+      location: cmd/lsp-mcp-go/server.go
+    - name: call_hierarchy-params
+      description: Parameters for call_hierarchy tool
+      definition: |
+        call_hierarchy(
+          file_path: string,
+          line: int,          # 1-indexed (output from go_to_symbol + 1 if 0-based)
+          column: int,        # 1-indexed
+          direction: string,  # optional: "incoming" | "outgoing" | "both" (default)
+          language_id: string # optional
+        ) -> { item: CallHierarchyItem, incoming: [...], outgoing: [...] }
+      location: cmd/lsp-mcp-go/server.go
+    - name: type_hierarchy-params
+      description: Parameters for type_hierarchy tool
+      definition: |
+        type_hierarchy(
+          file_path: string,
+          line: int,          # 1-indexed
+          column: int,        # 1-indexed
+          direction: string,  # optional: "supertypes" | "subtypes" | "both" (default)
+          language_id: string # optional
+        ) -> { item: TypeHierarchyItem, supertypes: [...], subtypes: [...] }
+      location: cmd/lsp-mcp-go/server.go
+    - name: get_references-params
+      description: Parameters for get_references tool
+      definition: |
+        get_references(
+          file_path: string,
+          line: int,                  # 1-indexed
+          column: int,                # 1-indexed
+          include_declaration: bool,  # optional, default false
+          language_id: string,        # optional
+          position_pattern: string    # optional: "prefix@@symbol" cursor marker
+        ) -> [{ file: string, line: int, column: int, end_line: int, end_column: int }]
+        # Returns [] if workspace still indexing. Output coords are 1-based.
+      location: cmd/lsp-mcp-go/server.go
+    - name: get_document_symbols-params
+      description: Parameters for get_document_symbols tool
+      definition: |
+        get_document_symbols(
+          file_path: string,
+          language_id: string  # optional
+        ) -> DocumentSymbol[] | SymbolInformation[]
+        # DocumentSymbol has: name, kind (int), range, selectionRange, children
+        # kind values: 5=Class, 6=Method, 11=Interface, 12=Function, 13=Variable, etc.
+        # Coords are 0-based (LSP native) — add 1 when passing to other tools.
+      location: cmd/lsp-mcp-go/server.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            # Wave 1 Agent A: lsp-simulate skill
+
+            You are Wave 1 Agent A. Create the lsp-simulate skill directory with SKILL.md
+            and a references/patterns.md file covering the speculative editing session workflow.
+
+            ## 0. Isolation Verification
+
+            Verify you are on the correct branch:
+            ```bash
+            git -C $SAW_AGENT_WORKTREE branch --show-current
+            # Expected: saw/lsp-skills-wave2/wave1-agent-A
+            ```
+
+            ## 1. File Ownership
+
+            You own ONLY these files (creating them new):
+            - `skills/lsp-simulate/SKILL.md`
+            - `skills/lsp-simulate/references/patterns.md`
+
+            Do NOT touch any other files.
+
+            ## 2. Interfaces You Must Implement
+
+            A Claude Code Agent Skill conforming to the spec:
+            - YAML frontmatter: `name`, `description` (≤250 chars, "Use when" trigger),
+              optional `argument-hint`, `allowed-tools` (space-separated MCP tool names)
+            - Markdown body: step-by-step workflow Claude follows
+            - references/patterns.md: supplementary reference detail
+
+            Style conventions derived from the four existing skills under skills/ (safe-edit, symbol-renaming, edit-export, verify):
+
+            - Start with `> Requires the lsp-mcp-go MCP server.`
+            - Steps use `**Step N — description**` headers
+            - Tool calls shown as code blocks using bare parameter names (no json syntax)
+            - Decision tables and output format tables where appropriate
+            - Prerequisite / start_lsp guard near the top
+
+            ## 3. Interfaces You May Call (tool parameters — verified from server.go)
+
+            ```
+            create_simulation_session(workspace_root, language) -> { session_id }
+
+            simulate_edit(session_id, file_path, start_line, start_column,
+                          end_line, end_column, new_text)
+              # All positions 1-indexed. Returns: { session_id, edit_applied, version_after }
+
+            simulate_chain(session_id, edits[], timeout_ms?)
+              # edits is array of {file_path, start_line, start_column, end_line, end_column, new_text}
+              # Returns: { steps[], safe_to_apply_through_step, cumulative_delta }
+
+            evaluate_session(session_id, scope?, timeout_ms?)
+              # scope: "file" (default, confidence: "high") | "workspace" (confidence: "eventual")
+              # Returns: { errors_introduced[], errors_resolved[], net_delta, confidence,
+              #            affected_symbols, edit_risk_score, timeout, duration_ms }
+
+            commit_session(session_id, target?, apply?)
+              # apply=false (default): returns patch only, no disk write
+              # apply=true: writes to disk + returns patch
+
+            discard_session(session_id)   # revert in-memory state, no disk write
+
+            destroy_session(session_id)   # release resources; call after commit or discard
+
+            simulate_edit_atomic(workspace_root, language, file_path,
+                                 start_line, start_column, end_line, end_column, new_text,
+                                 scope?, timeout_ms?)
+              # One-shot: create → edit → evaluate → destroy. Returns evaluation result.
+              # net_delta: 0 means safe to apply.
+            ```
+
+            ## 4. What to Implement
+
+            ### skills/lsp-simulate/SKILL.md
+
+            Frontmatter:
+            - `name: lsp-simulate`
+            - `description`: ≤250 chars, include "Use when" trigger. Suggested:
+              "Speculative code editing session — simulate changes in memory before touching
+              disk. Use when planning edits that might break things, exploring refactors
+              across multiple files, or verifying an edit is safe before applying."
+            - `allowed-tools`: space-separated list of all simulation tool names:
+              `mcp__lsp__start_lsp mcp__lsp__create_simulation_session mcp__lsp__simulate_edit
+              mcp__lsp__simulate_chain mcp__lsp__evaluate_session mcp__lsp__commit_session
+              mcp__lsp__discard_session mcp__lsp__destroy_session mcp__lsp__simulate_edit_atomic`
+
+            Skill body — cover these sections:
+
+            **Prerequisites**
+            - LSP must be initialized: `start_lsp(root_dir: "/your/workspace")`
+            - Auto-inference note (same as other skills)
+
+            **Quick start (single edit)**
+            Show `simulate_edit_atomic` as the simplest entry point:
+            ```
+            simulate_edit_atomic(
+              workspace_root: "/your/workspace",
+              language: "go",
+              file_path: "/abs/path/to/file.go",
+              start_line: 42, start_column: 1,
+              end_line: 42, end_column: 20,
+              new_text: "replacement text"
+            )
+            → { net_delta: 0 }  -- safe to apply
+            ```
+            State: `net_delta: 0` = no new errors introduced (safe). Positive = errors introduced.
+
+            **Full session workflow (multiple edits)**
+            Steps:
+            1. `create_simulation_session` → get session_id
+            2. `simulate_edit` (one or more times, all edits in-memory)
+            3. `evaluate_session` → check net_delta, confidence
+            4. Decision gate: if net_delta == 0, proceed to step 5; else discard
+            5. `commit_session` (apply=false returns patch, apply=true writes to disk)
+            6. `destroy_session` (always call to release resources)
+
+            Show each step with a concrete tool call example.
+
+            **Chained mutations (simulate_chain)**
+            Brief section: when to use simulate_chain vs multiple simulate_edit calls.
+            simulate_chain evaluates after EACH step — use it to find the safe-to-apply-through
+            point when a multi-step change has some risky steps.
+            Show example with edits array and interpreting `safe_to_apply_through_step`.
+
+            **Decision guide table**
+            | net_delta | confidence | Action |
+            |-----------|------------|--------|
+            | 0         | high       | Safe. Commit or apply. |
+            | 0         | eventual   | Likely safe. Workspace scope — re-evaluate if risk matters. |
+            | > 0       | any        | Do NOT apply. Inspect errors_introduced. Discard session. |
+            | > 0       | partial    | Timeout. Results may be incomplete. Discard and retry with smaller scope. |
+
+            **Session states**
+            Brief table: created → mutated → evaluated → committed/discarded → destroyed
+            Note: dirty state (from revert failure or version mismatch) requires destroy.
+
+            **Cleanup rule**
+            Always call `destroy_session` after commit or discard, even on error paths.
+            Show a note about what happens to sessions on MCP server restart (ephemeral —
+            IDs become invalid; use commit_session to get a portable patch before restart).
+
+            ### skills/lsp-simulate/references/patterns.md
+
+            Reference patterns file. Include:
+
+            1. **Session lifecycle state machine** — the full state diagram in text form:
+               created → mutated → evaluated → committed → destroyed
+               created → mutated → evaluated → discarded → destroyed
+               any → dirty (revert failure) → must destroy
+
+            2. **evaluate_session response fields** — table of all fields:
+               | Field | Type | Meaning |
+               |-------|------|---------|
+               | net_delta | int | +N = errors introduced, -N = resolved, 0 = safe |
+               | confidence | string | "high"=file-scoped settled, "eventual"=workspace, "partial"=timeout, "stale"=concurrent mutation |
+               | errors_introduced | array | each: { line, col, message, severity } |
+               | errors_resolved | array | same shape |
+               | edit_risk_score | float | 0.0 (safe) to 1.0 (risky); higher for exported symbol errors |
+               | timeout | bool | true if diagnostics didn't settle within timeout_ms |
+               | affected_symbols | array | symbol names whose type errors changed |
+
+            3. **simulate_edit_atomic for quick checks** — when to use it vs full session:
+               Use atomic for single what-if checks (no session management).
+               Use full session when applying multiple edits that build on each other,
+               or when you need to inspect the patch before deciding whether to write.
+
+            4. **Confidence interpretation** — brief prose on each confidence level
+               and recommended action.
+
+            5. **Position convention** — all start_line/end_line/start_column/end_column
+               are 1-indexed (matching editor line numbers and `cat -n` output).
+
+            ## 5. Tests to Write
+
+            This is a documentation-only skill (markdown files). No test suite exists for
+            skills — verification is structural (file exists, frontmatter valid, tool names correct).
+            No test files to create.
+
+            ## 6. Verification Gate
+
+            ```bash
+            # 1. Files exist
+            ls skills/lsp-simulate/SKILL.md
+            ls skills/lsp-simulate/references/patterns.md
+
+            # 2. Frontmatter has required fields
+            grep -c "^name:" skills/lsp-simulate/SKILL.md
+            # Expected: 1
+
+            grep -c "^description:" skills/lsp-simulate/SKILL.md
+            # Expected: 1
+
+            grep -c "^allowed-tools:" skills/lsp-simulate/SKILL.md
+            # Expected: 1
+
+            # 3. All required simulation tools referenced in allowed-tools line
+            grep "create_simulation_session" skills/lsp-simulate/SKILL.md
+            # Expected: at least 1 match
+
+            grep "simulate_edit_atomic" skills/lsp-simulate/SKILL.md
+            # Expected: at least 1 match
+
+            grep "evaluate_session" skills/lsp-simulate/SKILL.md
+            # Expected: at least 1 match
+
+            # 4. Description is ≤250 chars (measure the description value)
+            awk '/^description:/{print length($0)}' skills/lsp-simulate/SKILL.md
+            # Expected: ≤260 (allowing for "description: " prefix)
+            ```
+
+            ## 7. Constraints
+
+            - Do NOT modify any existing skill files.
+            - Do NOT create any Go source files.
+            - The `description` frontmatter field must be ≤250 characters total.
+            - Tool names in `allowed-tools` must use `mcp__lsp__` prefix with double underscores,
+              matching the exact registration names in server.go.
+            - All tool call examples in the skill body must use exact parameter names from the
+              interface contracts (e.g. `session_id` not `sessionId`, `start_line` not `startLine`).
+            - Follow the visual style of existing skills: backtick code blocks for tool calls,
+              `**Step N — description**` headers, decision tables where appropriate.
+            - references/patterns.md is a standalone reference document (no frontmatter, just markdown).
+
+            ## 8. Report
+
+            Commit your changes, then write your completion report to
+            `/Users/dayna.blackwell/code/LSP-MCP-GO/docs/IMPL/IMPL-lsp-skills-wave2.yaml`
+            under `### Agent A - Completion Report`.
+
+            ```bash
+            cd $SAW_AGENT_WORKTREE
+            git add skills/lsp-simulate/
+            git commit -m "wave1-agent-A: add lsp-simulate skill"
+            ```
+          files:
+            - skills/lsp-simulate/SKILL.md
+            - skills/lsp-simulate/references/patterns.md
+        - id: B
+          task: |
+            # Wave 1 Agent B: lsp-impact skill
+
+            You are Wave 1 Agent B. Create the lsp-impact skill directory with SKILL.md
+            and a references/patterns.md file covering blast-radius analysis before
+            touching a symbol.
+
+            ## 0. Isolation Verification
+
+            Verify you are on the correct branch:
+            ```bash
+            git -C $SAW_AGENT_WORKTREE branch --show-current
+            # Expected: saw/lsp-skills-wave2/wave1-agent-B
+            ```
+
+            ## 1. File Ownership
+
+            You own ONLY these files (creating them new):
+            - `skills/lsp-impact/SKILL.md`
+            - `skills/lsp-impact/references/patterns.md`
+
+            Do NOT touch any other files.
+
+            ## 2. Interfaces You Must Implement
+
+            A Claude Code Agent Skill conforming to the spec:
+            - YAML frontmatter: `name`, `description` (≤250 chars, "Use when" trigger),
+              optional `argument-hint`, `allowed-tools`
+            - Markdown body: step-by-step workflow
+            - references/patterns.md: supplementary reference detail
+
+            Style conventions: match existing skills under skills/ (see edit-export and symbol-renaming skill for reference)
+
+            ## 3. Interfaces You May Call (tool parameters — verified from server.go)
+
+            ```
+            call_hierarchy(
+              file_path, line, column,
+              direction: "incoming" | "outgoing" | "both" (default),
+              language_id?
+            ) -> { item: CallHierarchyItem, incoming: [...], outgoing: [...] }
+            # Requires go_to_symbol or go_to_definition first to get file/line/column.
+            # Returns "No call hierarchy item found at ..." when no symbol found.
+            # Returns error if server does not declare callHierarchyProvider.
+
+            type_hierarchy(
+              file_path, line, column,
+              direction: "supertypes" | "subtypes" | "both" (default),
+              language_id?
+            ) -> { item: TypeHierarchyItem, supertypes: [...], subtypes: [...] }
+            # Requires LSP 3.17. Use get_server_capabilities to check support.
+            # Returns error if server does not declare typeHierarchyProvider.
+
+            get_references(
+              file_path, line, column,
+              include_declaration: bool (default false),
+              language_id?,
+              position_pattern?   # "prefix@@symbol" format; replaces line/column when provided
+            ) -> [{ file, line, column, end_line, end_column }]
+            # All output coords 1-based. Returns [] if workspace still indexing.
+
+            go_to_symbol(
+              symbol_path,       # dot notation: "Package.Symbol" or just "Symbol"
+              workspace_root?,
+              language?
+            ) -> FormattedLocation with file, line, column (1-indexed)
+            # Use this to locate a symbol when you have its name but not its file/line.
+
+            get_server_capabilities()
+            # Returns { supported_tools: [...], unsupported_tools: [...] }
+            # Check before calling call_hierarchy or type_hierarchy (not all servers support them)
+            ```
+
+            ## 4. What to Implement
+
+            ### skills/lsp-impact/SKILL.md
+
+            Frontmatter:
+            - `name: lsp-impact`
+            - `argument-hint: "[symbol-name]"`
+            - `description`: ≤250 chars, include "Use when" trigger. Suggested:
+              "Blast-radius analysis for a symbol — shows all callers, type supertypes/subtypes,
+              and reference count before you change it. Use when refactoring, deleting, or
+              changing the signature of any function, type, or method."
+            - `allowed-tools`:
+              `mcp__lsp__go_to_symbol mcp__lsp__call_hierarchy mcp__lsp__type_hierarchy
+              mcp__lsp__get_references mcp__lsp__get_server_capabilities`
+
+            **Invocation**: User provides `symbol_name` (dot-notation accepted,
+            e.g. `"codec.Encode"`, `"Buffer.Reset"`). Optionally `workspace_root`.
+
+            Skill body — cover these sections:
+
+            **Prerequisites**
+            - LSP initialized: `start_lsp(root_dir: "/your/workspace")`
+            - Check server capabilities (call_hierarchy and type_hierarchy are optional
+              LSP features — not all servers support them):
+              ```
+              get_server_capabilities()
+              ```
+              Proceed differently based on what is supported (see Step 3 notes).
+
+            **Step 1 — Locate the symbol**
+            Use `go_to_symbol` with the symbol_name provided by user:
+            ```
+            go_to_symbol(
+              symbol_path: "Package.SymbolName",
+              workspace_root: "/abs/path"   # optional
+            )
+            → returns: file, line, column (1-indexed)
+            ```
+            Record file, line, column for use in subsequent steps.
+
+            **Step 2 — Enumerate all direct references (always available)**
+            Call `get_references` with `include_declaration: false`:
+            ```
+            get_references(
+              file_path: "<file from Step 1>",
+              position_pattern: "func @@SymbolName(",   # or type/method equivalent
+              include_declaration: false
+            )
+            ```
+            Collect all reference locations. Group by file. Record count.
+
+            **Step 3 — Call hierarchy (callers and callees)**
+            If server supports `call_hierarchy` (from get_server_capabilities):
+            ```
+            call_hierarchy(
+              file_path: "<file from Step 1>",
+              line: <line>,
+              column: <column>,
+              direction: "incoming"   # callers only; use "both" if callees also needed
+            )
+            ```
+            If not supported, skip this step and note in the report.
+
+            **Step 4 — Type hierarchy (supertypes and subtypes)**
+            Only applicable when the symbol is a type/interface/class (not a function).
+            If server supports `type_hierarchy` (LSP 3.17+):
+            ```
+            type_hierarchy(
+              file_path: "<file from Step 1>",
+              line: <line>,
+              column: <column>,
+              direction: "both"
+            )
+            ```
+            For functions/methods: skip this step; note "not applicable (function)".
+            If not supported by server: skip and note.
+
+            **Step 5 — Report impact surface**
+            Produce the Impact Report (format in references/patterns.md).
+
+            Show the full impact report, including:
+            - Symbol name, kind, definition location
+            - Reference count and files
+            - Callers (from call_hierarchy incoming) if available
+            - Supertypes / subtypes (from type_hierarchy) if applicable
+            - Overall blast radius: count of distinct files affected
+
+            **Decision guide**
+            | Blast radius | Recommendation |
+            |---|---|
+            | 0 references | Likely dead code. Confirm with lsp-dead-code before deleting. |
+            | 1–5 files | Low risk. Proceed. Update all callers. |
+            | 6–20 files | Medium risk. Plan changes carefully. Stage in waves. |
+            | > 20 files | High risk. Consider a deprecation path or feature flag. |
+
+            Note: always run this skill BEFORE lsp-edit-export — impact tells you what
+            exists; lsp-edit-export tells you how to change it safely.
+
+            ### skills/lsp-impact/references/patterns.md
+
+            Reference patterns file. Include:
+
+            1. **Impact Report format** — the canonical output format:
+               ```
+               ## Impact Report: SymbolName
+
+               - Kind:         function | method | type | interface | ...
+               - Definition:   path/to/file.go:line:column
+               - References:   N across M files
+
+               ### Direct References
+               - path/to/file1.go  lines: 12, 45
+               - path/to/file2.go  line: 3
+
+               ### Callers (call_hierarchy incoming)
+               <call tree or "not supported by this server">
+
+               ### Type Hierarchy
+               Supertypes: <list or "not applicable">
+               Subtypes:   <list or "not applicable">
+
+               ### Blast Radius Summary
+               - Total files affected: M
+               - Distinct callers: N
+               - Risk level: low | medium | high
+               ```
+
+            2. **Capability check pattern** — how to handle unsupported features:
+               "If `call_hierarchy` is not in `supported_tools`, skip Step 3 and note
+               'call hierarchy not supported by this server' in the report. Do not error."
+               Same for `type_hierarchy`.
+
+            3. **position_pattern for get_references** — @@ marker examples for common
+               language constructs (Go function, Go type, TypeScript export function,
+               Python class, Rust pub fn). Reference the shared patterns.md pattern.
+
+            4. **Relationship to lsp-edit-export** — brief note: lsp-impact is read-only
+               analysis; lsp-edit-export is the write workflow with confirmation gate.
+               Run impact first to understand scope, then edit-export to execute safely.
+
+            ## 5. Tests to Write
+
+            No test suite for skills. Verification is structural.
+
+            ## 6. Verification Gate
+
+            ```bash
+            # 1. Files exist
+            ls skills/lsp-impact/SKILL.md
+            ls skills/lsp-impact/references/patterns.md
+
+            # 2. Frontmatter completeness
+            grep -c "^name:" skills/lsp-impact/SKILL.md
+            # Expected: 1
+
+            grep -c "^description:" skills/lsp-impact/SKILL.md
+            # Expected: 1
+
+            grep -c "^allowed-tools:" skills/lsp-impact/SKILL.md
+            # Expected: 1
+
+            # 3. Required tools referenced in allowed-tools
+            grep "call_hierarchy" skills/lsp-impact/SKILL.md
+            # Expected: at least 1 match
+
+            grep "type_hierarchy" skills/lsp-impact/SKILL.md
+            # Expected: at least 1 match
+
+            grep "get_references" skills/lsp-impact/SKILL.md
+            # Expected: at least 1 match
+
+            # 4. Impact Report format present in references/patterns.md
+            grep "Impact Report" skills/lsp-impact/references/patterns.md
+            # Expected: at least 1 match
+
+            # 5. Description length check
+            awk '/^description:/{print length($0)}' skills/lsp-impact/SKILL.md
+            # Expected: ≤260
+            ```
+
+            ## 7. Constraints
+
+            - Do NOT modify any existing skill files.
+            - Do NOT create any Go source files.
+            - The `description` frontmatter field must be ≤250 characters.
+            - Tool names in `allowed-tools` use `mcp__lsp__` prefix with double underscores.
+            - `call_hierarchy` and `type_hierarchy` are optional LSP features. The skill
+              MUST handle the case where the server does not support them (gracefully skip,
+              note in report). Do NOT present them as required.
+            - Tool call examples must use exact parameter names from the interface contracts
+              (e.g. `direction` not `dir`, `include_declaration` not `includeDeclaration`).
+            - The argument-hint field value is `"[symbol-name]"`.
+
+            ## 8. Report
+
+            Commit your changes, then write your completion report to
+            `/Users/dayna.blackwell/code/LSP-MCP-GO/docs/IMPL/IMPL-lsp-skills-wave2.yaml`
+            under `### Agent B - Completion Report`.
+
+            ```bash
+            cd $SAW_AGENT_WORKTREE
+            git add skills/lsp-impact/
+            git commit -m "wave1-agent-B: add lsp-impact skill"
+            ```
+          files:
+            - skills/lsp-impact/SKILL.md
+            - skills/lsp-impact/references/patterns.md
+        - id: C
+          task: |
+            # Wave 1 Agent C: lsp-dead-code skill
+
+            You are Wave 1 Agent C. Create the lsp-dead-code skill directory with SKILL.md
+            and a references/patterns.md file covering detection of exported symbols with
+            zero references.
+
+            ## 0. Isolation Verification
+
+            Verify you are on the correct branch:
+            ```bash
+            git -C $SAW_AGENT_WORKTREE branch --show-current
+            # Expected: saw/lsp-skills-wave2/wave1-agent-C
+            ```
+
+            ## 1. File Ownership
+
+            You own ONLY these files (creating them new):
+            - `skills/lsp-dead-code/SKILL.md`
+            - `skills/lsp-dead-code/references/patterns.md`
+
+            Do NOT touch any other files.
+
+            ## 2. Interfaces You Must Implement
+
+            A Claude Code Agent Skill conforming to the spec:
+            - YAML frontmatter: `name`, `description` (≤250 chars, "Use when" trigger),
+              optional `argument-hint`, `allowed-tools`
+            - Markdown body: step-by-step workflow
+            - references/patterns.md: supplementary reference detail
+
+            Style conventions: match existing skills (lsp-safe-edit, lsp-verify, lsp-edit-export).
+
+            ## 3. Interfaces You May Call (tool parameters — verified from server.go)
+
+            ```
+            get_document_symbols(
+              file_path: string,
+              language_id?: string
+            ) -> DocumentSymbol[] | SymbolInformation[]
+            # DocumentSymbol has: name, kind (int), range, selectionRange, children[]
+            # kind values: 5=Class, 6=Method, 7=Property, 11=Interface, 12=Function,
+            #              13=Variable, 14=Constant, 9=Enum, 4=Constructor
+            # Coords are 0-based (LSP native) — add 1 when passing to other tools.
+            # Returns [] if server doesn't declare documentSymbolProvider.
+
+            get_references(
+              file_path: string,
+              line: int,                  # 1-indexed
+              column: int,                # 1-indexed
+              include_declaration: bool,  # default false
+              language_id?: string,
+              position_pattern?: string   # "prefix@@symbol" format
+            ) -> [{ file, line, column, end_line, end_column }]
+            # Returns [] if zero references (dead code candidate) or still indexing.
+            # Output coords are 1-based.
+            # include_declaration: false excludes the definition site itself.
+            ```
+
+            ## 4. What to Implement
+
+            ### skills/lsp-dead-code/SKILL.md
+
+            Frontmatter:
+            - `name: lsp-dead-code`
+            - `argument-hint: "[file-path]"`
+            - `description`: ≤250 chars, include "Use when" trigger. Suggested:
+              "Enumerate exported symbols in a file and surface those with zero references
+              across the workspace. Use when auditing for dead code, cleaning up APIs,
+              or checking which exports are safe to remove."
+            - `allowed-tools`:
+              `mcp__lsp__get_document_symbols mcp__lsp__get_references mcp__lsp__open_document`
+
+            **Invocation**: User provides `file_path` (absolute path to file to audit).
+            Optionally `workspace_root` if LSP needs initialization.
+
+            Skill body — cover these sections:
+
+            **Prerequisites**
+            - LSP initialized: `start_lsp(root_dir: "/your/workspace")`
+            - Auto-inference note (same as other skills).
+            - Note: get_references waits for workspace indexing to complete; if it returns []
+              for ALL symbols, the workspace may not be indexed yet — wait briefly and retry.
+
+            **What counts as "exported"**
+            Brief language table (same as lsp-edit-export uses):
+            | Language | Exported means... |
+            |---|---|
+            | Go | Starts with uppercase letter (e.g. `MyFunc`, `MyType`) |
+            | TypeScript | Has `export` keyword or is a public class member |
+            | Python | Not prefixed with `_`; or listed in `__all__` |
+            | Java/C# | Has `public` or `protected` modifier |
+            | Rust | Has `pub` keyword |
+
+            **Step 1 — Open the file and enumerate symbols**
+            ```
+            open_document(file_path: "/abs/path/to/file.go")
+
+            get_document_symbols(file_path: "/abs/path/to/file.go")
+            ```
+            Collect the full symbol list. Filter to exported symbols only (apply
+            the language-appropriate rule from the table above).
+
+            Note: `get_document_symbols` returns 0-based coordinates. Add 1 to
+            `selectionRange.start.line` and `selectionRange.start.character` before
+            passing to `get_references`.
+
+            **Step 2 — Check references for each exported symbol**
+            For each exported symbol, call `get_references` with
+            `include_declaration: false` (so the definition itself is excluded):
+            ```
+            get_references(
+              file_path: "/abs/path/to/file.go",
+              line: <selectionRange.start.line + 1>,    # convert 0-based to 1-based
+              column: <selectionRange.start.character + 1>,
+              include_declaration: false
+            )
+            ```
+            Record result: `{ symbol_name, kind, line, reference_count, locations[] }`.
+
+            **Batching note**: For files with many exported symbols (>20), process in
+            batches of 5–10 to avoid overwhelming the LSP server. The workspace
+            indexing is shared state — rapid-fire calls may return stale results.
+
+            **Step 3 — Classify and report**
+            Classify each symbol:
+            - **Zero references**: candidate for removal. Flag with WARNING.
+            - **1–2 references**: review manually — may be test-only usage.
+            - **3+ references**: active. Not dead code.
+
+            Produce the Dead Code Report (format in references/patterns.md).
+
+            **Caveats section (REQUIRED in the skill)**
+            The skill body must include a "Caveats" section noting:
+            1. `get_references` only searches files open or indexed by the language server.
+               If the workspace is partially indexed, results may be incomplete.
+            2. Symbols used via reflection, `//go:linkname`, `unsafe`, or dynamic dispatch
+               may show zero LSP references even when used at runtime.
+            3. Exported symbols called from external packages not in the workspace
+               (e.g., a library's public API) will show zero references even if consumers exist.
+            4. Always review zero-reference candidates manually before deleting.
+            5. The declaration site is excluded from the reference count
+               (`include_declaration: false`) — a count of 0 means no callers, not no occurrences.
+
+            **Step 4 — Next steps guidance**
+            After the report:
+            - For each zero-reference symbol: "Before deleting, run `lsp-impact` on the
+              symbol to confirm. If lsp-impact also finds zero references, it is safe to
+              remove."
+            - For symbols with only test-file references: mark as "test-only" in the report.
+              These may be candidates for removal if the tests themselves are redundant.
+
+            ### skills/lsp-dead-code/references/patterns.md
+
+            Reference patterns file. Include:
+
+            1. **Dead Code Report format**:
+               ```
+               ## Dead Code Audit: path/to/file.go
+
+               Exported symbols: N total
+               Zero-reference: M candidates
+               Test-only reference: K
+
+               ### Zero-Reference Candidates (WARNING)
+               | Symbol | Kind | Line | References |
+               |--------|------|------|------------|
+               | MyFunc | function | 42 | 0 |
+               | MyType | type | 87 | 0 |
+
+               ### Test-Only References
+               | Symbol | Kind | Line | References | Test files |
+               |--------|------|------|------------|------------|
+               | HelperFunc | function | 15 | 1 | foo_test.go |
+
+               ### Active Symbols
+               | Symbol | Kind | Line | References |
+               |--------|------|------|------------|
+               | PublicAPI | function | 3 | 12 |
+               ```
+
+            2. **Coordinate conversion** — reminder table:
+               `get_document_symbols` returns 0-based coords (LSP native).
+               `get_references` requires 1-based coords.
+               Formula: `line_for_refs = symbol.selectionRange.start.line + 1`
+                        `col_for_refs  = symbol.selectionRange.start.character + 1`
+
+            3. **Exported symbol detection by language** — same table as in SKILL.md,
+               reproduced here for quick reference.
+
+            4. **False-positive categories** — list of cases where zero LSP references
+               does NOT mean dead code:
+               - Reflection usage (Go: `reflect.TypeOf`, Java: `Class.forName`)
+               - `//go:linkname` or assembly-linked symbols
+               - Library public API (callers outside the workspace)
+               - Interface implementations checked at compile time (`var _ Interface = (*Impl)(nil)`)
+               - CGo exported functions
+               - Build tag variants (symbol only compiled on certain OS/arch)
+
+            5. **Batching pattern** — for large files, how to iterate:
+               Process exported symbols in batches of 5–10. Between batches, check
+               if any `get_references` returned empty unexpectedly — that may indicate
+               the workspace is still loading. If first-symbol reference returns []
+               but the symbol is clearly used, wait 2–3 seconds and retry.
+
+            ## 5. Tests to Write
+
+            No test suite for skills. Verification is structural.
+
+            ## 6. Verification Gate
+
+            ```bash
+            # 1. Files exist
+            ls skills/lsp-dead-code/SKILL.md
+            ls skills/lsp-dead-code/references/patterns.md
+
+            # 2. Frontmatter completeness
+            grep -c "^name:" skills/lsp-dead-code/SKILL.md
+            # Expected: 1
+
+            grep -c "^description:" skills/lsp-dead-code/SKILL.md
+            # Expected: 1
+
+            grep -c "^allowed-tools:" skills/lsp-dead-code/SKILL.md
+            # Expected: 1
+
+            # 3. Required tools referenced
+            grep "get_document_symbols" skills/lsp-dead-code/SKILL.md
+            # Expected: at least 1 match
+
+            grep "get_references" skills/lsp-dead-code/SKILL.md
+            # Expected: at least 1 match
+
+            # 4. Caveats section present
+            grep -i "caveat" skills/lsp-dead-code/SKILL.md
+            # Expected: at least 1 match
+
+            # 5. Dead Code Report format in references/patterns.md
+            grep "Dead Code" skills/lsp-dead-code/references/patterns.md
+            # Expected: at least 1 match
+
+            # 6. Coordinate conversion documented
+            grep "selectionRange" skills/lsp-dead-code/references/patterns.md
+            # Expected: at least 1 match
+
+            # 7. Description length
+            awk '/^description:/{print length($0)}' skills/lsp-dead-code/SKILL.md
+            # Expected: ≤260
+            ```
+
+            ## 7. Constraints
+
+            - Do NOT modify any existing skill files.
+            - Do NOT create any Go source files.
+            - The `description` frontmatter field must be ≤250 characters.
+            - Tool names in `allowed-tools` use `mcp__lsp__` prefix with double underscores.
+            - The coordinate conversion from 0-based (get_document_symbols output) to
+              1-based (get_references input) MUST be explicit in the skill body. This is
+              a known source of subtle bugs — surface it clearly.
+            - The Caveats section (false positives) is mandatory — do not omit it.
+            - `include_declaration: false` must be used in all get_references calls so
+              the definition site does not count as a reference. State this explicitly.
+
+            ## 8. Report
+
+            Commit your changes, then write your completion report to
+            `/Users/dayna.blackwell/code/LSP-MCP-GO/docs/IMPL/IMPL-lsp-skills-wave2.yaml`
+            under `### Agent C - Completion Report`.
+
+            ```bash
+            cd $SAW_AGENT_WORKTREE
+            git add skills/lsp-dead-code/
+            git commit -m "wave1-agent-C: add lsp-dead-code skill"
+            ```
+          files:
+            - skills/lsp-dead-code/SKILL.md
+            - skills/lsp-dead-code/references/patterns.md
+      base_commit: 89e93c7fe0a30f5a35edf7c02448c05a0752e50c
+quality_gates:
+    level: standard
+    gates:
+        - type: custom
+          command: ls skills/lsp-simulate/SKILL.md skills/lsp-impact/SKILL.md skills/lsp-dead-code/SKILL.md
+          required: false
+completion_reports:
+    A:
+        status: complete
+        branch: saw/lsp-skills-wave2/wave1-agent-A
+        commit: 196bfff
+        files_changed:
+            - skills/lsp-simulate/SKILL.md
+            - skills/lsp-simulate/references/patterns.md
+        files_created:
+            - skills/lsp-simulate/SKILL.md
+            - skills/lsp-simulate/references/patterns.md
+        verification: PASS
+        notes: 'lsp-simulate skill created. SKILL.md covers: quick-start via simulate_edit_atomic, full session workflow (6 steps), simulate_chain for chained mutations, decision guide table, session states table, cleanup rule. references/patterns.md covers: state machine, evaluate_session response fields, atomic vs full session guidance, confidence interpretation, position convention.'
+    B:
+        status: complete
+        branch: saw/lsp-skills-wave2/wave1-agent-B
+        commit: 095f4e1
+        files_changed:
+            - skills/lsp-impact/SKILL.md
+            - skills/lsp-impact/references/patterns.md
+        files_created:
+            - skills/lsp-impact/SKILL.md
+            - skills/lsp-impact/references/patterns.md
+        verification: PASS
+        notes: 'lsp-impact skill created. SKILL.md covers 5-step workflow: locate symbol, get_references, call_hierarchy (optional), type_hierarchy (optional for types), impact report. references/patterns.md covers Impact Report format, capability check pattern, position_pattern examples for Go/TS/Python/Rust, and lsp-impact vs lsp-edit-export relationship. Description is 230 chars. All verification gates pass.'
+    C:
+        status: complete
+        branch: saw/lsp-skills-wave2/wave1-agent-C
+        commit: e7edfd5
+        files_changed:
+            - skills/lsp-dead-code/SKILL.md
+            - skills/lsp-dead-code/references/patterns.md
+        files_created:
+            - skills/lsp-dead-code/SKILL.md
+            - skills/lsp-dead-code/references/patterns.md
+        verification: PASS
+        notes: 'lsp-dead-code skill created. All verification gates pass. Description is 207 chars (under 250 limit). Coordinate conversion (0-based to 1-based), include_declaration: false, and Caveats section all documented as required.'
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |
+            Agent writes tool names with wrong prefix (e.g. "lsp__simulate_edit" instead of "mcp__lsp__simulate_edit") in allowed-tools frontmatter. Skill installs but tools are not available when skill runs.
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Interface contracts section specifies exact prefix pattern (mcp__lsp__ with double underscores). Verification gate checks grep for correct tool names. Agents must copy from contracts, not from memory.
+        - scenario: |
+            Agent A uses wrong parameter names (camelCase instead of snake_case), e.g. "sessionId" instead of "session_id" or "startLine" instead of "start_line" in tool call examples.
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Interface contracts section includes exact parameter names from server.go struct tags (json field names). Agents instructed to copy from contracts.
+        - scenario: |
+            Agent C uses wrong coordinate base for get_references. get_document_symbols returns 0-based coords; get_references expects 1-based. Skill examples using raw selectionRange values will point to the wrong character.
+          likelihood: high
+          impact: high
+          mitigation: |
+            Agent C brief explicitly states the conversion formula and adds a postcondition check for "selectionRange" appearing in references/patterns.md. The Caveats constraint in Agent C's brief flags this as a known source of bugs.
+        - scenario: |
+            Agent B omits capability check for call_hierarchy/type_hierarchy. Some servers (e.g. gopls) do not support type_hierarchy. Skill that always calls type_hierarchy will error for those users.
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Agent B brief mandates capability check pattern and explicitly states both tools are optional LSP features that must be gracefully skipped. The verification gate checks that both tool names appear in SKILL.md.
+        - scenario: |
+            description frontmatter exceeds 250 characters. Claude Code Skills spec requires ≤250 chars or the description is truncated in the skill picker UI.
+          likelihood: low
+          impact: low
+          mitigation: |
+            Verification gate for each agent includes awk length check on description line. Agent briefs state the limit explicitly.
+critic_report:
+    verdict: PASS
+    agent_reviews: {}
+    summary: Skipped by operator (--skip-critic)
+    reviewed_at: "2026-04-09T15:04:20Z"
+    issue_count: 0
+state: COMPLETE
+original_branch: develop
+injection_method: manual-fallback
