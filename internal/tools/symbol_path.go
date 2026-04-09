@@ -92,24 +92,75 @@ func HandleGoToSymbol(ctx context.Context, client *lsp.LSPClient, args map[strin
 // bestSymbolMatch picks the best candidate from a list of workspace symbols
 // for the given dotted symbol path.
 //
-// If symbolPath has no ".": returns &candidates[0] (first match).
-// If symbolPath has ".": prefers a candidate where ContainerName matches the
-// parent component (everything before the last dot), case-sensitive.
-// Falls back to &candidates[0] if no ContainerName match is found.
+// For dotted paths (e.g. "MyClass.method"), priority is:
+//  1. Exact name + ContainerName match in a non-test file.
+//  2. Exact name + ContainerName match in any file.
+//  3. ContainerName match in a non-test file.
+//  4. ContainerName match in any file.
+//  5. Exact name in a non-test file.
+//  6. Exact name in any file.
+//  7. First candidate.
+//
+// For non-dotted paths (e.g. "HandleGoToSymbol"), priority is:
+//  1. Exact name in a non-test file.
+//  2. Exact name in any file.
+//  3. First candidate.
 func bestSymbolMatch(candidates []types.SymbolInformation, symbolPath string) *types.SymbolInformation {
 	if len(candidates) == 0 {
 		return nil
 	}
 
-	if !strings.Contains(symbolPath, ".") {
-		return &candidates[0]
+	leaf := symbolPath
+	var parent string
+	dotted := strings.Contains(symbolPath, ".")
+	if dotted {
+		lastDot := strings.LastIndex(symbolPath, ".")
+		leaf = symbolPath[lastDot+1:]
+		parent = symbolPath[:lastDot]
 	}
 
-	lastDot := strings.LastIndex(symbolPath, ".")
-	parent := symbolPath[:lastDot]
+	isTest := func(uri string) bool { return strings.HasSuffix(uri, "_test.go") }
+	nameMatch := func(s types.SymbolInformation) bool { return s.Name == leaf }
+	containerMatch := func(s types.SymbolInformation) bool {
+		return s.ContainerName != nil && *s.ContainerName == parent
+	}
 
+	if dotted {
+		// 1. Exact name + container, non-test.
+		for i := range candidates {
+			if nameMatch(candidates[i]) && containerMatch(candidates[i]) && !isTest(candidates[i].Location.URI) {
+				return &candidates[i]
+			}
+		}
+		// 2. Exact name + container, any file.
+		for i := range candidates {
+			if nameMatch(candidates[i]) && containerMatch(candidates[i]) {
+				return &candidates[i]
+			}
+		}
+		// 3. Container only, non-test.
+		for i := range candidates {
+			if containerMatch(candidates[i]) && !isTest(candidates[i].Location.URI) {
+				return &candidates[i]
+			}
+		}
+		// 4. Container only, any file.
+		for i := range candidates {
+			if containerMatch(candidates[i]) {
+				return &candidates[i]
+			}
+		}
+	}
+
+	// 5 / 1. Exact name, non-test.
 	for i := range candidates {
-		if candidates[i].ContainerName != nil && *candidates[i].ContainerName == parent {
+		if nameMatch(candidates[i]) && !isTest(candidates[i].Location.URI) {
+			return &candidates[i]
+		}
+	}
+	// 6 / 2. Exact name, any file.
+	for i := range candidates {
+		if nameMatch(candidates[i]) {
 			return &candidates[i]
 		}
 	}

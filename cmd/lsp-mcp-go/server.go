@@ -301,8 +301,8 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	type RenameSymbolArgs struct {
 		FilePath        string `json:"file_path"`
 		LanguageID      string `json:"language_id,omitempty"`
-		Line            int    `json:"line"`
-		Column          int    `json:"column"`
+		Line            int    `json:"line,omitempty"`
+		Column          int    `json:"column,omitempty"`
 		NewName         string `json:"new_name"`
 		PositionPattern string `json:"position_pattern,omitempty"`
 		DryRun          bool   `json:"dry_run,omitempty"`
