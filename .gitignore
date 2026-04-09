@@ -24,4 +24,4 @@ test/fixtures/kotlin/.gradle/
 test/fixtures/kotlin/.project
 test/fixtures/kotlin/.settings/
 test/fixtures/swift/.build/
-agent-lsp
+/agent-lsp

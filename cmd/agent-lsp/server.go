@@ -18,6 +18,20 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// mcpSessionSender adapts *mcp.ServerSession to the logging.logSender interface,
+// which requires LogMessage(level, logger, message string) error. Called by
+// logging.SetServer once the client session sends notifications/initialized.
+type mcpSessionSender struct{ ss *mcp.ServerSession }
+
+func (s *mcpSessionSender) LogMessage(level, logger, message string) error {
+	data, _ := json.Marshal(message)
+	return s.ss.Log(context.Background(), &mcp.LoggingMessageParams{
+		Level:  mcp.LoggingLevel(level),
+		Logger: logger,
+		Data:   json.RawMessage(data),
+	})
+}
+
 // clientState holds the current LSP client reference, guarded by a mutex.
 type clientState struct {
 	mu     sync.RWMutex
@@ -204,10 +218,13 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "agent-lsp",
 		Version: "0.1.0",
-	}, nil)
-	// TODO(W3): logging.SetServer needs a logSender implementation wrapping
-	// the MCP server. The *mcp.Server type does not expose LogMessage directly.
-	// Wire after confirming the correct session notification API.
+	}, &mcp.ServerOptions{
+		// Wire MCP log notifications once the client session initializes.
+		InitializedHandler: func(_ context.Context, req *mcp.InitializedRequest) {
+			logging.SetServer(&mcpSessionSender{ss: req.Session})
+			logging.MarkServerInitialized()
+		},
+	})
 
 	// ------- Tool argument types -------
 
