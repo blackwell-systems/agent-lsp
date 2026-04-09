@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/config"
+	"github.com/blackwell-systems/agent-lsp/internal/config"
 )
 
 func TestParseArgs_Legacy(t *testing.T) {

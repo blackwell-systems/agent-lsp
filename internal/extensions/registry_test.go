@@ -3,7 +3,7 @@ package extensions
 import (
 	"testing"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // resetFactories clears the factory map between tests to avoid cross-test pollution.

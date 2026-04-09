@@ -4,8 +4,8 @@ import (
 	"regexp"
 	"sync"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/logging"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/logging"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // sanitizeLanguageID removes any character that is not alphanumeric or a hyphen.

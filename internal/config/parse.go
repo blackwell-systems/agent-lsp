@@ -43,15 +43,15 @@ var extensionMap = map[string][]string{
 }
 
 // ParseArgs parses command-line arguments into a ParseResult.
-// Mode 1 — legacy: lsp-mcp-go <language-id> <binary> [args...]
+// Mode 1 — legacy: agent-lsp <language-id> <binary> [args...]
 //
 //	Detected when len>=2 AND args[0] contains no ":"
 //
-// Mode 2 — multi-arg: lsp-mcp-go go:gopls typescript:tsserver,--stdio
+// Mode 2 — multi-arg: agent-lsp go:gopls typescript:tsserver,--stdio
 //
 //	Detected when args[0] contains ":"
 //
-// Mode 3 — config file: lsp-mcp-go --config /path/to/lsp-mcp.json
+// Mode 3 — config file: agent-lsp --config /path/to/lsp-mcp.json
 func ParseArgs(args []string) (ParseResult, error) {
 	if len(args) == 0 || (len(args) == 1 && args[0] == "--auto") {
 		cfg, err := AutodetectServers()
@@ -65,10 +65,10 @@ func ParseArgs(args []string) (ParseResult, error) {
 	if args[0] == "--config" {
 		if len(args) < 2 {
 			return ParseResult{}, fmt.Errorf("--config requires a file path argument\n" +
-				"usage: lsp-mcp-go <language-id> <binary> [args...]\n" +
-				"       lsp-mcp-go go:gopls typescript:typescript-language-server,--stdio\n" +
-				"       lsp-mcp-go --config /path/to/lsp-mcp.json\n" +
-				"       lsp-mcp-go (auto-detect mode)")
+				"usage: agent-lsp <language-id> <binary> [args...]\n" +
+				"       agent-lsp go:gopls typescript:typescript-language-server,--stdio\n" +
+				"       agent-lsp --config /path/to/lsp-mcp.json\n" +
+				"       agent-lsp (auto-detect mode)")
 		}
 		cfg, err := LoadConfig(args[1])
 		if err != nil {
