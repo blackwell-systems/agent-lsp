@@ -2398,6 +2398,8 @@ structured result, not an MCP error — callers can detect it and fall back to
   fall back to `get_info_on_location`.
 - TypeScript and JavaScript are not supported; returns `source: "error"` with an
   appropriate message.
+- `get_symbol_documentation` is used as Tier 2 in the `lsp-docs` skill — call it
+  after hover returns empty, before falling back to source navigation.
 
 ---
 
