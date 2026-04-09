@@ -3,8 +3,8 @@ package lsp_test
 import (
 	"testing"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/config"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
+	"github.com/blackwell-systems/agent-lsp/internal/config"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 )
 
 func TestNewSingleServerManager_ClientForFile(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // TestWaitForDiagnostics_SettlesAfterQuietWindow verifies that WaitForDiagnostics

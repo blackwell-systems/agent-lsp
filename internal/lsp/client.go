@@ -15,8 +15,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/logging"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/logging"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -528,7 +528,7 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 		"rootUri":   rootURI,
 		// rootPath is deprecated in favour of rootUri; omitted per LSP 3.17.
 		"clientInfo": map[string]interface{}{
-			"name":    "lsp-mcp-go",
+			"name":    "agent-lsp",
 			"version": "0.1.0",
 		},
 		"capabilities": map[string]interface{}{

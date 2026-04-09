@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/config"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/logging"
+	"github.com/blackwell-systems/agent-lsp/internal/config"
+	"github.com/blackwell-systems/agent-lsp/internal/logging"
 )
 
 // managedEntry holds one language server along with its routing metadata.
