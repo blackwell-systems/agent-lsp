@@ -836,11 +836,28 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		WorkspaceRoot string `json:"workspace_root,omitempty"`
 		Language      string `json:"language,omitempty"`
 	}
+
+	type GetSymbolSourceArgs struct {
+		FilePath        string `json:"file_path"`
+		LanguageID      string `json:"language_id,omitempty"`
+		Line            int    `json:"line,omitempty"`
+		Character       int    `json:"character,omitempty"`
+		PositionPattern string `json:"position_pattern,omitempty"`
+	}
+
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "go_to_symbol",
 		Description: "Navigate to a symbol definition by dot-notation name (e.g. \"LSPClient.GetReferences\", \"http.Handler\") without needing file_path or line/column. Uses workspace symbol search to locate the definition. Useful when you know the symbol name but not its location.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GoToSymbolArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleGoToSymbol(ctx, cs.get(), toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_symbol_source",
+		Description: "Return the source code of the innermost symbol (function, method, class, struct, etc.) whose range contains the given cursor position. Calls textDocument/documentSymbol, walks the symbol tree to find the smallest enclosing symbol, then slices the file at that symbol's range. Returns symbol_name, symbol_kind, start_line (1-based), end_line (1-based), and source text. Use line+character or position_pattern (@@-syntax) to specify the cursor. character defaults to 1.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetSymbolSourceArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleGetSymbolSource(ctx, clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 
