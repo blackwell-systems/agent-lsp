@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // NotifyFunc is called by the subscription handler to send resource update notifications.
