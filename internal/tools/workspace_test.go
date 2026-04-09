@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/lsp"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 )
 
 // newFakeClient returns a non-nil *lsp.LSPClient that passes CheckInitialized

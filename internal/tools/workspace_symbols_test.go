@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // --- TestHandleGetWorkspaceSymbols_NilClient ---

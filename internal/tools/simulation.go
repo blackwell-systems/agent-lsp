@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/session"
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/session"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // HandleCreateSimulationSession creates a new isolated simulation session.
