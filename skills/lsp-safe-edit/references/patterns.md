@@ -15,7 +15,7 @@ More reliable than coordinate math. line/column still work as fallback.
 Every skill that calls LSP tools SHOULD include a guard:
 "If LSP is not yet initialized, call start_lsp with the workspace root first."
 
-Auto-init note: lsp-mcp-go supports workspace auto-inference from file paths.
+Auto-init note: agent-lsp supports workspace auto-inference from file paths.
 Explicit start_lsp only needed when switching workspace roots.
 
 ## Diagnostic Diff Output Format

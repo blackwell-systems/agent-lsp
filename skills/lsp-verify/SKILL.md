@@ -4,7 +4,7 @@ description: Full three-layer verification after any change — LSP diagnostics 
 allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests
 ---
 
-> Requires the lsp-mcp-go MCP server.
+> Requires the agent-lsp MCP server.
 
 # lsp-verify: Three-Layer Verification
 

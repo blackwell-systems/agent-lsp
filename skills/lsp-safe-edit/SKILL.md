@@ -4,7 +4,7 @@ description: Wrap any code edit with before/after diagnostic comparison. Use whe
 allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_diagnostics Edit Write Bash
 ---
 
-> Requires the lsp-mcp-go MCP server.
+> Requires the agent-lsp MCP server.
 
 # lsp-safe-edit
 
@@ -16,7 +16,7 @@ errors, makes the edit, then reports what errors were introduced vs. resolved.
 LSP must be running for the target workspace. If not yet initialized, call
 `mcp__lsp__start_lsp` with the workspace root before proceeding.
 
-Auto-init note: lsp-mcp-go supports workspace auto-inference from file paths.
+Auto-init note: agent-lsp supports workspace auto-inference from file paths.
 Explicit `start_lsp` is only needed when switching workspace roots.
 
 ## Input

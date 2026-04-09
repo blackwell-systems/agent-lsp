@@ -5,7 +5,7 @@ argument-hint: "[symbol-name]"
 allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__call_hierarchy mcp__lsp__type_hierarchy mcp__lsp__get_references mcp__lsp__get_server_capabilities
 ---
 
-> Requires the lsp-mcp-go MCP server.
+> Requires the agent-lsp MCP server.
 
 # lsp-impact
 
@@ -176,6 +176,6 @@ Step 5 — Impact Report:
 
 ## Note on position_pattern
 
-`position_pattern` with `@@` is a lsp-mcp-go extension. If your MCP client
+`position_pattern` with `@@` is a agent-lsp extension. If your MCP client
 does not support it, fall back to explicit `line` and `column` parameters from
 the location returned by `go_to_symbol` in Step 1.
