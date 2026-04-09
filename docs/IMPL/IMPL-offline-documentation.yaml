@@ -682,6 +682,6 @@ pre_mortem:
             or "const " rather than assuming the first line is always a signature. This
             handles the common go doc preamble pattern. The doc field returns the full output
             regardless, so the agent always gets complete information even if signature is empty.
-state: SCOUT_PENDING
+state: "REVIEWED"
 original_branch: main
 injection_method: hook
