@@ -1,9 +1,11 @@
 ---
 name: lsp-edit-export
-description: Safe workflow for editing exported symbols. Finds all callers via go_to_symbol + get_references before making any change, then verifies with diagnostics + build.
-compatibility: Requires lsp-mcp-go MCP server
+description: Safe workflow for editing exported symbols or public APIs. Use when changing a function signature, modifying a public type, or altering any symbol used outside its own package — finds all callers first so nothing breaks silently.
+argument-hint: "[symbol-name]"
 allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__open_document mcp__lsp__get_references mcp__lsp__get_diagnostics mcp__lsp__run_build Edit Write
 ---
+
+> Requires the lsp-mcp-go MCP server.
 
 # lsp-edit-export
 

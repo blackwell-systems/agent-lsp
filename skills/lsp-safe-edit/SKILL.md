@@ -1,9 +1,10 @@
 ---
 name: lsp-safe-edit
-description: Wrap any code edit with before/after diagnostic comparison. Captures baseline errors, makes the edit, then reports errors introduced vs. resolved.
-compatibility: Requires lsp-mcp-go MCP server
+description: Wrap any code edit with before/after diagnostic comparison. Use when editing logic, fixing bugs, or modifying function bodies — captures baseline diagnostics, makes the edit, then diffs errors introduced vs. resolved.
 allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_diagnostics Edit Write Bash
 ---
+
+> Requires the lsp-mcp-go MCP server.
 
 # lsp-safe-edit
 

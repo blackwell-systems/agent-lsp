@@ -1,9 +1,11 @@
 ---
 name: lsp-rename
-description: Two-phase safe rename — preview all sites with dry_run, confirm, then execute atomically. Never renames without showing impact first.
-compatibility: Requires lsp-mcp-go MCP server
+description: Two-phase safe rename across the entire workspace. Use when renaming any symbol, function, method, variable, type, or identifier — shows all affected sites before executing atomically via LSP. Never renames without confirmation.
+argument-hint: "[old-name] [new-name]"
 allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__get_references mcp__lsp__rename_symbol mcp__lsp__apply_edit mcp__lsp__get_diagnostics
 ---
+
+> Requires the lsp-mcp-go MCP server.
 
 # lsp-rename: Safe Symbol Rename
 
