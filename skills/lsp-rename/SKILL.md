@@ -2,7 +2,7 @@
 name: lsp-rename
 description: Two-phase safe rename across the entire workspace. Use when renaming any symbol, function, method, variable, type, or identifier — shows all affected sites before executing atomically via LSP. Never renames without confirmation.
 argument-hint: "[old-name] [new-name]"
-allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__get_references mcp__lsp__rename_symbol mcp__lsp__apply_edit mcp__lsp__get_diagnostics
+allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__prepare_rename mcp__lsp__get_references mcp__lsp__rename_symbol mcp__lsp__apply_edit mcp__lsp__get_diagnostics
 ---
 
 > Requires the agent-lsp MCP server.
@@ -43,7 +43,28 @@ mcp__lsp__go_to_symbol
 This returns the definition location (file, line, column). If not found, report
 the error and stop.
 
-### Step 2 — Enumerate references
+### Step 2 — Validate rename is possible
+
+Call `mcp__lsp__prepare_rename` at the definition location from Step 1:
+
+```
+mcp__lsp__prepare_rename
+  file_path: "<file from Step 1>"
+  line: <line from Step 1>
+  column: <column from Step 1>
+```
+
+`prepare_rename` asks the language server whether a rename is valid at this
+position. If it returns an error (e.g. the symbol is a keyword, a built-in, or
+in a location the server cannot rename), **stop immediately** and report:
+
+> Cannot rename `OldName`: <server error message>
+> Common causes: built-in or keyword, imported external package, or position is
+> not on the symbol name. Try locating the declaration site directly.
+
+Only proceed to Step 3 if `prepare_rename` succeeds.
+
+### Step 3 — Enumerate references
 
 Call `mcp__lsp__get_references` at the definition location from Step 1:
 
@@ -56,7 +77,7 @@ mcp__lsp__get_references
 
 Collect all returned locations. Note the total count and the distinct files.
 
-### Step 3 — Dry-run preview
+### Step 4 — Dry-run preview
 
 Call `mcp__lsp__rename_symbol` with `dry_run=true`. **Do not call `apply_edit`.**
 
@@ -72,7 +93,7 @@ mcp__lsp__rename_symbol
 The response includes a `workspace_edit` with all proposed changes and a
 `preview.note` describing the scope.
 
-### Step 4 — Report impact and hard stop
+### Step 5 — Report impact and hard stop
 
 Display the preview summary to the user:
 
