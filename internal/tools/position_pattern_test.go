@@ -124,3 +124,19 @@ func TestExtractPositionWithPattern_Fallback(t *testing.T) {
 		t.Errorf("col: got %d, want 3", col)
 	}
 }
+
+func TestResolvePositionPattern_FileNotFound(t *testing.T) {
+	_, _, err := ResolvePositionPattern("/nonexistent/path/file.go", "foo@@bar")
+	if err == nil {
+		t.Fatal("expected error for non-existent file, got nil")
+	}
+}
+
+// TestExtractPositionWithPattern_NeitherPatternNorPosition verifies that when
+// neither position_pattern nor line/column are provided, an error is returned.
+func TestExtractPositionWithPattern_NeitherPatternNorPosition(t *testing.T) {
+	_, _, err := ExtractPositionWithPattern(map[string]interface{}{}, "")
+	if err == nil {
+		t.Fatal("expected error when no position information provided, got nil")
+	}
+}

@@ -86,3 +86,169 @@ func TestBestSymbolMatch_WithDots(t *testing.T) {
 		t.Errorf("expected candidate with ContainerName=%q, got %v", containerRight, result.ContainerName)
 	}
 }
+
+// --- TestBestSymbolMatch_Empty ---
+
+// TestBestSymbolMatch_Empty verifies that an empty candidate list returns nil.
+func TestBestSymbolMatch_Empty(t *testing.T) {
+	if got := bestSymbolMatch(nil, "pkg.Fn"); got != nil {
+		t.Errorf("expected nil for empty candidates, got %+v", got)
+	}
+	if got := bestSymbolMatch([]types.SymbolInformation{}, "Fn"); got != nil {
+		t.Errorf("expected nil for empty slice, got %+v", got)
+	}
+}
+
+// --- TestBestSymbolMatch_NilContainerName ---
+
+// TestBestSymbolMatch_NilContainerName verifies that candidates with a nil
+// ContainerName do not panic during dotted-path matching.
+func TestBestSymbolMatch_NilContainerName(t *testing.T) {
+	right := "MyStruct"
+	candidates := []types.SymbolInformation{
+		{Name: "Method", ContainerName: nil},       // nil — must not dereference
+		{Name: "Method", ContainerName: &right},
+	}
+	result := bestSymbolMatch(candidates, "MyStruct.Method")
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if result.ContainerName == nil || *result.ContainerName != right {
+		t.Errorf("expected ContainerName=%q, got %v", right, result.ContainerName)
+	}
+}
+
+// --- TestBestSymbolMatch_PrefersNonTestOverTest_NoDot ---
+
+// TestBestSymbolMatch_PrefersNonTestOverTest_NoDot verifies that for a non-dotted
+// path, a non-test file candidate is preferred over a test file candidate with the
+// same name.
+func TestBestSymbolMatch_PrefersNonTestOverTest_NoDot(t *testing.T) {
+	candidates := []types.SymbolInformation{
+		{Name: "HandleFoo", Location: types.Location{URI: "file:///project/tools/foo_test.go"}},
+		{Name: "HandleFoo", Location: types.Location{URI: "file:///project/tools/foo.go"}},
+	}
+	result := bestSymbolMatch(candidates, "HandleFoo")
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if strings.HasSuffix(result.Location.URI, "_test.go") {
+		t.Errorf("expected non-test file, got %q", result.Location.URI)
+	}
+}
+
+// --- TestBestSymbolMatch_PrefersNonTestOverTest_Dotted ---
+
+// TestBestSymbolMatch_PrefersNonTestOverTest_Dotted verifies that for a dotted path,
+// when both candidates have the correct ContainerName, the non-test file wins.
+// This is the core scenario from the reported bug: gopls returns the test wrapper
+// first, then the real implementation.
+func TestBestSymbolMatch_PrefersNonTestOverTest_Dotted(t *testing.T) {
+	container := "MyType"
+	candidates := []types.SymbolInformation{
+		{
+			Name:          "DoWork",
+			ContainerName: &container,
+			Location:      types.Location{URI: "file:///project/tools/mytype_test.go"},
+		},
+		{
+			Name:          "DoWork",
+			ContainerName: &container,
+			Location:      types.Location{URI: "file:///project/tools/mytype.go"},
+		},
+	}
+	result := bestSymbolMatch(candidates, "MyType.DoWork")
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if strings.HasSuffix(result.Location.URI, "_test.go") {
+		t.Errorf("expected non-test implementation file, got %q", result.Location.URI)
+	}
+}
+
+// --- TestBestSymbolMatch_SingleTestOnly_Dotted ---
+
+// TestBestSymbolMatch_SingleTestOnly_Dotted documents the known limitation: when
+// gopls returns only one candidate and it is a test file, bestSymbolMatch has no
+// alternative and returns it. This is the case where gopls indexing is incomplete.
+func TestBestSymbolMatch_SingleTestOnly_Dotted(t *testing.T) {
+	container := "MyType"
+	candidates := []types.SymbolInformation{
+		{
+			Name:          "DoWork",
+			ContainerName: &container,
+			Location:      types.Location{URI: "file:///project/tools/mytype_test.go"},
+		},
+	}
+	result := bestSymbolMatch(candidates, "MyType.DoWork")
+	if result == nil {
+		t.Fatal("expected non-nil result even when only candidate is a test file")
+	}
+	// Document: returns the test file candidate — this is the known limitation when
+	// gopls has not yet indexed the implementation file.
+	if !strings.HasSuffix(result.Location.URI, "_test.go") {
+		t.Errorf("expected test file candidate to be returned, got %q", result.Location.URI)
+	}
+}
+
+// --- TestBestSymbolMatch_ContainerFallback ---
+
+// TestBestSymbolMatch_ContainerFallback verifies that when no candidate has the
+// exact leaf name, the container-only match still wins over candidates[0].
+func TestBestSymbolMatch_ContainerFallback(t *testing.T) {
+	right := "MyStruct"
+	wrong := "OtherStruct"
+	candidates := []types.SymbolInformation{
+		// candidates[0] has a non-matching container
+		{Name: "WrongName", ContainerName: &wrong, Location: types.Location{URI: "file:///other.go"}},
+		// candidates[1] has the correct container but a different leaf name
+		{Name: "WrongName", ContainerName: &right, Location: types.Location{URI: "file:///myfile.go"}},
+	}
+	// path leaf is "Target" — no exact-name match exists, so container-match wins
+	result := bestSymbolMatch(candidates, "MyStruct.Target")
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if result.ContainerName == nil || *result.ContainerName != right {
+		t.Errorf("expected container-match candidate, got ContainerName=%v URI=%q",
+			result.ContainerName, result.Location.URI)
+	}
+}
+
+// --- TestBestSymbolMatch_NoMatchFallback ---
+
+// TestBestSymbolMatch_NoMatchFallback verifies that when no candidate matches on
+// name or container, candidates[0] is returned as a last resort.
+func TestBestSymbolMatch_NoMatchFallback(t *testing.T) {
+	unrelated := "Unrelated"
+	candidates := []types.SymbolInformation{
+		{Name: "SomethingElse", ContainerName: &unrelated, Location: types.Location{URI: "file:///other.go"}},
+	}
+	result := bestSymbolMatch(candidates, "MyStruct.DoWork")
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if result.Name != "SomethingElse" {
+		t.Errorf("expected candidates[0] fallback, got %q", result.Name)
+	}
+}
+
+// --- TestBestSymbolMatch_DeeplyNestedPath ---
+
+// TestBestSymbolMatch_DeeplyNestedPath verifies that "a.b.c" splits correctly:
+// parent="a.b", leaf="c". ContainerName matching uses the full parent segment.
+func TestBestSymbolMatch_DeeplyNestedPath(t *testing.T) {
+	parentShallow := "b"   // would match "b.c" but not "a.b.c"
+	parentDeep := "a.b"    // correct full parent for "a.b.c"
+	candidates := []types.SymbolInformation{
+		{Name: "c", ContainerName: &parentShallow, Location: types.Location{URI: "file:///shallow.go"}},
+		{Name: "c", ContainerName: &parentDeep, Location: types.Location{URI: "file:///deep.go"}},
+	}
+	result := bestSymbolMatch(candidates, "a.b.c")
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if result.ContainerName == nil || *result.ContainerName != parentDeep {
+		t.Errorf("expected ContainerName=%q (deep parent), got %v", parentDeep, result.ContainerName)
+	}
+}
