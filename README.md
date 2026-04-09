@@ -25,7 +25,7 @@ Language servers are the intelligence layer behind IDE features — go-to-defini
 
 ## Skills
 
-Ten agent-native skills compose agent-lsp tools into single-command workflows:
+Eleven agent-native skills compose agent-lsp tools into single-command workflows:
 
 | Skill | Purpose |
 |-------|---------|
@@ -39,6 +39,7 @@ Ten agent-native skills compose agent-lsp tools into single-command workflows:
 | `/lsp-dead-code` | Detect zero-reference exports and unreachable symbols |
 | `/lsp-implement` | Find all concrete implementations of an interface or abstract type |
 | `/lsp-docs` | Three-tier documentation lookup: hover → offline toolchain (`go doc`, `pydoc`) → source |
+| `/lsp-cross-repo` | Multi-root workspace analysis — add a consumer repo and find all cross-repo callers, references, and implementations of a library symbol |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.
 
