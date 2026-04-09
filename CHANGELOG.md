@@ -19,6 +19,17 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - **`start_lsp` `language_id` parameter** — optional field selects a specific configured server in multi-server mode (e.g. `language_id: "go"` targets gopls, `language_id: "typescript"` targets tsserver); routes via new `ServerManager.StartForLanguage` which matches by `language_id` field or extension set; without `language_id`, behavior is unchanged (StartAll). Fixes an agent usability gap where the wrong language server could be active in a mixed-language repo with no in-session override. Description updated to recommend `get_server_capabilities` for diagnosing active-server mismatches.
 - **`apply_edit` text-match mode** — new `file_path` + `old_text` + `new_text` parameter mode; finds `old_text` in the file (exact byte match first, then whitespace-normalised line match that tolerates indentation differences) and applies the replacement without requiring line/column positions; positional `workspace_edit` mode unchanged
 - **`lsp-edit-symbol` skill** — edit a named symbol without knowing its file or position; composes `get_workspace_symbols` → `get_document_symbols` → `apply_edit` to resolve the symbol name to its definition range and apply the edit; decision guide covers signature-only edits, full-body replacements, and ambiguous symbol disambiguation
+- **`get_symbol_documentation` tool** — fetch authoritative documentation for a named
+  symbol from local toolchain sources (go doc, pydoc, cargo doc) without requiring an
+  LSP hover response. Works on transitive dependencies not indexed by the language
+  server. Returns `{ symbol, language, source, doc, signature }`. Dispatches to
+  per-language toolchain commands with a 10-second timeout; strips ANSI escape codes;
+  returns a structured error (not MCP error) when the toolchain fails so callers can
+  fall back to LSP hover.
+- **`lsp-docs` skill** — three-tier documentation lookup: (1) `get_info_on_location`
+  (hover, fast, live); (2) `get_symbol_documentation` (offline, authoritative, works on
+  unindexed deps); (3) `go_to_definition` + `get_symbol_source` (source fallback). Use
+  when hover text is absent or the symbol is in a transitive dependency.
 
 ### Changed (2026-04-09)
 - **Skill descriptions updated with trigger conditions** — all four skill `description` fields now include explicit "use when" clauses per the Claude Code skills spec, enabling automatic invocation when relevant. Descriptions trimmed to ≤250 chars (spec cap). Non-spec `compatibility` field moved to markdown body. `argument-hint` added to `lsp-rename` and `lsp-edit-export` for autocomplete UX.

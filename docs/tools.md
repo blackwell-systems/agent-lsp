@@ -2336,6 +2336,73 @@ line/column required. Useful when you know a symbol name but not its location.
 
 ---
 
+### `get_symbol_documentation`
+
+Fetch authoritative documentation for a named symbol from local toolchain
+sources (go doc, pydoc, cargo doc) without requiring an LSP hover response.
+Works on transitive dependencies not indexed by the language server.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | yes | Fully-qualified symbol name (e.g. `fmt.Println`, `std::vec::Vec::new`) |
+| `language_id` | string | yes | Language identifier: `go`, `rust`, `python` |
+| `file_path` | string | no | Absolute path to any file in the module/project — used to infer package context for Go |
+| `format` | string | no | `"text"` (default) or `"markdown"` — wraps signature in a fenced code block |
+
+**Algorithm**
+
+Dispatches to a per-language toolchain command based on `language_id`:
+
+| Language | Command |
+|----------|---------|
+| `go` | `go doc <symbol>` (run from `file_path` directory if provided) |
+| `python` | `pydoc <symbol>` |
+| `rust` | `cargo doc --open` (offline cache lookup) |
+
+All dispatchers run with a 10-second timeout. When the toolchain command fails,
+`source` is set to `"error"` and `error` contains the stderr. This is a
+structured result, not an MCP error — callers can detect it and fall back to
+`get_info_on_location` (hover).
+
+**Example call**
+
+```json
+{
+  "symbol": "fmt.Println",
+  "language_id": "go"
+}
+```
+
+**Actual output**
+
+```json
+{
+  "symbol": "fmt.Println",
+  "language": "go",
+  "source": "toolchain",
+  "doc": "func Println(a ...any) (n int, err error)\n\nPrintln formats using the default formats...",
+  "signature": "func Println(a ...any) (n int, err error)",
+  "error": ""
+}
+```
+
+**Notes**
+
+- All dispatchers use a 10-second timeout. Cold module cache (first `go doc` call)
+  may approach this limit; subsequent calls are fast.
+- Output is ANSI-stripped — safe for MCP transport.
+- When the toolchain command fails, `source` is `"error"` and `error` contains the
+  stderr. This is a structured result, not an MCP error — callers can detect it and
+  fall back to `get_info_on_location`.
+- TypeScript and JavaScript are not supported; returns `source: "error"` with an
+  appropriate message.
+- `get_symbol_documentation` is used as Tier 2 in the `lsp-docs` skill — call it
+  after hover returns empty, before falling back to source navigation.
+
+---
+
 ### Position-pattern parameter (`position_pattern`)
 
 Three existing tools accept an optional `position_pattern` field:
@@ -2407,5 +2474,6 @@ workflows. Install with `cd skills && ./install.sh`.
 | `/lsp-simulate` | `create_simulation_session`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session` | Speculative editing — test changes without touching the file; supports single edits, sessions, and chained multi-edit sequences |
 | `/lsp-impact` | `get_references`, `call_hierarchy`, `type_hierarchy` | Blast-radius analysis before renaming or deleting — maps all callers, implementors, and subtypes |
 | `/lsp-dead-code` | `get_document_symbols`, `get_references` | Detect zero-reference exports and unreachable symbols across a file or workspace |
+| `/lsp-docs` | `get_info_on_location`, `get_symbol_documentation`, `go_to_definition`, `get_symbol_source` | Three-tier documentation lookup: hover → offline toolchain doc → source definition |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.
