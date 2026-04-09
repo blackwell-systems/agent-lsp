@@ -386,6 +386,7 @@ waves:
           files:
             - internal/tools/position_pattern.go
             - internal/tools/position_pattern_test.go
+      base_commit: 9eeab223fa63b9a56c74c58a325005ac69e6d5d3
     - number: 2
       agents:
         - id: C
@@ -1001,6 +1002,44 @@ scaffolds:
         and calling the listed tools.
       import_path: N/A (reference only)
       status: committed (7b986ac)
+completion_reports:
+    A:
+        status: complete
+        branch: saw/lsp-skills/wave1-agent-A
+        commit: 6dc19c1
+        files_changed:
+            - internal/tools/symbol_path.go
+            - internal/tools/symbol_path_test.go
+        files_created:
+            - internal/tools/symbol_path.go
+            - internal/tools/symbol_path_test.go
+        tests_added:
+            - TestHandleGoToSymbol_NilClient
+            - TestHandleGoToSymbol_EmptySymbolPath
+            - TestBestSymbolMatch_NoDots
+            - TestBestSymbolMatch_WithDots
+        verification: PASS
+        notes: All 4 required tests pass. Full build, vet, and test suite clean. HandleGoToSymbol and bestSymbolMatch implemented per contract. No existing files modified.
+    B:
+        status: complete
+        branch: saw/lsp-skills/wave1-agent-B
+        commit: 7d173c9
+        files_changed:
+            - internal/tools/position_pattern.go
+            - internal/tools/position_pattern_test.go
+        files_created:
+            - internal/tools/position_pattern.go
+            - internal/tools/position_pattern_test.go
+        tests_added:
+            - TestResolvePositionPattern_Basic
+            - TestResolvePositionPattern_MultiLine
+            - TestResolvePositionPattern_NoMarker
+            - TestResolvePositionPattern_NotFound
+            - TestResolvePositionPattern_MarkerAtStart
+            - TestExtractPositionWithPattern_WithPattern
+            - TestExtractPositionWithPattern_Fallback
+        verification: PASS
+        notes: All 7 tests pass. Full build and vet clean. No existing files modified.
 pre_mortem:
     overall_risk: medium
     rows:
@@ -1067,6 +1106,6 @@ critic_report:
     summary: 'All issues corrected by Orchestrator before wave launch: (1) Agent A brief updated to use sym.ContainerName != nil && *sym.ContainerName == parent for correct *string comparison. (2) Agent D and E briefs corrected from "Wave 2 Agent G" to "Wave 3 Agent G". All checks pass.'
     reviewed_at: "2026-04-09T04:30:02Z"
     issue_count: 0
-state: "REVIEWED"
+state: REVIEWED
 original_branch: develop
 injection_method: hook
