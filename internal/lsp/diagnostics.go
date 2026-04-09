@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/blackwell-systems/lsp-mcp-go/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // WaitForDiagnostics waits for diagnostic stabilisation for all uris.
