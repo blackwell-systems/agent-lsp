@@ -171,3 +171,18 @@ func TestInferLanguageID(t *testing.T) {
 		t.Error("expected non-nil manager for explicit LanguageID")
 	}
 }
+
+// TestStartForLanguage_NoMatch verifies that StartForLanguage returns an error
+// when no server is configured for the requested language.
+func TestStartForLanguage_NoMatch(t *testing.T) {
+	m := lsp.NewMultiServerManager([]config.ServerEntry{
+		{Extensions: []string{"ts"}, Command: []string{"tsserver", "--stdio"}, LanguageID: "typescript"},
+	})
+	_, err := m.StartForLanguage(t.Context(), "/tmp", "go")
+	if err == nil {
+		t.Fatal("expected error for unconfigured language, got nil")
+	}
+	if err.Error() == "" {
+		t.Error("expected non-empty error message")
+	}
+}

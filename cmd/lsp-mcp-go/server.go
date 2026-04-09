@@ -212,7 +212,8 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	// ------- Tool argument types -------
 
 	type StartLspArgs struct {
-		RootDir string `json:"root_dir"`
+		RootDir    string `json:"root_dir"`
+		LanguageID string `json:"language_id,omitempty"`
 	}
 	type RestartLspArgs struct {
 		RootDir string `json:"root_dir,omitempty"`
@@ -419,12 +420,19 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "start_lsp",
-		Description: "Initialize or reinitialize the LSP server with a specific project root directory. Call this before using get_references, get_info_on_location, or get_diagnostics when working in a project different from the one the server was started with. The root_dir should be the workspace root (directory containing go.work, go.mod, package.json, etc.).",
+		Description: "Initialize or reinitialize the LSP server with a specific project root directory. Call this before using get_references, get_info_on_location, or get_diagnostics when working in a project different from the one the server was started with. root_dir should be the workspace root (directory containing go.mod, package.json, Cargo.toml, etc.). Optional language_id (e.g. \"go\", \"typescript\", \"rust\") selects a specific configured server in multi-server mode — use this when working in a mixed-language repo to ensure the correct server handles the workspace. If unsure which server is active, call get_server_capabilities first.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args StartLspArgs) (*mcp.CallToolResult, any, error) {
-		// If resolver is a ServerManager, call StartAll so all language server
-		// clients are initialized and available for file-extension routing.
-		// (In single-server mode, entries have nil commands so StartAll is a no-op.)
+		// If resolver is a ServerManager, use StartAll (all servers) or
+		// StartForLanguage (targeted) depending on whether language_id was supplied.
 		if sm, ok := resolver.(*lsp.ServerManager); ok {
+			if args.LanguageID != "" {
+				client, err := sm.StartForLanguage(ctx, args.RootDir, args.LanguageID)
+				if err != nil {
+					return makeCallToolResult(types.ErrorResult(err.Error())), nil, nil
+				}
+				cs.set(client)
+				return makeCallToolResult(types.TextResult("LSP server started successfully")), nil, nil
+			}
 			if err := sm.StartAll(ctx, args.RootDir); err != nil {
 				return makeCallToolResult(types.ErrorResult(err.Error())), nil, nil
 			}

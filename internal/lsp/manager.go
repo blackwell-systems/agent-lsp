@@ -158,6 +158,44 @@ func (m *ServerManager) AllClients() []*LSPClient {
 	return out
 }
 
+// StartForLanguage starts (or restarts) the server whose languageID or extension
+// set matches languageID, initialises it at rootDir, and returns the client.
+// Returns an error if no server is configured for that language.
+// In single-server mode (no command set) the one pre-created client is returned
+// regardless of languageID — there is nothing else to choose from.
+func (m *ServerManager) StartForLanguage(ctx context.Context, rootDir, languageID string) (*LSPClient, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	langLower := strings.ToLower(languageID)
+
+	for _, e := range m.entries {
+		// Single-server mode: command is nil; return the pre-created client.
+		if len(e.command) == 0 {
+			if e.client != nil && !e.client.IsInitialized() {
+				if err := e.client.Initialize(ctx, rootDir); err != nil {
+					return nil, fmt.Errorf("initialize server: %w", err)
+				}
+			}
+			return e.client, nil
+		}
+		// Match by languageID field or by any extension in the set.
+		if strings.ToLower(e.languageID) == langLower || e.extensions[langLower] {
+			// Restart if already running.
+			if e.client != nil {
+				_ = e.client.Shutdown(context.Background())
+			}
+			client := NewLSPClient(e.command[0], e.command[1:])
+			if err := client.Initialize(ctx, rootDir); err != nil {
+				return nil, fmt.Errorf("initialize server for %q: %w", languageID, err)
+			}
+			e.client = client
+			return client, nil
+		}
+	}
+	return nil, fmt.Errorf("no server configured for language %q; check get_server_capabilities or reconfigure with the correct server binary", languageID)
+}
+
 // Shutdown gracefully shuts down all managed LSP clients.
 func (m *ServerManager) Shutdown(ctx context.Context) error {
 	m.mu.RLock()
