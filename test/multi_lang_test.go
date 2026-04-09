@@ -921,6 +921,7 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		testRunBuild(t, ctx, session, lang),
 		testRunTests(t, ctx, session, lang),
 		testGetTestsForFile(t, ctx, session, lang),
+		testGetSymbolSource(t, ctx, session, lang),
 	}
 
 	return langTestResult{tier1: "pass", tier2: tier2Results}
@@ -1959,6 +1960,45 @@ func testDidChangeWatchedFiles(t *testing.T, ctx context.Context, session *mcp.C
 	return toolResult{tool: "did_change_watched_files", status: "pass"}
 }
 
+// testGetSymbolSource tests the get_symbol_source tool using the hover position,
+// which points at a named symbol in every fixture that supports document symbols.
+func testGetSymbolSource(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	if lang.hoverLine == 0 {
+		return toolResult{tool: "get_symbol_source", status: "skip", detail: "no hover position configured"}
+	}
+	res, err := callTool(ctx, session, "get_symbol_source", map[string]any{
+		"file_path":   lang.file,
+		"language_id": lang.id,
+		"line":        lang.hoverLine,
+		"character":   lang.hoverColumn,
+	})
+	if err != nil {
+		return toolResult{tool: "get_symbol_source", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		text, _ := textFromResult(res)
+		return toolResult{tool: "get_symbol_source", status: "skip",
+			detail: fmt.Sprintf("server does not support document symbols: %s", text)}
+	}
+	text, err := textFromResult(res)
+	if err != nil || strings.TrimSpace(text) == "" {
+		return toolResult{tool: "get_symbol_source", status: "fail", detail: "empty get_symbol_source response"}
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		return toolResult{tool: "get_symbol_source", status: "fail",
+			detail: fmt.Sprintf("failed to parse get_symbol_source response: %s", text)}
+	}
+	if _, ok := result["symbol_name"]; !ok {
+		return toolResult{tool: "get_symbol_source", status: "fail", detail: "missing symbol_name in response"}
+	}
+	if src, ok := result["source"].(string); !ok || strings.TrimSpace(src) == "" {
+		return toolResult{tool: "get_symbol_source", status: "fail", detail: "empty source in response"}
+	}
+	return toolResult{tool: "get_symbol_source", status: "pass"}
+}
+
 // statusIcon returns a visual icon for a tool result status.
 func statusIcon(s string) string {
 	switch s {
@@ -1975,14 +2015,14 @@ func statusIcon(s string) string {
 func printMultiLangSummary(t *testing.T, results []langResult) {
 	t.Helper()
 	header := fmt.Sprintf(
-		"%-14s | T1 | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s | %-8s | %-10s | %-11s | %-10s | %-12s | %-12s | %-17s",
+		"%-14s | T1 | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s | %-8s | %-10s | %-11s | %-10s | %-12s | %-12s | %-17s | %-10s",
 		"Language", "symbols", "definition", "references", "completions",
 		"workspace", "format", "declaration", "type_hierarchy", "hover",
 		"call_hier", "sem_tok", "sig_help",
 		"highlights", "inlay_hints", "code_act", "prep_ren", "rename",
 		"srv_caps", "wk_folders",
 		"type_def", "go_to_impl", "format_range", "apply_edit", "detect_servers",
-		"close_doc", "did_change_watched")
+		"close_doc", "did_change_watched", "sym_source")
 	sep := strings.Repeat("-", len(header))
 	t.Logf("\n%s\n%s", header, sep)
 
@@ -1999,7 +2039,7 @@ func printMultiLangSummary(t *testing.T, results []langResult) {
 			return " "
 		}
 		t.Logf(
-			"%-14s | %-2s | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s | %-8s | %-10s | %-11s | %-10s | %-12s | %-12s | %-17s",
+			"%-14s | %-2s | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s | %-8s | %-10s | %-11s | %-10s | %-12s | %-12s | %-17s | %-10s",
 			r.name,
 			statusIcon(r.tier1),
 			get("get_document_symbols"),
@@ -2028,6 +2068,7 @@ func printMultiLangSummary(t *testing.T, results []langResult) {
 			get("detect_lsp_servers"),
 			get("close_document"),
 			get("did_change_watched_files"),
+			get("get_symbol_source"),
 		)
 	}
 	t.Logf("%s", sep)

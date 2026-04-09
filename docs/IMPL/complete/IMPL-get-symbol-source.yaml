@@ -1,3 +1,4 @@
+completion_date: "2026-04-09"
 title: Add get_symbol_source MCP Tool
 feature_slug: get-symbol-source
 verdict: SUITABLE
@@ -431,6 +432,7 @@ waves:
               do not add a stub or workaround in server.go.
           files:
             - cmd/agent-lsp/server.go
+      base_commit: 38135ec74868ed842d72840090112551d3723458
 quality_gates:
     level: standard
     gates:
@@ -456,6 +458,35 @@ post_merge_checklist:
                 to the tier2Results slice after testDocumentSymbols. (3) Add sym_source column
                 to printMultiLangSummary header and per-row t.Logf.
               command: GOWORK=off go test ./test/... -run TestMultiLanguage -list '.*'
+completion_reports:
+    A:
+        status: complete
+        branch: saw/get-symbol-source/wave1-agent-A
+        commit: 7725cf1
+        files_changed:
+            - internal/tools/symbol_source.go
+            - internal/tools/symbol_source_test.go
+        files_created:
+            - internal/tools/symbol_source.go
+            - internal/tools/symbol_source_test.go
+        tests_added:
+            - TestContainsPosition
+            - TestFindInnermostSymbol_Empty
+            - TestFindInnermostSymbol_OuterOnly
+            - TestFindInnermostSymbol_Nested
+            - TestFindInnermostSymbol_ParentNotChild
+            - TestFindInnermostSymbol_NoMatch
+            - TestHandleGetSymbolSource_NilClient
+        verification: PASS
+        notes: All 13 test cases pass (7 table-driven subtests in TestContainsPosition + 6 standalone tests). Build, vet, and pre-commit hooks all clean. symbolKindName not redefined (uses analysis.go). MCP tool registration is out of scope (Agent B).
+    B:
+        status: complete
+        branch: saw/get-symbol-source/wave1-agent-B
+        commit: 25705b3
+        files_changed:
+            - cmd/agent-lsp/server.go
+        verification: PASS
+        notes: 'Added GetSymbolSourceArgs struct and mcp.AddTool registration for get_symbol_source. go vet fails only on undefined: tools.HandleGetSymbolSource (Agent A''s scope, expected in parallel wave). Postconditions verified: 1 occurrence of ''get_symbol_source'' name string, 2 occurrences of GetSymbolSourceArgs. No syntax or structural errors in owned code.'
 pre_mortem:
     overall_risk: low
     rows:
@@ -506,5 +537,5 @@ known_issues:
         test_cascade, wave_structure).
       status: known
       workaround: Proceed with wave execution. The symbols will exist after Agent B merges.
-state: "REVIEWED"
+state: COMPLETE
 original_branch: develop
