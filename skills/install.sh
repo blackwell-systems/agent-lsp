@@ -114,5 +114,5 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "Dry run complete. No changes made."
 else
     echo "Done. Installed: $installed, Skipped: $skipped, Errors: $errors"
-    [[ $errors -gt 0 ]] && exit 1
+    if [[ $errors -gt 0 ]]; then exit 1; fi
 fi
