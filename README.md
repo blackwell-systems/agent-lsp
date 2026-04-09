@@ -9,9 +9,13 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Agent Skills](assets/badge-agentskills.svg)](https://agentskills.io)
 
-agent-lsp is a stateful runtime over real language servers — not a bridge. It maintains a persistent, warm session, reshapes LSP into agent-oriented workflows, and adds a transactional execution layer for safe speculative edits.
+Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships. AI agents should be able to use them. Most can't, for two reasons.
 
-Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships.
+**First, existing MCP-LSP implementations are stateless bridges.** They cold-start the language server on every call, which means no warm index, no cross-file awareness, and no way to maintain session state across a multi-step workflow. The agent pays the indexing cost every time.
+
+**Second, raw tools don't get used.** You can expose 47 tools to an agent, but in non-SDK human-in-the-loop workflows, agents routinely skip them — even when they're available. A safe rename requires `prepare_rename` → `rename_symbol` → `apply_edit` in sequence. An agent that has to reason its way to the correct sequence on every invocation will often skip steps or use the wrong tool. The tools exist but the workflow doesn't reliably happen.
+
+agent-lsp solves both problems. It is a **stateful runtime** over real language servers — not a bridge. It maintains a persistent warm session and adds a **skill layer** that wraps correct tool sequences into single-command workflows agents actually use.
 
 **47 tools** across navigation, analysis, refactoring, and formatting — **28 CI-verified** end-to-end against real language servers across **22 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
@@ -25,7 +29,9 @@ Language servers are the intelligence layer behind IDE features — go-to-defini
 
 ## Skills
 
-Twelve agent-native skills compose agent-lsp tools into single-command workflows:
+The skill layer is the behavioral reliability layer. Raw tools get ignored; skills get used. Each skill encodes the correct tool sequence for a workflow — the agent reads the skill, follows the steps, and uses the tools in the right order without per-prompt orchestration instructions. This is the difference between tools that are available and workflows that actually happen.
+
+Twelve skills ship with agent-lsp:
 
 | Skill | Purpose |
 |-------|---------|
