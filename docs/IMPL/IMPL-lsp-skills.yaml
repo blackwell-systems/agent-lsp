@@ -1106,11 +1106,6 @@ integration_reports:
         gaps: []
         valid: true
         summary: 'Wave 2: all exports are integrated (no gaps detected)'
-    wave3:
-        wave: 3
-        gaps: []
-        valid: true
-        summary: 'Wave 3: all exports are integrated (no gaps detected)'
 pre_mortem:
     overall_risk: medium
     rows:
