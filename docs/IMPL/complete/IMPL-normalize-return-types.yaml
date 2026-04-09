@@ -1,3 +1,4 @@
+completion_date: "2026-04-09"
 title: 'Normalize return types: replace interface{} with concrete types in GetDocumentSymbols, GetCompletion, GetCodeActions'
 feature_slug: normalize-return-types
 verdict: SUITABLE
@@ -793,5 +794,112 @@ pre_mortem:
           mitigation: |-
             Agent D's task covers this explicitly: check for explicit type annotation; if found,
             update and verify the import block.
-state: WAVE_PENDING
+critic_report:
+    verdict: ISSUES
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: ISSUES
+            issues:
+                - check: symbol_accuracy
+                  severity: error
+                  description: DocumentSymbol, CompletionItem, CodeAction, and CompletionList all already exist in internal/types/types.go. The brief states 'These types are currently missing' — this is false. Agent A would insert duplicate type definitions that will not compile.
+                  file: internal/types/types.go
+                  symbol: DocumentSymbol
+                - check: symbol_accuracy
+                  severity: error
+                  description: The interface contract specifies DocumentSymbol.Detail as *string and DocumentSymbol.Deprecated as *bool, but the existing type has Detail as string and Deprecated as bool. The contract does not match the current file.
+                  file: internal/types/types.go
+                  symbol: DocumentSymbol
+                - check: symbol_accuracy
+                  severity: error
+                  description: The interface contract specifies CompletionItem.Deprecated as *bool, Preselect as *bool, and Documentation as *string, but the existing type has Deprecated bool, Preselect bool, and Documentation interface{}. Inserting the contract form would create a duplicate type with conflicting field types.
+                  file: internal/types/types.go
+                  symbol: CompletionItem
+                - check: symbol_accuracy
+                  severity: error
+                  description: The interface contract introduces CodeActionKind as a named string type and uses *CodeActionKind for CodeAction.Kind. The existing CodeAction.Kind is *string. CodeActionKind does not exist in the file. The contract definition conflicts with the already-present CodeAction struct.
+                  file: internal/types/types.go
+                  symbol: CodeActionKind
+                - check: pattern_accuracy
+                  severity: error
+                  description: The brief instructs Agent A to insert types after SymbolInformation at line 148. The existing file already has DocumentSymbol at line 152, Command at 165, CompletionItem at 173, CompletionList at 194, and CodeAction at 201. Inserting at that location would duplicate existing types.
+                  file: internal/types/types.go
+                  symbol: SymbolInformation
+                - check: pattern_accuracy
+                  severity: error
+                  description: Verification gate uses 'cd /Users/dayna.blackwell/code/LSP-MCP-GO' which does not exist. Actual repo root is /Users/dayna.blackwell/workspace/code/agent-lsp.
+                  file: internal/types/types.go
+        B:
+            agent_id: B
+            verdict: ISSUES
+            issues:
+                - check: symbol_accuracy
+                  severity: error
+                  description: parseInterfaceArray does not exist anywhere in internal/lsp/client.go. The brief says to grep for it and conditionally remove it. The function never existed in this form.
+                  file: internal/lsp/client.go
+                  symbol: parseInterfaceArray
+                - check: symbol_accuracy
+                  severity: error
+                  description: GetCompletion already returns (types.CompletionList, error), not ([]interface{}, error). The interface contract specifies the new signature as ([]types.CompletionItem, error), which contradicts the actual return type. The actual return type is types.CompletionList, not []types.CompletionItem.
+                  file: internal/lsp/client.go
+                  symbol: GetCompletion
+                - check: symbol_accuracy
+                  severity: error
+                  description: GetCodeActions already returns ([]types.CodeAction, error) and GetDocumentSymbols already returns ([]types.DocumentSymbol, error). Both methods delegate to NormalizeCodeActions and NormalizeDocumentSymbols in normalize.go. Neither uses parseInterfaceArray.
+                  file: internal/lsp/client.go
+                  symbol: GetCodeActions
+                - check: symbol_accuracy
+                  severity: error
+                  description: The three private helpers (parseCompletionItems, parseCodeActions, parseDocumentSymbols) the brief wants to add already exist as the exported NormalizeCompletion, NormalizeCodeActions, and NormalizeDocumentSymbols in internal/lsp/normalize.go. The normalize.go versions are more complete (e.g., NormalizeDocumentSymbols does proper tree reconstruction).
+                  file: internal/lsp/client.go
+                  symbol: parseCompletionItems
+                - check: pattern_accuracy
+                  severity: error
+                  description: 'Line numbers in the brief are stale: GetCompletion is at line 1099 (brief says ~1051), GetCodeActions at 1117 (brief says ~1067), GetDocumentSymbols at 1239 (brief says ~1189), parseLocations at 2159 (brief says ~1840). All references are off by 40-90 lines.'
+                  file: internal/lsp/client.go
+                - check: file_existence
+                  severity: warning
+                  description: 'internal/lsp/client_completion_test.go does not exist (action: new, correct). However, tests for the named private helpers (TestParseCompletionItems_*, etc.) overlap with existing normalize_test.go coverage of NormalizeCompletion/NormalizeCodeActions/NormalizeDocumentSymbols.'
+                  file: internal/lsp/client_completion_test.go
+                - check: pattern_accuracy
+                  severity: error
+                  description: Verification gate uses 'cd /Users/dayna.blackwell/code/LSP-MCP-GO' which does not exist. Actual repo root is /Users/dayna.blackwell/workspace/code/agent-lsp.
+                  file: internal/lsp/client.go
+        C:
+            agent_id: C
+            verdict: ISSUES
+            issues:
+                - check: symbol_accuracy
+                  severity: error
+                  description: The brief claims HandleGetCompletions currently uses WithDocument[[]interface{}]. The actual code at line 114 uses WithDocument[types.CompletionList]. HandleGetCodeActions already uses WithDocument[[]types.CodeAction] and HandleGetDocumentSymbols already uses WithDocument[[]types.DocumentSymbol]. None of the three handlers use []interface{}. The 'Current' code snippets in the brief do not match the actual file.
+                  file: internal/tools/analysis.go
+                  symbol: HandleGetCompletions
+                - check: symbol_accuracy
+                  severity: error
+                  description: The interface contract specifies GetCompletion returns []types.CompletionItem, but the actual client method returns types.CompletionList. If Agent C updated the WithDocument type parameter to []types.CompletionItem per the brief, it would fail to compile because the closure return type would not match GetCompletion's actual return type.
+                  file: internal/tools/analysis.go
+                  symbol: HandleGetCompletions
+                - check: pattern_accuracy
+                  severity: warning
+                  description: Verification gate uses 'cd /Users/dayna.blackwell/code/LSP-MCP-GO' which does not exist. Actual repo root is /Users/dayna.blackwell/workspace/code/agent-lsp.
+                  file: internal/tools/analysis.go
+        D:
+            agent_id: D
+            verdict: ISSUES
+            issues:
+                - check: symbol_accuracy
+                  severity: error
+                  description: The brief says resources.go assigns GetCompletion result to a variable with inferred type []interface{}. The actual code assigns to completions with inferred type types.CompletionList (GetCompletion already returns types.CompletionList). Neither []interface{} nor []types.CompletionItem is the current or target type. The task premise is false.
+                  file: internal/resources/resources.go
+                  symbol: HandleCompletionsResource
+                - check: interface_consistency
+                  severity: error
+                  description: The interface contract specifies GetCompletion returns ([]types.CompletionItem, error), but the actual current signature is (types.CompletionList, error). This mismatch means Agent D's verification that 'json.Marshal(completions) continues to work without changes' is based on a false premise — the actual return type is CompletionList, which serializes differently from []CompletionItem.
+                  file: internal/resources/resources.go
+                  symbol: GetCompletion
+    summary: The IMPL doc describes the codebase as it was before significant normalization work was completed. All three target types (DocumentSymbol, CompletionItem, CodeAction) already exist in internal/types/types.go with different field signatures than the contracts specify. All three LSPClient methods already return concrete types — GetCompletion returns types.CompletionList (not []types.CompletionItem per the contract), GetCodeActions returns []types.CodeAction, and GetDocumentSymbols returns []types.DocumentSymbol — with normalization handled by NormalizeCompletion/NormalizeCodeActions/NormalizeDocumentSymbols in internal/lsp/normalize.go. The callers in analysis.go already use concrete types. parseInterfaceArray does not exist in client.go. Line numbers are stale by 40-90 lines. Verification gate cd paths point to /Users/dayna.blackwell/code/LSP-MCP-GO which does not exist. All four agents would execute against fundamentally wrong premises and would either duplicate existing types or fail to compile.
+    reviewed_at: "2026-04-09T20:20:50Z"
+    issue_count: 18
+state: COMPLETE
 injection_method: hook
