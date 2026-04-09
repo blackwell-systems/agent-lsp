@@ -20,7 +20,7 @@ func TestSpeculativeSessions(t *testing.T) {
 
 	binaryPath := getMultilangBinary(t)
 	if binaryPath == "" {
-		t.Skip("failed to build lsp-mcp-go binary")
+		t.Skip("failed to build agent-lsp binary")
 	}
 
 	fixtureBase := filepath.Join(testDir(t), "fixtures")
