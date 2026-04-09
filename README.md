@@ -24,6 +24,30 @@ lsp-mcp-go is a stateful runtime over real language servers — not a bridge. It
 
 **Semantic token classification.** `get_semantic_tokens` classifies every token in a range as `function`, `parameter`, `variable`, `type`, `keyword`, etc. — the same data an IDE uses to colorize code. No other MCP-LSP server exposes this.
 
+## Skills
+
+Four agent-native skills compose lsp-mcp-go tools into single-command workflows:
+
+| Skill | Purpose |
+|-------|---------|
+| `/lsp-safe-edit` | Wrap any edit with before/after diagnostic diff |
+| `/lsp-edit-export` | Safe editing of exported symbols — finds all callers first |
+| `/lsp-rename` | Two-phase rename: preview all sites, confirm, then apply |
+| `/lsp-verify` | Full three-layer check: diagnostics + build + tests |
+
+Skills work with any MCP client that supports tool use, not just Claude Code.
+
+```bash
+cd skills && ./install.sh
+```
+
+### New tools
+
+Three new features were added to the MCP tools in this wave:
+a symbol-path navigation tool, a position-pattern cursor syntax using @@,
+and a dry-run preview mode for the rename tool. See docs/tools.md
+for parameter details.
+
 ## Installation
 
 **Requires Go 1.21+** — [install Go](https://go.dev/dl/) if needed.

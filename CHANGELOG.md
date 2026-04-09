@@ -5,6 +5,16 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (2026-04-08) — LSP Skills wave
+
+- **`go_to_symbol` MCP tool** — navigate to any symbol by dot-notation path (e.g. `"MyClass.method"`, `"pkg.Function"`) without needing a file path or line/column; uses `GetWorkspaceSymbols` to find candidates and resolves to the definition location; supports optional `workspace_root` and `language` filters
+- **Position-pattern parameter (`position_pattern`)** — `@@` cursor marker syntax for position-based tools; `ResolvePositionPattern` searches file content for the pattern and returns the 1-indexed line/col of the character immediately after `@@`; `ExtractPositionWithPattern` integrates with existing `extractPosition` fallback; field added to `GetInfoOnLocationArgs`, `GetReferencesArgs`, `GoToDefinitionArgs`, and `RenameSymbolArgs`
+- **Dry-run preview mode for `rename_symbol`** — `dry_run: true` returns a preview envelope `{ "workspace_edit": {...}, "preview": { "note": "..." } }` without writing to disk; existing behavior unchanged when `dry_run` is omitted or false
+- **Four agent-native skills** — `lsp-safe-edit`, `lsp-edit-export`, `lsp-rename`, `lsp-verify`; compose lsp-mcp-go tools into single-command workflows for safe editing, exported-symbol refactoring, two-phase rename, and full diagnostic+build+test verification
+- **`skills/install.sh`** — executable install script for registering skills with MCP clients
+
+## [Unreleased]
+
 ### Fixed (2026-04-08)
 - **`run_build` and `run_tests` in Go workspaces** — both tools now unconditionally set `GOWORK=off` when running `go build` and `go test`; Go searches upward through parent directories for `go.work` files, and when found, `./...` patterns only match modules listed in the workspace file; setting `GOWORK=off` forces Go to build/test all modules in the directory, matching the tool's intent
 

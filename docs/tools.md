@@ -2285,3 +2285,123 @@ additionally waits for all `$/progress` end events before returning. tsserver
 does not emit `$/progress`, so references may require a brief wait and retry
 on first use. Set `set_log_level` to `debug` and look for `Progress end:` log
 lines to confirm when the server is ready.
+
+---
+
+## New tools (LSP Skills wave)
+
+### `go_to_symbol`
+
+Navigate to a symbol's definition by dot-notation path — no file path or
+line/column required. Useful when you know a symbol name but not its location.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol_path` | string | yes | Dot-notation symbol path, e.g. `"MyClass.method"` or `"pkg.Function"` |
+| `workspace_root` | string | no | Restrict search to a specific workspace root |
+| `language` | string | no | Filter candidates by language ID |
+
+**Algorithm**
+
+1. Splits `symbol_path` on `.` to extract the leaf name (last component).
+2. Calls `GetWorkspaceSymbols` with the leaf name to get candidates.
+3. If the path is dotted, prefers candidates where `ContainerName` matches the parent component; otherwise uses the first result.
+4. Opens the candidate file via `WithDocument` and calls `GetDefinition` at the candidate position; if empty, uses the candidate location directly.
+5. Returns a 1-indexed `FormattedLocation`.
+
+**Example call**
+
+```json
+{
+  "symbol_path": "LSPClient.GetDefinition",
+  "workspace_root": "/Users/you/code/lsp-mcp-go"
+}
+```
+
+**Actual output**
+
+```json
+[
+  {
+    "file": "/Users/you/code/lsp-mcp-go/internal/lsp/client.go",
+    "line": 142,
+    "column": 1,
+    "end_line": 142,
+    "end_column": 13
+  }
+]
+```
+
+---
+
+### Position-pattern parameter (`position_pattern`)
+
+Three existing tools accept an optional `position_pattern` field:
+`get_info_on_location`, `get_references`, `go_to_definition`, and
+`rename_symbol`. When provided, it replaces the `line`/`column` pair.
+
+**How it works**
+
+The value is a text snippet that appears in the file, with `@@` marking the
+cursor position. `ResolvePositionPattern` searches the file for the text
+surrounding `@@`, strips the marker, and returns the 1-indexed line and column
+of the character immediately after `@@`.
+
+**Example**
+
+```json
+{
+  "file_path": "/path/to/file.go",
+  "position_pattern": "func (c *LSPClient) Get@@Definition"
+}
+```
+
+This positions the cursor at the `D` in `GetDefinition` — equivalent to
+passing the line/column manually, but robust to line number drift.
+
+**Error cases**
+
+- Pattern missing `@@`: returns an error.
+- Search text not found in file: returns an error.
+
+---
+
+### Dry-run preview for `rename_symbol`
+
+`rename_symbol` now accepts an optional `dry_run` boolean parameter.
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `dry_run` | boolean | no | If true, return the workspace edit preview without writing to disk (default: false) |
+
+**Dry-run output**
+
+```json
+{
+  "workspace_edit": { "...": "full WorkspaceEdit as usual" },
+  "preview": {
+    "note": "Dry run — no files were modified. Call apply_edit with workspace_edit to commit."
+  }
+}
+```
+
+**Normal mode** (`dry_run` omitted or false): behavior unchanged — returns the
+`WorkspaceEdit` directly, ready for `apply_edit`.
+
+---
+
+## Skills
+
+Four agent-native skills compose lsp-mcp-go tools into single-command
+workflows. Install with `cd skills && ./install.sh`.
+
+| Skill | Tools used | Purpose |
+|-------|-----------|---------|
+| `/lsp-safe-edit` | `create_simulation_session`, `simulate_edit_atomic`, `get_diagnostics` | Wrap any edit with a before/after diagnostic diff — shows errors introduced or resolved |
+| `/lsp-edit-export` | `get_references`, `get_info_on_location`, `simulate_edit_atomic` | Safe editing of exported symbols — finds all callers first, then validates the edit |
+| `/lsp-rename` | `prepare_rename`, `rename_symbol` (dry_run), `apply_edit` | Two-phase rename: preview all rename sites, confirm, then apply atomically |
+| `/lsp-verify` | `get_diagnostics`, `run_build`, `run_tests` | Full three-layer check: LSP diagnostics + build + tests — summarizes pass/fail |
+
+Skills work with any MCP client that supports tool use, not just Claude Code.
