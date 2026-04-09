@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ## [Unreleased]
 
 ### Added (2026-04-09) — Skills expansion (continued)
+- **`format_document` step folded into `/lsp-safe-edit` and `/lsp-verify`** — `format_document` → `apply_edit` is now an optional final step in both skills; in `/lsp-safe-edit` it fires after diagnostics are clean (Step 8, before the report); in `/lsp-verify` it fires after all three layers pass as a pre-commit cleanup; skipped when there are unresolved errors or the user did not request formatting; `format_document` added to `allowed-tools` in both skills
 - **`/lsp-format-code` skill** — format a file or selection via the language server's formatter (`gofmt` via gopls, `prettier` via tsserver, `rustfmt` via rust-analyzer, etc.); `format_document` for full file, `format_range` for selection; both return `TextEdit[]` applied via `apply_edit`; optional `get_server_capabilities` pre-check for `documentFormattingProvider`; post-apply `get_diagnostics` guard; multi-file protocol runs format calls in parallel then applies per-file sequentially; language notes table covers Go/TypeScript/Rust/Python/C
 
 ### Added (2026-04-09) — Skills expansion (continued)
