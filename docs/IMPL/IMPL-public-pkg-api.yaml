@@ -1,0 +1,1097 @@
+title: Expose Public pkg/ API
+feature_slug: public-pkg-api
+verdict: SUITABLE
+suitability_assessment: |
+    File decomposition: The work decomposes cleanly into 3 independent agents:
+    Agent A owns pkg/types (re-export layer), Agent B owns pkg/lsp (re-export layer),
+    and Agent C owns pkg/session (re-export layer). Additionally, Agent D owns the
+    doc-comment-only pass across all 9 internal packages plus cmd/agent-lsp. These are
+    all new files with no overlapping ownership. No same-file conflicts exist.
+
+    Investigation-first: All types, interfaces, and method signatures are already fully
+    defined in internal/. No unknown root causes or speculative behavior. Implementation
+    is purely additive.
+
+    Interface discoverability: All cross-agent interfaces are the existing internal types.
+    The pkg/ packages thin-wrap or re-export — no new APIs need to be designed.
+
+    Pre-implementation status: No prior implementation. pkg/ directory does not exist.
+    All 3 target packages are new. Doc comments are absent from 9 of 10 internal
+    packages (internal/config already has a package doc comment; others do not).
+
+    Parallelization value: High. Agents A, B, C, D are fully independent in Wave 1.
+    Each creates 1-3 new files. Build/test cycle ~10s (GOWORK=off go build ./...).
+    Wave 1 runs 4 agents in parallel; no Wave 2 needed (no cross-agent dependencies).
+
+    Estimated times:
+    - Scout phase: ~15 min
+    - Agent execution: ~15 min (4 agents × ~4 min avg, full parallel)
+    - Merge and verification: ~3 min
+    Total SAW time: ~33 min
+
+    Sequential baseline: ~25 min (4 × ~6 min sequential)
+    Time savings: marginal on pure speed but coordination value is high (interface
+    contracts lock in the re-export patterns and prevent inconsistent wrapping choices).
+
+    Recommendation: Proceed. SUITABLE.
+test_command: GOWORK=off go test ./internal/... ./cmd/... ./pkg/...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: pkg/types/doc.go
+      agent: A
+      wave: 1
+      action: new
+    - file: pkg/lsp/doc.go
+      agent: B
+      wave: 1
+      action: new
+    - file: pkg/lsp/lsp.go
+      agent: B
+      wave: 1
+      action: new
+    - file: pkg/session/doc.go
+      agent: C
+      wave: 1
+      action: new
+    - file: pkg/session/session.go
+      agent: C
+      wave: 1
+      action: new
+    - file: internal/lsp/doc.go
+      agent: D
+      wave: 1
+      action: new
+    - file: internal/session/doc.go
+      agent: D
+      wave: 1
+      action: new
+    - file: internal/types/doc.go
+      agent: D
+      wave: 1
+      action: new
+    - file: internal/logging/doc.go
+      agent: D
+      wave: 1
+      action: new
+    - file: internal/uri/doc.go
+      agent: D
+      wave: 1
+      action: new
+    - file: internal/extensions/doc.go
+      agent: D
+      wave: 1
+      action: new
+    - file: internal/tools/doc.go
+      agent: D
+      wave: 1
+      action: new
+    - file: internal/resources/doc.go
+      agent: D
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/doc.go
+      agent: D
+      wave: 1
+      action: new
+    - file: docs/architecture.md
+      agent: D
+      wave: 1
+      action: modify
+    - file: README.md
+      agent: D
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: pkg/types package
+      description: |
+        Re-exports all types from internal/types as the public API surface.
+        Uses type aliases (type X = internaltypes.X) so callers can pass values
+        interchangeably between pkg/types and internal/types without conversion.
+      definition: |
+        // In pkg/types/doc.go — package-level doc comment only.
+        // In a thin re-export file (can be the doc.go itself, or a separate types.go):
+        package types
+
+        import internaltypes "github.com/blackwell-systems/agent-lsp/internal/types"
+
+        type Position                 = internaltypes.Position
+        type Range                    = internaltypes.Range
+        type Location                 = internaltypes.Location
+        type FormattedLocation        = internaltypes.FormattedLocation
+        type LSPDiagnostic            = internaltypes.LSPDiagnostic
+        type DiagnosticUpdateCallback = internaltypes.DiagnosticUpdateCallback
+        type FileChangeEvent          = internaltypes.FileChangeEvent
+        type ToolResult               = internaltypes.ToolResult
+        type ContentItem              = internaltypes.ContentItem
+        type SymbolKind               = internaltypes.SymbolKind
+        type SymbolTag                = internaltypes.SymbolTag
+        type CallHierarchyItem        = internaltypes.CallHierarchyItem
+        type CallHierarchyIncomingCall = internaltypes.CallHierarchyIncomingCall
+        type CallHierarchyOutgoingCall = internaltypes.CallHierarchyOutgoingCall
+        type TypeHierarchyItem        = internaltypes.TypeHierarchyItem
+        type SemanticToken            = internaltypes.SemanticToken
+        type TextEdit                 = internaltypes.TextEdit
+        type SymbolInformation        = internaltypes.SymbolInformation
+        type DocumentSymbol           = internaltypes.DocumentSymbol
+        type Command                  = internaltypes.Command
+        type CompletionItem           = internaltypes.CompletionItem
+        type CompletionList           = internaltypes.CompletionList
+        type CodeAction               = internaltypes.CodeAction
+        type ToolHandler              = internaltypes.ToolHandler
+        type ResourceHandler          = internaltypes.ResourceHandler
+        type Extension                = internaltypes.Extension
+        type InlayHintKind            = internaltypes.InlayHintKind
+        type InlayHintLabelPart       = internaltypes.InlayHintLabelPart
+        type InlayHint                = internaltypes.InlayHint
+        type DocumentHighlightKind    = internaltypes.DocumentHighlightKind
+        type DocumentHighlight        = internaltypes.DocumentHighlight
+
+        // Re-export constants.
+        const InlayHintKindType      = internaltypes.InlayHintKindType
+        const InlayHintKindParameter = internaltypes.InlayHintKindParameter
+        const DocumentHighlightText  = internaltypes.DocumentHighlightText
+        const DocumentHighlightRead  = internaltypes.DocumentHighlightRead
+        const DocumentHighlightWrite = internaltypes.DocumentHighlightWrite
+
+        // Re-export constructor functions.
+        var TextResult  = internaltypes.TextResult
+        var ErrorResult = internaltypes.ErrorResult
+      location: pkg/types/doc.go
+    - name: pkg/lsp package
+      description: |
+        Re-exports LSPClient, ServerManager, and ClientResolver as the public
+        LSP client API. Uses type aliases for concrete types so values are
+        interchangeable with internal/ usage. The ClientResolver interface is
+        re-declared (not aliased — interfaces cannot be aliased to satisfy the
+        same method sets across packages). All constructors are var-aliased.
+      definition: |
+        // In pkg/lsp/doc.go — package-level doc comment only.
+        // In pkg/lsp/lsp.go:
+        package lsp
+
+        import internallsp "github.com/blackwell-systems/agent-lsp/internal/lsp"
+
+        // Type aliases for concrete types.
+        type LSPClient     = internallsp.LSPClient
+        type ServerManager = internallsp.ServerManager
+
+        // ClientResolver is the public interface for resolving LSP clients by file.
+        // Matches the method set of internal/lsp.ClientResolver exactly.
+        type ClientResolver interface {
+            ClientForFile(filePath string) *LSPClient
+            DefaultClient() *LSPClient
+            AllClients() []*LSPClient
+            Shutdown(ctx context.Context) error
+        }
+
+        // Constructor aliases.
+        var NewLSPClient            = internallsp.NewLSPClient
+        var NewSingleServerManager  = internallsp.NewSingleServerManager
+        var NewMultiServerManager   = internallsp.NewMultiServerManager
+      location: pkg/lsp/lsp.go
+    - name: pkg/session package
+      description: |
+        Re-exports SessionManager, SimulationSession, and all session-related
+        types as the public speculative-execution API. Type aliases keep values
+        interchangeable with internal/session. SessionExecutor interface is
+        re-declared (not aliased). All constructors are var-aliased.
+      definition: |
+        // In pkg/session/doc.go — package-level doc comment only.
+        // In pkg/session/session.go:
+        package session
+
+        import internalsession "github.com/blackwell-systems/agent-lsp/internal/session"
+
+        // Type aliases.
+        type SessionManager     = internalsession.SessionManager
+        type SimulationSession  = internalsession.SimulationSession
+        type SessionStatus      = internalsession.SessionStatus
+        type Confidence         = internalsession.Confidence
+        type AppliedEdit        = internalsession.AppliedEdit
+        type DiagnosticsSnapshot = internalsession.DiagnosticsSnapshot
+        type EvaluationResult   = internalsession.EvaluationResult
+        type DiagnosticEntry    = internalsession.DiagnosticEntry
+        type EditResult         = internalsession.EditResult
+        type ChainEdit          = internalsession.ChainEdit
+        type ChainStepResult    = internalsession.ChainStepResult
+        type ChainResult        = internalsession.ChainResult
+        type CommitResult       = internalsession.CommitResult
+
+        // SessionExecutor is the public interface for session locking.
+        // Matches the method set of internal/session.SessionExecutor exactly.
+        type SessionExecutor interface {
+            Acquire(ctx context.Context, session *SimulationSession) error
+            Release(session *SimulationSession)
+        }
+
+        // Status constants.
+        const StatusCreated    = internalsession.StatusCreated
+        const StatusMutated    = internalsession.StatusMutated
+        const StatusEvaluating = internalsession.StatusEvaluating
+        const StatusEvaluated  = internalsession.StatusEvaluated
+        const StatusCommitted  = internalsession.StatusCommitted
+        const StatusDiscarded  = internalsession.StatusDiscarded
+        const StatusDirty      = internalsession.StatusDirty
+        const StatusDestroyed  = internalsession.StatusDestroyed
+
+        // Confidence constants.
+        const ConfidenceHigh     = internalsession.ConfidenceHigh
+        const ConfidencePartial  = internalsession.ConfidencePartial
+        const ConfidenceEventual = internalsession.ConfidenceEventual
+
+        // Constructor aliases.
+        var NewSessionManager     = internalsession.NewSessionManager
+        var NewSerializedExecutor = internalsession.NewSerializedExecutor
+      location: pkg/session/session.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Role
+            Create the `pkg/types` public re-export package.
+
+            ## Context
+            The goal is pkg.go.dev discoverability: external Go programs should be able to
+            import `github.com/blackwell-systems/agent-lsp/pkg/types` and get fully typed
+            access to all LSP/tool types without importing the internal package path.
+
+            ## What to implement
+
+            Create `pkg/types/doc.go`. This single file serves two purposes:
+            1. The package-level doc comment (required for pkg.go.dev indexing).
+            2. All type alias declarations re-exporting internal/types.
+
+            Use Go type aliases (`type X = internalX`) — NOT new type definitions. Aliases
+            allow callers to pass `pkg/types.Position` values directly to internal functions
+            that accept `internal/types.Position` without any conversion.
+
+            ### File: pkg/types/doc.go
+
+            The file must contain:
+
+            A package doc comment. Use this text:
+            ```
+            // Package types provides the public type definitions for agent-lsp's LSP client
+            // and MCP tool layer. It re-exports all types from the internal implementation
+            // package as type aliases, so values are interchangeable with internal usage.
+            //
+            // Importers of agent-lsp as a library should use this package rather than
+            // the internal/types path, which is not covered by the Go module's public API
+            // stability guarantees.
+            //
+            // Key types:
+            //
+            //   - Position, Range, Location: LSP coordinate types (0-based, LSP convention)
+            //   - LSPDiagnostic: diagnostic returned by the language server
+            //   - DocumentSymbol, SymbolInformation: symbol shapes from documentSymbol/workspaceSymbol
+            //   - CallHierarchyItem, TypeHierarchyItem: call/type hierarchy nodes
+            //   - CompletionItem, CompletionList: completion response types
+            //   - CodeAction, TextEdit: edit and action types
+            //   - InlayHint, DocumentHighlight, SemanticToken: display annotation types
+            //   - ToolResult, ContentItem: MCP tool response envelope
+            //   - Extension: interface for per-language extension packages
+            package types
+            ```
+
+            Then the import:
+            ```go
+            import internaltypes "github.com/blackwell-systems/agent-lsp/internal/types"
+            ```
+
+            Then all type alias declarations (one per line, exported name on left,
+            internal alias on right):
+            - All struct types: Position, Range, Location, FormattedLocation,
+              LSPDiagnostic, FileChangeEvent, ToolResult, ContentItem,
+              CallHierarchyItem, CallHierarchyIncomingCall, CallHierarchyOutgoingCall,
+              TypeHierarchyItem, SemanticToken, TextEdit, SymbolInformation,
+              DocumentSymbol, Command, CompletionItem, CompletionList, CodeAction,
+              InlayHintLabelPart, InlayHint, DocumentHighlight
+            - All function types: DiagnosticUpdateCallback, ToolHandler, ResourceHandler
+            - All interface types: Extension
+            - All integer types: SymbolKind, SymbolTag, InlayHintKind, DocumentHighlightKind
+
+            Then const re-exports:
+            ```go
+            const (
+                InlayHintKindType      = internaltypes.InlayHintKindType
+                InlayHintKindParameter = internaltypes.InlayHintKindParameter
+                DocumentHighlightText  = internaltypes.DocumentHighlightText
+                DocumentHighlightRead  = internaltypes.DocumentHighlightRead
+                DocumentHighlightWrite = internaltypes.DocumentHighlightWrite
+            )
+            ```
+
+            Then constructor re-exports (use var, not func wrappers):
+            ```go
+            var (
+                TextResult  = internaltypes.TextResult
+                ErrorResult = internaltypes.ErrorResult
+            )
+            ```
+
+            ## Verification gate
+
+            1. Build succeeds:
+               ```
+               GOWORK=off go build ./pkg/types/...
+               ```
+            2. Vet passes:
+               ```
+               GOWORK=off go vet ./pkg/types/...
+               ```
+            3. Postcondition — verify aliases exist (grep should find matches):
+               ```
+               grep -c "type Position " /Users/dayna.blackwell/workspace/code/agent-lsp/pkg/types/doc.go
+               # expected output: 1
+               grep -c "type LSPDiagnostic " /Users/dayna.blackwell/workspace/code/agent-lsp/pkg/types/doc.go
+               # expected output: 1
+               grep -c "type Extension " /Users/dayna.blackwell/workspace/code/agent-lsp/pkg/types/doc.go
+               # expected output: 1
+               ```
+
+            ## Constraints
+            - Do NOT define any new types with new fields. Every declaration must be a
+              type alias (`= internaltypes.X`), not a new type definition.
+            - Do NOT modify any file in internal/ — that is Agent D's scope for doc
+              comments only.
+            - Do NOT create any file other than pkg/types/doc.go.
+            - Do NOT modify files outside your ownership list.
+          files:
+            - pkg/types/doc.go
+        - id: B
+          task: |
+            ## Role
+            Create the `pkg/lsp` public re-export package exposing LSPClient,
+            ServerManager, and the ClientResolver interface.
+
+            ## Context
+            External Go programs need to import `github.com/blackwell-systems/agent-lsp/pkg/lsp`
+            to use the LSP subprocess client without running the MCP server. The pkg/ layer
+            provides a stable, public-API path on pkg.go.dev.
+
+            ## What to implement
+
+            Create two files: `pkg/lsp/doc.go` (package doc comment only) and
+            `pkg/lsp/lsp.go` (re-exports and interface declaration).
+
+            ### File: pkg/lsp/doc.go
+
+            Content:
+            ```go
+            // Package lsp provides a public API for spawning and communicating with
+            // Language Server Protocol (LSP) subprocesses from Go programs.
+            //
+            // The primary type is [LSPClient], which manages the lifecycle of a single
+            // LSP server process: spawning, Content-Length framing, request/response
+            // correlation, server-initiated request handling, diagnostic subscriptions,
+            // and workspace file watching.
+            //
+            // [ServerManager] routes file-specific operations to the correct language
+            // server in multi-server configurations. [ClientResolver] is the interface
+            // that ServerManager implements; it allows callers to inject alternative
+            // routing implementations.
+            //
+            // Typical single-server usage:
+            //
+            //	client := lsp.NewLSPClient("gopls", []string{})
+            //	if err := client.Initialize(ctx, "/path/to/workspace"); err != nil {
+            //	    log.Fatal(err)
+            //	}
+            //	defer client.Shutdown(ctx)
+            //	locs, err := client.GetDefinition(ctx, fileURI, pos)
+            //
+            // All types in this package are type aliases of the internal implementation;
+            // values are interchangeable with internal/lsp without conversion.
+            package lsp
+            ```
+
+            ### File: pkg/lsp/lsp.go
+
+            Content skeleton:
+            ```go
+            package lsp
+
+            import (
+                "context"
+
+                internallsp "github.com/blackwell-systems/agent-lsp/internal/lsp"
+                "github.com/blackwell-systems/agent-lsp/internal/config"
+            )
+
+            // LSPClient is the core LSP subprocess client. See [internallsp.LSPClient]
+            // for full documentation.
+            type LSPClient = internallsp.LSPClient
+
+            // ServerManager manages one or more LSP server instances and implements
+            // [ClientResolver]. See [internallsp.ServerManager] for full documentation.
+            type ServerManager = internallsp.ServerManager
+
+            // ClientResolver resolves the appropriate [LSPClient] for a given file path.
+            // Implemented by [ServerManager].
+            type ClientResolver interface {
+                ClientForFile(filePath string) *LSPClient
+                DefaultClient() *LSPClient
+                AllClients() []*LSPClient
+                Shutdown(ctx context.Context) error
+            }
+
+            // NewLSPClient creates a new, unstarted LSP client.
+            // Call [LSPClient.Initialize] to start the subprocess and complete the handshake.
+            var NewLSPClient = internallsp.NewLSPClient
+
+            // NewSingleServerManager wraps a single [LSPClient] to satisfy [ClientResolver].
+            var NewSingleServerManager = internallsp.NewSingleServerManager
+
+            // NewMultiServerManager creates a [ServerManager] from multiple ServerEntry configs.
+            // Does NOT start servers — call [ServerManager.StartAll] separately.
+            var NewMultiServerManager = internallsp.NewMultiServerManager
+
+            // ServerEntry is the configuration type for a single language server entry.
+            // Re-exported from internal/config for callers who use NewMultiServerManager.
+            type ServerEntry = config.ServerEntry
+            ```
+
+            Note: The `ClientResolver` interface in this file must exactly match the method
+            set of `internal/lsp.ClientResolver`:
+            - `ClientForFile(filePath string) *LSPClient`
+            - `DefaultClient() *LSPClient`
+            - `AllClients() []*LSPClient`
+            - `Shutdown(ctx context.Context) error`
+
+            Verify the current internal interface by reading:
+            `/Users/dayna.blackwell/workspace/code/agent-lsp/internal/lsp/resolver.go`
+            before writing the file. If the method set has changed from the above, match
+            whatever is in that file — do not invent methods.
+
+            ## Verification gate
+
+            1. Build succeeds:
+               ```
+               GOWORK=off go build ./pkg/lsp/...
+               ```
+            2. Vet passes:
+               ```
+               GOWORK=off go vet ./pkg/lsp/...
+               ```
+            3. Postconditions:
+               ```
+               grep -c "type LSPClient " /Users/dayna.blackwell/workspace/code/agent-lsp/pkg/lsp/lsp.go
+               # expected: 1
+               grep -c "type ServerManager " /Users/dayna.blackwell/workspace/code/agent-lsp/pkg/lsp/lsp.go
+               # expected: 1
+               grep -c "type ClientResolver interface" /Users/dayna.blackwell/workspace/code/agent-lsp/pkg/lsp/lsp.go
+               # expected: 1
+               ```
+
+            ## Constraints
+            - Do NOT duplicate logic from internal/lsp. Every method must be re-exported,
+              not re-implemented.
+            - Do NOT modify any internal/ files.
+            - Do NOT create any file other than pkg/lsp/doc.go and pkg/lsp/lsp.go.
+            - Do NOT import internal/session or internal/tools in this package.
+            - Do NOT modify files outside your ownership list.
+          files:
+            - pkg/lsp/doc.go
+            - pkg/lsp/lsp.go
+        - id: C
+          task: |
+            ## Role
+            Create the `pkg/session` public re-export package exposing SessionManager
+            and all speculative-execution session types.
+
+            ## Context
+            External Go programs need to import
+            `github.com/blackwell-systems/agent-lsp/pkg/session` to use the speculative
+            edit/evaluate/commit workflow without running the MCP server. The pkg/ layer
+            provides a stable, importable, pkg.go.dev-indexed path.
+
+            ## What to implement
+
+            Create two files: `pkg/session/doc.go` (package doc comment only) and
+            `pkg/session/session.go` (re-exports and interface declaration).
+
+            ### File: pkg/session/doc.go
+
+            Content:
+            ```go
+            // Package session provides a public API for speculative code editing:
+            // applying LSP-validated edits in memory, evaluating their diagnostic
+            // impact, and committing or discarding the result.
+            //
+            // The primary type is [SessionManager], which manages the lifecycle of
+            // simulation sessions. A session is a transactional unit of work:
+            //
+            //  1. Create a session with [SessionManager.CreateSession].
+            //  2. Apply in-memory edits with [SessionManager.ApplyEdit] or a chain of
+            //     edits with [SessionManager.SimulateChain].
+            //  3. Evaluate the net diagnostic delta with [SessionManager.Evaluate].
+            //  4. Either commit the edits to disk with [SessionManager.Commit] or
+            //     revert with [SessionManager.Discard].
+            //
+            // [SessionStatus] tracks the lifecycle state of each session.
+            // [EvaluationResult] reports introduced and resolved diagnostics relative to
+            // a baseline snapshot captured at the start of each file's first edit.
+            //
+            // All types in this package are type aliases of the internal implementation;
+            // values are interchangeable with internal/session without conversion.
+            package session
+            ```
+
+            ### File: pkg/session/session.go
+
+            Content skeleton:
+            ```go
+            package session
+
+            import (
+                "context"
+
+                internalsession "github.com/blackwell-systems/agent-lsp/internal/session"
+            )
+
+            // SessionManager manages the lifecycle of simulation sessions.
+            // All public methods are thread-safe.
+            type SessionManager = internalsession.SessionManager
+
+            // SimulationSession holds per-session state.
+            type SimulationSession = internalsession.SimulationSession
+
+            // SessionStatus represents the lifecycle phase of a simulation session.
+            type SessionStatus = internalsession.SessionStatus
+
+            // Confidence indicates diagnostic reliability.
+            type Confidence = internalsession.Confidence
+
+            // AppliedEdit records a single edit applied within a session.
+            type AppliedEdit = internalsession.AppliedEdit
+
+            // DiagnosticsSnapshot is a frozen copy of diagnostics for a URI at baseline time.
+            type DiagnosticsSnapshot = internalsession.DiagnosticsSnapshot
+
+            // EvaluationResult is the structured output of SessionManager.Evaluate.
+            type EvaluationResult = internalsession.EvaluationResult
+
+            // DiagnosticEntry is a single diagnostic in an evaluation result.
+            type DiagnosticEntry = internalsession.DiagnosticEntry
+
+            // EditResult is the response from SessionManager.ApplyEdit.
+            type EditResult = internalsession.EditResult
+
+            // ChainEdit is a single edit in a SimulateChain request.
+            type ChainEdit = internalsession.ChainEdit
+
+            // ChainStepResult is one step in a SimulateChain response.
+            type ChainStepResult = internalsession.ChainStepResult
+
+            // ChainResult is the response from SessionManager.SimulateChain.
+            type ChainResult = internalsession.ChainResult
+
+            // CommitResult is the response from SessionManager.Commit.
+            type CommitResult = internalsession.CommitResult
+
+            // SessionExecutor abstracts how a session acquires and releases LSP access.
+            type SessionExecutor interface {
+                Acquire(ctx context.Context, session *SimulationSession) error
+                Release(session *SimulationSession)
+            }
+
+            // Session status constants.
+            const (
+                StatusCreated    = internalsession.StatusCreated
+                StatusMutated    = internalsession.StatusMutated
+                StatusEvaluating = internalsession.StatusEvaluating
+                StatusEvaluated  = internalsession.StatusEvaluated
+                StatusCommitted  = internalsession.StatusCommitted
+                StatusDiscarded  = internalsession.StatusDiscarded
+                StatusDirty      = internalsession.StatusDirty
+                StatusDestroyed  = internalsession.StatusDestroyed
+            )
+
+            // Confidence level constants.
+            const (
+                ConfidenceHigh     = internalsession.ConfidenceHigh
+                ConfidencePartial  = internalsession.ConfidencePartial
+                ConfidenceEventual = internalsession.ConfidenceEventual
+            )
+
+            // NewSessionManager creates a new SessionManager with the given ClientResolver.
+            // The resolver is used to route session operations to the correct LSP client
+            // based on the session's language.
+            //
+            // resolver must satisfy the ClientResolver interface from pkg/lsp or
+            // internal/lsp — either works because LSPClient is a type alias.
+            var NewSessionManager = internalsession.NewSessionManager
+
+            // NewSerializedExecutor creates a new per-session serialized executor.
+            var NewSerializedExecutor = internalsession.NewSerializedExecutor
+            ```
+
+            The `SessionExecutor` interface must exactly match the method set of
+            `internal/session.SessionExecutor`. Verify by reading:
+            `/Users/dayna.blackwell/workspace/code/agent-lsp/internal/session/types.go`
+            before writing the file.
+
+            ## Verification gate
+
+            1. Build succeeds:
+               ```
+               GOWORK=off go build ./pkg/session/...
+               ```
+            2. Vet passes:
+               ```
+               GOWORK=off go vet ./pkg/session/...
+               ```
+            3. Postconditions:
+               ```
+               grep -c "type SessionManager " /Users/dayna.blackwell/workspace/code/agent-lsp/pkg/session/session.go
+               # expected: 1
+               grep -c "type EvaluationResult " /Users/dayna.blackwell/workspace/code/agent-lsp/pkg/session/session.go
+               # expected: 1
+               grep -c "type SessionExecutor interface" /Users/dayna.blackwell/workspace/code/agent-lsp/pkg/session/session.go
+               # expected: 1
+               grep -c "StatusCreated" /Users/dayna.blackwell/workspace/code/agent-lsp/pkg/session/session.go
+               # expected: 1
+               ```
+
+            ## Constraints
+            - Do NOT re-implement any logic. Every declaration must be an alias or const
+              re-export from internal/session.
+            - Do NOT import internal/lsp directly — use the type alias path:
+              `internalsession.NewSessionManager` already accepts `lsp.ClientResolver`
+              (the internal one), which is assignable from pkg/lsp.ClientResolver because
+              LSPClient is a type alias.
+            - Do NOT modify any internal/ files.
+            - Do NOT create any file other than pkg/session/doc.go and pkg/session/session.go.
+            - Do NOT modify files outside your ownership list.
+          files:
+            - pkg/session/doc.go
+            - pkg/session/session.go
+        - id: D
+          task: |
+            ## Role
+            Add package-level doc comments to the 9 internal packages missing them,
+            add a doc comment to cmd/agent-lsp, update docs/architecture.md to describe
+            the new pkg/ layer, and update README.md to add a Library Usage section.
+
+            ## Context
+            pkg.go.dev indexes package documentation. The internal packages need
+            `// Package X ...` doc comments so that when pkg.go.dev renders
+            pkg/types, pkg/lsp, and pkg/session, the linked internal types also have
+            good descriptions in the "Go reference documentation" sense.
+
+            Additionally, docs/architecture.md must be updated to reflect the new
+            public pkg/ layer, and README.md needs a Library Usage section.
+
+            ## What to implement
+
+            Create one `doc.go` per package. Each file contains only the package clause
+            with its doc comment. Do NOT add any imports or declarations.
+
+            ### 1. internal/lsp/doc.go
+
+            ```go
+            // Package lsp implements a JSON-RPC 2.0 client for Language Server Protocol
+            // (LSP) subprocesses. LSPClient manages the full lifecycle of a single LSP
+            // server: spawning, Content-Length framing, request/response correlation,
+            // server-initiated request handling (workspace/applyEdit,
+            // workspace/configuration, client/registerCapability), diagnostic
+            // subscriptions, workspace progress tracking, and optional file watching.
+            //
+            // ServerManager handles multi-server configurations, routing file operations
+            // to the correct language server by file extension. ClientResolver is the
+            // interface that ServerManager implements.
+            //
+            // This package is the internal implementation. External callers should use
+            // github.com/blackwell-systems/agent-lsp/pkg/lsp for a stable public API.
+            package lsp
+            ```
+
+            ### 2. internal/session/doc.go
+
+            ```go
+            // Package session implements speculative code editing: applying LSP-validated
+            // edits in memory, diffing resulting diagnostics against a pre-edit baseline,
+            // and committing or discarding the result. The design isolates speculative
+            // changes from the real filesystem until the caller decides to commit.
+            //
+            // SessionManager is the entry point. Each simulation session tracks its own
+            // set of in-memory file contents, diagnostic baselines, and edit history.
+            // Sessions serialize concurrent operations per-session via SerializedExecutor.
+            //
+            // This package is the internal implementation. External callers should use
+            // github.com/blackwell-systems/agent-lsp/pkg/session for a stable public API.
+            package session
+            ```
+
+            ### 3. internal/types/doc.go
+
+            ```go
+            // Package types defines the shared data types used throughout agent-lsp:
+            // LSP wire types (Position, Range, Location, LSPDiagnostic, TextEdit, etc.),
+            // symbol types (DocumentSymbol, SymbolInformation, CallHierarchyItem,
+            // TypeHierarchyItem, InlayHint, DocumentHighlight, SemanticToken),
+            // completion and code-action types (CompletionList, CodeAction), and
+            // the ToolResult/ContentItem envelope used by MCP tool handlers.
+            //
+            // Extension and ToolHandler/ResourceHandler are also defined here to allow
+            // per-language extension packages to register with the MCP server without
+            // importing the full cmd/ layer.
+            //
+            // This package is the internal implementation. External callers should use
+            // github.com/blackwell-systems/agent-lsp/pkg/types for a stable public API.
+            package types
+            ```
+
+            ### 4. internal/logging/doc.go
+
+            ```go
+            // Package logging provides a minimal leveled logger for agent-lsp.
+            // It writes to stderr and is controlled by the LOG_LEVEL environment variable
+            // (debug, info, warning, error). The default level is info.
+            // Log is the primary entry point; SetLevelFromEnv configures the level at startup.
+            package logging
+            ```
+
+            ### 5. internal/uri/doc.go
+
+            ```go
+            // Package uri provides helpers for converting between LSP file:// URIs and
+            // local filesystem paths, and for applying in-memory range edits to file
+            // content strings. URIToPath and PathToURI handle the encoding/decoding
+            // roundtrip. ApplyRangeEdit is the canonical implementation used by both
+            // LSPClient (workspace/applyEdit) and SessionManager (simulate_edit).
+            package uri
+            ```
+
+            ### 6. internal/extensions/doc.go
+
+            ```go
+            // Package extensions provides a thread-safe registry for per-language
+            // extension packages. Extensions register ToolHandlers, ResourceHandlers,
+            // SubscriptionHandlers, and PromptHandlers that are merged into the MCP
+            // server's handler tables at startup. Register adds an extension; the
+            // server calls the accessor methods to enumerate handlers at build time.
+            package extensions
+            ```
+
+            ### 7. internal/tools/doc.go
+
+            ```go
+            // Package tools contains the implementation functions for all agent-lsp MCP
+            // tools. Tool handlers in cmd/agent-lsp/ call into this package to perform
+            // the actual LSP operations and format results. The package is organized by
+            // capability area: navigation (go_to_definition, references, rename),
+            // analysis (hover, completion, diagnostics, symbols, semantic tokens),
+            // workspace lifecycle (start_lsp, open/close documents, formatting),
+            // session simulation (simulate_edit, evaluate_session, simulate_chain),
+            // build/test dispatch (run_build, run_tests, get_tests_for_file), and
+            // cross-repo analysis (get_change_impact, get_cross_repo_references).
+            package tools
+            ```
+
+            ### 8. internal/resources/doc.go
+
+            ```go
+            // Package resources implements MCP resource handlers for agent-lsp.
+            // Resources expose LSP data (diagnostics, workspace symbols, document
+            // content) via the MCP resource protocol, enabling clients to subscribe
+            // to live updates. Subscriptions are managed alongside the one-shot read
+            // handlers registered during server initialization.
+            package resources
+            ```
+
+            ### 9. cmd/agent-lsp/doc.go
+
+            ```go
+            // Command agent-lsp is a Model Context Protocol (MCP) server that wraps one
+            // or more Language Server Protocol (LSP) subprocesses, exposing LSP
+            // capabilities as MCP tools callable by AI agents and language-aware editors.
+            //
+            // Usage modes:
+            //
+            //	agent-lsp <language-id> <lsp-binary> [args...]   # single-server
+            //	agent-lsp go:gopls typescript:tsserver,--stdio   # multi-server
+            //	agent-lsp --config /path/to/lsp-mcp.json         # config file
+            //	agent-lsp                                          # auto-detect installed servers
+            //
+            // See README.md for full documentation and the tools reference.
+            package main
+            ```
+
+            ## docs/architecture.md update
+
+            Read the file at `/Users/dayna.blackwell/workspace/code/agent-lsp/docs/architecture.md`
+            first. Then insert a new "Public API (pkg/)" section immediately after the
+            existing "Package Structure" section's closing ``` fence and before the
+            "internal/config/" section header.
+
+            Insert after this exact text (the closing fence of the Package Structure diagram):
+            ```
+            ```
+            (the ``` that closes the package structure code block)
+
+            The text to insert is:
+
+            ```
+            ---
+
+            ## Public API (pkg/)
+
+            Three packages under `pkg/` expose a stable, importable, pkg.go.dev-indexed
+            public API without requiring callers to run the MCP server:
+
+            | Package | Import path | What it provides |
+            |---------|-------------|-----------------|
+            | `pkg/types` | `github.com/blackwell-systems/agent-lsp/pkg/types` | All LSP wire types, symbol types, tool response envelope |
+            | `pkg/lsp` | `github.com/blackwell-systems/agent-lsp/pkg/lsp` | `LSPClient`, `ServerManager`, `ClientResolver` interface |
+            | `pkg/session` | `github.com/blackwell-systems/agent-lsp/pkg/session` | `SessionManager`, session lifecycle types, speculative execution API |
+
+            Every type in `pkg/` is a **type alias** of the corresponding `internal/`
+            type. This means values are interchangeable — a `pkg/types.Position` can be
+            passed to any function expecting `internal/types.Position` without conversion.
+
+            The `pkg/` packages contain no logic; they are purely re-export layers. All
+            implementation lives in `internal/`. This design keeps the public surface
+            minimal and allows the internal implementation to evolve without breaking
+            external callers as long as the alias targets are preserved.
+
+            ```
+
+            IMPORTANT: do not modify the Package Structure diagram itself — only insert
+            the new section after its closing fence.
+
+            ## README.md update
+
+            Read the file at `/Users/dayna.blackwell/workspace/code/agent-lsp/README.md`
+            first to find the Installation section.
+
+            Two changes are needed:
+
+            **Change 1: Installation section.** Find the existing Installation section
+            and add one sentence after the `go install` line. The existing text contains
+            something like:
+            ```
+            go install github.com/blackwell-systems/agent-lsp/cmd/agent-lsp@latest
+            ```
+            Add after that line:
+            ```
+            To use agent-lsp as a library in your Go program (without running the MCP
+            server), import the `pkg/` packages directly — see [Library Usage](#library-usage) below.
+            ```
+
+            **Change 2: Add "Library Usage" section.** Append the following section
+            before the final horizontal rule or at the end of the file if no rule exists:
+
+            ```markdown
+            ## Library Usage
+
+            The `pkg/lsp`, `pkg/session`, and `pkg/types` packages expose a stable
+            public API for using agent-lsp's LSP client and speculative execution engine
+            directly from Go programs, without running the MCP server.
+
+            ### Import the LSP client
+
+            ```go
+            import (
+                "context"
+                "github.com/blackwell-systems/agent-lsp/pkg/lsp"
+            )
+
+            client := lsp.NewLSPClient("gopls", []string{})
+            if err := client.Initialize(ctx, "/path/to/workspace"); err != nil {
+                log.Fatal(err)
+            }
+            defer client.Shutdown(ctx)
+
+            locs, err := client.GetDefinition(ctx, fileURI, lsp.Position{Line: 10, Character: 4})
+            ```
+
+            ### Import types
+
+            ```go
+            import "github.com/blackwell-systems/agent-lsp/pkg/types"
+
+            var pos types.Position = types.Position{Line: 0, Character: 0}
+            ```
+
+            ### Speculative editing (simulate-before-apply)
+
+            ```go
+            import (
+                "github.com/blackwell-systems/agent-lsp/pkg/lsp"
+                "github.com/blackwell-systems/agent-lsp/pkg/session"
+            )
+
+            mgr := session.NewSessionManager(client) // client is a *lsp.LSPClient
+            id, _ := mgr.CreateSession(ctx, "/workspace", "go")
+            mgr.ApplyEdit(ctx, id, fileURI, editRange, newText)
+            result, _ := mgr.Evaluate(ctx, id, "file", 3000)
+            if result.NetDelta == 0 {
+                mgr.Commit(ctx, id, "", true)
+            } else {
+                mgr.Discard(ctx, id)
+            }
+            ```
+
+            All `pkg/` types are aliases of the internal implementation types and are
+            fully interchangeable with them.
+            ```
+
+            ## Verification gate
+
+            1. Build the full repo to confirm no doc.go files introduce errors:
+               ```
+               GOWORK=off go build ./...
+               ```
+            2. Vet:
+               ```
+               GOWORK=off go vet ./...
+               ```
+            3. Postconditions:
+               ```
+               # Each doc.go must exist and contain a package clause
+               grep -l "^package lsp"    /Users/dayna.blackwell/workspace/code/agent-lsp/internal/lsp/doc.go
+               grep -l "^package session" /Users/dayna.blackwell/workspace/code/agent-lsp/internal/session/doc.go
+               grep -l "^package types"  /Users/dayna.blackwell/workspace/code/agent-lsp/internal/types/doc.go
+               grep -l "^package logging" /Users/dayna.blackwell/workspace/code/agent-lsp/internal/logging/doc.go
+               grep -l "^package uri"    /Users/dayna.blackwell/workspace/code/agent-lsp/internal/uri/doc.go
+               grep -l "^package extensions" /Users/dayna.blackwell/workspace/code/agent-lsp/internal/extensions/doc.go
+               grep -l "^package tools"  /Users/dayna.blackwell/workspace/code/agent-lsp/internal/tools/doc.go
+               grep -l "^package resources" /Users/dayna.blackwell/workspace/code/agent-lsp/internal/resources/doc.go
+               grep -l "^package main"   /Users/dayna.blackwell/workspace/code/agent-lsp/cmd/agent-lsp/doc.go
+               # Each should print the file path (exit 0)
+
+               # Architecture doc should mention pkg/
+               grep -c "pkg/" /Users/dayna.blackwell/workspace/code/agent-lsp/docs/architecture.md
+               # expected: >= 3
+
+               # README should mention Library Usage
+               grep -c "Library Usage" /Users/dayna.blackwell/workspace/code/agent-lsp/README.md
+               # expected: >= 1
+               ```
+
+            ## Constraints
+            - Do NOT add any import statements to doc.go files. A doc.go file for
+              an existing package must contain ONLY the package comment and package
+              clause.
+            - For cmd/agent-lsp/doc.go the package clause must be `package main`.
+            - Do NOT modify any file in pkg/ — that is Agents A, B, C's scope.
+            - Do NOT modify any existing .go files in internal/ — only create new
+              doc.go files.
+            - When editing docs/architecture.md, do NOT alter the existing Package
+              Structure diagram. Insert only; do not rewrite.
+            - When editing README.md, preserve all existing content. Only add the
+              Library Usage section and the one-sentence installation note.
+            - Do NOT modify files outside your ownership list.
+          files:
+            - internal/lsp/doc.go
+            - internal/session/doc.go
+            - internal/types/doc.go
+            - internal/logging/doc.go
+            - internal/uri/doc.go
+            - internal/extensions/doc.go
+            - internal/tools/doc.go
+            - internal/resources/doc.go
+            - cmd/agent-lsp/doc.go
+            - docs/architecture.md
+            - README.md
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/... ./pkg/...
+          required: true
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |
+            Agent A uses `type X internaltypes.X` (new type definition) instead of
+            `type X = internaltypes.X` (type alias). This would make values
+            incompatible with internal code and break the interoperability guarantee.
+          likelihood: medium
+          impact: high
+          mitigation: |
+            Interface contracts specify `= internaltypes.X` syntax explicitly with examples.
+            Agent A's verification gate cannot catch this; the postcondition grep checks
+            only that the declarations exist. The build/vet gate will pass either way.
+            Reviewer must check that all type declarations use the `=` form.
+        - scenario: |
+            Agent B re-declares the ClientResolver interface with a slightly different
+            method set (e.g., missing AllClients or using wrong return type). pkg/lsp.ClientResolver
+            would then not be satisfied by *ServerManager, causing a compile error in any
+            caller that tries to assign a *ServerManager to a pkg/lsp.ClientResolver variable.
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Agent B's task explicitly instructs it to read internal/lsp/resolver.go before
+            writing the interface. The interface contract section specifies exact method
+            signatures. The build gate catches any mismatch at compile time.
+        - scenario: |
+            Agent C imports internal/lsp directly (e.g., to reference lsp.ClientResolver
+            in NewSessionManager's function signature). This creates a cross-package
+            import in pkg/session from internal/ that is permissible but may confuse
+            callers who expected to use only pkg/ paths.
+          likelihood: low
+          impact: low
+          mitigation: |
+            Agent C's task instructs it NOT to import internal/lsp directly. The
+            NewSessionManager var alias accepts the internal ClientResolver type, which
+            is assignable from *ServerManager because LSPClient is a type alias. No
+            explicit import of internal/lsp is needed.
+        - scenario: |
+            Agent D creates doc.go files for internal packages that already have a
+            package comment in another file (e.g., internal/config/config.go already
+            has `// Package config holds types...`). Go allows multiple files to have
+            package comments but godoc uses only one; having two produces a warning.
+          likelihood: medium
+          impact: low
+          mitigation: |
+            Agent D's task covers only the 9 packages identified as missing doc comments.
+            internal/config already has a doc comment in config.go and is NOT in Agent D's
+            file ownership list. Before creating each doc.go, Agent D should grep for
+            existing `// Package X` comments in the package directory to avoid duplication.
+            The task includes this check implicitly via the "read before writing" instruction.
+        - scenario: |
+            The new pkg/ packages break the existing `GOWORK=off go test ./internal/... ./cmd/...`
+            CI test command (which does not include ./pkg/...). Any compilation error in
+            pkg/ would be missed by the current CI scope and the existing test command.
+          likelihood: low
+          impact: medium
+          mitigation: |
+            test_command is updated to `GOWORK=off go test ./internal/... ./cmd/... ./pkg/...`
+            in this IMPL doc so post-merge verification catches pkg/ errors. Each agent's
+            verification gate includes `GOWORK=off go build ./pkg/<name>/...` explicitly.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+            issues:
+                - check: complexity_balance
+                  severity: warning
+                  description: Agent D owns 11 files — exceeds 8-file threshold; consider splitting
+                - check: complexity_balance
+                  severity: warning
+                  description: Agent D owns 11 of 15 total files (73%) — consider rebalancing
+    summary: All four agent briefs are accurate against the codebase. Agent A, B, and C all create new pkg/ files and their symbol references (types, constructors, interfaces) match the internal packages exactly. internal/lsp/resolver.go's ClientResolver interface (4 methods) matches the brief. internal/session/types.go's SessionExecutor interface matches exactly. All constructors (NewLSPClient, NewSingleServerManager, NewMultiServerManager, NewSessionManager, NewSerializedExecutor) exist with correct signatures. config.ServerEntry exists in internal/config. No existing doc.go files conflict with Agent D's new files. No existing package doc comments exist in the 9 targeted internal packages (only internal/config has one, which is correctly excluded). The docs/architecture.md Package Structure closing fence and README Installation section patterns match what Agent D is instructed to modify. Two advisory complexity_balance warnings are raised for Agent D, who owns 11 of 15 total files (73%).
+    reviewed_at: "2026-04-10T20:56:04Z"
+    issue_count: 2
+state: SCOUT_PENDING
+injection_method: manual-fallback
