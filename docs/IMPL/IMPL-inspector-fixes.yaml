@@ -1,0 +1,959 @@
+title: 'Inspector Fixes: Bug Fixes and Code Quality Improvements'
+feature_slug: inspector-fixes
+verdict: SUITABLE
+suitability_assessment: |
+    Nine inspection findings: the normalize.go implementation bug is already fixed in production;
+    only the test assertion update and the remaining eight findings require implementation.
+    All changes are localized and independent: no cross-agent type sharing, no new
+    exported types, no interface renames. File ownership is fully disjoint across
+    six agents running in a single wave.
+
+    File decomposition: 6 agents with disjoint ownership. Largest agent (C) owns
+    server.go plus new extracted tool-group files — all new files, no conflict risk.
+
+    Investigation-first: No root cause analysis needed. All bugs are pinpointed
+    with exact line numbers and fix instructions.
+
+    Interface discoverability: Agent D introduces LanguageIDFromPath as a new
+    exported function in internal/lsp; Agent D also updates the sole caller in
+    change_impact.go. No other agents depend on this export.
+
+    Pre-implementation check: All 9 findings are confirmed TODO by inspection.
+
+    Parallelization value: GOWORK=off go test ./internal/... ./cmd/... is the
+    full test suite. With 6 independent agents each compiling and testing their
+    own package scope, parallelization saves real wall-clock time.
+
+    Estimated times:
+    - Scout phase: ~10 min
+    - Agent execution: ~6 agents x ~8 min avg = ~48 min, running in parallel ~10 min wall
+    - Merge and verification: ~5 min
+    Total SAW time: ~25 min
+    Sequential baseline: ~48 min
+    Time savings: ~23 min (~48% faster)
+    Recommendation: Clear speedup. Proceed.
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: internal/lsp/normalize_test.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: internal/lsp/client.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/server.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/tools_session.go
+      agent: C
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/tools_navigation.go
+      agent: C
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/tools_analysis.go
+      agent: C
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/tools_workspace.go
+      agent: C
+      wave: 1
+      action: new
+    - file: internal/lsp/manager.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/tools/change_impact.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/tools/change_impact_test.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/tools/helpers.go
+      agent: E
+      wave: 1
+      action: modify
+    - file: internal/session/manager.go
+      agent: F
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: LanguageIDFromPath
+      description: |
+        Exported function in internal/lsp package that maps a file path's extension
+        to an LSP language ID. Replaces the duplicate langIDFromPath in change_impact.go.
+        Agent D defines it in manager.go and updates change_impact.go to call it.
+        No other agents reference this function.
+      definition: |
+        // LanguageIDFromPath maps a file extension to an LSP language ID.
+        // Canonical implementation; replaces langIDFromPath in internal/tools.
+        func LanguageIDFromPath(path string) string
+      location: internal/lsp/manager.go
+    - name: URIToFilePath (updated delegation)
+      description: |
+        tools.URIToFilePath in helpers.go delegates to uri.URIToPath instead of
+        re-implementing URL parsing. Callers in the tools package are unaffected —
+        the function signature (string, error) is preserved. The error behavior
+        changes slightly: uri.URIToPath never returns an error (it returns the raw
+        string on failure), so URIToFilePath now returns (path, nil) for all valid
+        file:// URIs, consistent with the existing happy path. The invalid-prefix
+        guard ("not a file URI") is retained.
+      definition: |
+        func URIToFilePath(uri string) (string, error)
+      location: internal/tools/helpers.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Role
+            Update the normalize test to assert the correct behavior now that the
+            value-copy bug in NormalizeDocumentSymbols is already fixed in production code.
+
+            ## Pre-implementation check
+            Run the test first to confirm the current state:
+            ```
+            GOWORK=off go test -v -run TestNormalizeDocumentSymbols_SymbolInformationVariant ./internal/lsp/...
+            ```
+            The test will PASS because the assertion is `_ = root.Children` (intentionally
+            ignores the value). The production code in normalize.go is correct — children DO
+            appear in the returned root. The inspector found this as a bug in the test, not
+            in the implementation.
+
+            ## Files
+            - internal/lsp/normalize_test.go
+
+            NOTE: normalize.go does NOT need changes. The implementation is correct.
+            Only the test file is in scope.
+
+            ## What to implement
+
+            ### normalize_test.go — Update TestNormalizeDocumentSymbols_SymbolInformationVariant
+
+            The test currently has (lines 54-85):
+            ```go
+            func TestNormalizeDocumentSymbols_SymbolInformationVariant(t *testing.T) {
+            	// NOTE: The current implementation has a known bug in two-pass tree reconstruction:
+            	// roots are collected by value before children are attached via pointer, so children
+            	// do not appear on root symbols in the returned slice.
+            	// This test documents actual behavior. Bug should be fixed in normalize.go (Agent A scope).
+            	// See: pass 2 copies *ds into roots before parent.Children is appended.
+            ```
+
+            1. Remove the stale bug comment (the 5-line NOTE block at the top of the function).
+               Replace with a brief positive description:
+               ```go
+               // TestNormalizeDocumentSymbols_SymbolInformationVariant verifies that the
+               // SymbolInformation[] variant correctly builds a parent-child tree: MyField
+               // (containerName "MyStruct") appears as a child of the MyStruct root symbol.
+               ```
+
+            2. Replace the dead assertion at lines 80-84:
+               ```go
+               	// BUG: children are not visible in the root because the value is copied before
+               	// parent.Children is populated. Expected 1 child per spec; actual is 0.
+               	// When the bug is fixed, change this assertion to len(root.Children) == 1
+               	// and root.Children[0].Name == "MyField".
+               	_ = root.Children // currently empty due to value-copy bug
+               ```
+               With active assertions:
+               ```go
+               	if len(root.Children) != 1 {
+               		t.Fatalf("expected 1 child in root, got %d", len(root.Children))
+               	}
+               	if root.Children[0].Name != "MyField" {
+               		t.Errorf("expected child Name == MyField, got %q", root.Children[0].Name)
+               	}
+               ```
+
+            ## Verification gate
+            ```
+            GOWORK=off go test -v -run TestNormalizeDocumentSymbols ./internal/lsp/...
+            # Expected: PASS — including the updated SymbolInformation variant test
+            GOWORK=off go vet ./internal/lsp/...
+            # Expected: no output
+            grep -c "value-copy bug\|known bug\|BUG:" /Users/dayna.blackwell/code/agent-lsp/internal/lsp/normalize_test.go
+            # Expected: 0
+            grep -c "len(root.Children)" /Users/dayna.blackwell/code/agent-lsp/internal/lsp/normalize_test.go
+            # Expected: 1
+            ```
+
+            ## Constraints
+            - Do NOT modify normalize.go — the production implementation is correct.
+            - Do NOT modify any file other than normalize_test.go.
+            - Do NOT change any other test functions in normalize_test.go.
+          files:
+            - internal/lsp/normalize_test.go
+        - id: B
+          task: |
+            ## Role
+            Add panic recovery to two long-lived goroutines in client.go, and add a
+            comment explaining the intentional context.Background() usage at line 324.
+
+            ## Files
+            - internal/lsp/client.go
+
+            ## What to implement
+
+            ### Finding 3: readLoop goroutine — add panic recovery (around line 240)
+
+            Add `runtime/debug` to the import block. Then add a deferred recover at
+            the top of the readLoop function body:
+
+            Current code:
+            ```go
+            // readLoop reads and dispatches all incoming messages.
+            func (c *LSPClient) readLoop() {
+            	for {
+            		raw, err := c.frameReader.ReadMessage()
+            ```
+
+            Insert after the opening brace of readLoop:
+            ```go
+            	defer func() {
+            		if r := recover(); r != nil {
+            			logging.Log(logging.LevelError, fmt.Sprintf("readLoop panic: %v\n%s", r, debug.Stack()))
+            		}
+            	}()
+            ```
+
+            The existing imports already include `"fmt"`. Add `"runtime/debug"` to the
+            import block. The import block is at lines 3-22 of client.go.
+
+            ### Finding 4: startWatcher goroutine — add panic recovery (around line 1966)
+
+            The startWatcher goroutine already has two deferred calls (watcher.Close
+            and the watcherMu nil-assignment). Add a recovery defer BEFORE those
+            existing defers, so it runs LAST (LIFO order = outermost protection).
+
+            Current code at the top of the goroutine closure (line 1966):
+            ```go
+            	go func() {
+            		watcher, err := fsnotify.NewWatcher()
+            		if err != nil {
+            			logging.Log(logging.LevelDebug, "auto-watcher: failed to create watcher: "+err.Error())
+            			return
+            		}
+            		// Register Close first so nil-assignment defer (registered after) runs first (LIFO).
+            		defer watcher.Close()
+            ```
+
+            Insert the recovery defer as the FIRST statement in the goroutine, before
+            the fsnotify.NewWatcher() call:
+            ```go
+            	go func() {
+            		defer func() {
+            			if r := recover(); r != nil {
+            				logging.Log(logging.LevelError, fmt.Sprintf("startWatcher panic: %v\n%s", r, debug.Stack()))
+            			}
+            		}()
+            		watcher, err := fsnotify.NewWatcher()
+            ```
+
+            This positions the recover defer outermost (runs last in LIFO) so it
+            catches panics from all subsequent code including the existing defers' cleanup.
+
+            ### Finding 9: context.Background() comment at line 324
+
+            The applyEdit handler uses context.Background() in the readLoop dispatch path.
+            Add a comment explaining why. Current code:
+
+            ```go
+            				applyCtx, applyCancel := context.WithTimeout(context.Background(), defaultTimeout)
+            ```
+
+            Change to:
+            ```go
+            				// Fresh context: readLoop has no per-request context (it processes
+            				// server-initiated requests outside any client call). context.Background()
+            				// is intentional — consistent with H4 pattern in server.go.
+            				applyCtx, applyCancel := context.WithTimeout(context.Background(), defaultTimeout)
+            ```
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/lsp/...
+            # Expected: exit 0, no errors
+            GOWORK=off go vet ./internal/lsp/...
+            # Expected: no output
+            GOWORK=off go test ./internal/lsp/...
+            # Expected: PASS
+            grep -c "readLoop panic\|startWatcher panic" /Users/dayna.blackwell/code/agent-lsp/internal/lsp/client.go
+            # Expected: 2
+            grep -c "runtime/debug" /Users/dayna.blackwell/code/agent-lsp/internal/lsp/client.go
+            # Expected: 1 (the import)
+            grep -c "Fresh context: readLoop" /Users/dayna.blackwell/code/agent-lsp/internal/lsp/client.go
+            # Expected: 1
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside your ownership list (client.go only).
+            - Do NOT change the context.Background() call itself — only add the comment.
+            - Do NOT change the logging.go init() pattern.
+            - The recovery defer in readLoop must be the first statement in the function body.
+            - The recovery defer in startWatcher must be the first statement in the goroutine
+              closure, before fsnotify.NewWatcher().
+          files:
+            - internal/lsp/client.go
+        - id: C
+          task: |
+            ## Role
+            Decompose the 832-line Run() function in server.go by extracting tool
+            registration into per-group functions in separate files. Run() becomes
+            a coordinator.
+
+            ## Files
+            - cmd/agent-lsp/server.go (modify — shrink Run, keep helper funcs)
+            - cmd/agent-lsp/tools_session.go (new — simulation session tools)
+            - cmd/agent-lsp/tools_navigation.go (new — navigation/goto tools)
+            - cmd/agent-lsp/tools_analysis.go (new — analysis/hover/refs tools)
+            - cmd/agent-lsp/tools_workspace.go (new — workspace/lifecycle tools)
+
+            ## What to implement
+
+            All new files are in `package main` (same package as server.go).
+
+            ### Step 1: Define a shared clientResolver type alias or helper type
+
+            The registration functions will need access to:
+            - `server *mcp.Server` — to call mcp.AddTool
+            - `cs *clientState` — for client access
+            - `resolver lsp.ClientResolver` — for ClientForFile routing
+            - `clientForFileWithAutoInit func(string) *lsp.LSPClient` — the closure
+            - `sessionMgr *session.SessionManager` — for session tools
+
+            Define a struct in server.go (before Run) to pass these dependencies:
+
+            ```go
+            // toolDeps bundles the shared dependencies passed to each tool registration function.
+            type toolDeps struct {
+            	server                   *mcp.Server
+            	cs                       *clientState
+            	resolver                 lsp.ClientResolver
+            	clientForFileWithAutoInit func(string) *lsp.LSPClient
+            	sessionMgr               *session.SessionManager
+            }
+            ```
+
+            ### Step 2: Create cmd/agent-lsp/tools_navigation.go
+
+            Extract navigation tool registrations into:
+            ```go
+            package main
+
+            import (
+                "context"
+                "github.com/blackwell-systems/agent-lsp/internal/tools"
+                "github.com/modelcontextprotocol/go-sdk/mcp"
+            )
+
+            func registerNavigationTools(d toolDeps) {
+                // ... mcp.AddTool calls for:
+                //   go_to_definition
+                //   go_to_type_definition
+                //   go_to_implementation
+                //   go_to_declaration
+                //   go_to_symbol
+                //   rename_symbol
+                //   prepare_rename
+                //   get_document_highlights
+                //   call_hierarchy
+                //   type_hierarchy
+            }
+            ```
+
+            Include the arg type definitions that are local to these tools (GoToDefinitionArgs,
+            GoToTypeDefinitionArgs, GoToImplementationArgs, GoToDeclarationArgs, RenameSymbolArgs,
+            PrepareRenameArgs, GoToSymbolArgs, GetDocumentHighlightsArgs, CallHierarchyArgs,
+            TypeHierarchyArgs) as file-level types in tools_navigation.go.
+
+            ### Step 3: Create cmd/agent-lsp/tools_analysis.go
+
+            Extract analysis tool registrations:
+            ```go
+            package main
+
+            func registerAnalysisTools(d toolDeps) {
+                // ... mcp.AddTool calls for:
+                //   get_info_on_location
+                //   get_completions
+                //   get_signature_help
+                //   get_code_actions
+                //   get_document_symbols
+                //   get_workspace_symbols
+                //   get_references
+                //   get_inlay_hints
+                //   get_semantic_tokens
+                //   get_symbol_source
+                //   get_symbol_documentation
+                //   get_change_impact
+                //   get_cross_repo_references
+            }
+            ```
+
+            Include arg type definitions for these tools as file-level types.
+
+            ### Step 4: Create cmd/agent-lsp/tools_workspace.go
+
+            Extract workspace/lifecycle tool registrations:
+            ```go
+            package main
+
+            func registerWorkspaceTools(d toolDeps) {
+                // ... mcp.AddTool calls for:
+                //   start_lsp
+                //   restart_lsp_server
+                //   add_workspace_folder
+                //   remove_workspace_folder
+                //   list_workspace_folders
+                //   open_document
+                //   close_document
+                //   get_diagnostics
+                //   get_server_capabilities
+                //   detect_lsp_servers
+                //   run_build
+                //   run_tests
+                //   get_tests_for_file
+                //   set_log_level
+                //   apply_edit
+                //   execute_command
+                //   did_change_watched_files
+                //   format_document
+                //   format_range
+            }
+            ```
+
+            Note: start_lsp uses `resolver` and `serverPath`/`serverArgs` from Run's scope.
+            The serverPath and serverArgs are not in toolDeps — add them:
+            ```go
+            type toolDeps struct {
+                server                   *mcp.Server
+                cs                       *clientState
+                resolver                 lsp.ClientResolver
+                clientForFileWithAutoInit func(string) *lsp.LSPClient
+                sessionMgr               *session.SessionManager
+                serverPath               string
+                serverArgs               []string
+            }
+            ```
+
+            ### Step 5: Create cmd/agent-lsp/tools_session.go
+
+            Extract simulation/session tool registrations:
+            ```go
+            package main
+
+            func registerSessionTools(d toolDeps) {
+                // ... mcp.AddTool calls for:
+                //   create_simulation_session
+                //   simulate_edit
+                //   evaluate_session
+                //   simulate_chain
+                //   commit_session
+                //   discard_session
+                //   destroy_session
+                //   simulate_edit_atomic
+            }
+            ```
+
+            ### Step 6: Update server.go Run() to call the registration functions
+
+            After creating `server` and before the resource registrations, replace
+            the inline tool registration block with:
+
+            ```go
+            deps := toolDeps{
+                server:                   server,
+                cs:                       cs,
+                resolver:                 resolver,
+                clientForFileWithAutoInit: clientForFileWithAutoInit,
+                sessionMgr:               sessionMgr,
+                serverPath:               serverPath,
+                serverArgs:               serverArgs,
+            }
+
+            registerWorkspaceTools(deps)
+            registerNavigationTools(deps)
+            registerAnalysisTools(deps)
+            registerSessionTools(deps)
+            ```
+
+            Remove all the inline tool arg type definitions and mcp.AddTool calls
+            from Run() — they move to the new files. Keep in Run():
+            - clientState, clientForFileWithAutoInit, sessionMgr setup
+            - server creation with InitializedHandler
+            - toolDeps construction and registration function calls
+            - resource registration (lsp-diagnostics://, lsp-hover://, lsp-completions://)
+            - diagnostic subscription loop
+            - server.Run(ctx, transport)
+
+            The helper functions (makeCallToolResult, clientForFile, autoInitClient,
+            toolArgsToMap, mcpSessionSender, clientState, csResolver) stay in server.go.
+
+            ### Important: arg types with scope issues
+
+            The WorkspaceFolderArgs, GetDocumentHighlightsArgs, GoToSymbolArgs,
+            GetSymbolSourceArgs, GetSymbolDocumentationArgs, GetChangeImpactArgs,
+            GetCrossRepoReferencesArgs, DetectLspServersArgs, RunBuildArgs, RunTestsArgs,
+            GetTestsForFileArgs, GetInlayHintsArgs types are currently defined inline
+            within Run(). Move each to the file where its registration function lives,
+            as package-level types.
+
+            The arg types currently defined at the top of the Run block (StartLspArgs
+            through SimulateEditAtomicArgs) should also be moved to their respective
+            registration files as package-level types.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./cmd/agent-lsp/...
+            # Expected: exit 0
+            GOWORK=off go vet ./cmd/agent-lsp/...
+            # Expected: no output
+            GOWORK=off go test ./cmd/agent-lsp/...
+            # Expected: PASS (or no tests, which is also fine)
+            wc -l /Users/dayna.blackwell/code/agent-lsp/cmd/agent-lsp/server.go
+            # Expected: well under 300 lines (Run body significantly reduced)
+            grep -c "func register" /Users/dayna.blackwell/code/agent-lsp/cmd/agent-lsp/server.go
+            # Expected: 0 (registration functions are in separate files, not server.go)
+            ls /Users/dayna.blackwell/code/agent-lsp/cmd/agent-lsp/tools_*.go | wc -l
+            # Expected: 4
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside your ownership list.
+            - Do NOT change public function signatures — Run() signature stays the same.
+            - Do NOT move resource registration out of server.go Run() — only tool
+              registrations move.
+            - All new files must be in package main.
+            - Keep all existing mcp.AddTool descriptions and handler logic identical —
+              this is a structural refactor only, no behavior changes.
+            - The toolDeps struct must be defined in server.go (shared by all registration files).
+            - Do NOT modify helpers.go, manager.go, or any internal package file.
+          files:
+            - cmd/agent-lsp/server.go
+            - cmd/agent-lsp/tools_session.go
+            - cmd/agent-lsp/tools_navigation.go
+            - cmd/agent-lsp/tools_analysis.go
+            - cmd/agent-lsp/tools_workspace.go
+        - id: D
+          task: |
+            ## Role
+            Eliminate the duplicate extension-to-languageID mapping by exporting
+            LanguageIDFromPath from internal/lsp/manager.go and updating
+            change_impact.go to use it.
+
+            ## Files
+            - internal/lsp/manager.go (modify — export new function)
+            - internal/tools/change_impact.go (modify — remove langIDFromPath, use lsp.LanguageIDFromPath)
+            - internal/tools/change_impact_test.go (modify — update test to call lsp.LanguageIDFromPath)
+
+            ## What to implement
+
+            ### Step 1: Add LanguageIDFromPath to internal/lsp/manager.go
+
+            manager.go already has the unexported `inferLanguageID(entry config.ServerEntry)` which
+            maps extension strings (without dot, trimmed) to language IDs. Add a NEW exported
+            function `LanguageIDFromPath` that maps a file path (with extension) to a language ID,
+            covering the same and extended set of languages.
+
+            Add after the inferLanguageID function (after line 251 of manager.go):
+
+            ```go
+            // LanguageIDFromPath maps a file path's extension to an LSP language ID.
+            // Canonical implementation shared by internal/lsp and internal/tools (E5 deduplication).
+            // Covers Go, TypeScript, JavaScript, Python, Rust, and common language server languages.
+            func LanguageIDFromPath(path string) string {
+            	ext := strings.ToLower(filepath.Ext(path))
+            	switch ext {
+            	case ".go":
+            		return "go"
+            	case ".ts", ".tsx":
+            		return "typescript"
+            	case ".js", ".jsx":
+            		return "javascript"
+            	case ".py":
+            		return "python"
+            	case ".rs":
+            		return "rust"
+            	case ".cs":
+            		return "csharp"
+            	case ".hs", ".lhs":
+            		return "haskell"
+            	case ".rb":
+            		return "ruby"
+            	case ".kt", ".kts":
+            		return "kotlin"
+            	case ".ml", ".mli":
+            		return "ocaml"
+            	default:
+            		return "plaintext"
+            	}
+            }
+            ```
+
+            Note: manager.go already imports `"path/filepath"` and `"strings"` — no new
+            imports needed.
+
+            ### Step 2: Update internal/tools/change_impact.go
+
+            Remove the entire `langIDFromPath` function (lines 28-45):
+            ```go
+            // langIDFromPath maps a file extension to an LSP language ID.
+            func langIDFromPath(path string) string {
+            	ext := strings.ToLower(filepath.Ext(path))
+            	switch ext {
+            	case ".go":
+            		return "go"
+            	...
+            	default:
+            		return "plaintext"
+            	}
+            }
+            ```
+
+            Replace all calls to `langIDFromPath(...)` with `lsp.LanguageIDFromPath(...)`.
+            There are 4 call sites in change_impact.go:
+            - Line 121: `langIDFromPath(refPath)` → `lsp.LanguageIDFromPath(refPath)`
+            - Line 147: `langIDFromPath(refPath)` → `lsp.LanguageIDFromPath(refPath)`
+            - Line 170: `langIDFromPath(file)` → `lsp.LanguageIDFromPath(file)`
+            (Run grep to confirm exact lines before editing.)
+
+            change_impact.go already imports `"github.com/blackwell-systems/agent-lsp/internal/lsp"`.
+            Also remove the `"path/filepath"` import if it was only used by langIDFromPath.
+            Run `GOWORK=off go build ./internal/tools/...` after editing to catch unused imports.
+
+            ### Step 3: Update internal/tools/change_impact_test.go
+
+            The test at line 64 calls `langIDFromPath(tc.path)` directly (it's in the same package).
+            Update the test to call `lsp.LanguageIDFromPath(tc.path)` instead.
+
+            Add the lsp import to change_impact_test.go if not already present:
+            ```go
+            import "github.com/blackwell-systems/agent-lsp/internal/lsp"
+            ```
+
+            Also update the test cases to include the additional language IDs now returned
+            by LanguageIDFromPath (cs, hs, rb, kt, ml) that langIDFromPath previously returned
+            "plaintext" for. Add test cases:
+            - {"File.cs", "csharp"}
+            - {"main.hs", "haskell"}
+            - {"app.rb", "ruby"}
+
+            The existing "config.xyz" → "plaintext" and "README.md" → "plaintext" cases
+            remain valid.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/lsp/... ./internal/tools/...
+            # Expected: exit 0
+            GOWORK=off go vet ./internal/lsp/... ./internal/tools/...
+            # Expected: no output
+            GOWORK=off go test -v -run TestLangID ./internal/tools/...
+            # Expected: PASS (all cases including new csharp/haskell/ruby)
+            grep -c "langIDFromPath" /Users/dayna.blackwell/code/agent-lsp/internal/tools/change_impact.go
+            # Expected: 0
+            grep -c "LanguageIDFromPath" /Users/dayna.blackwell/code/agent-lsp/internal/lsp/manager.go
+            # Expected: 1
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside your ownership list.
+            - Do NOT change inferLanguageID — it is a separate function used internally by the
+              lsp package for config-based routing and must remain unchanged.
+            - Do NOT modify any files in internal/tools/ other than change_impact.go and
+              change_impact_test.go.
+            - The new LanguageIDFromPath must return "plaintext" for unknown extensions,
+              matching the behavior of the old langIDFromPath.
+          files:
+            - internal/lsp/manager.go
+            - internal/tools/change_impact.go
+            - internal/tools/change_impact_test.go
+        - id: E
+          task: |
+            ## Role
+            Fix the duplicate URI-to-path conversion in helpers.go by delegating to
+            uri.URIToPath.
+
+            ## Files
+            - internal/tools/helpers.go
+
+            ## What to implement
+
+            ### Update URIToFilePath to delegate to uri.URIToPath
+
+            Current implementation (lines 84-94 of helpers.go):
+            ```go
+            // URIToFilePath converts a file:// URI to an absolute path.
+            func URIToFilePath(uri string) (string, error) {
+            	if !strings.HasPrefix(uri, "file://") {
+            		return "", fmt.Errorf("not a file URI: %s", uri)
+            	}
+            	u, err := url.Parse(uri)
+            	if err != nil {
+            		return "", fmt.Errorf("parsing URI %s: %w", uri, err)
+            	}
+            	return u.Path, nil
+            }
+            ```
+
+            Replace with:
+            ```go
+            // URIToFilePath converts a file:// URI to an absolute path.
+            // Delegates to uri.URIToPath — canonical shared implementation (M3).
+            func URIToFilePath(rawURI string) (string, error) {
+            	if !strings.HasPrefix(rawURI, "file://") {
+            		return "", fmt.Errorf("not a file URI: %s", rawURI)
+            	}
+            	return uriPkg.URIToPath(rawURI), nil
+            }
+            ```
+
+            Add the import for the uri package. helpers.go currently imports:
+            - "context", "errors", "fmt", "net/url", "os", "path/filepath", "strings"
+            - "github.com/blackwell-systems/agent-lsp/internal/lsp"
+
+            Add: `uriPkg "github.com/blackwell-systems/agent-lsp/internal/uri"`
+
+            Remove `"net/url"` from the import block IF it is no longer used anywhere
+            else in helpers.go after this change. Run `GOWORK=off go build ./internal/tools/...`
+            to confirm — unused imports fail the build.
+
+            The function signature `(string, error)` is preserved so all callers continue
+            to compile without changes. The behavior for invalid URIs is unchanged (the
+            prefix guard returns an error before delegating). For valid file:// URIs,
+            uri.URIToPath uses url.Parse internally and falls back to string stripping —
+            functionally equivalent to the current implementation.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/tools/...
+            # Expected: exit 0
+            GOWORK=off go vet ./internal/tools/...
+            # Expected: no output
+            GOWORK=off go test -v -run TestURIToFilePath ./internal/tools/...
+            # Expected: PASS
+            grep -c "net/url" /Users/dayna.blackwell/code/agent-lsp/internal/tools/helpers.go
+            # Expected: 0 (removed since url.Parse no longer called directly)
+            grep -c "uriPkg" /Users/dayna.blackwell/code/agent-lsp/internal/tools/helpers.go
+            # Expected: 1 or more
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside your ownership list (helpers.go only).
+            - Do NOT change the function signature of URIToFilePath.
+            - Do NOT change any other functions in helpers.go.
+            - Preserve the "not a file URI" guard — do not delegate non-file URIs to uri.URIToPath.
+          files:
+            - internal/tools/helpers.go
+        - id: F
+          task: |
+            ## Role
+            Wrap bare error returns in Discard and Destroy with context-adding fmt.Errorf.
+
+            ## Files
+            - internal/session/manager.go
+
+            ## What to implement
+
+            ### Finding 8: Wrap bare errors in Discard (line 375) and Destroy (line 416)
+
+            **Discard** (around line 372-375 of manager.go):
+
+            Current code:
+            ```go
+            func (m *SessionManager) Discard(ctx context.Context, sessionID string) error {
+            	session, err := m.GetSession(sessionID)
+            	if err != nil {
+            		return err
+            	}
+            ```
+
+            Change to:
+            ```go
+            func (m *SessionManager) Discard(ctx context.Context, sessionID string) error {
+            	session, err := m.GetSession(sessionID)
+            	if err != nil {
+            		return fmt.Errorf("discard: %w", err)
+            	}
+            ```
+
+            **Destroy** (around line 413-416 of manager.go):
+
+            Current code:
+            ```go
+            func (m *SessionManager) Destroy(ctx context.Context, sessionID string) error {
+            	session, err := m.GetSession(sessionID)
+            	if err != nil {
+            		return err
+            	}
+            ```
+
+            Change to:
+            ```go
+            func (m *SessionManager) Destroy(ctx context.Context, sessionID string) error {
+            	session, err := m.GetSession(sessionID)
+            	if err != nil {
+            		return fmt.Errorf("destroy: %w", err)
+            	}
+            ```
+
+            Verify manager.go already imports `"fmt"` before making the change.
+            (It does — fmt.Errorf is used elsewhere in the file.)
+
+            These are the only two changes needed. Do not modify any other functions.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/session/...
+            # Expected: exit 0
+            GOWORK=off go vet ./internal/session/...
+            # Expected: no output
+            GOWORK=off go test ./internal/session/...
+            # Expected: PASS
+            grep -n "discard: %w\|destroy: %w" /Users/dayna.blackwell/code/agent-lsp/internal/session/manager.go
+            # Expected: 2 matches (one for each wrapped error)
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside your ownership list (manager.go only).
+            - Do NOT change any other error returns in the file — only the two bare
+              `return err` immediately after GetSession in Discard and Destroy.
+            - Do NOT change function signatures.
+          files:
+            - internal/session/manager.go
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |
+            Agent A misdiagnoses the normalize bug. The pointer chain (symPtrs[i],
+            nameByBare, and Pass 2 mutation) is subtle. Agent may apply the wrong fix
+            and still see failing tests.
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Task brief instructs agent to run the test first to reproduce, then trace
+            through the pointer chain step by step. The test is authoritative — if it
+            passes after the fix, the fix is correct. Agent should not change the
+            function signature or restructure the algorithm.
+        - scenario: |
+            Agent B introduces a panic recovery defer in the wrong position in
+            startWatcher. The goroutine has two existing defers in LIFO order;
+            adding the recovery defer AFTER them (not before) would mean it runs
+            first and misses panics from the cleanup defers.
+          likelihood: low
+          impact: low
+          mitigation: |
+            Task brief explicitly states: insert recovery defer as FIRST statement
+            in the goroutine closure, before fsnotify.NewWatcher(). LIFO ordering
+            explained with rationale.
+        - scenario: |
+            Agent C misses moving some inline arg type definitions from Run() to the
+            new files, causing duplicate type declarations at package scope (both in
+            server.go and a new file).
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Task brief lists every arg type and which file it belongs to. Agent must
+            remove all inline type definitions from Run() and add them as package-level
+            types in the new files. Build gate will catch duplicate declarations.
+        - scenario: |
+            Agent C leaves tool registration closures that capture variables (resolver,
+            serverPath, serverArgs, cs) by closure. Extracting to functions breaks
+            the closure capture — these must be passed explicitly via toolDeps.
+          likelihood: medium
+          impact: high
+          mitigation: |
+            toolDeps struct includes all required fields (serverPath, serverArgs, cs,
+            resolver, clientForFileWithAutoInit, sessionMgr). Task brief is explicit
+            about this. Agent must pass deps parameter through to each registration call.
+        - scenario: |
+            Agent D forgets to remove the "path/filepath" import from change_impact.go
+            after deleting langIDFromPath, causing a build failure (unused import).
+          likelihood: medium
+          impact: low
+          mitigation: |
+            Task brief explicitly calls this out and instructs agent to run go build
+            to catch unused imports. The build quality gate will also catch this.
+        - scenario: |
+            Agent E removes the "not a file URI" prefix guard when delegating to
+            uri.URIToPath, causing URIToFilePath to silently return non-file paths.
+          likelihood: low
+          impact: medium
+          mitigation: |
+            Task brief explicitly says "preserve the not a file URI guard." The
+            existing test TestURIToFilePath_InvalidURI verifies this behavior.
+        - scenario: |
+            Agent F wraps an error in the wrong place (e.g., wraps the IsTerminal
+            check instead of the GetSession error) resulting in misleading error messages.
+          likelihood: low
+          impact: low
+          mitigation: |
+            Task brief shows exact current code context and the exact replacement.
+            Only the GetSession error returns are wrapped; subsequent error returns
+            in Discard/Destroy already have context.
+known_issues:
+    - title: V048 line budget waiver for client.go (Agent B)
+      description: |
+        client.go is 2303 lines, exceeding the 2000-line V048 agent budget for Agent B.
+        This is a pre-existing condition: the file cannot be split across two agents
+        without violating the I1 disjoint ownership invariant. Agent B makes only 3
+        targeted edits (two deferred recover blocks and one comment). The large file
+        size does not indicate excessive agent scope — the changes are minimal.
+      status: accepted
+      workaround: |
+        I1 requires single-agent ownership of client.go. V048 waived because Agent B
+        makes only 3 minimal edits totaling ~20 new lines in a 2303-line file.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+            issues:
+                - check: complexity_balance
+                  severity: warning
+                  description: Agent C owns 5 of 11 total files (45%) — exceeds 40% threshold; consider rebalancing
+        D:
+            agent_id: D
+            verdict: PASS
+            issues:
+                - check: symbol_accuracy
+                  severity: warning
+                  description: Brief states there are 4 call sites of langIDFromPath in change_impact.go, but grep finds only 3 (lines 121, 147, 170). The explicit line list that follows in the brief is correct. The word count is wrong but the fix instructions are accurate.
+                  file: internal/tools/change_impact.go
+                  symbol: langIDFromPath
+        E:
+            agent_id: E
+            verdict: PASS
+        F:
+            agent_id: F
+            verdict: PASS
+    summary: 'All six agents reviewed against codebase. File existence checks pass: all modify-action files exist and no new-action files conflict. Symbol accuracy is high — readLoop, startWatcher, inferLanguageID, Discard, Destroy, URIToPath, langIDFromPath, and logging.Log all exist with the exact signatures the briefs rely on. One minor inaccuracy found in Agent D''s brief: it states ''4 call sites'' for langIDFromPath in change_impact.go but the actual count is 3 (lines 121, 147, 170); the explicit line list that follows is correct. Agent C owns 5 of 11 total files (45%), triggering the complexity_balance advisory. No interface contract violations or import chain errors found.'
+    reviewed_at: "2026-04-10T15:36:23Z"
+    issue_count: 2
+state: SCOUT_PENDING
+original_branch: main

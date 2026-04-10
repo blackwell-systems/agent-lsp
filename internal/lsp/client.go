@@ -168,6 +168,11 @@ func NewLSPClient(serverPath string, serverArgs []string) *LSPClient {
 // start spawns the subprocess and begins reading responses.
 func (c *LSPClient) start() error {
 	cmd := exec.Command(c.serverPath, c.serverArgs...)
+	// Strip GOWORK from the subprocess environment. The inherited shell value
+	// is a session artifact pointing at whatever workspace the user had active,
+	// which is almost never the workspace being analyzed here. Removing it lets
+	// gopls discover the correct go.work naturally by walking up from root_dir.
+	cmd.Env = removeEnv(os.Environ(), "GOWORK")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("stdin pipe: %w", err)
@@ -402,20 +407,34 @@ func (c *LSPClient) handleProgress(params json.RawMessage) {
 }
 
 // waitForWorkspaceReady blocks until activeProgressTokens is empty or 60s
-// elapses. Uses a condition variable so handleProgress can signal immediately
-// rather than relying on a 100ms polling interval.
+// elapses. Uses a condition variable so handleProgress can signal immediately.
+// A timer goroutine guarantees the deadline fires even if gopls never emits
+// a matching "end" progress token (preventing an indefinite block).
 func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
-	deadline := time.Now().Add(60 * time.Second)
 	c.progressMu.Lock()
 	defer c.progressMu.Unlock()
-	for len(c.progressTokens) > 0 {
-		if time.Now().After(deadline) {
-			return
-		}
+	if len(c.progressTokens) == 0 {
+		return
+	}
+
+	// Guarantee a wakeup at the deadline so the cond var doesn't block forever
+	// if gopls emits a begin token without a corresponding end token.
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
 		select {
+		case <-time.After(60 * time.Second):
+			c.progressCond.Broadcast()
 		case <-ctx.Done():
+			c.progressCond.Broadcast()
+		case <-done:
+		}
+	}()
+
+	deadline := time.Now().Add(60 * time.Second)
+	for len(c.progressTokens) > 0 {
+		if time.Now().After(deadline) || ctx.Err() != nil {
 			return
-		default:
 		}
 		c.progressCond.Wait()
 	}
@@ -2266,6 +2285,18 @@ func (l *locationOrLink) toLocation() *types.Location {
 		return &types.Location{URI: l.URI, Range: l.Range}
 	}
 	return nil
+}
+
+// removeEnv returns a copy of env with all entries for the given key removed.
+func removeEnv(env []string, key string) []string {
+	prefix := key + "="
+	out := make([]string, 0, len(env))
+	for _, e := range env {
+		if !strings.HasPrefix(e, prefix) {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 

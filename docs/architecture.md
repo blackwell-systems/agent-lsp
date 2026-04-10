@@ -49,6 +49,8 @@ internal/tools/
   symbol_path.go   ← go_to_symbol (fuzzy workspace symbol → definition)
   simulation.go    ← Tool handlers for the speculative execution layer
   build.go         ← run_build, run_tests, get_tests_for_file
+  change_impact.go ← get_change_impact (enumerate exported symbols, resolve references, partition test/non-test callers)
+  cross_repo.go    ← get_cross_repo_references (add consumer repos as workspace folders, partition references by repo)
   workspace.go     ← workspace folder management (add/remove/list)
   workspace_folders.go ← add_workspace_folder, remove_workspace_folder, list_workspace_folders
   session.go       ← start_lsp, open_document, close_document, restart_lsp_server
@@ -394,9 +396,9 @@ The installer scans for `SKILL.md` files up to two levels deep, creates `~/.clau
 | Skill | Purpose |
 |-------|---------|
 | `lsp-verify` | Three-layer verification: diagnostics + build + tests |
-| `lsp-safe-edit` | Edit with before/after diagnostic diff |
+| `lsp-safe-edit` | Edit with before/after diagnostic diff; `simulate_chain` refactor preview before disk write |
 | `lsp-simulate` | Speculative edit session (create/apply/evaluate/commit/discard) |
-| `lsp-impact` | Blast-radius: references + call hierarchy + type hierarchy |
+| `lsp-impact` | Blast-radius: file-level `get_change_impact` entry + references + call hierarchy + type hierarchy |
 | `lsp-implement` | Find all concrete implementations of an interface |
 | `lsp-rename` | Two-phase rename: preview all sites, then apply atomically |
 | `lsp-edit-symbol` | Edit a symbol by name without knowing its file/position |
@@ -405,7 +407,7 @@ The installer scans for `SKILL.md` files up to two levels deep, creates `~/.clau
 | `lsp-docs` | Fetch toolchain documentation (`go doc`, `pydoc`, etc.) |
 | `lsp-format-code` | Format a file or range |
 | `lsp-local-symbols` | List all symbols in a file |
-| `lsp-cross-repo` | Navigate references across multiple repositories |
+| `lsp-cross-repo` | Navigate references across multiple repositories via `get_cross_repo_references` |
 | `lsp-test-correlation` | Map source files to their test files |
 
 ---
