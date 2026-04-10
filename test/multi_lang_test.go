@@ -1121,6 +1121,16 @@ func testWorkspaceFolders(t *testing.T, ctx context.Context, session *mcp.Client
 			detail: fmt.Sprintf("add_workspace_folder: unexpected response: %s", text)}
 	}
 
+	// Sub-case A: verify added folder appears in list.
+	res, err = callTool(ctx, session, "list_workspace_folders", map[string]any{})
+	if err == nil && !res.IsError {
+		if listText, lerr := textFromResult(res); lerr == nil {
+			if !strings.Contains(listText, filepath.Base(tmpDir)) && !strings.Contains(listText, tmpDir) {
+				t.Logf("[workspace_folders] added folder not found in list_workspace_folders result: %s", listText)
+			}
+		}
+	}
+
 	// Step 3: remove the folder.
 	res, err = callTool(ctx, session, "remove_workspace_folder", map[string]any{
 		"path": tmpDir,
@@ -1132,6 +1142,56 @@ func testWorkspaceFolders(t *testing.T, ctx context.Context, session *mcp.Client
 		return toolResult{tool: "workspace_folders", status: "skip",
 			detail: fmt.Sprintf("remove_workspace_folder not supported: %v", res.Content)}
 	}
+
+	// Sub-case B: verify removed folder no longer appears in list.
+	res, err = callTool(ctx, session, "list_workspace_folders", map[string]any{})
+	if err == nil && !res.IsError {
+		if listText, lerr := textFromResult(res); lerr == nil {
+			if strings.Contains(listText, tmpDir) {
+				return toolResult{tool: "workspace_folders", status: "fail",
+					detail: fmt.Sprintf("removed folder still present in list: %s", listText)}
+			}
+		}
+	}
+
+	// Sub-case C: error path — remove a non-existent folder (transport must not error).
+	nonExistentPath := tmpDir + "-nonexistent"
+	_, removeErr := callTool(ctx, session, "remove_workspace_folder", map[string]any{
+		"path": nonExistentPath,
+	})
+	if removeErr != nil {
+		return toolResult{tool: "workspace_folders", status: "fail",
+			detail: fmt.Sprintf("remove non-existent folder: unexpected transport error: %v", removeErr)}
+	}
+	t.Logf("[workspace_folders] remove non-existent folder: no transport error (server may silently ignore)")
+
+	// Sub-case D: multiple folders — add two, remove two.
+	tmpDir2, mkErr2 := os.MkdirTemp("", "lsp-mcp-wf-test2-*")
+	if mkErr2 != nil {
+		t.Logf("[workspace_folders] skipping multi-folder sub-case: %v", mkErr2)
+	} else {
+		defer os.RemoveAll(tmpDir2)
+		tmpDir3, mkErr3 := os.MkdirTemp("", "lsp-mcp-wf-test3-*")
+		if mkErr3 == nil {
+			defer os.RemoveAll(tmpDir3)
+			for _, extraDir := range []string{tmpDir2, tmpDir3} {
+				addRes, addErr := callTool(ctx, session, "add_workspace_folder", map[string]any{
+					"path": extraDir,
+				})
+				if addErr != nil || addRes.IsError {
+					t.Logf("[workspace_folders] multi-folder add skipped for %s", filepath.Base(extraDir))
+					continue
+				}
+				rmRes, rmErr := callTool(ctx, session, "remove_workspace_folder", map[string]any{
+					"path": extraDir,
+				})
+				if rmErr != nil || rmRes.IsError {
+					t.Logf("[workspace_folders] multi-folder remove failed for %s", filepath.Base(extraDir))
+				}
+			}
+		}
+	}
+
 	return toolResult{tool: "workspace_folders", status: "pass"}
 }
 
