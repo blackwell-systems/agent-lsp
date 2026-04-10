@@ -272,6 +272,12 @@ jobs:
       - name: Install Prisma language server and CLI
         run: npm install -g @prisma/language-server prisma
 
+      - name: Initialize Prisma fixture project
+        run: |
+          cd test/fixtures/prisma
+          npm install
+          DATABASE_URL="postgresql://user:password@localhost/fixture" prisma generate
+
       - name: Run Prisma tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Prisma$" ./test/ -timeout 10m
 
