@@ -5,6 +5,32 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed (2026-04-09) — Audit-5 batch: 16 bugs and quality fixes
+
+#### Critical
+- **C1 — `Restart` did not clear per-session state** — `openDocs`, `diags`, `legendTypes`, and `legendModifiers` were not reset on restart; after reconnecting to a fresh LSP server, stale open-document records caused the server to receive `didChange` instead of `didOpen` for already-open files, and stale diagnostics were served from the previous session. Fixed by adding explicit zeroing of all four maps/slices inside `Restart`, guarded by their respective mutexes, before calling `Initialize`.
+- **C2 — `watcherStop` data race in `startWatcher`/`stopWatcher`** — the `watcherStop` channel was read and written without synchronization, causing a race detectable by `go test -race`. Fixed by adding `watcherMu sync.Mutex` to `LSPClient`; `startWatcher` and `stopWatcher` now hold the mutex around all reads and writes of `watcherStop`.
+
+#### High
+- **H1 — `applyDocumentChanges` swallowed filesystem errors** — create, rename, and delete operations used `_ = os.WriteFile(...)` / `_ = os.Rename(...)` / `_ = os.Remove(...)`; errors were silently discarded. Fixed by capturing and returning errors from all three cases.
+- **H2 — `AddWorkspaceFolder` started watcher on root dir instead of new path** — called `c.startWatcher(c.rootDir)` instead of `c.startWatcher(path)`; adding a second workspace folder would restart the watcher on the original root. Fixed by passing `path`.
+- **H3 — `HandleSimulateEditAtomic` discarded `Discard` errors** — cleanup calls used `_ = mgr.Discard(...)`; if the session cleanup failed the error was lost. Fixed by capturing both errors and returning a combined message when both the evaluate-path and discard-path error.
+- **H4 — `LogMessage` used `context.Background()` and discarded marshal error** — the function created a detached context rather than using the caller's context, and `json.Marshal` errors were silently dropped, resulting in JSON null being sent to the client. Fixed by adding explicit error handling with a fallback encoded-error string; added comment explaining the intentional `context.Background()` for the notification send path.
+
+#### Medium
+- **M1 — `applyDocumentChanges` returned nil on array-unmarshal failure** — when the changes JSON couldn't be unmarshalled into `[]types.TextEdit`, the function returned nil instead of an error, silently applying no edits. Fixed by returning the unmarshal error.
+- **M2 — `StartAll` rollback used `context.Background()` for shutdown** — rollback loops in `StartAll` called `c.Shutdown(context.Background())`, ignoring the caller's context and discarding shutdown errors. Fixed by passing `ctx` and logging shutdown errors at debug level.
+- **M3 — `uriToPath` duplicated across `internal/lsp` and `internal/session`** — two near-identical implementations with a manual-sync comment. Extracted to new `internal/uri` package as `uri.URIToPath`; both packages now import and call the shared version.
+- **M4 — `HandleRestartLspServer` only restarted the default client in multi-server mode** — the handler restarted `c.lspManager.GetClient(c.language)` but did not address other configured servers. Fixed by adding a note to the success message indicating that only the default server for the current language is restarted in multi-server configurations.
+- **M5 — `WaitForDiagnostics` quiet-window checked on 50 ms ticks only** — when a `notify` event arrived just after a tick, the quiet-window exit condition wasn't evaluated until the next tick (up to 50 ms delay). Fixed by adding the same quiet-window check to the `case <-notify:` arm so it's evaluated immediately on each notification.
+
+#### Low
+- **L1 — Recovered panic exited 0** — `runWithRecovery`'s recover block logged the panic but did not set the named return error, so the process exited 0 instead of 1. Fixed by setting `runErr = fmt.Errorf("panic: %v", r)`.
+- **L2 — `ValidateFilePath` did not resolve symlinks** — the prefix check used the lexical path, so a symlink pointing outside the workspace root would pass validation. Fixed by calling `filepath.EvalSymlinks` on both the file path and the root dir before the prefix check; non-existent paths fall back to lexical path.
+- **L3 — `IsDocumentOpen` exported but only used in tests** — renamed to `isDocumentOpen`; `client_test.go` is in `package lsp` (same package) so the unexported name remains accessible.
+- **L4 — `toolArgsToMap` discarded `Unmarshal` error** — used `_ = json.Unmarshal(...)`; failures were silent. Fixed by capturing the error, logging at debug level, and returning an empty map.
+- **L5 — Line-splice algorithm duplicated with manual-sync comment** — `applyRangeEdit` in `internal/session/manager.go` and the inline loop in `applyEditsToFile` in `internal/lsp/client.go` implemented the same line-splice logic independently. Extracted to `uri.ApplyRangeEdit` in the new `internal/uri` package; both sites now delegate to the shared implementation.
+
 ### Fixed + Added (2026-04-09) — Speculative session test hardening
 - **`discard_path` bug fix** — test was calling `simulate_edit_atomic` with a `session_id`, but `simulate_edit_atomic` is a self-contained tool (creates its own session internally, requires `workspace_root` + `language`); the call was silently returning `IsError: true` and logging it as "may be expected"; fixed to call `simulate_edit` which is the correct tool for applying edits to an existing session
 - **`evaluate_session` response assertions** — existing subtests were only logging the response; now parse the JSON and assert `net_delta == 0` for comment-only edits (with `confidence != "low"` guard for CI timing); `simulate_edit` response now asserts `edit_applied == true`

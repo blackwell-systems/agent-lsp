@@ -41,3 +41,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-clojure-nix-dart-integration.yaml
 - **mongodb-integration**: completed 2026-04-09, 2 waves, 3 agents
   - IMPL doc: docs/IMPL/complete/IMPL-mongodb-integration.yaml
+- **audit-5-fixes**: completed 2026-04-09, 2 waves, 7 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-audit-5-fixes.yaml
