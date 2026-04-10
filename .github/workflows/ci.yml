@@ -474,8 +474,9 @@ jobs:
       - name: Run Dart tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Dart$" ./test/ -timeout 10m
 
-  # MongoDB via @mongodb-js/mongodb-language-server (requires live mongo:7 service)
-  # continue-on-error: mongodb-language-server is bundled in VS Code extension, not published standalone
+  # MongoDB via mongodb-language-server (extracted from mongodb-js/vscode VSIX)
+  # Requires live mongo:7 service container. continue-on-error: true because the
+  # extracted server may not support --stdio without VS Code extension host context.
   multi-lang-mongodb:
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -500,12 +501,15 @@ jobs:
       - name: Build
         run: GOWORK=off go build ./...
 
-      - name: Install mongodb-language-server
+      - name: Install mongodb-language-server (from VS Code extension VSIX)
         run: |
-          # @mongodb-js/mongodb-language-server is bundled inside the VS Code extension
-          # and not published as a standalone npm package. This job is informational;
-          # the test will be skipped (binary not found on PATH).
-          echo "mongodb-language-server not available standalone; test will be skipped"
+          MDBVSC_VERSION=$(curl -fsSL https://api.github.com/repos/mongodb-js/vscode/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
+          wget -q "https://github.com/mongodb-js/vscode/releases/download/v${MDBVSC_VERSION}/mongodb-vscode-${MDBVSC_VERSION}.vsix" -O /tmp/mongodb-vscode.vsix
+          sudo mkdir -p /opt/mongodb-vscode
+          sudo unzip -q /tmp/mongodb-vscode.vsix -d /opt/mongodb-vscode
+          printf '#!/bin/bash\nexec node /opt/mongodb-vscode/extension/dist/languageServer.js "$@"\n' | sudo tee /usr/local/bin/mongodb-language-server > /dev/null
+          sudo chmod +x /usr/local/bin/mongodb-language-server
+          node /opt/mongodb-vscode/extension/dist/languageServer.js --version 2>/dev/null || echo "server extracted ok"
 
       - name: Run MongoDB tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^MongoDB$" ./test/ -timeout 10m
