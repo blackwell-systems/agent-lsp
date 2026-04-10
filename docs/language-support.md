@@ -1,6 +1,6 @@
 # Language Support
 
-## Current (29 languages, CI-tested)
+## Current (30 languages, CI-tested)
 
 | Language | Language Server | Status |
 |---|---|---|
@@ -33,6 +33,7 @@
 | Clojure | clojure-lsp | ✅ passing |
 | Nix | nil | ✅ passing |
 | Dart | dart language-server | ✅ passing |
+| MongoDB | mongodb-language-server | ✅ passing (mongo:7 service container) |
 
 ---
 
@@ -54,6 +55,7 @@
 | `multi-lang-clojure` | Clojure | ubuntu-latest |
 | `multi-lang-nix` | Nix | ubuntu-latest |
 | `multi-lang-dart` | Dart | ubuntu-latest |
+| `multi-lang-mongodb` | MongoDB | ubuntu-latest (mongo:7 service) |
 | `speculative-test` | session lifecycle (gopls) | ubuntu-latest |
 
 ---
@@ -124,8 +126,8 @@ Each new language needs three things:
 
 | Tier | Languages | Count |
 |---|---|---|
-| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Swift, Zig, CSS, HTML, Terraform, Scala, Gleam, Elixir, Prisma, SQL, Clojure, Nix, Dart | **29** |
-| Tier 3 candidates | Bash, MongoDB | 1–2 |
-| **Potential total** | | **30–31** |
+| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Swift, Zig, CSS, HTML, Terraform, Scala, Gleam, Elixir, Prisma, SQL, Clojure, Nix, Dart, MongoDB | **30** |
+| Tier 3 candidates | Bash | 1 |
+| **Potential total** | | **31** |
 
-The 29-language set covers systems, web, JVM, scripting, infrastructure, config, functional, schema, query, and Nix/functional-package-manager domains.
+The 30-language set covers systems, web, JVM, scripting, infrastructure, config, functional, schema, query, document-database, and Nix/functional-package-manager domains.
