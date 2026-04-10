@@ -1,0 +1,1353 @@
+title: Tiered Docker Image Distribution for agent-lsp
+feature_slug: docker-distribution
+verdict: SUITABLE
+suitability_assessment: |
+    The work decomposes cleanly across 6 agents with fully disjoint file ownership.
+    Every file being created is new (except DOCKER.md and README.md which are grouped
+    together under one agent). There are no investigation-first blockers — the design
+    spec is complete and all interface points (entrypoint env vars, image tag naming,
+    workflow trigger rules) are specified upfront.
+
+    File decomposition: 9 new files + 2 modified files split across 6 agents in 2 waves.
+    No two agents touch the same file. Cross-agent interface: the base image tag
+    (ghcr.io/blackwell-systems/agent-lsp:base) is defined by Agent A and referenced by
+    Agents B and C — this is a naming contract, not a code contract, and is fully
+    specifiable before implementation starts.
+
+    Parallelization value: High. Wave 1 has 5 independent agents creating distinct new
+    files; they can run fully in parallel. Wave 2 (documentation) depends only on the
+    final file names and tag names being fixed, which they are from the design spec.
+
+    Estimated times:
+    - Scout phase: ~10 min
+    - Agent execution: ~25 min (5 Wave 1 agents x ~5 min avg, parallelized; 1 Wave 2 agent x ~5 min)
+    - Merge and verification: ~5 min
+    Total SAW time: ~40 min
+
+    Sequential baseline: ~35 min (6 agents x ~6 min avg sequential)
+    Time savings: ~15 min (38% faster). Recommendation: Clear speedup from Wave 1 parallelism.
+test_command: GOWORK=off go build ./...
+lint_command: go vet ./...
+file_ownership:
+    - file: Dockerfile
+      agent: A
+      wave: 1
+      action: new
+    - file: Dockerfile.lang
+      agent: B
+      wave: 1
+      action: new
+    - file: Dockerfile.full
+      agent: B
+      wave: 1
+      action: new
+    - file: docker/entrypoint.sh
+      agent: C
+      wave: 1
+      action: new
+    - file: docker/lsp-servers.yaml
+      agent: C
+      wave: 1
+      action: new
+    - file: .github/workflows/docker.yml
+      agent: D
+      wave: 1
+      action: new
+    - file: docker-compose.yml
+      agent: E
+      wave: 1
+      action: new
+    - file: .env.example
+      agent: E
+      wave: 1
+      action: new
+    - file: .dockerignore
+      agent: E
+      wave: 1
+      action: new
+    - file: DOCKER.md
+      agent: F
+      wave: 2
+      action: modify
+      depends_on:
+        - A
+        - B
+        - C
+        - D
+        - E
+    - file: README.md
+      agent: F
+      wave: 2
+      action: modify
+      depends_on:
+        - A
+        - B
+        - C
+        - D
+        - E
+interface_contracts:
+    - name: base_image_tag
+      description: |-
+        The base image tag used as FROM in per-language and full images.
+        This naming contract must be consistent across all Dockerfiles and the workflow.
+      definition: |
+        ghcr.io/blackwell-systems/agent-lsp:base
+        # Used as the FROM line in Dockerfile.lang and Dockerfile.full.
+        # In the GitHub Actions workflow, built first, then per-language images built FROM it.
+        # In local builds (docker-compose), references the locally-built base image.
+      location: Dockerfile
+    - name: LSP_SERVERS_env_var
+      description: |-
+        Runtime environment variable read by docker/entrypoint.sh to install language
+        servers on first container start. Comma-separated list of server binary names
+        matching entries in docker/lsp-servers.yaml.
+      definition: |
+        LSP_SERVERS=gopls,typescript-language-server,pyright
+        # The entrypoint script reads this variable, looks up each name in
+        # docker/lsp-servers.yaml to find the install command, installs it if not
+        # already on PATH, caches to /var/cache/lsp-servers/, then exec's agent-lsp.
+      location: docker/entrypoint.sh
+    - name: lsp_servers_yaml_schema
+      description: |-
+        Schema for docker/lsp-servers.yaml: the registry of all supported language
+        servers with install metadata. Used by entrypoint.sh for runtime install and
+        by DOCKER.md for documentation.
+      definition: |
+        servers:
+          - name: gopls                          # binary name on PATH
+            language: go
+            package_manager: go                  # go | npm | apt | gem | pip | cargo | manual
+            install_command: "go install golang.org/x/tools/gopls@latest"
+            binary: gopls
+          - name: typescript-language-server
+            language: typescript
+            package_manager: npm
+            install_command: "npm install -g typescript-language-server typescript"
+            binary: typescript-language-server
+          # ... one entry per supported server
+      location: docker/lsp-servers.yaml
+    - name: LANG_ARG
+      description: |-
+        Build ARG in Dockerfile.lang that selects which language server to install.
+        Three args are passed together to enable a single parameterized Dockerfile.
+      definition: |
+        ARG LANG           # e.g. "go", "typescript", "python"
+        ARG LSP_PACKAGE    # e.g. "golang.org/x/tools/gopls@latest", "typescript-language-server typescript"
+        ARG LSP_BINARY     # e.g. "gopls", "typescript-language-server"
+        ARG PACKAGE_MGR    # e.g. "go", "npm", "apt"
+      location: Dockerfile.lang
+    - name: docker_workflow_matrix
+      description: |-
+        GitHub Actions matrix strategy for per-language image builds. Each entry maps
+        to one docker/build-push-action call building Dockerfile.lang with the given ARGs.
+        The workflow also builds base, full, and combo images outside the matrix.
+      definition: |
+        strategy:
+          matrix:
+            include:
+              - lang: go
+                lsp_package: golang.org/x/tools/gopls@latest
+                lsp_binary: gopls
+                package_mgr: go
+              - lang: typescript
+                lsp_package: "typescript-language-server typescript"
+                lsp_binary: typescript-language-server
+                package_mgr: npm
+              - lang: python
+                lsp_package: pyright
+                lsp_binary: pyright-langserver
+                package_mgr: npm
+              - lang: rust
+                lsp_package: rust-analyzer
+                lsp_binary: rust-analyzer
+                package_mgr: cargo-binstall
+              - lang: java
+                lsp_package: jdtls
+                lsp_binary: jdtls
+                package_mgr: manual
+              - lang: ruby
+                lsp_package: solargraph
+                lsp_binary: solargraph
+                package_mgr: gem
+              - lang: cpp
+                lsp_package: clangd
+                lsp_binary: clangd
+                package_mgr: apt
+              - lang: csharp
+                lsp_package: csharp-ls
+                lsp_binary: csharp-ls
+                package_mgr: dotnet
+              - lang: kotlin
+                lsp_package: kotlin-language-server
+                lsp_binary: kotlin-language-server
+                package_mgr: manual
+              - lang: php
+                lsp_package: intelephense
+                lsp_binary: intelephense
+                package_mgr: npm
+              - lang: scala
+                lsp_package: metals
+                lsp_binary: metals
+                package_mgr: coursier
+              - lang: lua
+                lsp_package: lua-language-server
+                lsp_binary: lua-language-server
+                package_mgr: manual
+              - lang: elixir
+                lsp_package: elixir-ls
+                lsp_binary: elixir-ls
+                package_mgr: manual
+              - lang: clojure
+                lsp_package: clojure-lsp
+                lsp_binary: clojure-lsp
+                package_mgr: manual
+              - lang: dart
+                lsp_package: dart
+                lsp_binary: dart
+                package_mgr: apt
+              - lang: zig
+                lsp_package: zls
+                lsp_binary: zls
+                package_mgr: manual
+              - lang: haskell
+                lsp_package: haskell-language-server
+                lsp_binary: haskell-language-server-wrapper
+                package_mgr: ghcup
+              - lang: swift
+                lsp_package: sourcekit-lsp
+                lsp_binary: sourcekit-lsp
+                package_mgr: manual
+      location: .github/workflows/docker.yml
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Role
+            Create the multi-stage base Dockerfile for agent-lsp.
+
+            ## Context
+            - Module: github.com/blackwell-systems/agent-lsp (from go.mod)
+            - Go version in go.mod: 1.25.0 (use this exact version in the builder stage)
+            - Binary entrypoint: reads no special env vars itself — env var handling is
+              in docker/entrypoint.sh (written by Agent C), which exec's agent-lsp
+            - Final image must be debian:bookworm-slim (not alpine — some LSP servers
+              need glibc)
+            - The base image must NOT install any language servers; those go in
+              Dockerfile.lang and Dockerfile.full
+            - The entrypoint script will be at /usr/local/bin/entrypoint.sh in the image
+
+            ## What to implement
+
+            Create `/Users/dayna.blackwell/code/agent-lsp/Dockerfile` with:
+
+            1. **Builder stage** (`FROM golang:1.25-bookworm AS builder`):
+               - Set WORKDIR to /src
+               - Copy go.mod and go.sum first (for layer caching)
+               - Run `go mod download`
+               - Copy the full source
+               - Build: `CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/agent-lsp ./cmd/agent-lsp/`
+               - The `-trimpath -ldflags="-s -w"` flags produce a stripped static binary
+
+            2. **Final stage** (`FROM debian:bookworm-slim`):
+               - Install runtime dependencies: `ca-certificates curl git` (minimal; needed for some LSP runtime installs via entrypoint)
+               - Copy the binary: `COPY --from=builder /out/agent-lsp /usr/local/bin/agent-lsp`
+               - Copy the entrypoint script: `COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh`
+               - `RUN chmod +x /usr/local/bin/entrypoint.sh`
+               - Create the LSP server cache dir: `RUN mkdir -p /var/cache/lsp-servers`
+               - Set ENV HOME=/root (some language servers require HOME)
+               - Set WORKDIR to /workspace
+               - ENTRYPOINT: `["/usr/local/bin/entrypoint.sh"]`
+               - CMD: `[]` (no default; agent-lsp requires args specifying language servers;
+                 users pass args at `docker run` time or in docker-compose command:)
+
+            3. Add a comment block at the top:
+               ```
+               # agent-lsp base image
+               # No language servers installed — use LSP_SERVERS env var at runtime
+               # or use per-language tags: ghcr.io/blackwell-systems/agent-lsp:<lang>
+               # See DOCKER.md for full usage.
+               ```
+
+            ## Verification gate
+            ```bash
+            # 1. File exists
+            test -f /Users/dayna.blackwell/code/agent-lsp/Dockerfile
+            # 2. Builder stage uses correct Go version
+            grep -q "FROM golang:1.25" /Users/dayna.blackwell/code/agent-lsp/Dockerfile
+            # 3. Final stage uses debian:bookworm-slim
+            grep -q "FROM debian:bookworm-slim" /Users/dayna.blackwell/code/agent-lsp/Dockerfile
+            # 4. CGO disabled
+            grep -q "CGO_ENABLED=0" /Users/dayna.blackwell/code/agent-lsp/Dockerfile
+            # 5. Entrypoint is the shell script
+            grep -q "entrypoint.sh" /Users/dayna.blackwell/code/agent-lsp/Dockerfile
+            # 6. Go build still succeeds (not affected, but confirm no go.mod changes made)
+            cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go build ./...
+            ```
+
+            ## Constraints
+            - Do NOT modify any Go source files, go.mod, or existing workflows
+            - Do NOT install language servers in this Dockerfile — base is language-server-free
+            - Do NOT use alpine — use debian:bookworm-slim for glibc compatibility
+            - Do NOT pin the golang builder to a digest; use the `golang:1.25-bookworm` tag
+          files:
+            - Dockerfile
+        - id: B
+          task: |
+            ## Role
+            Create the parameterized per-language Dockerfile and the full-image Dockerfile.
+
+            ## Context
+            - Base image tag: `ghcr.io/blackwell-systems/agent-lsp:base`
+              (this is what Dockerfile and Dockerfile.full extend FROM in production;
+              for local builds docker-compose will build them from context)
+            - Dockerfile.lang uses three build ARGs: LANG, LSP_PACKAGE, PACKAGE_MGR, LSP_BINARY
+            - The 18 supported per-language tags (from design spec):
+              go, typescript, python, rust, java, ruby, cpp, csharp, swift, kotlin,
+              php, scala, haskell, lua, elixir, clojure, dart, zig
+            - Dockerfile.full installs ALL language servers that can be installed
+              via package managers on debian:bookworm-slim
+
+            ## What to implement
+
+            ### File 1: `/Users/dayna.blackwell/code/agent-lsp/Dockerfile.lang`
+
+            Structure:
+            ```dockerfile
+            # agent-lsp per-language image
+            # Build with: docker build -f Dockerfile.lang --build-arg LANG=go \
+            #   --build-arg LSP_PACKAGE="golang.org/x/tools/gopls@latest" \
+            #   --build-arg PACKAGE_MGR=go \
+            #   --build-arg LSP_BINARY=gopls \
+            #   -t ghcr.io/blackwell-systems/agent-lsp:go .
+
+            ARG BASE_TAG=base
+            FROM ghcr.io/blackwell-systems/agent-lsp:${BASE_TAG}
+
+            ARG LANG
+            ARG LSP_PACKAGE
+            ARG PACKAGE_MGR
+            ARG LSP_BINARY
+
+            # Install language server based on package manager
+            RUN set -eux; \
+                case "${PACKAGE_MGR}" in \
+                  npm) \
+                    apt-get update && apt-get install -y --no-install-recommends nodejs npm && \
+                    npm install -g ${LSP_PACKAGE} ;; \
+                  go) \
+                    apt-get update && apt-get install -y --no-install-recommends golang-go && \
+                    go install ${LSP_PACKAGE} ;; \
+                  apt) \
+                    apt-get update && apt-get install -y --no-install-recommends ${LSP_PACKAGE} ;; \
+                  gem) \
+                    apt-get update && apt-get install -y --no-install-recommends ruby-full && \
+                    gem install ${LSP_PACKAGE} ;; \
+                  pip) \
+                    apt-get update && apt-get install -y --no-install-recommends python3-pip && \
+                    pip3 install --break-system-packages ${LSP_PACKAGE} ;; \
+                  dotnet) \
+                    apt-get update && apt-get install -y --no-install-recommends dotnet-sdk-8.0 && \
+                    dotnet tool install -g ${LSP_PACKAGE} ;; \
+                  *) \
+                    echo "PACKAGE_MGR=${PACKAGE_MGR}: manual install not supported in Dockerfile.lang; use entrypoint LSP_SERVERS instead" && exit 1 ;; \
+                esac && \
+                rm -rf /var/lib/apt/lists/*
+
+            # Set language label
+            LABEL org.opencontainers.image.description="agent-lsp with ${LANG} language server"
+            ```
+
+            Note: The `manual` package manager (rust-analyzer, jdtls, kotlin-ls, lua-ls,
+            elixir-ls, clojure-lsp, zls, sourcekit-lsp) requires custom build steps that
+            can't be parameterized. The workflow handles these with custom Dockerfile sections
+            or by using the entrypoint LSP_SERVERS mechanism. In Dockerfile.lang, emit an
+            error for `manual` with the guidance above — this is intentional.
+
+            For `go` package manager: use the Go toolchain already in the builder stage path
+            if available, otherwise install via apt. Actually, the base image (debian:bookworm-slim)
+            does NOT have Go — only the builder stage does. For the `go` PACKAGE_MGR case in
+            Dockerfile.lang, you need to install Go first. Use:
+            ```
+            apt-get update && apt-get install -y --no-install-recommends golang-go && \
+            GOPATH=/usr/local go install ${LSP_PACKAGE}
+            ```
+            Set `PATH=$PATH:/usr/local/bin` via ENV so the installed binary is on PATH.
+
+            ### File 2: `/Users/dayna.blackwell/code/agent-lsp/Dockerfile.full`
+
+            ```dockerfile
+            # agent-lsp full image — ALL supported language servers
+            # WARNING: This image is 2-3 GB. For zero-setup use only.
+            # For targeted use, prefer per-language tags: ghcr.io/blackwell-systems/agent-lsp:<lang>
+            #
+            # Pull: docker pull ghcr.io/blackwell-systems/agent-lsp:full
+
+            ARG BASE_TAG=base
+            FROM ghcr.io/blackwell-systems/agent-lsp:${BASE_TAG}
+
+            # Install Node.js (needed for npm-based servers)
+            RUN apt-get update && apt-get install -y --no-install-recommends \
+                nodejs npm \
+                && rm -rf /var/lib/apt/lists/*
+
+            # npm-based language servers
+            RUN npm install -g \
+                typescript-language-server typescript \
+                pyright \
+                intelephense \
+                yaml-language-server \
+                vscode-langservers-extracted \
+                dockerfile-language-server-nodejs \
+                @prisma/language-server \
+                && npm cache clean --force
+
+            # Go + gopls
+            RUN apt-get update && apt-get install -y --no-install-recommends golang-go \
+                && GOPATH=/usr/local go install golang.org/x/tools/gopls@latest \
+                && rm -rf /var/lib/apt/lists/*
+
+            # Ruby + solargraph
+            RUN apt-get update && apt-get install -y --no-install-recommends ruby-full \
+                && gem install solargraph \
+                && rm -rf /var/lib/apt/lists/*
+
+            # C/C++ via clangd
+            RUN apt-get update && apt-get install -y --no-install-recommends clangd \
+                && rm -rf /var/lib/apt/lists/*
+
+            # .NET + csharp-ls
+            RUN apt-get update && apt-get install -y --no-install-recommends dotnet-sdk-8.0 \
+                && dotnet tool install -g csharp-ls \
+                && rm -rf /var/lib/apt/lists/*
+
+            LABEL org.opencontainers.image.description="agent-lsp with all supported language servers (~2-3 GB)"
+            ```
+
+            Note for Dockerfile.full: Java (jdtls), Kotlin (kotlin-ls), Scala (metals),
+            Swift (sourcekit-lsp), Rust (rust-analyzer), Elixir (elixir-ls), Clojure
+            (clojure-lsp), Dart, Haskell (hls), Lua (lua-ls), Zig (zls), and Terraform
+            (terraform-ls) all require complex installation steps or platform-specific tools.
+            Add a comment section at the bottom of Dockerfile.full:
+            ```
+            # The following language servers require platform-specific installation and are
+            # NOT included in the full image. Use LSP_SERVERS or install manually:
+            # - rust-analyzer (Rust): rustup component add rust-analyzer
+            # - jdtls (Java): see https://download.eclipse.org/jdtls/snapshots/
+            # - kotlin-language-server (Kotlin): see https://github.com/fwcd/kotlin-language-server/releases
+            # - sourcekit-lsp (Swift): ships with Xcode on macOS only
+            # - elixir-ls (Elixir): build from source
+            # - clojure-lsp (Clojure): binary release from GitHub
+            # - dart language-server (Dart): install Dart SDK
+            # - lua-language-server (Lua): binary release from GitHub
+            # - zls (Zig): match Zig version exactly
+            # - metals (Scala): requires sbt compilation
+            # - haskell-language-server (Haskell): install via GHCup
+            # - terraform-ls (Terraform): binary release from hashicorp.com
+            ```
+
+            ## Verification gate
+            ```bash
+            # 1. Files exist
+            test -f /Users/dayna.blackwell/code/agent-lsp/Dockerfile.lang
+            test -f /Users/dayna.blackwell/code/agent-lsp/Dockerfile.full
+            # 2. Dockerfile.lang has the four ARGs
+            grep -q "ARG LANG" /Users/dayna.blackwell/code/agent-lsp/Dockerfile.lang
+            grep -q "ARG LSP_PACKAGE" /Users/dayna.blackwell/code/agent-lsp/Dockerfile.lang
+            grep -q "ARG PACKAGE_MGR" /Users/dayna.blackwell/code/agent-lsp/Dockerfile.lang
+            grep -q "ARG LSP_BINARY" /Users/dayna.blackwell/code/agent-lsp/Dockerfile.lang
+            # 3. Dockerfile.full has the size warning
+            grep -q "2-3 GB" /Users/dayna.blackwell/code/agent-lsp/Dockerfile.full
+            # 4. Dockerfile.full has npm-based servers
+            grep -q "typescript-language-server" /Users/dayna.blackwell/code/agent-lsp/Dockerfile.full
+            # 5. Both reference base image
+            grep -q "agent-lsp" /Users/dayna.blackwell/code/agent-lsp/Dockerfile.lang
+            grep -q "agent-lsp" /Users/dayna.blackwell/code/agent-lsp/Dockerfile.full
+            ```
+
+            ## Constraints
+            - Do NOT modify any Go source files or existing Docker/workflow files
+            - Do NOT create a separate Dockerfile per language — exactly ONE Dockerfile.lang
+              with ARG parameterization
+            - The base tag should be configurable via BASE_TAG ARG (defaults to "base") so
+              local builds can override without modifying the file
+            - Do NOT add a case for "manual" that silently succeeds — fail loudly so the
+              workflow author knows to handle those languages separately
+          files:
+            - Dockerfile.lang
+            - Dockerfile.full
+        - id: C
+          task: |
+            ## Role
+            Create the entrypoint script and the LSP server registry YAML.
+
+            ## Context
+            - Entrypoint must be POSIX sh compatible (#!/bin/sh, not #!/bin/bash)
+            - Cache dir: /var/cache/lsp-servers/
+            - lsp-servers.yaml is the source of truth for install commands
+            - The entrypoint is the ENTRYPOINT in the base image; it reads LSP_SERVERS
+              env var, installs missing servers, then exec's agent-lsp with all args
+            - The binary path is /usr/local/bin/agent-lsp
+
+            ## What to implement
+
+            ### File 1: `/Users/dayna.blackwell/code/agent-lsp/docker/entrypoint.sh`
+
+            POSIX sh script that:
+            1. If `LSP_SERVERS` env var is empty, exec agent-lsp directly with "$@"
+            2. If set, split on commas and for each server name:
+               a. Check if already on PATH (`command -v "$server" > /dev/null 2>&1`)
+               b. Check cache dir: `/var/cache/lsp-servers/$server/.installed` marker file
+               c. If neither: look up the server in /etc/agent-lsp/lsp-servers.yaml
+                  (parsed via grep/awk — no yq/python dependency), find install_command
+               d. Run the install command
+               e. Create the cache marker: `touch /var/cache/lsp-servers/$server/.installed`
+            3. After processing all servers, exec agent-lsp with "$@"
+
+            The registry file path in the container is `/etc/agent-lsp/lsp-servers.yaml`
+            (it will be COPY'd there by the Dockerfile). The Dockerfile.lang and base image
+            should include: `COPY docker/lsp-servers.yaml /etc/agent-lsp/lsp-servers.yaml`
+            (note this in a comment in entrypoint.sh so Agent A knows to add this COPY line
+            to the base Dockerfile).
+
+            YAML parsing approach: the lsp-servers.yaml format uses a simple structure.
+            Parse it with a shell function using grep and awk:
+            ```sh
+            get_install_command() {
+              server_name="$1"
+              # Extract the install_command for the matching server name block
+              awk "/^  - name: ${server_name}$/,/^  - name:/" /etc/agent-lsp/lsp-servers.yaml \
+                | grep "install_command:" \
+                | head -1 \
+                | sed 's/.*install_command: *"\(.*\)"/\1/'
+            }
+            ```
+
+            Full script structure:
+            ```sh
+            #!/bin/sh
+            set -e
+
+            CACHE_DIR=/var/cache/lsp-servers
+            REGISTRY=/etc/agent-lsp/lsp-servers.yaml
+
+            if [ -n "${LSP_SERVERS}" ]; then
+              # Split LSP_SERVERS on commas
+              echo "agent-lsp: installing requested language servers: ${LSP_SERVERS}"
+              # ... (use IFS or tr for splitting in POSIX sh)
+              # For each server: check PATH, check cache, install if needed
+            fi
+
+            exec /usr/local/bin/agent-lsp "$@"
+            ```
+
+            Use `printf '%s\n' "$LSP_SERVERS" | tr ',' '\n'` for comma-splitting in POSIX sh.
+
+            Add a header comment block:
+            ```sh
+            # agent-lsp entrypoint
+            # Reads LSP_SERVERS env var (comma-separated server names) and installs
+            # any requested language servers not already present, using the registry
+            # at /etc/agent-lsp/lsp-servers.yaml. Caches installs to /var/cache/lsp-servers/.
+            # Then exec's agent-lsp with all passed arguments.
+            #
+            # NOTE: The Dockerfile must include:
+            #   COPY docker/lsp-servers.yaml /etc/agent-lsp/lsp-servers.yaml
+            ```
+
+            ### File 2: `/Users/dayna.blackwell/code/agent-lsp/docker/lsp-servers.yaml`
+
+            Registry of all 18 supported language servers. Schema:
+            ```yaml
+            # agent-lsp language server registry
+            # Used by docker/entrypoint.sh for runtime LSP_SERVERS installs.
+            # package_manager: npm | go | apt | gem | pip | dotnet | cargo | manual
+
+            servers:
+              - name: gopls
+                language: go
+                package_manager: go
+                install_command: "GOPATH=/usr/local go install golang.org/x/tools/gopls@latest"
+                binary: gopls
+              - name: typescript-language-server
+                language: typescript
+                package_manager: npm
+                install_command: "npm install -g typescript-language-server typescript"
+                binary: typescript-language-server
+              - name: pyright-langserver
+                language: python
+                package_manager: npm
+                install_command: "npm install -g pyright"
+                binary: pyright-langserver
+              - name: rust-analyzer
+                language: rust
+                package_manager: cargo
+                install_command: "cargo install rust-analyzer"
+                binary: rust-analyzer
+              - name: clangd
+                language: cpp
+                package_manager: apt
+                install_command: "apt-get update && apt-get install -y --no-install-recommends clangd && rm -rf /var/lib/apt/lists/*"
+                binary: clangd
+              - name: solargraph
+                language: ruby
+                package_manager: gem
+                install_command: "gem install solargraph"
+                binary: solargraph
+              - name: intelephense
+                language: php
+                package_manager: npm
+                install_command: "npm install -g intelephense"
+                binary: intelephense
+              - name: csharp-ls
+                language: csharp
+                package_manager: dotnet
+                install_command: "dotnet tool install -g csharp-ls"
+                binary: csharp-ls
+              - name: lua-language-server
+                language: lua
+                package_manager: manual
+                install_command: "echo 'Install lua-language-server from https://github.com/LuaLS/lua-language-server/releases and add to PATH'"
+                binary: lua-language-server
+              - name: zls
+                language: zig
+                package_manager: manual
+                install_command: "echo 'Install zls from https://github.com/zigtools/zls/releases matching your Zig version'"
+                binary: zls
+              - name: kotlin-language-server
+                language: kotlin
+                package_manager: manual
+                install_command: "echo 'Install kotlin-language-server from https://github.com/fwcd/kotlin-language-server/releases'"
+                binary: kotlin-language-server
+              - name: metals
+                language: scala
+                package_manager: manual
+                install_command: "echo 'Install metals via: cs install metals (requires Coursier)'"
+                binary: metals
+              - name: elixir-ls
+                language: elixir
+                package_manager: manual
+                install_command: "echo 'Build elixir-ls from https://github.com/elixir-lsp/elixir-ls'"
+                binary: elixir-ls
+              - name: clojure-lsp
+                language: clojure
+                package_manager: manual
+                install_command: "echo 'Install clojure-lsp from https://github.com/clojure-lsp/clojure-lsp/releases'"
+                binary: clojure-lsp
+              - name: haskell-language-server-wrapper
+                language: haskell
+                package_manager: manual
+                install_command: "echo 'Install HLS via GHCup: ghcup install hls'"
+                binary: haskell-language-server-wrapper
+              - name: sourcekit-lsp
+                language: swift
+                package_manager: manual
+                install_command: "echo 'sourcekit-lsp ships with Xcode on macOS; not available on Linux'"
+                binary: sourcekit-lsp
+              - name: jdtls
+                language: java
+                package_manager: manual
+                install_command: "echo 'Install jdtls from https://download.eclipse.org/jdtls/snapshots/'"
+                binary: jdtls
+              - name: dart
+                language: dart
+                package_manager: apt
+                install_command: "apt-get update && apt-get install -y --no-install-recommends dart && rm -rf /var/lib/apt/lists/*"
+                binary: dart
+            ```
+
+            ## Verification gate
+            ```bash
+            # 1. Files exist
+            test -f /Users/dayna.blackwell/code/agent-lsp/docker/entrypoint.sh
+            test -f /Users/dayna.blackwell/code/agent-lsp/docker/lsp-servers.yaml
+            # 2. Entrypoint is POSIX sh (no bashisms)
+            head -1 /Users/dayna.blackwell/code/agent-lsp/docker/entrypoint.sh | grep -q "#!/bin/sh"
+            # 3. Entrypoint reads LSP_SERVERS
+            grep -q "LSP_SERVERS" /Users/dayna.blackwell/code/agent-lsp/docker/entrypoint.sh
+            # 4. Entrypoint execs agent-lsp
+            grep -q 'exec /usr/local/bin/agent-lsp' /Users/dayna.blackwell/code/agent-lsp/docker/entrypoint.sh
+            # 5. Registry has all 18 servers
+            grep -c "^  - name:" /Users/dayna.blackwell/code/agent-lsp/docker/lsp-servers.yaml
+            # Expected: 18
+            # 6. No bash-specific syntax in entrypoint
+            ! grep -q "\[\[" /Users/dayna.blackwell/code/agent-lsp/docker/entrypoint.sh
+            ! grep -q "source " /Users/dayna.blackwell/code/agent-lsp/docker/entrypoint.sh
+            ```
+
+            ## Constraints
+            - Do NOT use `#!/bin/bash` or bash-specific syntax (`[[ ]]`, `source`, `$'...'`,
+              process substitution `<()`)
+            - Do NOT use yq, python, jq, or any external tool for YAML parsing — only
+              grep/awk/sed (all present in debian:bookworm-slim)
+            - Do NOT modify any Go source files or existing files
+            - The entrypoint must handle the case where LSP_SERVERS is unset gracefully
+              (just exec agent-lsp directly, zero overhead)
+          files:
+            - docker/entrypoint.sh
+            - docker/lsp-servers.yaml
+        - id: D
+          task: |
+            ## Role
+            Create the GitHub Actions Docker build and push workflow.
+
+            ## Context
+            - Existing workflows: ci.yml (CI tests), release.yml (GoReleaser binary release)
+            - This workflow is ENTIRELY SEPARATE — do not modify ci.yml or release.yml
+            - Registry: ghcr.io (GitHub Container Registry), uses GITHUB_TOKEN
+            - Image: ghcr.io/blackwell-systems/agent-lsp
+            - Per-language matrix: 18 languages (see interface_contracts.docker_workflow_matrix)
+            - Triggers: push to main (edge tag), push of v* tags (version tags)
+            - Combo tags: web (typescript+python), backend (go+python+rust), fullstack (go+typescript+python)
+            - Layer caching: GitHub Actions cache (type=gha)
+
+            ## What to implement
+
+            Create `/Users/dayna.blackwell/code/agent-lsp/.github/workflows/docker.yml`:
+
+            ### Workflow structure
+
+            ```yaml
+            name: Docker
+
+            on:
+              push:
+                branches: [main]
+                tags: ['v*']
+
+            permissions:
+              contents: read
+              packages: write
+
+            env:
+              REGISTRY: ghcr.io
+              IMAGE: ghcr.io/blackwell-systems/agent-lsp
+
+            jobs:
+              # Job 1: Build and push the base image
+              base:
+                runs-on: ubuntu-latest
+                outputs:
+                  base-digest: ${{ steps.push.outputs.digest }}
+                steps:
+                  - uses: actions/checkout@v4
+                  - uses: docker/setup-buildx-action@v3
+                  - uses: docker/login-action@v3
+                    with:
+                      registry: ghcr.io
+                      username: ${{ github.actor }}
+                      password: ${{ secrets.GITHUB_TOKEN }}
+                  - name: Docker metadata
+                    id: meta
+                    uses: docker/metadata-action@v5
+                    with:
+                      images: ${{ env.IMAGE }}
+                      tags: |
+                        type=raw,value=base
+                        type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+                        type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' }}
+                        type=semver,pattern={{version}}
+                        type=semver,pattern={{major}}.{{minor}}
+                  - name: Build and push base
+                    id: push
+                    uses: docker/build-push-action@v6
+                    with:
+                      context: .
+                      file: Dockerfile
+                      push: true
+                      tags: ${{ steps.meta.outputs.tags }}
+                      cache-from: type=gha
+                      cache-to: type=gha,mode=max
+
+              # Job 2: Per-language matrix builds
+              per-language:
+                runs-on: ubuntu-latest
+                needs: base
+                strategy:
+                  fail-fast: false
+                  matrix:
+                    include:
+                      - lang: go
+                        lsp_package: golang.org/x/tools/gopls@latest
+                        lsp_binary: gopls
+                        package_mgr: go
+                      - lang: typescript
+                        lsp_package: "typescript-language-server typescript"
+                        lsp_binary: typescript-language-server
+                        package_mgr: npm
+                      - lang: python
+                        lsp_package: pyright
+                        lsp_binary: pyright-langserver
+                        package_mgr: npm
+                      - lang: ruby
+                        lsp_package: solargraph
+                        lsp_binary: solargraph
+                        package_mgr: gem
+                      - lang: cpp
+                        lsp_package: clangd
+                        lsp_binary: clangd
+                        package_mgr: apt
+                      - lang: csharp
+                        lsp_package: csharp-ls
+                        lsp_binary: csharp-ls
+                        package_mgr: dotnet
+                      - lang: php
+                        lsp_package: intelephense
+                        lsp_binary: intelephense
+                        package_mgr: npm
+                      - lang: dart
+                        lsp_package: dart
+                        lsp_binary: dart
+                        package_mgr: apt
+                steps:
+                  - uses: actions/checkout@v4
+                  - uses: docker/setup-buildx-action@v3
+                  - uses: docker/login-action@v3
+                    with:
+                      registry: ghcr.io
+                      username: ${{ github.actor }}
+                      password: ${{ secrets.GITHUB_TOKEN }}
+                  - name: Build and push ${{ matrix.lang }}
+                    uses: docker/build-push-action@v6
+                    with:
+                      context: .
+                      file: Dockerfile.lang
+                      push: true
+                      tags: ${{ env.IMAGE }}:${{ matrix.lang }}
+                      build-args: |
+                        BASE_TAG=base
+                        LANG=${{ matrix.lang }}
+                        LSP_PACKAGE=${{ matrix.lsp_package }}
+                        PACKAGE_MGR=${{ matrix.package_mgr }}
+                        LSP_BINARY=${{ matrix.lsp_binary }}
+                      cache-from: type=gha
+                      cache-to: type=gha,mode=max
+
+            Note: Languages requiring `manual` package manager (rust, java, kotlin, swift,
+            scala, haskell, lua, elixir, clojure, zig) are intentionally excluded from the
+            per-language matrix because Dockerfile.lang exits 1 for PACKAGE_MGR=manual.
+            These languages are best served via the LSP_SERVERS runtime install mechanism
+            in the base image. Document this in a YAML comment in the matrix.
+
+              # Job 3: Combo images (web, backend, fullstack)
+              # Each combo image is a multi-stage build that copies binaries from the
+              # individual per-language images. OR: build fresh from base with multiple
+              # package installs. Choose the simpler approach: build from base, install
+              # all needed servers in one RUN block.
+              combos:
+                runs-on: ubuntu-latest
+                needs: [base, per-language]
+                strategy:
+                  matrix:
+                    include:
+                      - tag: web
+                        servers: "typescript python"
+                        packages_npm: "typescript-language-server typescript pyright"
+                        description: "TypeScript + Python language servers"
+                      - tag: backend
+                        servers: "go python"
+                        packages_npm: "pyright"
+                        description: "Go + Python language servers"
+                      - tag: fullstack
+                        servers: "go typescript python"
+                        packages_npm: "typescript-language-server typescript pyright"
+                        description: "Go + TypeScript + Python language servers"
+                steps:
+                  - uses: actions/checkout@v4
+                  - uses: docker/setup-buildx-action@v3
+                  - uses: docker/login-action@v3
+                    ...
+                  - name: Build and push ${{ matrix.tag }}
+                    uses: docker/build-push-action@v6
+                    with:
+                      context: .
+                      file: Dockerfile
+                      push: true
+                      tags: ${{ env.IMAGE }}:${{ matrix.tag }}
+                      # Use a build-arg or inline Dockerfile for combo installs
+                      # Simplest: use LSP_SERVERS in a FROM+RUN pattern
+
+            For combos, the simplest approach is an inline Dockerfile approach using
+            heredoc syntax in the workflow or a dedicated Dockerfile.combo. Recommended:
+            use `docker buildx build` with `--build-arg LSP_SERVERS=...` against the
+            base image Dockerfile, overriding the CMD so the install runs at build time
+            (not runtime). Actually the cleanest approach for combos: write three small
+            Dockerfile.{web,backend,fullstack} files — but the design spec says "no extra
+            files". Instead, use a `--build-arg EXTRA_SERVERS=...` in a modified version
+            of the base Dockerfile that optionally pre-installs servers. Or use `docker build`
+            with stdin heredoc.
+
+            The cleanest approach that requires no new Dockerfile files: in the combo job,
+            use `docker/build-push-action` with a `dockerfile-inline` option:
+            ```yaml
+            - name: Build combo ${{ matrix.tag }}
+              uses: docker/build-push-action@v6
+              with:
+                push: true
+                tags: ${{ env.IMAGE }}:${{ matrix.tag }}
+                file: Dockerfile.lang  # or use inline
+            ```
+
+            Best approach for combos: use Dockerfile.lang for each language, then combine
+            via a multi-stage FROM scratch approach, or just build a small inline Dockerfile
+            for each combo that installs the needed npm packages in one layer:
+
+            Use inline Dockerfile in the workflow for combos — this is supported by
+            docker/build-push-action via the `file` argument pointing at a temp file,
+            or via `context: ${{ runner.temp }}`. The pragmatic approach: write the combo
+            build as a plain `docker build` step using a bash heredoc, then push with
+            `docker push`. This avoids the complexity of inline build-push-action files.
+
+              # Job 4: Full image
+              full:
+                runs-on: ubuntu-latest
+                needs: base
+                steps:
+                  - uses: actions/checkout@v4
+                  - uses: docker/setup-buildx-action@v3
+                  - uses: docker/login-action@v3
+                    ...
+                  - name: Build and push full
+                    uses: docker/build-push-action@v6
+                    with:
+                      context: .
+                      file: Dockerfile.full
+                      push: true
+                      tags: |
+                        ${{ env.IMAGE }}:full
+                      build-args: BASE_TAG=base
+                      cache-from: type=gha
+                      cache-to: type=gha,mode=max
+            ```
+
+            Write the actual complete YAML workflow file. Where the description above
+            shows pseudocode or multiple options, choose the cleanest approach and
+            implement it fully. For combo images, use the inline dockerfile approach
+            within the workflow job rather than creating additional Dockerfile.* files.
+
+            Use `docker buildx build --platform linux/amd64` for all builds (don't attempt
+            multi-arch in this first version — keep it simple).
+
+            ## Verification gate
+            ```bash
+            # 1. File exists
+            test -f /Users/dayna.blackwell/code/agent-lsp/.github/workflows/docker.yml
+            # 2. Uses ghcr.io
+            grep -q "ghcr.io" /Users/dayna.blackwell/code/agent-lsp/.github/workflows/docker.yml
+            # 3. Separate from release.yml (does not reference goreleaser)
+            ! grep -q "goreleaser" /Users/dayna.blackwell/code/agent-lsp/.github/workflows/docker.yml
+            # 4. Has matrix for per-language builds
+            grep -q "strategy:" /Users/dayna.blackwell/code/agent-lsp/.github/workflows/docker.yml
+            # 5. Triggers on tags and main
+            grep -q "v\*" /Users/dayna.blackwell/code/agent-lsp/.github/workflows/docker.yml
+            grep -q "branches: \[main\]" /Users/dayna.blackwell/code/agent-lsp/.github/workflows/docker.yml
+            # 6. Uses GHA cache
+            grep -q "type=gha" /Users/dayna.blackwell/code/agent-lsp/.github/workflows/docker.yml
+            # 7. Has packages: write permission
+            grep -q "packages: write" /Users/dayna.blackwell/code/agent-lsp/.github/workflows/docker.yml
+            ```
+
+            ## Constraints
+            - Do NOT modify release.yml, ci.yml, or any existing files
+            - Do NOT add goreleaser or binary release logic — this workflow is Docker only
+            - Do NOT attempt multi-arch (linux/arm64) in this version — amd64 only
+            - Do NOT create additional Dockerfile.* files (web/backend/fullstack) — handle
+              combo images inline in the workflow
+            - The workflow must use actions/checkout@v4, consistent with existing workflows
+          files:
+            - .github/workflows/docker.yml
+        - id: E
+          task: |
+            ## Role
+            Create docker-compose.yml, .env.example, and .dockerignore.
+
+            ## Context
+            - Existing DOCKER.md describes resource limits (4GB RAM, 2 CPU) — match these
+            - The binary is at /usr/local/bin/agent-lsp inside the container
+            - WORKSPACE_DIR env var sets the host directory to mount as /workspace
+            - The base image tag locally is built from Dockerfile (before pushed to ghcr.io)
+            - agent-lsp takes language server args: e.g. `go:gopls typescript:typescript-language-server,--stdio`
+            - LSP_SERVER_CACHE named volume enables persistence across container restarts
+            - .dockerignore keeps the build context small (exclude test fixtures, docs, etc.)
+
+            ## What to implement
+
+            ### File 1: `/Users/dayna.blackwell/code/agent-lsp/docker-compose.yml`
+
+            ```yaml
+            # agent-lsp docker-compose — local development
+            # Copy .env.example to .env and set WORKSPACE_DIR before use.
+            # See DOCKER.md for full usage and MCP client configuration.
+
+            services:
+              agent-lsp:
+                build:
+                  context: .
+                  dockerfile: Dockerfile
+                image: ghcr.io/blackwell-systems/agent-lsp:base
+                stdin_open: true
+                tty: false
+                volumes:
+                  - ${WORKSPACE_DIR:?Set WORKSPACE_DIR in .env}:/workspace:rw
+                  - lsp-server-cache:/var/cache/lsp-servers
+                working_dir: /workspace
+                environment:
+                  - LSP_SERVERS=${LSP_SERVERS:-}
+                  - HOME=/root
+                command: []  # Override with language args: go:gopls typescript:typescript-language-server,--stdio
+                deploy:
+                  resources:
+                    limits:
+                      memory: 4g
+                      cpus: '2'
+                    reservations:
+                      memory: 1g
+                      cpus: '0.5'
+                env_file:
+                  - .env
+
+            volumes:
+              lsp-server-cache:
+                driver: local
+            ```
+
+            Note: The `command: []` with no default means the user must specify language
+            server args. Add a comment showing the usage:
+            ```yaml
+            # Usage:
+            #   docker compose run --rm agent-lsp go:gopls
+            #   docker compose run --rm agent-lsp typescript:typescript-language-server,--stdio
+            #   LSP_SERVERS=gopls docker compose run --rm agent-lsp  # runtime install
+            ```
+
+            ### File 2: `/Users/dayna.blackwell/code/agent-lsp/.env.example`
+
+            ```
+            # Copy to .env and fill in your values.
+            # Required:
+            WORKSPACE_DIR=/path/to/your/project
+
+            # Optional: comma-separated language servers to install at container startup
+            # (only needed if using the base image without per-language tags)
+            # LSP_SERVERS=gopls,typescript-language-server
+
+            # Optional: override the image tag (default: base, built locally)
+            # AGENT_LSP_TAG=go
+            ```
+
+            ### File 3: `/Users/dayna.blackwell/code/agent-lsp/.dockerignore`
+
+            ```
+            # Version control
+            .git
+            .gitignore
+
+            # Documentation (not needed for build)
+            docs/
+            *.md
+            CHANGELOG.md
+
+            # Test fixtures (large, not needed in build context)
+            test/
+
+            # Development artifacts
+            *.test
+            *.out
+            coverage.html
+
+            # Local environment
+            .env
+            .env.*
+            !.env.example
+
+            # Editor artifacts
+            .idea/
+            .vscode/
+            *.swp
+            *.swo
+
+            # OS artifacts
+            .DS_Store
+            Thumbs.db
+
+            # Skills (not needed in image)
+            skills/
+
+            # Assets
+            assets/
+
+            # Inspections
+            inspections/
+            ```
+
+            ## Verification gate
+            ```bash
+            # 1. All three files exist
+            test -f /Users/dayna.blackwell/code/agent-lsp/docker-compose.yml
+            test -f /Users/dayna.blackwell/code/agent-lsp/.env.example
+            test -f /Users/dayna.blackwell/code/agent-lsp/.dockerignore
+            # 2. docker-compose.yml has resource limits
+            grep -q "memory: 4g" /Users/dayna.blackwell/code/agent-lsp/docker-compose.yml
+            # 3. docker-compose.yml mounts WORKSPACE_DIR
+            grep -q "WORKSPACE_DIR" /Users/dayna.blackwell/code/agent-lsp/docker-compose.yml
+            # 4. docker-compose.yml has the lsp-server-cache volume
+            grep -q "lsp-server-cache" /Users/dayna.blackwell/code/agent-lsp/docker-compose.yml
+            # 5. .env.example has WORKSPACE_DIR
+            grep -q "WORKSPACE_DIR" /Users/dayna.blackwell/code/agent-lsp/.env.example
+            # 6. .dockerignore excludes test/
+            grep -q "^test/" /Users/dayna.blackwell/code/agent-lsp/.dockerignore
+            # 7. .dockerignore excludes .git
+            grep -q "^\.git$" /Users/dayna.blackwell/code/agent-lsp/.dockerignore
+            ```
+
+            ## Constraints
+            - Do NOT modify any existing files
+            - Do NOT hard-code absolute paths in docker-compose.yml — use ${WORKSPACE_DIR}
+            - The .dockerignore must exclude test/ and docs/ to keep build context fast
+            - Do NOT create a .env file (only .env.example) — .env is gitignored
+          files:
+            - docker-compose.yml
+            - .env.example
+            - .dockerignore
+    - number: 2
+      agents:
+        - id: F
+          task: |
+            ## Role
+            Rewrite DOCKER.md completely and add a minimal Docker section to README.md.
+
+            ## Context
+            - All Docker files have been created by Wave 1 agents (A, B, C, D, E)
+            - Registry: ghcr.io/blackwell-systems/agent-lsp (NOT DockerHub)
+            - Image tiers: base/latest, per-language (18 tags), combo (web/backend/fullstack), full
+            - Runtime install via LSP_SERVERS env var documented in docker/entrypoint.sh
+            - Volume caching at /var/cache/lsp-servers with named volume lsp-server-cache
+            - README.md is long (~380 lines) — Docker section should be minimal (key
+              one-liners + link to DOCKER.md), inserted BEFORE the "## Installation" section
+
+            ## What to implement
+
+            ### File 1: `/Users/dayna.blackwell/code/agent-lsp/DOCKER.md`
+
+            Completely replace the existing content. New DOCKER.md should cover:
+
+            1. **Overview** (2-3 sentences): what the image tiers are, the registry URL
+            2. **Quick start** — the single most common use case first:
+               ```bash
+               docker run --rm -i \
+                 -v /your/project:/workspace \
+                 ghcr.io/blackwell-systems/agent-lsp:go \
+                 go:gopls
+               ```
+            3. **Image tiers** table:
+               | Tag | Contents | Size |
+               |-----|----------|------|
+               | latest / base | agent-lsp binary only | ~50 MB |
+               | go, typescript, python, ... | One language server | ~150-500 MB |
+               | web (combo) | TypeScript + Python | ~400 MB |
+               | backend (combo) | Go + Python | ~500 MB |
+               | fullstack (combo) | Go + TypeScript + Python | ~600 MB |
+               | full | All supported servers | ~2-3 GB |
+
+            4. **Per-language one-liners** — a table showing the docker run command for
+               each of the 18 language tags
+
+            5. **Runtime install (LSP_SERVERS)** — how to use the base image with
+               the LSP_SERVERS env var; volume caching example:
+               ```bash
+               docker run --rm -i \
+                 -v /your/project:/workspace \
+                 -v lsp-server-cache:/var/cache/lsp-servers \
+                 -e LSP_SERVERS=gopls,typescript-language-server \
+                 ghcr.io/blackwell-systems/agent-lsp:latest \
+                 go:gopls typescript:typescript-language-server,--stdio
+               ```
+
+            6. **MCP client configuration** — the JSON snippet for claude/cursor/etc
+               pointing at docker compose run or docker run
+
+            7. **docker-compose** — setup instructions (cp .env.example .env, set WORKSPACE_DIR,
+               docker compose up)
+
+            8. **Resource limits** — table matching the existing DOCKER.md (4GB/2CPU)
+
+            9. **Volume caching** — named volume for persistent LSP server installs
+
+            10. **Notes** — workspace mounted rw, static binary, no Go runtime needed
+
+            The `full` image size note must be prominent: add a warning callout:
+            ```
+            > **Warning:** The `full` image is approximately 2-3 GB. Unless you need all
+            > language servers immediately available, prefer a per-language tag.
+            ```
+
+            ### File 2: `/Users/dayna.blackwell/code/agent-lsp/README.md`
+
+            The current README.md has "## Installation" as a section. Find the exact insertion point
+            by reading the file and locating:
+            ```
+            ## Installation
+
+            **Requires Go 1.21+.** [Install Go](https://go.dev/dl/) if needed.
+            ```
+            Insert a new "## Docker" section BEFORE this section. Keep it brief:
+
+            ```markdown
+            ## Docker
+
+            Pre-built images on GitHub Container Registry for all major languages:
+
+            ```bash
+            # Go
+            docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:go go:gopls
+
+            # TypeScript
+            docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:typescript typescript:typescript-language-server,--stdio
+
+            # Python
+            docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:python python:pyright-langserver,--stdio
+
+            # Multi-language (runtime install)
+            docker run --rm -i -v /your/project:/workspace \
+              -e LSP_SERVERS=gopls,typescript-language-server \
+              ghcr.io/blackwell-systems/agent-lsp:latest \
+              go:gopls typescript:typescript-language-server,--stdio
+            ` `` `
+
+            See [DOCKER.md](./DOCKER.md) for full tier documentation, all 18 language tags,
+            docker-compose setup, and volume caching.
+
+            ```
+
+            (That is, a minimal section with the 4 most common examples and a link.)
+
+            Read the current README.md carefully to find the exact text before "## Installation"
+            to use as the insertion anchor for the Edit tool. The text just before ## Installation is:
+            ```
+            go install github.com/blackwell-systems/agent-lsp@latest
+            ```
+            Wait — that's inside the Installation section. The text BEFORE ## Installation is the
+            end of the badge/intro section. Read the actual file to find the exact anchor.
+
+            ## Verification gate
+            ```bash
+            # 1. DOCKER.md has been rewritten (old content gone)
+            ! grep -q "docker run --rm -i -v /your/project:/workspace agent-lsp go gopls" /Users/dayna.blackwell/code/agent-lsp/DOCKER.md
+            # 2. DOCKER.md uses ghcr.io URLs
+            grep -q "ghcr.io/blackwell-systems/agent-lsp" /Users/dayna.blackwell/code/agent-lsp/DOCKER.md
+            # 3. DOCKER.md has the full image warning
+            grep -q "2-3 GB" /Users/dayna.blackwell/code/agent-lsp/DOCKER.md
+            # 4. DOCKER.md has LSP_SERVERS section
+            grep -q "LSP_SERVERS" /Users/dayna.blackwell/code/agent-lsp/DOCKER.md
+            # 5. README.md has Docker section
+            grep -q "## Docker" /Users/dayna.blackwell/code/agent-lsp/README.md
+            # 6. README.md links to DOCKER.md
+            grep -q "DOCKER.md" /Users/dayna.blackwell/code/agent-lsp/README.md
+            # 7. README.md Docker section uses ghcr.io URLs
+            grep -q "ghcr.io/blackwell-systems/agent-lsp" /Users/dayna.blackwell/code/agent-lsp/README.md
+            # 8. Go build still works (nothing Go-related was changed)
+            cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go build ./...
+            ```
+
+            ## Constraints
+            - Do NOT add more than ~40 lines to README.md — it is already long; Docker
+              tutorial content belongs in DOCKER.md, not README.md
+            - Do NOT use DockerHub URLs — all image references must use ghcr.io/blackwell-systems/agent-lsp
+            - Do NOT modify any Go source files or GitHub Actions workflows
+            - Read the current DOCKER.md and README.md before writing to understand
+              exactly what needs to change; use the Edit tool to insert the Docker section
+              into README.md at the correct anchor point
+          files:
+            - DOCKER.md
+            - README.md
+          dependencies:
+            - A
+            - B
+            - C
+            - D
+            - E
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+          repo: agent-lsp
+        - type: custom
+          command: docker build --no-cache -t agent-lsp:test-base . 2>&1 | tail -5
+          required: false
+          repo: agent-lsp
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |-
+            Agent A's Dockerfile does not include the COPY for lsp-servers.yaml to
+            /etc/agent-lsp/lsp-servers.yaml. The entrypoint.sh (Agent C) depends on this
+            file being present. Agent C leaves a comment about this but Agent A may not
+            see it since agents work in isolation.
+          likelihood: medium
+          impact: medium
+          mitigation: |-
+            Agent A's task explicitly notes the COPY line required. Additionally, the
+            verification gate for Agent C checks that the entrypoint references the
+            registry path. The post-merge integration test (docker build) will catch
+            the missing COPY at build time, not runtime.
+        - scenario: |-
+            Dockerfile.lang's case statement for package_mgr=go installs golang-go from
+            apt (Debian's Go package, which may be an older version) instead of the
+            upstream Go toolchain. gopls requires a recent Go version; the Debian package
+            may be too old.
+          likelihood: medium
+          impact: low
+          mitigation: |-
+            Agent B's task notes this concern and instructs using `golang-go` from apt with
+            awareness that it may be an older version. For production use, the gopls image
+            would ideally install via the official Go installer. The task notes that users
+            with strict version requirements should build from source. A TODO comment in
+            Dockerfile.lang documents this.
+        - scenario: |-
+            Agent D's workflow uses `docker/build-push-action@v6` which may not exist
+            (current stable is v5). Using a non-existent action version causes workflow
+            failures.
+          likelihood: low
+          impact: medium
+          mitigation: |-
+            Agent D should use `docker/build-push-action@v5` (verified stable as of 2026).
+            The task description uses v6 as an example; the agent must use the latest stable
+            version. Cross-check: use the same major version as docker/setup-buildx-action
+            and docker/login-action (all v3 as of 2026).
+        - scenario: |-
+            The combo image jobs in the workflow are complex — inline Dockerfile approach
+            in GitHub Actions YAML is tricky. Agent D may produce invalid YAML or use
+            a mechanism (heredoc in workflow) that GitHub Actions doesn't support cleanly.
+          likelihood: medium
+          impact: low
+          mitigation: |-
+            Agent D's task provides guidance to use the simplest possible approach. If
+            inline Dockerfiles prove complex, the combo jobs can use a simple `docker buildx
+            build` shell command with bash heredoc as a `run:` step, followed by `docker push`.
+            This is less elegant but straightforward. The task explicitly allows this fallback.
+        - scenario: |-
+            Agent F inserts the Docker section into README.md at the wrong position, either
+            duplicating content, breaking the existing badge table, or inserting in the middle
+            of an existing section.
+          likelihood: low
+          impact: low
+          mitigation: |-
+            Agent F is instructed to read README.md before editing and use a verbatim text
+            anchor for the Edit tool. The exact surrounding context is identified: the Docker
+            section goes before "## Installation". Agent F's verification gate checks that
+            the Docker section exists and that ghcr.io URLs are present.
+        - scenario: |-
+            The entrypoint.sh uses awk/grep to parse YAML, which is fragile. If the
+            lsp-servers.yaml format has any inconsistency (extra spaces, quoted values with
+            different quoting), the install_command extraction will silently fail.
+          likelihood: low
+          impact: low
+          mitigation: |-
+            Agent C defines a strict YAML format for lsp-servers.yaml (all install_command
+            values double-quoted, consistent indentation) and the awk pattern matches the
+            exact format. The entrypoint prints a warning if install_command is empty.
+            Users hitting issues can fall back to manual installation.
+state: SCOUT_PENDING
+injection_method: hook
