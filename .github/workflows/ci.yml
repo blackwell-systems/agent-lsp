@@ -472,3 +472,33 @@ jobs:
 
       - name: Run Dart tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Dart$" ./test/ -timeout 10m
+
+  # MongoDB via @mongodb-js/mongodb-language-server (requires live mongo:7 service)
+  multi-lang-mongodb:
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval \"db.adminCommand('ping')\""
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install mongodb-language-server
+        run: npm install -g @mongodb-js/mongodb-language-server
+
+      - name: Run MongoDB tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^MongoDB$" ./test/ -timeout 10m
