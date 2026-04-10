@@ -317,25 +317,25 @@ func textMatchApply(filePath, oldText, newText string) (interface{}, error) {
 	// Compute LSP range (0-based line/character) from byte offsets.
 	before := src[:startByte]
 	startLine := strings.Count(before, "\n")
-	lastNL := strings.LastIndex(before, "\n")
-	var startChar int
-	if lastNL < 0 {
-		startChar = startByte
+	var startLineBegin int
+	if lastNL := strings.LastIndex(before, "\n"); lastNL < 0 {
+		startLineBegin = 0
 	} else {
-		startChar = startByte - lastNL - 1
+		startLineBegin = lastNL + 1
 	}
+	startChar := utf16Offset(src[startLineBegin:startByte], startByte-startLineBegin)
 
 	segment := src[startByte:endByte]
 	endLine := startLine + strings.Count(segment, "\n")
-	lastNLInSeg := strings.LastIndex(segment, "\n")
 	var endChar int
-	if lastNLInSeg < 0 {
-		endChar = startChar + len(segment)
+	if lastNLInSeg := strings.LastIndex(segment, "\n"); lastNLInSeg < 0 {
+		endChar = startChar + utf16Offset(segment, len(segment))
 	} else {
-		endChar = len(segment) - lastNLInSeg - 1
+		endLineContent := segment[lastNLInSeg+1:]
+		endChar = utf16Offset(endLineContent, len(endLineContent))
 	}
 
-	fileURI := "file://" + filePath
+	fileURI := CreateFileURI(filePath)
 	edit := map[string]interface{}{
 		"changes": map[string]interface{}{
 			fileURI: []interface{}{
