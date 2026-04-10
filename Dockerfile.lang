@@ -34,17 +34,13 @@ RUN set -eux; \
         apt-get update && apt-get install -y --no-install-recommends python3-pip && \
         pip3 install --break-system-packages ${LSP_PACKAGE} ;; \
       dotnet) \
-        curl -fsSL https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -o /tmp/ms-prod.deb && \
-        dpkg -i /tmp/ms-prod.deb && \
-        rm /tmp/ms-prod.deb && \
-        apt-get update && apt-get install -y --no-install-recommends dotnet-sdk-8.0 && \
-        dotnet tool install -g ${LSP_PACKAGE} ;; \
+        echo "dotnet: csharp-ls NuGet package is not a valid global tool (missing DotnetToolSettings.xml). Use LSP_SERVERS at runtime instead." && exit 1 ;; \
       *) \
         echo "PACKAGE_MGR=${PACKAGE_MGR}: manual install not supported in Dockerfile.lang; use entrypoint LSP_SERVERS instead" && exit 1 ;; \
     esac && \
     rm -rf /var/lib/apt/lists/*
 
-ENV PATH=$PATH:/usr/local/bin:/usr/local/go/bin:/root/.dotnet/tools
+ENV PATH=$PATH:/usr/local/bin:/usr/local/go/bin
 
 # Set language label
 LABEL org.opencontainers.image.description="agent-lsp with ${LANG} language server"

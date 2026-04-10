@@ -41,15 +41,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ruby-full build
 RUN apt-get update && apt-get install -y --no-install-recommends clangd \
     && rm -rf /var/lib/apt/lists/*
 
-# .NET + csharp-ls (dotnet-sdk-8.0 requires Microsoft apt repository)
-RUN curl -fsSL https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -o /tmp/ms-prod.deb \
-    && dpkg -i /tmp/ms-prod.deb \
-    && rm /tmp/ms-prod.deb \
-    && apt-get update && apt-get install -y --no-install-recommends dotnet-sdk-8.0 \
-    && dotnet tool install -g csharp-ls \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV PATH=$PATH:/root/.dotnet/tools
+# C# (csharp-ls): NuGet package lacks DotnetToolSettings.xml — unreliable for global tool install.
+# Use LSP_SERVERS=csharp-ls at runtime, or install manually. Not included in this image.
 
 # The following language servers require platform-specific installation and are
 # NOT included in the full image. Use LSP_SERVERS or install manually:

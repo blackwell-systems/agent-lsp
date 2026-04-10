@@ -86,10 +86,7 @@ jobs:
             lsp_package: clangd
             lsp_binary: clangd
             package_mgr: apt
-          - lang: csharp
-            lsp_package: csharp-ls
-            lsp_binary: csharp-ls
-            package_mgr: dotnet
+          # csharp: csharp-ls NuGet package lacks DotnetToolSettings.xml; use LSP_SERVERS=csharp-ls at runtime
           - lang: php
             lsp_package: intelephense
             lsp_binary: intelephense
