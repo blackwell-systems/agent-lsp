@@ -10,9 +10,9 @@
 
 - **Total tools:** 50
 - **Skills at audit:** 10 → **14 after sprints** (`/lsp-cross-repo`, `/lsp-local-symbols`, `/lsp-test-correlation`, `/lsp-format-code` added)
-- **Coverage:** ~35 tools directly surfaced through skills (~71%)
+- **Coverage:** ~29 tools directly surfaced through skills (~58% fully covered; ~72% including partial)
 - **Partial coverage:** 7 tools mentioned but not as primary workflow drivers
-- **Uncovered:** ~11 tools (down from 14 at audit time)
+- **Uncovered:** ~10 tools (down from 14 at audit time)
 
 **Sprint completed (P0):** `/lsp-cross-repo` shipped, `/lsp-local-symbols` shipped, `/lsp-rename` `prepare_rename` gate added, `/lsp-safe-edit` enhanced with `simulate_edit_atomic` pre-flight + `get_code_actions` on errors + multi-file protocol.
 
@@ -58,8 +58,9 @@
 | `simulate_chain` | `lsp-safe-edit` | Refactor/rename preview gate (Step 3b) — chain edits, check `cumulative_delta`, commit or discard |
 | `get_change_impact` | `lsp-impact` | File-level blast-radius analysis (Step 0) — exports + test/non-test caller partition in one call |
 | `get_cross_repo_references` | `lsp-cross-repo` | Cross-repo reference lookup (Step 3) — adds consumer roots, partitions by repo, returns warnings |
+| `get_tests_for_file` | `lsp-test-correlation`, `lsp-verify` | Source-to-test file mapping; used as pre-step in verify and primary lookup in test-correlation |
 
-**Count:** 28 tools fully covered.
+**Count:** 29 tools fully covered.
 
 ---
 
@@ -96,9 +97,9 @@
 | `restart_lsp_server` | Session lifecycle | Restart server after crash or config change | Primitive; no skill demonstrates failure recovery workflow |
 | `execute_command` | Utilities | Run server-side command (e.g., from code action) | No skill demonstrates when to call this beyond `lsp-verify` code action flow |
 | `set_log_level` | Utilities | Change runtime log verbosity | Diagnostic tool; no workflow skill |
-| `get_tests_for_file` | Analysis | Find tests for a source file | No skill demonstrates before/after test correlation |
+| ~~`get_tests_for_file`~~ | Analysis | **(shipped)** | Covered by `/lsp-test-correlation` (primary lookup) and `/lsp-verify` (pre-step) |
 
-**Count:** 14 tools uncovered (distinct from the 8 partial-coverage tools).
+**Count:** 10 tools uncovered.
 
 ---
 
@@ -161,10 +162,10 @@
 **Gap analysis:** Useful for diagnostic purposes (turn on debug logging when things go wrong), but not a creative workflow.  
 **Recommendation:** Not a skill candidate. Document in troubleshooting guide.
 
-#### `get_tests_for_file`
+#### `get_tests_for_file` ✅ SHIPPED
 **Agent workflow?** Yes — "show me the tests for this file so I can run them after editing."  
-**Gap analysis:** Bridges source file → test file mapping. No skill uses this. Could be part of a test-driven workflow skill.  
-**Recommendation:** New skill `/lsp-test-correlation` (see New Skill Candidates, below).
+**Gap analysis:** Bridges source file → test file mapping. Now covered by `/lsp-test-correlation` (primary lookup step) and `/lsp-verify` (pre-step in Layer 3 output).  
+**Recommendation:** No action needed — fully covered.
 
 ---
 
@@ -582,7 +583,7 @@ Arguments: file_path, line, column (cursor inside argument list)
 | Missing navigation workflows | 2 | `get_document_highlights`, `go_to_type_definition` | New: `/lsp-local-symbols`, `/lsp-type-info` |
 | Missing cross-repo workflows | 1 | `add_workspace_folder` + multi-root analysis | New: `/lsp-cross-repo` |
 | Missing code formatting | 1 | `format_document`, `format_range` | New: `/lsp-format-code` |
-| Missing test correlation | 1 | `get_tests_for_file` + `run_tests` | New: `/lsp-test-correlation` |
+| ~~Missing test correlation~~ | ~~1~~ | ~~`get_tests_for_file` + `run_tests`~~ | **Shipped:** `/lsp-test-correlation` |
 | Missing code discovery | 1 | `get_completions`, `get_signature_help` in isolation | New: `/lsp-signature-help` (optional) |
 | Low-level utilities (no skill needed) | 6+ | `close_document`, `restart_lsp_server`, `set_log_level`, etc. | Document, don't skill |
 
@@ -590,7 +591,7 @@ Arguments: file_path, line, column (cursor inside argument list)
 
 ## Conclusion
 
-**Post-sprint state:** ~71% of tools covered by 14 skills. P0+P1 sprints added 4 new skills and enhanced 4 existing ones. Tools sprint added `get_change_impact` and `get_cross_repo_references` (50 total tools), promoted `simulate_chain` to fully covered.
+**Post-sprint state:** ~72% of tools covered (including partial) by 14 skills. P0+P1 sprints added 4 new skills and enhanced 4 existing ones. Tools sprint added `get_change_impact` and `get_cross_repo_references` (50 total tools), promoted `simulate_chain` and `get_tests_for_file` to fully covered.
 
 **Remaining gaps (P2):**
 1. Type introspection — `go_to_type_definition` still uncovered; `/lsp-type-info` skill or `/lsp-docs` enhancement

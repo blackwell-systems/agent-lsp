@@ -94,7 +94,7 @@ operations.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
-| `language_id` | string | yes | Language identifier (`typescript`, `javascript`, `go`, `python`, `haskell`, etc.) |
+| `language_id` | string | no | Language identifier (`typescript`, `javascript`, `go`, `python`, `haskell`, etc.). Defaults to `"plaintext"` when omitted; auto-detected from extension by most analysis tools. |
 
 **Example call**
 
@@ -621,7 +621,7 @@ name. Optionally enrich results with hover documentation for a paginated window.
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `query` | string | yes | Search string. Use `""` to list all symbols. |
+| `query` | string | no | Search string. Use `""` or omit to list all symbols. |
 | `detail_level` | string | no | `"basic"` (default) returns name/kind/location only. `"hover"` returns the full structured response with hover-enriched `enriched[]` for the current pagination window. |
 | `limit` | number | no | Number of symbols to enrich when `detail_level=hover`. Default `3`. |
 | `offset` | number | no | Pagination offset into results for enrichment. Default `0`. |
@@ -724,23 +724,31 @@ understand blast radius.
 
 ```json
 {
-  "affected_symbols": [
+  "changed_symbols": [
     { "name": "LSPClient", "file": "internal/lsp/client.go", "line": 14 }
   ],
-  "test_callers": [
+  "test_files": [
+    "internal/lsp/client_test.go"
+  ],
+  "test_functions": [
     { "name": "TestGetReferences", "file": "internal/lsp/client_test.go", "line": 42 }
   ],
   "non_test_callers": [
-    { "name": "HandleGetReferences", "file": "internal/tools/analysis.go", "line": 67 }
-  ]
+    { "name": "LSPClient", "file": "internal/tools/analysis.go", "line": 67 }
+  ],
+  "summary": "Found 1 changed symbols with 1 test references across 1 test files.",
+  "warnings": []
 }
 ```
 
 **Notes**
 
 - Only exported symbols are analyzed (uppercase identifiers in Go; all public symbols in other languages).
-- `test_callers` includes the name of the enclosing test function when available.
+- `changed_symbols` lists each analyzed symbol with its file and 1-based line number.
+- `test_functions` contains the enclosing test function name for each test file reference.
+- `test_files` is the deduplicated set of test files that reference any changed symbol.
 - `non_test_callers` is the blast radius for production code.
+- `warnings` contains messages for any `GetReferences` calls that failed (non-fatal).
 
 ---
 
@@ -1349,14 +1357,14 @@ may also be listed in the server's `executeCommandProvider.commands` capability.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `command` | string | yes | Command identifier (e.g., `_typescript.applyRefactoring`) |
-| `args` | array | no | Arguments to pass to the command |
+| `arguments` | array | no | Arguments to pass to the command |
 
 **Example call** — triggering a TypeScript refactoring command
 
 ```json
 {
   "command": "_typescript.applyRefactoring",
-  "args": [
+  "arguments": [
     "/path/to/file.ts",
     "refactorRewrite",
     "Add return type",
@@ -2140,7 +2148,7 @@ Compare the session's current diagnostic state against the baseline. Returns whi
 **Notes**
 
 - `net_delta: 0` means no new errors were introduced — safe to apply.
-- `confidence` values: `"high"` (file scope, settled within timeout), `"partial"` (timed out), `"stale"` (concurrent mutation detected), `"eventual"` (workspace scope, cross-file propagation may be incomplete).
+- `confidence` values: `"high"` (file scope, settled within timeout), `"partial"` (timed out or snapshot incomplete), `"eventual"` (workspace scope, cross-file propagation may be incomplete).
 - Does not mutate session state.
 
 ---

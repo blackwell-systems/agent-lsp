@@ -37,6 +37,9 @@ Every LSP 3.17 method and its MCP surface. "Protocol only" means the method is c
 | `textDocument/codeLens` | §3.15.21 | — | ✗ not yet implemented |
 | `textDocument/inlayHint` | §3.17.11 | `get_inlay_hints` | ✓ |
 | `textDocument/semanticTokens` | §3.16.12 | `get_semantic_tokens` | ✓ |
+| `textDocument/prepareCallHierarchy` | §3.16.5 | `call_hierarchy` | ✓ |
+| `callHierarchy/incomingCalls` | §3.16.5 | `call_hierarchy` | ✓ |
+| `callHierarchy/outgoingCalls` | §3.16.5 | `call_hierarchy` | ✓ |
 | `textDocument/prepareTypeHierarchy` | §3.17.12 | `type_hierarchy` | ✓ |
 | `typeHierarchy/supertypes` | §3.17.12 | `type_hierarchy` | ✓ |
 | `typeHierarchy/subtypes` | §3.17.12 | `type_hierarchy` | ✓ |
@@ -49,6 +52,7 @@ Every LSP 3.17 method and its MCP surface. "Protocol only" means the method is c
 | `workspace/configuration` | §3.16.14 | — | ✓ protocol only (server-initiated) |
 | `workspace/executeCommand` | §3.16.13 | `execute_command` | ✓ |
 | `workspace/didChangeWatchedFiles` | §3.16.8 | `did_change_watched_files` (+ auto-watch) | ✓ |
+| `workspace/didChangeWorkspaceFolders` | §3.16.5 | `add_workspace_folder`, `remove_workspace_folder` | ✓ |
 
 ### Protocol Infrastructure
 
