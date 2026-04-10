@@ -392,12 +392,15 @@ func TestEvaluate_CancelledContextLeavesStatusRetryable(t *testing.T) {
 	mgr.sessions[sess.ID] = sess
 	mgr.mu.Unlock()
 
-	// Pre-fill the executor semaphore so that Acquire must block, then cancel
-	// the context to force Acquire to return ctx.Err(). This is more reliable
-	// than a bare pre-cancelled context because Go's select is non-deterministic
-	// when both cases are ready simultaneously.
+	// Pre-acquire the per-session mutex so that Acquire inside Evaluate must
+	// block, then cancel the context to force Acquire to return ctx.Err().
+	// This is more reliable than a bare pre-cancelled context because Go's
+	// select is non-deterministic when both cases are ready simultaneously.
 	executor := mgr.executor.(*SerializedExecutor)
-	executor.sem <- struct{}{} // occupy the single semaphore slot
+	holdCtx := context.Background()
+	if err := executor.Acquire(holdCtx, sess); err != nil {
+		t.Fatalf("pre-Acquire failed: %v", err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // already cancelled — Acquire will return immediately via ctx.Done()
@@ -407,8 +410,8 @@ func TestEvaluate_CancelledContextLeavesStatusRetryable(t *testing.T) {
 		t.Fatal("expected error from cancelled context, got nil")
 	}
 
-	// Drain the semaphore so the executor is left in a clean state.
-	<-executor.sem
+	// Release the pre-acquired lock so the executor is left in a clean state.
+	executor.Release(sess)
 
 	// The status must NOT be StatusEvaluating — that would permanently block
 	// the session. It must remain StatusMutated so the caller can retry.
