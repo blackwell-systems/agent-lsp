@@ -1,0 +1,15 @@
+// Person schema definition
+use('testdb');
+
+db.createCollection('persons', {
+  validator: {
+    $jsonSchema: {
+      bsonType: 'object',
+      required: ['name', 'age'],
+      properties: {
+        name: { bsonType: 'string', description: 'must be a string' },
+        age:  { bsonType: 'int',    description: 'must be an integer' },
+      },
+    },
+  },
+});
