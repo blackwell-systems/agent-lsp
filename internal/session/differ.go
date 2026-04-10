@@ -1,6 +1,10 @@
 package session
 
-import "github.com/blackwell-systems/agent-lsp/internal/types"
+import (
+	"fmt"
+
+	"github.com/blackwell-systems/agent-lsp/internal/types"
+)
 
 // DiagnosticsEqual reports whether two LSP diagnostics are semantically identical.
 // Two diagnostics are equal if they have matching:
@@ -35,47 +39,72 @@ func DiagnosticsEqual(a, b types.LSPDiagnostic) bool {
 	return true
 }
 
+// diagnosticFingerprint returns a stable string key for d using Range,
+// Message, and Severity. Source is excluded to match DiagnosticsEqual
+// semantics (Source ignored when either diagnostic's Source is empty).
+func diagnosticFingerprint(d types.LSPDiagnostic) string {
+	return fmt.Sprintf("%d\x00%d\x00%d\x00%d\x00%s\x00%d",
+		d.Range.Start.Line,
+		d.Range.Start.Character,
+		d.Range.End.Line,
+		d.Range.End.Character,
+		d.Message,
+		d.Severity,
+	)
+}
+
 // DiffDiagnostics computes introduced and resolved diagnostics between baseline and current.
 // - introduced: diagnostics present in current but not matched in baseline
 // - resolved: diagnostics present in baseline but not matched in current
 // Returns DiagnosticEntry slices with 1-indexed line/column positions.
 func DiffDiagnostics(baseline, current []types.LSPDiagnostic) (introduced, resolved []DiagnosticEntry) {
-	// Find introduced diagnostics (in current but not in baseline)
-	for _, curr := range current {
-		found := false
-		for _, base := range baseline {
-			if DiagnosticsEqual(curr, base) {
-				found = true
-				break
-			}
-		}
-		if !found {
+	// Build a count map from baseline for O(1) membership tests.
+	baseCount := make(map[string]int, len(baseline))
+	for _, d := range baseline {
+		baseCount[diagnosticFingerprint(d)]++
+	}
+
+	// Find introduced: present in current but count exhausted in baseline.
+	remaining := make(map[string]int, len(baseCount))
+	for k, v := range baseCount {
+		remaining[k] = v
+	}
+	for _, d := range current {
+		fp := diagnosticFingerprint(d)
+		if remaining[fp] > 0 {
+			remaining[fp]--
+		} else {
 			introduced = append(introduced, DiagnosticEntry{
-				Line:     curr.Range.Start.Line + 1,      // Convert to 1-indexed
-				Col:      curr.Range.Start.Character + 1, // Convert to 1-indexed
-				Message:  curr.Message,
-				Severity: SeverityString(curr.Severity),
-				Source:   curr.Source,
+				Line:     d.Range.Start.Line + 1,
+				Col:      d.Range.Start.Character + 1,
+				Message:  d.Message,
+				Severity: SeverityString(d.Severity),
+				Source:   d.Source,
 			})
 		}
 	}
 
-	// Find resolved diagnostics (in baseline but not in current)
-	for _, base := range baseline {
-		found := false
-		for _, curr := range current {
-			if DiagnosticsEqual(base, curr) {
-				found = true
-				break
-			}
+	// Find resolved: present in baseline but count exhausted in current.
+	baseRemaining := make(map[string]int, len(baseCount))
+	for k, v := range baseCount {
+		baseRemaining[k] = v
+	}
+	for _, d := range current {
+		fp := diagnosticFingerprint(d)
+		if baseRemaining[fp] > 0 {
+			baseRemaining[fp]--
 		}
-		if !found {
+	}
+	for _, d := range baseline {
+		fp := diagnosticFingerprint(d)
+		if baseRemaining[fp] > 0 {
+			baseRemaining[fp]--
 			resolved = append(resolved, DiagnosticEntry{
-				Line:     base.Range.Start.Line + 1,      // Convert to 1-indexed
-				Col:      base.Range.Start.Character + 1, // Convert to 1-indexed
-				Message:  base.Message,
-				Severity: SeverityString(base.Severity),
-				Source:   base.Source,
+				Line:     d.Range.Start.Line + 1,
+				Col:      d.Range.Start.Character + 1,
+				Message:  d.Message,
+				Severity: SeverityString(d.Severity),
+				Source:   d.Source,
 			})
 		}
 	}
