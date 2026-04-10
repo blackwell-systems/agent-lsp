@@ -79,7 +79,7 @@ docker run --rm -i -v /your/project:/workspace \
   go:gopls typescript:typescript-language-server,--stdio
 ```
 
-See [DOCKER.md](./DOCKER.md) for full tier documentation, all 18 language tags,
+See [DOCKER.md](./DOCKER.md) for full tier documentation, per-language tags,
 docker-compose setup, and volume caching.
 
 ## Installation
@@ -320,7 +320,7 @@ Safe what-if analysis: simulate edits in-memory, evaluate diagnostic changes (er
 | `discard_session` | Revert in-memory edits without touching disk |
 | `destroy_session` | Release all session resources |
 
-See [docs/speculative-execution.md](./docs/speculative-execution.md) for session lifecycle examples and [docs/refactor-preview.md](./docs/refactor-preview.md) for refactor and rename preview workflows.
+See [docs/speculative-execution.md](./docs/speculative-execution.md) for session lifecycle examples and refactor/rename preview workflows.
 
 **Recommended agent workflow:**
 ```
