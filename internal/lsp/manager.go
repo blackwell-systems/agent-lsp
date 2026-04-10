@@ -187,7 +187,7 @@ func (m *ServerManager) StartForLanguage(ctx context.Context, rootDir, languageI
 		if strings.ToLower(e.languageID) == langLower || e.extensions[langLower] {
 			// Restart if already running.
 			if e.client != nil {
-				_ = e.client.Shutdown(context.Background())
+				_ = e.client.Shutdown(ctx)
 			}
 			client := NewLSPClient(e.command[0], e.command[1:])
 			if err := client.Initialize(ctx, rootDir); err != nil {
@@ -277,6 +277,12 @@ func LanguageIDFromPath(path string) string {
 		return "kotlin"
 	case ".ml", ".mli":
 		return "ocaml"
+	case ".c":
+		return "c"
+	case ".cpp", ".cc", ".cxx":
+		return "cpp"
+	case ".java":
+		return "java"
 	default:
 		return "plaintext"
 	}
