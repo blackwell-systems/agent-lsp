@@ -17,6 +17,7 @@ import (
 
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
+	uripkg "github.com/blackwell-systems/agent-lsp/internal/uri"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -142,6 +143,7 @@ type LSPClient struct {
 
 	// auto-watcher: watches the workspace root and notifies the server
 	// of file changes automatically, keeping the LSP index fresh.
+	watcherMu   sync.Mutex // guards watcherStop (C2: prevents data race)
 	watcherStop chan struct{}
 }
 
@@ -748,6 +750,19 @@ func (c *LSPClient) Restart(ctx context.Context, rootDir string) error {
 	c.capabilities = make(map[string]interface{})
 	c.capsMu.Unlock()
 
+	// C1: clear per-session state so the fresh server receives didOpen
+	// (not didChange) for all documents and serves no stale diagnostics.
+	c.mu.Lock()
+	c.openDocs = make(map[string]docMeta)
+	c.mu.Unlock()
+	c.diagMu.Lock()
+	c.diags = make(map[string][]types.LSPDiagnostic)
+	c.diagMu.Unlock()
+	c.legendMu.Lock()
+	c.legendTypes = nil
+	c.legendModifiers = nil
+	c.legendMu.Unlock()
+
 	return c.Initialize(ctx, rootDir)
 }
 
@@ -776,7 +791,7 @@ func (c *LSPClient) OpenDocument(ctx context.Context, uri, text, languageID stri
 
 	c.mu.Lock()
 	c.openDocs[uri] = docMeta{
-		filePath:   uriToPath(uri),
+		filePath:   uripkg.URIToPath(uri),
 		languageID: languageID,
 		version:    1,
 	}
@@ -802,8 +817,8 @@ func (c *LSPClient) CloseDocument(ctx context.Context, uri string) error {
 	})
 }
 
-// IsDocumentOpen reports whether uri is currently tracked as open.
-func (c *LSPClient) IsDocumentOpen(uri string) bool {
+// isDocumentOpen reports whether uri is currently tracked as open.
+func (c *LSPClient) isDocumentOpen(uri string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	_, ok := c.openDocs[uri]
@@ -934,7 +949,7 @@ func (c *LSPClient) ReopenDocument(ctx context.Context, uri string) error {
 	if !ok {
 		// URI not tracked — attempt to open from disk, mirroring TypeScript behavior.
 		logging.Log(logging.LevelDebug, "ReopenDocument: URI not tracked, attempting disk open: "+uri)
-		filePath := uriToPath(uri)
+		filePath := uripkg.URIToPath(uri)
 		data, readErr := os.ReadFile(filePath)
 		if readErr != nil {
 			return fmt.Errorf("ReopenDocument: URI not tracked and disk read failed for %s: %w", uri, readErr)
@@ -1601,7 +1616,7 @@ func (c *LSPClient) applyDocumentChanges(ctx context.Context, dc interface{}) er
 	b, _ := json.Marshal(dc)
 	var raw []json.RawMessage
 	if err := json.Unmarshal(b, &raw); err != nil {
-		return nil // not an array; ignore
+		return fmt.Errorf("applyDocumentChanges: documentChanges is not a JSON array: %w", err)
 	}
 	for _, entry := range raw {
 		var disc struct {
@@ -1617,9 +1632,11 @@ func (c *LSPClient) applyDocumentChanges(ctx context.Context, dc interface{}) er
 				URI string `json:"uri"`
 			}
 			if err := json.Unmarshal(entry, &op); err == nil && op.URI != "" {
-				path := uriToPath(op.URI)
-				if _, err := os.Stat(path); os.IsNotExist(err) {
-					_ = os.WriteFile(path, []byte{}, 0644)
+				path := uripkg.URIToPath(op.URI)
+				if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+					if writeErr := os.WriteFile(path, []byte{}, 0644); writeErr != nil {
+						return fmt.Errorf("applyDocumentChanges create %s: %w", path, writeErr)
+					}
 				}
 			}
 		case "rename":
@@ -1628,14 +1645,21 @@ func (c *LSPClient) applyDocumentChanges(ctx context.Context, dc interface{}) er
 				NewURI string `json:"newUri"`
 			}
 			if err := json.Unmarshal(entry, &op); err == nil {
-				_ = os.Rename(uriToPath(op.OldURI), uriToPath(op.NewURI))
+				oldPath := uripkg.URIToPath(op.OldURI)
+				newPath := uripkg.URIToPath(op.NewURI)
+				if renameErr := os.Rename(oldPath, newPath); renameErr != nil {
+					return fmt.Errorf("applyDocumentChanges rename %s -> %s: %w", oldPath, newPath, renameErr)
+				}
 			}
 		case "delete":
 			var op struct {
 				URI string `json:"uri"`
 			}
 			if err := json.Unmarshal(entry, &op); err == nil && op.URI != "" {
-				_ = os.Remove(uriToPath(op.URI))
+				path := uripkg.URIToPath(op.URI)
+				if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
+					return fmt.Errorf("applyDocumentChanges delete %s: %w", path, removeErr)
+				}
 			}
 		default:
 			// TextDocumentEdit (no kind field).
@@ -1698,60 +1722,20 @@ type textEdit struct {
 
 // applyEditsToFile applies text edits in reverse order to a file and sends didChange.
 func (c *LSPClient) applyEditsToFile(ctx context.Context, uri string, edits []textEdit) error {
-	path := uriToPath(uri)
+	path := uripkg.URIToPath(uri)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("applyEdit read %s: %w", path, err)
 	}
 
-	lines := strings.Split(string(data), "\n")
-
-	// Apply edits in reverse order (bottom-to-top).
+	// Apply edits in reverse order (bottom-to-top) using the canonical
+	// ApplyRangeEdit from internal/uri (L5 deduplication).
+	content := string(data)
 	for i := len(edits) - 1; i >= 0; i-- {
-		e := edits[i]
-		startLine := e.Range.Start.Line
-		startChar := e.Range.Start.Character
-		endLine := e.Range.End.Line
-		endChar := e.Range.End.Character
-
-		// Clamp bounds.
-		if startLine >= len(lines) {
-			startLine = len(lines) - 1
-		}
-		if endLine >= len(lines) {
-			endLine = len(lines) - 1
-		}
-
-		before := ""
-		if startLine >= 0 && startLine < len(lines) {
-			l := lines[startLine]
-			if startChar > len(l) {
-				startChar = len(l)
-			}
-			before = l[:startChar]
-		}
-		after := ""
-		if endLine >= 0 && endLine < len(lines) {
-			l := lines[endLine]
-			if endChar > len(l) {
-				endChar = len(l)
-			}
-			after = l[endChar:]
-		}
-
-		newLines := strings.Split(e.NewText, "\n")
-		newLines[0] = before + newLines[0]
-		newLines[len(newLines)-1] += after
-
-		// Splice lines.
-		result := make([]string, 0, len(lines)-(endLine-startLine)+len(newLines))
-		result = append(result, lines[:startLine]...)
-		result = append(result, newLines...)
-		result = append(result, lines[endLine+1:]...)
-		lines = result
+		content = uripkg.ApplyRangeEdit(content, edits[i].Range, edits[i].NewText)
 	}
 
-	newContent := strings.Join(lines, "\n")
+	newContent := content
 	if err := os.WriteFile(path, []byte(newContent), 0644); err != nil {
 		return fmt.Errorf("applyEdit write %s: %w", path, err)
 	}
@@ -1860,7 +1844,8 @@ func (c *LSPClient) AddWorkspaceFolder(path string) error {
 	}
 
 	// Extend the auto-watcher to cover the new folder.
-	c.startWatcher(c.rootDir)
+	// H2: was incorrectly passing c.rootDir; pass path so the new folder is watched.
+	c.startWatcher(path)
 	return nil
 }
 
@@ -1944,10 +1929,11 @@ func (c *LSPClient) GetDocumentHighlights(ctx context.Context, uri string, pos t
 // did_change_watched_files calls. Uses a 150ms debounce to batch rapid edits.
 // A previous watcher (if any) is stopped first.
 func (c *LSPClient) startWatcher(rootDir string) {
-	c.stopWatcher()
-
+	c.watcherMu.Lock()
+	c.stopWatcherLocked()
 	stop := make(chan struct{})
 	c.watcherStop = stop
+	c.watcherMu.Unlock()
 
 	go func() {
 		watcher, err := fsnotify.NewWatcher()
@@ -2038,6 +2024,14 @@ func (c *LSPClient) startWatcher(rootDir string) {
 
 // stopWatcher stops the auto-watcher if one is running.
 func (c *LSPClient) stopWatcher() {
+	c.watcherMu.Lock()
+	c.stopWatcherLocked()
+	c.watcherMu.Unlock()
+}
+
+// stopWatcherLocked is the lock-free inner body of stopWatcher.
+// Caller must hold c.watcherMu.
+func (c *LSPClient) stopWatcherLocked() {
 	if c.watcherStop != nil {
 		close(c.watcherStop)
 		c.watcherStop = nil
@@ -2234,15 +2228,4 @@ func (l *locationOrLink) toLocation() *types.Location {
 }
 
 
-// uriToPath converts a file:// URI to a local path, correctly decoding
-// percent-encoded characters (e.g. %20 -> space) per RFC 3986.
-func uriToPath(uri string) string {
-	if u, err := url.Parse(uri); err == nil && u.Path != "" {
-		return u.Path
-	}
-	// Fallback: strip scheme prefix without decoding.
-	if strings.HasPrefix(uri, "file://") {
-		return uri[len("file://"):]
-	}
-	return uri
-}
+
