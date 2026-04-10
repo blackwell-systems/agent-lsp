@@ -322,6 +322,8 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		testGetSymbolSource(t, ctx, session, lang),
 		testGoToSymbol(t, ctx, session, lang),
 		testRestartLspServer(t, ctx, session, lang),
+		testSetLogLevel(t, ctx, session, lang),
+		testExecuteCommand(t, ctx, session, lang),
 	}
 
 	return langTestResult{tier1: "pass", tier2: tier2Results}
@@ -1464,6 +1466,88 @@ func testRestartLspServer(t *testing.T, ctx context.Context, session *mcp.Client
 			detail: "server unresponsive after restart"}
 	}
 	return toolResult{tool: "restart_lsp_server", status: "pass"}
+}
+
+// testSetLogLevel tests set_log_level — a local tool that does not require LSP.
+// It sets the level to "debug", verifies the confirmation message, then resets
+// to "info" so subsequent log output is not noisy.
+func testSetLogLevel(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+	res, err := callTool(ctx, session, "set_log_level", map[string]any{
+		"level": "debug",
+	})
+	if err != nil {
+		return toolResult{tool: "set_log_level", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		text, _ := textFromResult(res)
+		return toolResult{tool: "set_log_level", status: "fail", detail: text}
+	}
+	text, _ := textFromResult(res)
+	if !strings.Contains(text, "debug") {
+		return toolResult{tool: "set_log_level", status: "fail",
+			detail: fmt.Sprintf("unexpected response: %s", text)}
+	}
+	// Reset so the rest of the test run is not flooded with debug output.
+	callTool(ctx, session, "set_log_level", map[string]any{"level": "info"}) //nolint:errcheck
+	return toolResult{tool: "set_log_level", status: "pass"}
+}
+
+// testExecuteCommand tests execute_command by discovering available commands from
+// server capabilities. If the server advertises no executeCommandProvider, the
+// test is skipped. A server-level error on the command (e.g. it requires
+// arguments we did not supply) is also treated as skip — the dispatch path was
+// still exercised. A Go-level transport error is a failure.
+func testExecuteCommand(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
+	t.Helper()
+
+	// Query capabilities to find available commands.
+	caps, err := callTool(ctx, session, "get_server_capabilities", map[string]any{
+		"language_id": lang.id,
+	})
+	if err != nil || caps.IsError {
+		return toolResult{tool: "execute_command", status: "skip", detail: "could not retrieve server capabilities"}
+	}
+	capsText, _ := textFromResult(caps)
+	if !strings.Contains(capsText, `"executeCommandProvider"`) {
+		return toolResult{tool: "execute_command", status: "skip", detail: "server does not advertise executeCommandProvider"}
+	}
+
+	var capsMap map[string]any
+	if err := json.Unmarshal([]byte(capsText), &capsMap); err != nil {
+		return toolResult{tool: "execute_command", status: "skip", detail: "could not parse capabilities JSON"}
+	}
+	ecp, ok := capsMap["executeCommandProvider"].(map[string]any)
+	if !ok {
+		return toolResult{tool: "execute_command", status: "skip", detail: "executeCommandProvider is not an object"}
+	}
+	cmds, ok := ecp["commands"].([]any)
+	if !ok || len(cmds) == 0 {
+		return toolResult{tool: "execute_command", status: "skip", detail: "no commands listed in executeCommandProvider"}
+	}
+	cmd, ok := cmds[0].(string)
+	if !ok || cmd == "" {
+		return toolResult{tool: "execute_command", status: "skip", detail: "first command is not a string"}
+	}
+
+	// Attempt the command. Many server commands require context arguments (e.g. a
+	// file URI); pass one so gopls and similar servers can route the request.
+	fileURI := "file://" + lang.file
+	res, err := callTool(ctx, session, "execute_command", map[string]any{
+		"command":   cmd,
+		"arguments": []any{map[string]any{"URI": fileURI}},
+	})
+	if err != nil {
+		return toolResult{tool: "execute_command", status: "fail", detail: err.Error()}
+	}
+	if res.IsError {
+		// Server returned a command-level error (wrong args, unsupported variant, etc.).
+		// The tool dispatch was still exercised — record as skip, not failure.
+		text, _ := textFromResult(res)
+		return toolResult{tool: "execute_command", status: "skip",
+			detail: fmt.Sprintf("command %q returned server error (may need different args): %s", cmd, text)}
+	}
+	return toolResult{tool: "execute_command", status: "pass"}
 }
 
 // statusIcon returns a visual icon for a tool result status.

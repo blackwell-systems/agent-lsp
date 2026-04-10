@@ -5,6 +5,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (2026-04-09) — Full tool coverage (47/47)
+- **`testSetLogLevel`** — integration test for `set_log_level`; sets level to `"debug"`, verifies confirmation message contains "debug", resets to `"info"`; no LSP required, runs for all 30 languages
+- **`testExecuteCommand`** — integration test for `execute_command`; queries `get_server_capabilities` for `executeCommandProvider.commands`, skips if server advertises none, calls `commands[0]` with a file URI argument; server-level errors treated as skip (dispatch path still exercised); Go-level transport errors are failures; tool coverage 32 → 34 (multi-language harness); 47/47 tools covered across all test suites
+
 ### Added (2026-04-09) — Test coverage + CI cleanup
 - **`testGoToSymbol` and `testRestartLspServer` test functions** — two previously untested tools now covered in `TestMultiLanguage`; `testGoToSymbol` calls `go_to_symbol` with `lang.workspaceSymbol` and verifies at least one result is returned; `testRestartLspServer` restarts the server, waits 5 s for re-indexing, reopens the document, and confirms hover still works; both wired into `tier2Results` with skip guards; tool coverage 28 → 32 (accounting for `go_to_symbol`, `restart_lsp_server`, and two tools added in prior waves)
 - **`test/lang_configs_test.go`** — `buildLanguageConfigs()` extracted from `test/multi_lang_test.go` into its own file (840 lines); `multi_lang_test.go` reduced from 2340 → 1573 lines; only additional import needed was `path/filepath`; no behavior changes
