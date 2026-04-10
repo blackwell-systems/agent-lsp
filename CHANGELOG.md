@@ -5,6 +5,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (2026-04-10) — Language expansion (26 languages)
+- **SQL integration test** — `sqls` (`go install github.com/sqls-server/sqls@latest`); fixture at `test/fixtures/sql/` with `schema.sql` (CREATE TABLE person + post), `query.sql` (two SELECT statements, 18 lines, calibrated hover/completion/reference positions), `.sqls.yml` (postgresql DSN); `serverArgs: []string{"--config", filepath.Join(fixtureBase, "sql", ".sqls.yml")}` — config path is resolved at test time, not hardcoded; dedicated `multi-lang-sql` CI job with `postgres:16` service container, `pg_isready` health check, `psql` schema load step, and `PGPASSWORD` env for the load command; supportsFormatting/rename/inlayHints all false (sqls does not implement them); language count updated 25 → 26
+- **JSON-RPC string ID support** — `jsonrpcMsg.ID` changed from `*int` to `json.RawMessage`; dispatch now handles both integer and string IDs per JSON-RPC 2.0 spec; `sendResponse` echoes the raw ID bytes verbatim; `sendRequest` marshals integer IDs into RawMessage; fixes compatibility with servers that use string IDs (e.g. `prisma-language-server`)
+
 ### Added (2026-04-09) — Language expansion (25 languages)
 - **Gleam integration test** — `gleam lsp` (built-in to the Gleam binary, `serverArgs: ["lsp"]`); fixture at `test/fixtures/gleam/` with `gleam.toml`, `src/person.gleam`, `src/greeter.gleam`; full Tier 2 coverage including rename, highlights, code actions, and inlay hints; dedicated `multi-lang-gleam` CI job (downloads binary from GitHub releases)
 - **Elixir integration test** — `elixir-ls` (`language_server.sh` symlinked as `elixir-ls`); fixture at `test/fixtures/elixir/` with `mix.exs`, `lib/person.ex`, `lib/greeter.ex`; rename and inlay hints skipped (`renameSymbolLine: 0`, `inlayHintEndLine: 0` — ElixirLS does not implement those); dedicated `multi-lang-elixir` CI job using `erlef/setup-beam@v1` (Elixir 1.16 / OTP 26), `continue-on-error: true` due to ElixirLS cold-start variability

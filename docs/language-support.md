@@ -1,6 +1,6 @@
 # Language Support
 
-## Current (25 languages, CI-tested)
+## Current (26 languages, CI-tested)
 
 | Language | Language Server | Status |
 |---|---|---|
@@ -28,7 +28,8 @@
 | Scala | metals | ⚠️ best-effort (cold-start; continue-on-error CI job) |
 | Gleam | gleam (built-in lsp) | ✅ passing |
 | Elixir | elixir-ls | ⚠️ best-effort (continue-on-error CI job) |
-| Prisma | prisma-language-server | ✅ passing |
+| Prisma | prisma-language-server | 🔍 investigating (continue-on-error; server requires VS Code extension host) |
+| SQL | sqls | ✅ passing (postgres:16 service container) |
 
 ---
 
@@ -45,7 +46,8 @@
 | `multi-lang-scala` | Scala | ubuntu-latest (continue-on-error) |
 | `multi-lang-gleam` | Gleam | ubuntu-latest |
 | `multi-lang-elixir` | Elixir | ubuntu-latest (continue-on-error) |
-| `multi-lang-prisma` | Prisma | ubuntu-latest |
+| `multi-lang-prisma` | Prisma | ubuntu-latest (continue-on-error) |
+| `multi-lang-sql` | SQL | ubuntu-latest (postgres:16 service) |
 | `speculative-test` | session lifecycle (gopls) | ubuntu-latest |
 
 ---
@@ -116,8 +118,8 @@ Each new language needs three things:
 
 | Tier | Languages | Count |
 |---|---|---|
-| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Swift, Zig, CSS, HTML, Terraform, Scala, Gleam, Elixir, Prisma | **25** |
-| Tier 3 candidates | SQL (sqls + live DB), Bash, R | 1–3 |
-| **Potential total** | | **26–28** |
+| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Swift, Zig, CSS, HTML, Terraform, Scala, Gleam, Elixir, Prisma, SQL | **26** |
+| Tier 3 candidates | Clojure, Nix, Dart, Bash, R | 3–5 |
+| **Potential total** | | **29–31** |
 
-The 25-language set covers systems, web, JVM, scripting, infrastructure, config, functional, and schema domains.
+The 26-language set covers systems, web, JVM, scripting, infrastructure, config, functional, schema, and query domains.
