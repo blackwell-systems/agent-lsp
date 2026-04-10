@@ -1,0 +1,95 @@
+# agent-lsp language server registry
+# Used by docker/entrypoint.sh for runtime LSP_SERVERS installs.
+# package_manager: npm | go | apt | gem | pip | dotnet | cargo | manual
+
+servers:
+  - name: gopls
+    language: go
+    package_manager: go
+    install_command: "GOPATH=/usr/local go install golang.org/x/tools/gopls@latest"
+    binary: gopls
+  - name: typescript-language-server
+    language: typescript
+    package_manager: npm
+    install_command: "npm install -g typescript-language-server typescript"
+    binary: typescript-language-server
+  - name: pyright-langserver
+    language: python
+    package_manager: npm
+    install_command: "npm install -g pyright"
+    binary: pyright-langserver
+  - name: rust-analyzer
+    language: rust
+    package_manager: cargo
+    install_command: "cargo install rust-analyzer"
+    binary: rust-analyzer
+  - name: clangd
+    language: cpp
+    package_manager: apt
+    install_command: "apt-get update && apt-get install -y --no-install-recommends clangd && rm -rf /var/lib/apt/lists/*"
+    binary: clangd
+  - name: solargraph
+    language: ruby
+    package_manager: gem
+    install_command: "gem install solargraph"
+    binary: solargraph
+  - name: intelephense
+    language: php
+    package_manager: npm
+    install_command: "npm install -g intelephense"
+    binary: intelephense
+  - name: csharp-ls
+    language: csharp
+    package_manager: dotnet
+    install_command: "dotnet tool install -g csharp-ls"
+    binary: csharp-ls
+  - name: lua-language-server
+    language: lua
+    package_manager: manual
+    install_command: "echo 'Install lua-language-server from https://github.com/LuaLS/lua-language-server/releases and add to PATH'"
+    binary: lua-language-server
+  - name: zls
+    language: zig
+    package_manager: manual
+    install_command: "echo 'Install zls from https://github.com/zigtools/zls/releases matching your Zig version'"
+    binary: zls
+  - name: kotlin-language-server
+    language: kotlin
+    package_manager: manual
+    install_command: "echo 'Install kotlin-language-server from https://github.com/fwcd/kotlin-language-server/releases'"
+    binary: kotlin-language-server
+  - name: metals
+    language: scala
+    package_manager: manual
+    install_command: "echo 'Install metals via: cs install metals (requires Coursier)'"
+    binary: metals
+  - name: elixir-ls
+    language: elixir
+    package_manager: manual
+    install_command: "echo 'Build elixir-ls from https://github.com/elixir-lsp/elixir-ls'"
+    binary: elixir-ls
+  - name: clojure-lsp
+    language: clojure
+    package_manager: manual
+    install_command: "echo 'Install clojure-lsp from https://github.com/clojure-lsp/clojure-lsp/releases'"
+    binary: clojure-lsp
+  - name: haskell-language-server-wrapper
+    language: haskell
+    package_manager: manual
+    install_command: "echo 'Install HLS via GHCup: ghcup install hls'"
+    binary: haskell-language-server-wrapper
+  - name: sourcekit-lsp
+    language: swift
+    package_manager: manual
+    install_command: "echo 'sourcekit-lsp ships with Xcode on macOS; not available on Linux'"
+    binary: sourcekit-lsp
+  - name: jdtls
+    language: java
+    package_manager: manual
+    install_command: "echo 'Install jdtls from https://download.eclipse.org/jdtls/snapshots/'"
+    binary: jdtls
+  - name: dart
+    language: dart
+    package_manager: apt
+    install_command: "apt-get update && apt-get install -y --no-install-recommends dart && rm -rf /var/lib/apt/lists/*"
+    binary: dart
