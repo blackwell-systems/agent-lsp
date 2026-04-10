@@ -5,6 +5,28 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed (2026-04-09) — Audit-6 batch: 12 bugs and quality fixes
+
+#### Critical
+- **C1 — `AddWorkspaceFolder` watcher regression** — The audit-5 H2 fix (passing `path` instead of `c.rootDir` to `startWatcher`) made `AddWorkspaceFolder` call `startWatcher(path)`, which internally stopped the existing watcher goroutine before starting a new one watching only the new path. After adding a second workspace folder, file changes under the original root were no longer delivered to the LSP server; the index went stale silently. Fixed by adding a `watcher *fsnotify.Watcher` field to `LSPClient` and a new `addWatcherRoot` method that calls `watcher.Add(path)` on the live watcher goroutine rather than restarting it. `AddWorkspaceFolder` now calls `addWatcherRoot` instead of `startWatcher`.
+- **C2 — Exit-monitor goroutine did not clear `initialized` on crash** — After an unplanned LSP subprocess exit (OOM, segfault), `rejectPending` was called to unblock pending requests, but `c.initialized` was left `true`. All subsequent tool calls passed `CheckInitialized` and received opaque RPC errors instead of the clear "call start_lsp first" message. Fixed by adding `c.mu.Lock(); c.initialized = false; c.mu.Unlock()` in the exit-monitor goroutine immediately after `rejectPending`.
+
+#### High
+- **H1 — `NormalizeDocumentSymbols` name map was last-write-wins on duplicate names** — `nameMap[info.Name]` overwrote earlier entries for symbols sharing a name (e.g., multiple `String()` or `Error()` methods across types). Children were attached to the wrong parent node. Fixed by keying the name map with `nameKey(name, kind)` using `\x00` as separator; a separate `nameByBare` map handles `ContainerName` lookups.
+- **H2 — `SerializedExecutor` global semaphore serialized all sessions** — A single `chan struct{}` blocked all concurrent session operations regardless of which sessions were involved. Two independent speculative sessions were forced sequential. Fixed by replacing the global channel with `map[string]chan struct{}` — one buffered channel per session ID — created on first access under a guard mutex. The per-session channel preserves the original cancellation semantics via `select`.
+- **H3 — Column offsets were byte offsets, not UTF-16 code unit offsets** — `ResolvePositionPattern` and `textMatchApply` computed the `character` field using raw byte subtraction. LSP spec §3.4 requires UTF-16 code unit offsets; gopls silently returns empty results when given positions past the line end. Fixed by adding a `utf16Offset(line string, byteOffset int) int` helper in `position_pattern.go` (walks UTF-8 runes, counts surrogate pairs for U+10000+) and using it in both locations.
+
+#### Medium
+- **M1 — `MarkServerInitialized()` called before MCP session established** — A premature call at `server.go:1016` set `serverInitialized = true` before any MCP client had connected, making the initialization flag misleading and fragile to ordering changes. Removed; the canonical call inside `InitializedHandler` (which fires on MCP client connection) is the only remaining call site.
+- **M2 — `DiffDiagnostics` was O(n×m)** — Nested loop compared every current diagnostic against every baseline diagnostic. For files with hundreds of diagnostics, this compounded across URIs per evaluation. Fixed with a fingerprint-keyed counter map (`map[string]int`) for O(n+m) complexity; fingerprint uses Range, Message, and Severity (matching `DiagnosticsEqual` semantics); counts handle duplicate diagnostics correctly.
+- **M3 — `textMatchApply` built file URIs via string concatenation** — `"file://" + filePath` does not percent-encode spaces or special characters; `CreateFileURI` (using `url.URL`) was already the established pattern elsewhere. Fixed by replacing the concat with a `CreateFileURI(filePath)` call.
+
+#### Low
+- **L1 — `NormalizeDocumentSymbols` Pass 3 comment was misleading** — Comment incorrectly implied the value-copy logic handled multi-level SymbolInformation hierarchies. Updated to accurately describe deferred pointer dereferencing, why it is correct for the 1-level depth that LSP SymbolInformation always produces, and the spec constraint.
+- **L2 — `waitForWorkspaceReady` polled at 100ms intervals** — Unnecessary latency of up to 100ms after workspace indexing completed. Replaced busy-poll with `sync.Cond`; `handleProgress` now broadcasts when `progressTokens` becomes empty; `waitForWorkspaceReady` blocks on `Wait()` with a context-deadline fallback.
+- **L3 — `AddWorkspaceFolder`/`RemoveWorkspaceFolder` dropped context** — Methods had no `ctx context.Context` parameter; notification sends could not be cancelled. Added `ctx` as first parameter to both methods and updated the call sites in `workspace_folders.go`.
+- **L4 — `json.Marshal` errors discarded in three workspace folder handlers** — `HandleAddWorkspaceFolder`, `HandleRemoveWorkspaceFolder`, and `HandleListWorkspaceFolders` used `data, _ := json.Marshal(...)`. Fixed by capturing the error and returning `types.ErrorResult` on failure, consistent with all other handlers.
+
 ### Fixed (2026-04-09) — Audit-5 batch: 16 bugs and quality fixes
 
 #### Critical
