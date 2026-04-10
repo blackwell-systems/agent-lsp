@@ -56,12 +56,6 @@ Skills work with any MCP client that supports tool use, not just Claude Code.
 cd skills && ./install.sh
 ```
 
-### Recent additions
-
-**Tools:** `get_symbol_source` (source text of the innermost symbol at a position without loading files into context), `get_symbol_documentation` (offline toolchain docs via `go doc`, `pydoc`, `cargo doc` for dependencies not indexed by LSP), MCP log notifications forwarded to the client via `notifications/message`.
-
-**Skills:** `/lsp-cross-repo` (multi-root workspace analysis for library + consumer workflows), `/lsp-local-symbols` (file-scoped symbol search and type info, faster than workspace-wide references). `prepare_rename` safety gate added to `/lsp-rename`. `/lsp-safe-edit` now previews changes speculatively before touching disk and surfaces code actions on introduced errors.
-
 See [docs/tools.md](./docs/tools.md) for full parameter details.
 
 ## Installation
