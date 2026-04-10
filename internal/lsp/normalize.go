@@ -3,6 +3,7 @@ package lsp
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 
 	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
@@ -46,8 +47,15 @@ func NormalizeDocumentSymbols(raw json.RawMessage) ([]types.DocumentSymbol, erro
 		return nil, err
 	}
 
-	// Pass 1: create DocumentSymbol for each item and build name map.
-	nameMap := make(map[string]*types.DocumentSymbol, len(infos))
+	// Pass 1: create DocumentSymbol for each item and build name maps.
+	// nameKey builds a compound lookup key to prevent collisions on duplicate
+	// symbol names (e.g. multiple String() or Error() methods on different types).
+	nameKey := func(name string, kind types.SymbolKind) string {
+		return fmt.Sprintf("%s\x00%d", name, kind)
+	}
+
+	nameMap := make(map[string]*types.DocumentSymbol, len(infos))   // compound key
+	nameByBare := make(map[string]*types.DocumentSymbol, len(infos)) // bare name for container lookup
 	symPtrs := make([]*types.DocumentSymbol, len(infos))
 	for i, info := range infos {
 		ds := &types.DocumentSymbol{
@@ -58,7 +66,8 @@ func NormalizeDocumentSymbols(raw json.RawMessage) ([]types.DocumentSymbol, erro
 			SelectionRange: info.Location.Range,
 		}
 		symPtrs[i] = ds
-		nameMap[info.Name] = ds // last write wins on duplicates
+		nameMap[nameKey(info.Name, info.Kind)] = ds
+		nameByBare[info.Name] = ds // last-write ok: containers are unambiguously named
 	}
 
 	// Pass 2: attach children to parents. Track which nodes have a parent.
@@ -66,15 +75,18 @@ func NormalizeDocumentSymbols(raw json.RawMessage) ([]types.DocumentSymbol, erro
 	for i, info := range infos {
 		ds := symPtrs[i]
 		if info.ContainerName != nil && *info.ContainerName != "" {
-			if parent, ok := nameMap[*info.ContainerName]; ok {
+			if parent, ok := nameByBare[*info.ContainerName]; ok {
 				parent.Children = append(parent.Children, *ds)
 				hasParent[i] = true
 			}
 		}
 	}
 
-	// Pass 3: collect roots by dereferencing pointers after all children are wired.
-	// Value-copying roots before Pass 2 completes would miss children added later.
+	// Pass 3: collect root symbols (those with no parent) by dereferencing
+	// symPtrs after Pass 2 has finished wiring all children. Deferred
+	// dereferencing ensures children added in Pass 2 are visible in each
+	// root's Children slice. Note: SymbolInformation is always 1-level deep
+	// per the LSP spec; this function handles that single-depth case only.
 	var roots []types.DocumentSymbol
 	for i := range infos {
 		if !hasParent[i] {
