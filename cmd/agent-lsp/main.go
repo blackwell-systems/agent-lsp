@@ -99,6 +99,10 @@ func runWithRecovery(ctx context.Context, resolver lsp.ClientResolver, registry 
 	defer func() {
 		if r := recover(); r != nil {
 			logging.Log(logging.LevelError, fmt.Sprintf("panic recovered: %v", r))
+			// L1: Set runErr so the caller exits with code 1.
+			// Without this, process supervisors with restart-on-nonzero policies
+			// will not restart the process after a panic.
+			runErr = fmt.Errorf("panic: %v", r)
 			// Attempt graceful shutdown after panic.
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), gracefulShutdownTimeout)
 			defer cancel()

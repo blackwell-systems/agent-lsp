@@ -24,7 +24,15 @@ import (
 type mcpSessionSender struct{ ss *mcp.ServerSession }
 
 func (s *mcpSessionSender) LogMessage(level, logger, message string) error {
-	data, _ := json.Marshal(message)
+	// H4: LogMessage has no context parameter (interface constraint from
+	// logging.SetServer). context.Background() is intentional: log sends
+	// during shutdown may proceed after the main ctx is cancelled, which is
+	// acceptable for best-effort diagnostic output.
+	data, err := json.Marshal(message)
+	if err != nil {
+		// Fallback: encode an error description rather than sending JSON null.
+		data, _ = json.Marshal(fmt.Sprintf("[marshal error: %v] %s", err, message))
+	}
 	return s.ss.Log(context.Background(), &mcp.LoggingMessageParams{
 		Level:  mcp.LoggingLevel(level),
 		Logger: logger,
@@ -80,7 +88,12 @@ func toolArgsToMap(v interface{}) map[string]interface{} {
 		return map[string]interface{}{}
 	}
 	m := map[string]interface{}{}
-	_ = json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		// This should not happen in practice (Marshal produced valid JSON).
+		// Return empty map so callers receive field-required errors, not panics.
+		logging.Log(logging.LevelDebug, fmt.Sprintf("toolArgsToMap: unmarshal error: %v", err))
+		return map[string]interface{}{}
+	}
 	return m
 }
 
