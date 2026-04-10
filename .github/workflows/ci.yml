@@ -276,7 +276,7 @@ jobs:
         run: |
           cd test/fixtures/prisma
           npm install
-          DATABASE_URL="postgresql://user:password@localhost/fixture" prisma generate
+          prisma generate
 
       - name: Run Prisma tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Prisma$" ./test/ -timeout 10m
@@ -392,7 +392,7 @@ jobs:
         run: psql -h localhost -U postgres -d testdb -f test/fixtures/sql/schema.sql
 
       - name: Install sqls
-        run: go install github.com/lighttiger2505/sqls@latest
+        run: go install github.com/sqls-server/sqls@latest
 
       - name: Run SQL tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^SQL$" ./test/ -timeout 10m
