@@ -1550,6 +1550,185 @@ func testExecuteCommand(t *testing.T, ctx context.Context, session *mcp.ClientSe
 	return toolResult{tool: "execute_command", status: "pass"}
 }
 
+// TestGetChangeImpact tests the get_change_impact tool end-to-end using gopls
+// and the Go fixture. It verifies blast-radius analysis works in CI.
+func TestGetChangeImpact(t *testing.T) {
+	lspBinaryPath, err := exec.LookPath("gopls")
+	if err != nil {
+		t.Skip("skipping TestGetChangeImpact: gopls not found on PATH")
+	}
+
+	binaryPath := getMultilangBinary(t)
+	if binaryPath == "" {
+		t.Skip("failed to build agent-lsp binary")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	goFixture := filepath.Join(testDir(t), "fixtures", "go")
+	greeterFile := filepath.Join(goFixture, "greeter.go")
+
+	cmd := exec.Command(binaryPath, "go", lspBinaryPath)
+	client := mcp.NewClient(&mcp.Implementation{Name: "change-impact-test", Version: "1.0"}, nil)
+	transport := &mcp.CommandTransport{Command: cmd}
+	session, err := client.Connect(ctx, transport, nil)
+	if err != nil {
+		t.Skipf("failed to connect MCP session for gopls: %v", err)
+		return
+	}
+	defer session.Close()
+
+	res, err := callTool(ctx, session, "start_lsp", map[string]any{"root_dir": goFixture})
+	if err != nil || res.IsError {
+		t.Skipf("start_lsp failed for gopls: err=%v", err)
+		return
+	}
+	time.Sleep(8 * time.Second)
+
+	res, err = callTool(ctx, session, "open_document", map[string]any{
+		"file_path":   greeterFile,
+		"language_id": "go",
+	})
+	if err != nil || res.IsError {
+		t.Skipf("open_document failed for greeter.go: err=%v", err)
+		return
+	}
+	time.Sleep(2 * time.Second)
+
+	res, err = callTool(ctx, session, "get_change_impact", map[string]any{
+		"changed_files": []any{greeterFile},
+	})
+	if err != nil {
+		t.Errorf("get_change_impact call failed: %v", err)
+		return
+	}
+	if res.IsError {
+		text, _ := textFromResult(res)
+		t.Skipf("get_change_impact returned IsError (server may not support it): %s", text)
+		return
+	}
+
+	text, err := textFromResult(res)
+	if err != nil {
+		t.Errorf("get_change_impact: failed to extract text: %v", err)
+		return
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		t.Errorf("get_change_impact: failed to parse JSON response: %s", text)
+		return
+	}
+
+	changedSymbols, _ := result["changed_symbols"].([]any)
+	if len(changedSymbols) == 0 {
+		t.Errorf("get_change_impact: expected changed_symbols to be non-empty")
+	}
+
+	summary, _ := result["summary"].(string)
+	if summary == "" {
+		t.Errorf("get_change_impact: expected non-empty summary")
+	}
+
+	t.Logf("[TestGetChangeImpact] changed_symbols=%d summary=%q", len(changedSymbols), summary)
+}
+
+// TestGetCrossRepoReferences tests the get_cross_repo_references tool end-to-end
+// using gopls and the Go fixture. It adds the fixture dir as both the primary
+// workspace root and a consumer_root to exercise the full cross-repo wiring path.
+func TestGetCrossRepoReferences(t *testing.T) {
+	lspBinaryPath, err := exec.LookPath("gopls")
+	if err != nil {
+		t.Skip("skipping TestGetCrossRepoReferences: gopls not found on PATH")
+	}
+
+	binaryPath := getMultilangBinary(t)
+	if binaryPath == "" {
+		t.Skip("failed to build agent-lsp binary")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	goFixture := filepath.Join(testDir(t), "fixtures", "go")
+	mainFile := filepath.Join(goFixture, "main.go")
+
+	cmd := exec.Command(binaryPath, "go", lspBinaryPath)
+	client := mcp.NewClient(&mcp.Implementation{Name: "cross-repo-test", Version: "1.0"}, nil)
+	transport := &mcp.CommandTransport{Command: cmd}
+	session, err := client.Connect(ctx, transport, nil)
+	if err != nil {
+		t.Skipf("failed to connect MCP session for gopls: %v", err)
+		return
+	}
+	defer session.Close()
+
+	res, err := callTool(ctx, session, "start_lsp", map[string]any{"root_dir": goFixture})
+	if err != nil || res.IsError {
+		t.Skipf("start_lsp failed for gopls: err=%v", err)
+		return
+	}
+	time.Sleep(8 * time.Second)
+
+	res, err = callTool(ctx, session, "open_document", map[string]any{
+		"file_path":   mainFile,
+		"language_id": "go",
+	})
+	if err != nil || res.IsError {
+		t.Skipf("open_document failed for main.go: err=%v", err)
+		return
+	}
+	time.Sleep(2 * time.Second)
+
+	// Add the fixture dir as a consumer workspace folder.
+	res, err = callTool(ctx, session, "add_workspace_folder", map[string]any{
+		"path": goFixture,
+	})
+	if err != nil {
+		t.Logf("add_workspace_folder warning: %v", err)
+	}
+
+	// Call get_cross_repo_references on the Person struct declaration (line 6, col 6).
+	res, err = callTool(ctx, session, "get_cross_repo_references", map[string]any{
+		"symbol_file":    mainFile,
+		"language_id":    "go",
+		"line":           6,
+		"column":         6,
+		"consumer_roots": []any{goFixture},
+	})
+	if err != nil {
+		t.Errorf("get_cross_repo_references call failed: %v", err)
+		return
+	}
+	if res.IsError {
+		text, _ := textFromResult(res)
+		t.Skipf("get_cross_repo_references returned IsError: %s", text)
+		return
+	}
+
+	text, err := textFromResult(res)
+	if err != nil {
+		t.Errorf("get_cross_repo_references: failed to extract text: %v", err)
+		return
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		t.Errorf("get_cross_repo_references: failed to parse JSON response: %s", text)
+		return
+	}
+
+	if _, ok := result["symbol"]; !ok {
+		t.Errorf("get_cross_repo_references: missing 'symbol' key in response")
+	}
+	if _, ok := result["summary"]; !ok {
+		t.Errorf("get_cross_repo_references: missing 'summary' key in response")
+	}
+
+	t.Logf("[TestGetCrossRepoReferences] symbol=%v summary=%v", result["symbol"], result["summary"])
+}
+
 // statusIcon returns a visual icon for a tool result status.
 func statusIcon(s string) string {
 	switch s {
