@@ -142,6 +142,19 @@ func (s *SimulationSession) IsDirty() bool {
 	return s.Status == StatusDirty
 }
 
+// DirtyError returns the error that caused the session to enter dirty
+// state, or nil if the session is not dirty. This is the safe accessor
+// for DirtyErr: reading DirtyErr directly on a non-dirty session yields
+// nil with no signal that the session is healthy vs. dirty.
+func (s *SimulationSession) DirtyError() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.Status == StatusDirty {
+		return s.DirtyErr
+	}
+	return nil
+}
+
 // IsTerminal reports whether the session is in a terminal state.
 func (s *SimulationSession) IsTerminal() bool {
 	s.mu.Lock()

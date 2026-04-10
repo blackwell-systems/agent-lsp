@@ -99,7 +99,7 @@ func (m *SessionManager) ApplyEdit(ctx context.Context, sessionID, fileURI strin
 		return nil, fmt.Errorf("session %s is in terminal state: %s", sessionID, session.Status)
 	}
 	if session.IsDirty() {
-		return nil, fmt.Errorf("session %s is dirty: %w", sessionID, session.DirtyErr)
+		return nil, fmt.Errorf("session %s is dirty: %w", sessionID, session.DirtyError())
 	}
 
 	// Acquire executor lock for serialized LSP access.
