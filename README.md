@@ -90,6 +90,9 @@ docker-compose setup, and volume caching.
 go install github.com/blackwell-systems/agent-lsp@latest
 ```
 
+To use agent-lsp as a library in your Go program (without running the MCP
+server), import the `pkg/` packages directly — see [Library Usage](#library-usage) below.
+
 If `agent-lsp` isn't found after install, add Go's bin directory to your PATH:
 
 ```bash
@@ -406,6 +409,59 @@ cd agent-lsp && go build ./...
 go test ./...                   # all unit test suites
 go test ./... -tags integration # integration tests (requires language servers)
 ```
+
+## Library Usage
+
+The `pkg/lsp`, `pkg/session`, and `pkg/types` packages expose a stable
+public API for using agent-lsp's LSP client and speculative execution engine
+directly from Go programs, without running the MCP server.
+
+### Import the LSP client
+
+```go
+import (
+    "context"
+    "github.com/blackwell-systems/agent-lsp/pkg/lsp"
+)
+
+client := lsp.NewLSPClient("gopls", []string{})
+if err := client.Initialize(ctx, "/path/to/workspace"); err != nil {
+    log.Fatal(err)
+}
+defer client.Shutdown(ctx)
+
+locs, err := client.GetDefinition(ctx, fileURI, lsp.Position{Line: 10, Character: 4})
+```
+
+### Import types
+
+```go
+import "github.com/blackwell-systems/agent-lsp/pkg/types"
+
+var pos types.Position = types.Position{Line: 0, Character: 0}
+```
+
+### Speculative editing (simulate-before-apply)
+
+```go
+import (
+    "github.com/blackwell-systems/agent-lsp/pkg/lsp"
+    "github.com/blackwell-systems/agent-lsp/pkg/session"
+)
+
+mgr := session.NewSessionManager(client) // client is a *lsp.LSPClient
+id, _ := mgr.CreateSession(ctx, "/workspace", "go")
+mgr.ApplyEdit(ctx, id, fileURI, editRange, newText)
+result, _ := mgr.Evaluate(ctx, id, "file", 3000)
+if result.NetDelta == 0 {
+    mgr.Commit(ctx, id, "", true)
+} else {
+    mgr.Discard(ctx, id)
+}
+```
+
+All `pkg/` types are aliases of the internal implementation types and are
+fully interchangeable with them.
 
 ## License
 

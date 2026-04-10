@@ -121,6 +121,28 @@ skills/            ← Agent Skills (SKILL.md directories)
   lsp-test-correlation/ ← Map source files to test files
 ```
 
+---
+
+## Public API (pkg/)
+
+Three packages under `pkg/` expose a stable, importable, pkg.go.dev-indexed
+public API without requiring callers to run the MCP server:
+
+| Package | Import path | What it provides |
+|---------|-------------|-----------------|
+| `pkg/types` | `github.com/blackwell-systems/agent-lsp/pkg/types` | All LSP wire types, symbol types, tool response envelope |
+| `pkg/lsp` | `github.com/blackwell-systems/agent-lsp/pkg/lsp` | `LSPClient`, `ServerManager`, `ClientResolver` interface |
+| `pkg/session` | `github.com/blackwell-systems/agent-lsp/pkg/session` | `SessionManager`, session lifecycle types, speculative execution API |
+
+Every type in `pkg/` is a **type alias** of the corresponding `internal/`
+type. This means values are interchangeable — a `pkg/types.Position` can be
+passed to any function expecting `internal/types.Position` without conversion.
+
+The `pkg/` packages contain no logic; they are purely re-export layers. All
+implementation lives in `internal/`. This design keeps the public surface
+minimal and allows the internal implementation to evolve without breaking
+external callers as long as the alias targets are preserved.
+
 ### Layer rules
 
 - `cmd/agent-lsp/` owns the MCP server lifecycle and routes requests to handlers via the four tool files
