@@ -1,0 +1,5 @@
+#!/bin/bash
+# Wrapper: extracted from mongodb-js/vscode VSIX at dist/languageServer.js
+# Installed to /usr/local/bin/mongodb-language-server by CI.
+# This file documents the wrapper pattern used in the CI install step.
+exec node /opt/mongodb-vscode/extension/dist/languageServer.js "$@"
