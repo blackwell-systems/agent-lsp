@@ -18,6 +18,7 @@ import (
 const gracefulShutdownTimeout = 5 * time.Second
 
 func main() {
+	logging.SetLevelFromEnv()
 	parsed, err := config.ParseArgs(os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
