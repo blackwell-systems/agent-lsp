@@ -51,12 +51,10 @@ func TestNormalizeDocumentSymbols_DocumentSymbolVariant(t *testing.T) {
 	}
 }
 
+// TestNormalizeDocumentSymbols_SymbolInformationVariant verifies that the
+// SymbolInformation[] variant correctly builds a parent-child tree: MyField
+// (containerName "MyStruct") appears as a child of the MyStruct root symbol.
 func TestNormalizeDocumentSymbols_SymbolInformationVariant(t *testing.T) {
-	// NOTE: The current implementation has a known bug in two-pass tree reconstruction:
-	// roots are collected by value before children are attached via pointer, so children
-	// do not appear on root symbols in the returned slice.
-	// This test documents actual behavior. Bug should be fixed in normalize.go (Agent A scope).
-	// See: pass 2 copies *ds into roots before parent.Children is appended.
 	raw := json.RawMessage(`[
   {"name":"MyStruct","kind":5,"location":{"uri":"file:///foo.go","range":{"start":{"line":0,"character":0},"end":{"line":5,"character":1}}}},
   {"name":"MyField","kind":8,"location":{"uri":"file:///foo.go","range":{"start":{"line":1,"character":1},"end":{"line":1,"character":10}}},"containerName":"MyStruct"}
@@ -77,11 +75,12 @@ func TestNormalizeDocumentSymbols_SymbolInformationVariant(t *testing.T) {
 	if root.SelectionRange != root.Range {
 		t.Errorf("expected SelectionRange == Range (synthesized), got selectionRange=%+v range=%+v", root.SelectionRange, root.Range)
 	}
-	// BUG: children are not visible in the root because the value is copied before
-	// parent.Children is populated. Expected 1 child per spec; actual is 0.
-	// When the bug is fixed, change this assertion to len(root.Children) == 1
-	// and root.Children[0].Name == "MyField".
-	_ = root.Children // currently empty due to value-copy bug
+	if len(root.Children) != 1 {
+		t.Fatalf("expected 1 child in root, got %d", len(root.Children))
+	}
+	if root.Children[0].Name != "MyField" {
+		t.Errorf("expected child Name == MyField, got %q", root.Children[0].Name)
+	}
 }
 
 // ---- NormalizeCompletion ----
