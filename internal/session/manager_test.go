@@ -7,6 +7,7 @@ import (
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
+	internaluri "github.com/blackwell-systems/agent-lsp/internal/uri"
 )
 
 // mockResolver is a test resolver that returns nil client.
@@ -542,7 +543,7 @@ func TestLanguageToExtension(t *testing.T) {
 	}
 }
 
-// TestUriToPath_PercentDecoded verifies that uriToPath correctly decodes
+// TestUriToPath_PercentDecoded verifies that internaluri.URIToPath correctly decodes
 // percent-encoded characters in file URIs.
 func TestUriToPath_PercentDecoded(t *testing.T) {
 	cases := []struct {
@@ -556,9 +557,9 @@ func TestUriToPath_PercentDecoded(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.uri, func(t *testing.T) {
-			got := uriToPath(tc.uri)
+			got := internaluri.URIToPath(tc.uri)
 			if got != tc.expected {
-				t.Errorf("uriToPath(%q) = %q, want %q", tc.uri, got, tc.expected)
+				t.Errorf("internaluri.URIToPath(%q) = %q, want %q", tc.uri, got, tc.expected)
 			}
 		})
 	}
