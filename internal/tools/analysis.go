@@ -21,7 +21,11 @@ func HandleGetDiagnostics(ctx context.Context, client *lsp.LSPClient, args map[s
 	var diagMap map[string][]types.LSPDiagnostic
 
 	if filePath != "" {
-		fileURI := CreateFileURI(filePath)
+		cleanPath, err := ValidateFilePath(filePath, client.RootDir())
+		if err != nil {
+			return types.ErrorResult(fmt.Sprintf("invalid file path: %s", err)), nil
+		}
+		fileURI := CreateFileURI(cleanPath)
 		if err := client.ReopenDocument(ctx, fileURI); err != nil {
 			return types.ErrorResult(fmt.Sprintf("failed to reopen document: %s", err)), nil
 		}
