@@ -89,7 +89,9 @@ func (m *ServerManager) StartAll(ctx context.Context, rootDir string) error {
 				logging.Log(logging.LevelDebug, fmt.Sprintf("ServerManager.StartAll: initializing pre-created client %s", e.client.serverPath))
 				if err := e.client.Initialize(ctx, rootDir); err != nil {
 					for _, c := range started {
-						_ = c.Shutdown(context.Background())
+						if shutErr := c.Shutdown(ctx); shutErr != nil {
+							logging.Log(logging.LevelDebug, fmt.Sprintf("StartAll rollback shutdown: %v", shutErr))
+						}
 					}
 					return fmt.Errorf("initialize pre-created client: %w", err)
 				}
@@ -101,7 +103,9 @@ func (m *ServerManager) StartAll(ctx context.Context, rootDir string) error {
 		logging.Log(logging.LevelDebug, fmt.Sprintf("ServerManager.StartAll: starting %s", e.command[0]))
 		if err := client.Initialize(ctx, rootDir); err != nil {
 			for _, c := range started {
-				_ = c.Shutdown(context.Background())
+				if shutErr := c.Shutdown(ctx); shutErr != nil {
+					logging.Log(logging.LevelDebug, fmt.Sprintf("StartAll rollback shutdown: %v", shutErr))
+				}
 			}
 			return fmt.Errorf("initialize server %s: %w", e.command[0], err)
 		}
