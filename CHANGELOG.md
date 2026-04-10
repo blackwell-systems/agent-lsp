@@ -5,12 +5,39 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (2026-04-10) — Public pkg/ API
+
+Exposed a stable importable Go API so other programs can use agent-lsp's LSP client and speculative execution engine without running the MCP server:
+
+- **`pkg/types`** — all 29 LSP data types, 5 constants, and 2 constructor vars re-exported as type aliases from `internal/types`
+- **`pkg/lsp`** — `LSPClient`, `ServerManager`, `ClientResolver` interface, and all constructors; `ServerEntry` re-exported from `internal/config`
+- **`pkg/session`** — `SessionManager`, `SessionExecutor` interface, all speculative execution types and constants
+
+All `pkg/` types are aliases (`type X = internal.X`) — values are interchangeable with internal types without conversion. `pkg.go.dev` now indexes and renders the full public API surface.
+
+Added package-level doc comments to all 9 previously undocumented internal packages (`internal/lsp`, `internal/session`, `internal/types`, `internal/logging`, `internal/uri`, `internal/extensions`, `internal/tools`, `internal/resources`, `cmd/agent-lsp`).
+
+Added **Library Usage** section to `README.md` with import examples for `pkg/lsp`, `pkg/session`, and `pkg/types`. Updated `docs/architecture.md` to document the new `pkg/` layer.
+
+### Added (2026-04-10) — `--version` flag
+
+`agent-lsp --version` prints the version and exits. Defaults to `dev` for local builds; GoReleaser injects the release tag at build time via `-ldflags="-X main.Version=x.y.z"`. The MCP server's `Implementation.Version` field now reads from the same variable.
+
+### Fixed (2026-04-10) — Docker image build failures
+
+- **`go`/gopls** — `apt golang-go` installs Go 1.19, too old for gopls. Switched to fetching the latest Go tarball from `go.dev/VERSION` at build time.
+- **`ruby`/solargraph** — added `build-essential` for native C extension compilation (`prism`).
+- **`csharp`** — `csharp-ls` NuGet package lacks `DotnetToolSettings.xml`; moved to `LSP_SERVERS` runtime-only with a clear error message.
+- **`dart`** — not in standard Debian bookworm repos; moved to `LSP_SERVERS` runtime-only.
+- **combo images** — inline Dockerfile assumed `npm` and `go` were in the base image; fixed to install nodejs/npm and Go from `go.dev` when needed.
+- Per-language tag table in `DOCKER.md` corrected: removed 12 tags that were never published; split into published tags and `LSP_SERVERS`-only languages with install notes.
+
 ### Added (2026-04-10) — Docker image distribution (ghcr.io)
 
 Tiered Docker image distribution published to `ghcr.io/blackwell-systems/agent-lsp`:
 
 - **`:latest` (base)** — binary only, no language servers, ~50MB. Supports `LSP_SERVERS=gopls,pyright,...` env var for runtime install with `/var/cache/lsp-servers` volume caching.
-- **Per-language tags** (`:go`, `:typescript`, `:python`, `:ruby`, `:cpp`, `:csharp`, `:php`, `:dart`) — extend base, one language server pre-installed.
+- **Per-language tags** (`:go`, `:typescript`, `:python`, `:ruby`, `:cpp`, `:php`) — extend base, one language server pre-installed.
 - **Combo tags** (`:web`, `:backend`, `:fullstack`) — curated multi-language images for common stacks.
 - **`:full`** — all package-manager-installable language servers (~2–3GB).
 - `Dockerfile`, `Dockerfile.lang`, `Dockerfile.full` — multi-stage builds on `debian:bookworm-slim`.
