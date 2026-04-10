@@ -585,6 +585,7 @@ waves:
             - Do NOT reformat paragraphs or reflow any text.
           files:
             - README.md
+      base_commit: 29a8a246684645b61552505c386f377a7bd0bbab
     - number: 2
       agents:
         - id: C
@@ -769,6 +770,57 @@ quality_gates:
         - type: test
           command: GOWORK=off go test ./internal/... ./cmd/... ./pkg/...
           required: true
+completion_reports:
+    A:
+        status: complete
+        branch: saw/test-coverage-gaps/wave1-agent-A
+        commit: c656872
+        files_changed:
+            - test/multi_lang_test.go
+        verification: PASS
+        notes: 'Added sub-cases A-D to testWorkspaceFolders: list-after-add verification, list-after-remove verification, remove-nonexistent error path, multi-folder add/remove. Build clean, vet clean, all unit tests pass. Postconditions: 5 list_workspace_folders calls (>=3 required), 1 nonexistent reference (>=1 required).'
+    B:
+        status: complete
+        branch: saw/test-coverage-gaps/wave1-agent-B
+        commit: 4ea8558
+        files_changed:
+            - pkg/lsp/lsp_test.go
+        files_created:
+            - pkg/lsp/lsp_test.go
+        tests_added:
+            - TestPkgLSPCompileSmoke
+        verification: PASS
+        notes: Compile-smoke test created. Build, test (SKIP), vet, and postcondition all pass. No LSP binary started.
+    D:
+        status: complete
+        branch: saw/test-coverage-gaps/wave1-agent-D
+        commit: d0d36a0
+        files_created:
+            - pkg/session/session_test.go
+        tests_added:
+            - TestPkgSessionCompileSmoke
+        verification: PASS
+        notes: Compile smoke test created. Build passes, test SKIPs as expected, vet clean, postcondition (SessionExecutor count=4) satisfied.
+    E:
+        status: complete
+        branch: saw/test-coverage-gaps/wave1-agent-E
+        commit: dbb470a
+        files_changed:
+            - pkg/types/types_test.go
+        files_created:
+            - pkg/types/types_test.go
+        tests_added:
+            - TestPkgTypesAliasAssignability
+        verification: PASS
+        notes: Alias assignability smoke test written. Build, test (SKIP), vet, and postcondition all pass. No existing files modified.
+    F:
+        status: complete
+        branch: saw/test-coverage-gaps/wave1-agent-F
+        commit: 9ad147e
+        files_changed:
+            - README.md
+        verification: PASS
+        notes: Badge updated from 49/50 to 50/50. Prose updated from 47/50 to 50/50. All three grep verification checks pass.
 pre_mortem:
     overall_risk: low
     rows:
@@ -871,6 +923,6 @@ critic_report:
     summary: 'All six agent briefs verified against the codebase. File existence checks pass: test/multi_lang_test.go and README.md exist for modification; the three pkg/ test files do not exist (correct for action:new). Symbol accuracy checks pass: testWorkspaceFolders at line 1081 matches the exact snippet shown in Agent A''s brief; textFromResult, callTool, getMultilangBinary, testDir all confirmed present; NewLSPClient/NewSingleServerManager/NewMultiServerManager signatures match internal/lsp exactly; ClientResolver interface methods match pkg/lsp/lsp.go; NewSessionManager/NewSerializedExecutor/Acquire/Release signatures match internal/session exactly; all type aliases in pkg/types/doc.go match the assignability assertions in Agent E''s brief. The README badge (49%2F50 on line 8) and prose (47/50 on line 252) targets exist as described. One advisory warning: Agent C''s brief contradicts itself — it says ''the new function goes AFTER the last function in the file'' but then instructs appending after TestGetCrossRepoReferences, which is followed by statusIcon and printMultiLangSummary helper functions. Either insertion point compiles correctly; the inconsistency is advisory only.'
     reviewed_at: "2026-04-10T23:25:44Z"
     issue_count: 1
-state: "REVIEWED"
+state: REVIEWED
 original_branch: main
 injection_method: hook
