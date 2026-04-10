@@ -33,7 +33,7 @@
 | Clojure | clojure-lsp | ✅ passing |
 | Nix | nil | ✅ passing |
 | Dart | dart language-server | ✅ passing |
-| MongoDB | mongodb-language-server | ✅ passing (mongo:7 service container) |
+| MongoDB | mongodb-language-server | 🔍 investigating (continue-on-error; server bundled in VS Code extension, not published standalone) |
 
 ---
 
@@ -55,7 +55,7 @@
 | `multi-lang-clojure` | Clojure | ubuntu-latest |
 | `multi-lang-nix` | Nix | ubuntu-latest |
 | `multi-lang-dart` | Dart | ubuntu-latest |
-| `multi-lang-mongodb` | MongoDB | ubuntu-latest (mongo:7 service) |
+| `multi-lang-mongodb` | MongoDB | ubuntu-latest (continue-on-error) |
 | `speculative-test` | session lifecycle (gopls) | ubuntu-latest |
 
 ---
