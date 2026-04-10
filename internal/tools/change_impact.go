@@ -68,6 +68,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 	testFilesSet := map[string]bool{}
 	var testFunctions []symbolRef
 	var nonTestCallers []symbolRef
+	var refWarnings []string
 
 	// collectExported walks a DocumentSymbol tree and collects exported symbols.
 	// For Go, only symbols whose first character is uppercase are exported.
@@ -88,9 +89,12 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 					Line:      sym.SelectionRange.Start.Line,
 					Character: sym.SelectionRange.Start.Character,
 				}
-				locs, _ := WithDocument[[]types.Location](ctx, client, filePath, langID, func(fURI string) ([]types.Location, error) {
+				locs, refErr := WithDocument[[]types.Location](ctx, client, filePath, langID, func(fURI string) ([]types.Location, error) {
 					return client.GetReferences(ctx, fURI, pos, false)
 				})
+				if refErr != nil {
+					refWarnings = append(refWarnings, fmt.Sprintf("warning: GetReferences failed for %s in %s: %s", sym.Name, filePath, refErr))
+				}
 
 				for _, loc := range locs {
 					refPath, err := URIToFilePath(loc.URI)
@@ -179,6 +183,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 		"test_functions":   testFunctions,
 		"non_test_callers": nonTestCallers,
 		"summary":          summary,
+		"warnings":         refWarnings,
 	}
 
 	data, err := json.Marshal(response)
