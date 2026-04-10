@@ -303,6 +303,70 @@ func TestParseBuildErrors_NewLanguages_NoErrors(t *testing.T) {
 	}
 }
 
+// TestParseBuildErrors_TypeScript verifies TypeScript compiler error parsing.
+func TestParseBuildErrors_TypeScript(t *testing.T) {
+	input := []byte("src/index.ts(5,3): error TS2322: Type 'string' is not assignable to type 'number'\n")
+	errors := parseBuildErrors("typescript", input)
+	if len(errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(errors))
+	}
+	if errors[0].File != "src/index.ts" {
+		t.Errorf("expected File=src/index.ts, got %q", errors[0].File)
+	}
+	if errors[0].Line != 5 {
+		t.Errorf("expected Line=5, got %d", errors[0].Line)
+	}
+	if errors[0].Column != 3 {
+		t.Errorf("expected Column=3, got %d", errors[0].Column)
+	}
+}
+
+// TestParseBuildErrors_Rust verifies Rust compiler error parsing.
+func TestParseBuildErrors_Rust(t *testing.T) {
+	input := []byte("error[E0308]: mismatched types\n --> src/main.rs:10:5\n")
+	errors := parseBuildErrors("rust", input)
+	if len(errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(errors))
+	}
+	if errors[0].File != "src/main.rs" {
+		t.Errorf("expected File=src/main.rs, got %q", errors[0].File)
+	}
+	if errors[0].Line != 10 {
+		t.Errorf("expected Line=10, got %d", errors[0].Line)
+	}
+	if errors[0].Column != 5 {
+		t.Errorf("expected Column=5, got %d", errors[0].Column)
+	}
+}
+
+// TestParseBuildErrors_Python verifies mypy/pyflakes-style error parsing.
+func TestParseBuildErrors_Python(t *testing.T) {
+	input := []byte("app/models.py:23: error: Argument 1 to \"open\" has incompatible type \"int\"\n")
+	errors := parseBuildErrors("python", input)
+	if len(errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(errors))
+	}
+	if errors[0].File != "app/models.py" {
+		t.Errorf("expected File=app/models.py, got %q", errors[0].File)
+	}
+	if errors[0].Line != 23 {
+		t.Errorf("expected Line=23, got %d", errors[0].Line)
+	}
+}
+
+// TestParseBuildErrors_NoErrors_TypeScript_Rust_Python verifies clean output.
+func TestParseBuildErrors_NoErrors_TypeScript_Rust_Python(t *testing.T) {
+	languages := []string{"typescript", "rust", "python"}
+	for _, lang := range languages {
+		t.Run(lang, func(t *testing.T) {
+			result := parseBuildErrors(lang, []byte("Build succeeded.\n"))
+			if len(result) != 0 {
+				t.Errorf("expected 0 errors for clean output, got %d", len(result))
+			}
+		})
+	}
+}
+
 // TestFindTestFiles_CSharp verifies that FindTestFiles finds *Test*.cs files.
 func TestFindTestFiles_CSharp(t *testing.T) {
 	dir := t.TempDir()
