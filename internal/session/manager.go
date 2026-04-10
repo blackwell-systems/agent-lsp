@@ -6,15 +6,14 @@ import (
 	"encoding/hex"
 	"fmt"
 	"maps"
-	"net/url"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
+	internaluri "github.com/blackwell-systems/agent-lsp/internal/uri"
 )
 
 // SessionManager manages the lifecycle of simulation sessions.
@@ -125,7 +124,7 @@ func (m *SessionManager) ApplyEdit(ctx context.Context, sessionID, fileURI strin
 		}
 
 		// Read file content from disk.
-		path := uriToPath(fileURI)
+		path := internaluri.URIToPath(fileURI)
 		content, err := os.ReadFile(path)
 		if err != nil {
 			session.MarkDirty(fmt.Errorf("reading file %s: %w", path, err))
@@ -339,8 +338,8 @@ func (m *SessionManager) Commit(ctx context.Context, sessionID, target string, a
 
 	// If apply=true, write files to disk.
 	if apply {
-		for uri, content := range session.Contents {
-			path := uriToPath(uri)
+		for fileURI, content := range session.Contents {
+			path := internaluri.URIToPath(fileURI)
 			if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 				session.MarkDirty(fmt.Errorf("writing file %s: %w", path, err))
 				return nil, fmt.Errorf("writing file %s: %w", path, err)
@@ -350,9 +349,9 @@ func (m *SessionManager) Commit(ctx context.Context, sessionID, target string, a
 			// Notify LSP of the change by sending didChange.
 			// If notification fails, mark session dirty — LSP state is now stale
 			// relative to disk content and callers must be informed.
-			if err := session.Client.OpenDocument(ctx, uri, content, session.Language); err != nil {
-				session.MarkDirty(fmt.Errorf("LSP notification failed after commit for %s: %w", uri, err))
-				logging.Log(logging.LevelWarning, fmt.Sprintf("notifying LSP of committed change for %s: %v", uri, err))
+			if err := session.Client.OpenDocument(ctx, fileURI, content, session.Language); err != nil {
+				session.MarkDirty(fmt.Errorf("LSP notification failed after commit for %s: %w", fileURI, err))
+				logging.Log(logging.LevelWarning, fmt.Sprintf("notifying LSP of committed change for %s: %v", fileURI, err))
 			}
 		}
 	}
@@ -430,68 +429,9 @@ func (m *SessionManager) Destroy(ctx context.Context, sessionID string) error {
 }
 
 // applyRangeEdit applies a range edit to content in-memory and returns the new content.
-// Algorithm mirrors LSPClient.applyEditsToFile in internal/lsp/client.go.
-// SYNC: if applyEditsToFile changes its line-splice logic, update this function too.
+// Delegates to internaluri.ApplyRangeEdit — canonical shared implementation (L5).
 func applyRangeEdit(content string, rng types.Range, newText string) string {
-	lines := strings.Split(content, "\n")
-
-	startLine := rng.Start.Line
-	startChar := rng.Start.Character
-	endLine := rng.End.Line
-	endChar := rng.End.Character
-
-	// Clamp bounds.
-	if startLine >= len(lines) {
-		startLine = len(lines) - 1
-	}
-	if endLine >= len(lines) {
-		endLine = len(lines) - 1
-	}
-
-	// Extract text before the edit range.
-	before := ""
-	if startLine >= 0 && startLine < len(lines) {
-		l := lines[startLine]
-		if startChar > len(l) {
-			startChar = len(l)
-		}
-		before = l[:startChar]
-	}
-
-	// Extract text after the edit range.
-	after := ""
-	if endLine >= 0 && endLine < len(lines) {
-		l := lines[endLine]
-		if endChar > len(l) {
-			endChar = len(l)
-		}
-		after = l[endChar:]
-	}
-
-	// Split newText into lines.
-	newLines := strings.Split(newText, "\n")
-	newLines[0] = before + newLines[0]
-	newLines[len(newLines)-1] += after
-
-	// Splice lines: keep everything before startLine, insert newLines, keep everything after endLine.
-	result := make([]string, 0, len(lines)-(endLine-startLine)+len(newLines))
-	result = append(result, lines[:startLine]...)
-	result = append(result, newLines...)
-	result = append(result, lines[endLine+1:]...)
-
-	return strings.Join(result, "\n")
-}
-
-// uriToPath converts a file:// URI to a filesystem path,
-// correctly decoding percent-encoded characters per RFC 3986.
-func uriToPath(uri string) string {
-	if u, err := url.Parse(uri); err == nil && u.Path != "" {
-		return u.Path
-	}
-	if strings.HasPrefix(uri, "file://") {
-		return uri[len("file://"):]
-	}
-	return uri
+	return internaluri.ApplyRangeEdit(content, rng, newText)
 }
 
 // languageToExtension maps a language ID to a file extension for ClientForFile routing.
