@@ -1,3 +1,4 @@
+completion_date: "2026-04-10"
 title: Expose Public pkg/ API
 feature_slug: public-pkg-api
 verdict: SUITABLE
@@ -996,6 +997,7 @@ waves:
             - cmd/agent-lsp/doc.go
             - docs/architecture.md
             - README.md
+      base_commit: 0c02442054e5252d7c77a67a308bc7fc210f6a3c
 quality_gates:
     level: standard
     gates:
@@ -1008,6 +1010,69 @@ quality_gates:
         - type: test
           command: GOWORK=off go test ./internal/... ./cmd/...
           required: true
+completion_reports:
+    A:
+        status: complete
+        branch: saw/public-pkg-api/wave1-agent-A
+        commit: 7c2fbc9
+        files_changed:
+            - pkg/types/doc.go
+        files_created:
+            - pkg/types/doc.go
+        verification: PASS
+        notes: pkg/types package created with 29 type aliases, 5 const re-exports, and 2 var constructor aliases. Build and vet clean. All postcondition greps pass.
+    B:
+        status: complete
+        branch: saw/public-pkg-api/wave1-agent-B
+        commit: 96cebbe
+        files_changed:
+            - pkg/lsp/doc.go
+            - pkg/lsp/lsp.go
+        files_created:
+            - pkg/lsp/doc.go
+            - pkg/lsp/lsp.go
+        verification: PASS
+        notes: pkg/lsp re-export package created. Type aliases for LSPClient and ServerManager, ClientResolver interface re-declared matching internal/lsp exactly. Build and vet clean. All postconditions pass.
+    C:
+        status: complete
+        branch: saw/public-pkg-api/wave1-agent-C
+        commit: 6124f0a
+        files_changed:
+            - pkg/session/doc.go
+            - pkg/session/session.go
+        files_created:
+            - pkg/session/doc.go
+            - pkg/session/session.go
+        verification: PASS
+        notes: pkg/session re-export package created. All type aliases, constants, constructor var-aliases, and SessionExecutor interface implemented. Build and vet clean. All 4 postconditions pass.
+    D:
+        status: complete
+        branch: saw/public-pkg-api/wave1-agent-D
+        commit: 7d113c4
+        files_changed:
+            - internal/lsp/doc.go
+            - internal/session/doc.go
+            - internal/types/doc.go
+            - internal/logging/doc.go
+            - internal/uri/doc.go
+            - internal/extensions/doc.go
+            - internal/tools/doc.go
+            - internal/resources/doc.go
+            - cmd/agent-lsp/doc.go
+            - docs/architecture.md
+            - README.md
+        files_created:
+            - internal/lsp/doc.go
+            - internal/session/doc.go
+            - internal/types/doc.go
+            - internal/logging/doc.go
+            - internal/uri/doc.go
+            - internal/extensions/doc.go
+            - internal/tools/doc.go
+            - internal/resources/doc.go
+            - cmd/agent-lsp/doc.go
+        verification: PASS
+        notes: All 9 internal package doc.go files created. cmd/agent-lsp/doc.go created. docs/architecture.md updated with Public API (pkg/) section. README.md updated with Library Usage section and installation note. Build, vet, and tests all pass.
 pre_mortem:
     overall_risk: low
     rows:
@@ -1093,6 +1158,5 @@ critic_report:
     summary: All four agent briefs are accurate against the codebase. Agent A, B, and C all create new pkg/ files and their symbol references (types, constructors, interfaces) match the internal packages exactly. internal/lsp/resolver.go's ClientResolver interface (4 methods) matches the brief. internal/session/types.go's SessionExecutor interface matches exactly. All constructors (NewLSPClient, NewSingleServerManager, NewMultiServerManager, NewSessionManager, NewSerializedExecutor) exist with correct signatures. config.ServerEntry exists in internal/config. No existing doc.go files conflict with Agent D's new files. No existing package doc comments exist in the 9 targeted internal packages (only internal/config has one, which is correctly excluded). The docs/architecture.md Package Structure closing fence and README Installation section patterns match what Agent D is instructed to modify. Two advisory complexity_balance warnings are raised for Agent D, who owns 11 of 15 total files (73%).
     reviewed_at: "2026-04-10T20:56:04Z"
     issue_count: 2
-state: "REVIEWED"
-original_branch: main
+state: COMPLETE
 injection_method: hook
