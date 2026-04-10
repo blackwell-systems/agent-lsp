@@ -17,7 +17,7 @@ Language servers are the intelligence layer behind IDE features: go-to-definitio
 
 agent-lsp solves both problems. It is a **stateful runtime** over real language servers, not a bridge. It maintains a persistent warm session and adds a **skill layer** that wraps correct tool sequences into single-command workflows agents actually use.
 
-**47 tools** across navigation, analysis, refactoring, and formatting; **28 CI-verified** end-to-end against real language servers across **26 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+**47 tools** across navigation, analysis, refactoring, and formatting; **28 CI-verified** end-to-end against real language servers across **29 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
 **Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One agent-lsp process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright; no reconfiguration when you switch projects.
 
@@ -110,6 +110,9 @@ agent-lsp runs on top of real language servers. Install the servers for your sta
 | Elixir | `elixir-ls` | [GitHub releases](https://github.com/elixir-lsp/elixir-ls/releases) |
 | Prisma | `prisma-language-server` | `npm i -g @prisma/language-server` |
 | SQL | `sqls` | `go install github.com/sqls-server/sqls@latest` |
+| Clojure | `clojure-lsp` | [GitHub releases](https://github.com/clojure-lsp/clojure-lsp/releases) |
+| Nix | `nil` | [GitHub releases](https://github.com/oxalica/nil/releases) |
+| Dart | `dart language-server` | Ships with Dart SDK (`brew install dart`) |
 
 ### Step 2: Add to your AI config
 
@@ -147,7 +150,7 @@ Then use any of the 47 tools. The session persists; no need to restart when swit
 
 | | agent-lsp | other MCP-LSP implementations |
 |--|---------|---------------------|
-| Languages (CI-verified) | **26** (end-to-end integration tests) | config-listed, untested |
+| Languages (CI-verified) | **29** (end-to-end integration tests) | config-listed, untested |
 | Tools | **47** | 3–18 |
 | Multi-server routing | **✓** (one process, many languages) | varies |
 | LSP spec compliance | **3.17, built to spec** | ad hoc |
@@ -206,16 +209,19 @@ Tier 2 results per language from the latest CI run:
 | Elixir | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
 | Prisma | — | — | — | — | — | — | — | — | — | — | — | — | — |
 | SQL | pass | pass | pass | pass | pass | pass | — | — | — | pass | — | — | — |
+| Clojure | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Nix | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Dart | — | — | — | — | — | — | — | — | — | — | — | — | — |
 
-Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout (a known jdtls cold-start characteristic, not a tool bug). Scala (metals) runs in a separate CI job with `continue-on-error: true` and a 30-minute timeout; metals requires sbt compilation on first start and results are informational. Swift (`sourcekit-lsp`) runs on a `macos-latest` runner since sourcekit-lsp ships with Xcode. Prisma runs with `continue-on-error: true`; the language server requires VS Code extension host features and is under active investigation. SQL (sqls) requires a live PostgreSQL service container; the CI job provisions postgres:16 automatically. `type_hierarchy` is tested on Java (jdtls) and TypeScript (typescript-language-server); TypeScript skips when the server does not return a hierarchy item at the configured position.
+Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout (a known jdtls cold-start characteristic, not a tool bug). Scala (metals) runs in a separate CI job with `continue-on-error: true` and a 30-minute timeout; metals requires sbt compilation on first start and results are informational. Swift (`sourcekit-lsp`) runs on a `macos-latest` runner since sourcekit-lsp ships with Xcode. Prisma runs with `continue-on-error: true`; the language server requires VS Code extension host features and is under active investigation. SQL (sqls) requires a live PostgreSQL service container; the CI job provisions postgres:16 automatically. `type_hierarchy` is tested on Java (jdtls) and TypeScript (typescript-language-server); TypeScript skips when the server does not return a hierarchy item at the configured position. Clojure (`clojure-lsp`), Nix (`nil`), and Dart (`dart language-server`) were added in the 29-language expansion; Tier 2 results shown after first CI run.
 
 ## Tools
 
 All tools require `start_lsp` to be called first.
 
-**CI coverage:** The following tools are end-to-end integration-tested against real language servers on every CI run across all 26 languages:
+**CI coverage:** The following tools are end-to-end integration-tested against real language servers on every CI run across all 29 languages:
 
-- **Tier 1** (4 tools, all 26 languages): `start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`
+- **Tier 1** (4 tools, all 29 languages): `start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`
 - **Tier 2** (28 tools): `get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`, `get_info_on_location`, `call_hierarchy`, `get_semantic_tokens`, `get_signature_help`, `get_document_highlights`, `get_inlay_hints`, `get_code_actions`, `prepare_rename`, `rename_symbol`, `get_server_capabilities`, `add_workspace_folder`, `go_to_type_definition`, `go_to_implementation`, `format_range`, `apply_edit`, `detect_lsp_servers`, `close_document`, `did_change_watched_files`, `run_build`, `run_tests`
 
 Speculative session tools (`create_simulation_session`, `simulate_edit`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session`, `commit_session`, `discard_session`, `destroy_session`) are covered by `TestSpeculativeSessions` in `test/speculative_test.go`. Remaining tools (`restart_lsp_server`, `execute_command`, `set_log_level`) are unit tested.

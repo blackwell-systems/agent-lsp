@@ -5,6 +5,11 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (2026-04-09) — Language expansion (29 languages)
+- **Clojure integration test** — `clojure-lsp`; fixture at `test/fixtures/clojure/` with `deps.edn` (empty map for project recognition) and `src/fixture/core.clj` (7-line file with `greet` function at line 3 col 7, call site at line 7 col 13); dedicated `multi-lang-clojure` CI job installing clojure-lsp native binary
+- **Nix integration test** — `nil` (Nix language server); fixture at `test/fixtures/nix/flake.nix` (9-line flake with `helper` binding at line 5 col 5, call site at line 7 col 21); `supportsFormatting: false`; dedicated `multi-lang-nix` CI job installing nil binary
+- **Dart integration test** — `dart language-server`; fixture at `test/fixtures/dart/` with `pubspec.yaml` (SDK `>=3.0.0 <4.0.0`), `lib/fixture.dart` (`Greeter` class at line 1 col 7, `greet` method at line 2 col 10), `lib/caller.dart` (imports and calls `Greeter`; `Greeter` at col 13, `greet` at col 11); dedicated `multi-lang-dart` CI job installing Dart SDK via apt; language count updated 26 → 29
+
 ### Added (2026-04-10) — Language expansion (26 languages)
 - **SQL integration test** — `sqls` (`go install github.com/sqls-server/sqls@latest`); fixture at `test/fixtures/sql/` with `schema.sql` (CREATE TABLE person + post), `query.sql` (two SELECT statements, 18 lines, calibrated hover/completion/reference positions), `.sqls.yml` (postgresql DSN); `serverArgs: []string{"--config", filepath.Join(fixtureBase, "sql", ".sqls.yml")}` — config path is resolved at test time, not hardcoded; dedicated `multi-lang-sql` CI job with `postgres:16` service container, `pg_isready` health check, `psql` schema load step, and `PGPASSWORD` env for the load command; supportsFormatting/rename/inlayHints all false (sqls does not implement them); language count updated 25 → 26
 - **JSON-RPC string ID support** — `jsonrpcMsg.ID` changed from `*int` to `json.RawMessage`; dispatch now handles both integer and string IDs per JSON-RPC 2.0 spec; `sendResponse` echoes the raw ID bytes verbatim; `sendRequest` marshals integer IDs into RawMessage; fixes compatibility with servers that use string IDs (e.g. `prisma-language-server`)

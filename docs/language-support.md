@@ -30,6 +30,9 @@
 | Elixir | elixir-ls | ⚠️ best-effort (continue-on-error CI job) |
 | Prisma | prisma-language-server | 🔍 investigating (continue-on-error; server requires VS Code extension host) |
 | SQL | sqls | ✅ passing (postgres:16 service container) |
+| Clojure | clojure-lsp | ✅ passing |
+| Nix | nil | ✅ passing |
+| Dart | dart language-server | ✅ passing |
 
 ---
 
@@ -48,6 +51,9 @@
 | `multi-lang-elixir` | Elixir | ubuntu-latest (continue-on-error) |
 | `multi-lang-prisma` | Prisma | ubuntu-latest (continue-on-error) |
 | `multi-lang-sql` | SQL | ubuntu-latest (postgres:16 service) |
+| `multi-lang-clojure` | Clojure | ubuntu-latest |
+| `multi-lang-nix` | Nix | ubuntu-latest |
+| `multi-lang-dart` | Dart | ubuntu-latest |
 | `speculative-test` | session lifecycle (gopls) | ubuntu-latest |
 
 ---
@@ -118,8 +124,8 @@ Each new language needs three things:
 
 | Tier | Languages | Count |
 |---|---|---|
-| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Swift, Zig, CSS, HTML, Terraform, Scala, Gleam, Elixir, Prisma, SQL | **26** |
-| Tier 3 candidates | Clojure, Nix, Dart, Bash, R | 3–5 |
-| **Potential total** | | **29–31** |
+| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Swift, Zig, CSS, HTML, Terraform, Scala, Gleam, Elixir, Prisma, SQL, Clojure, Nix, Dart | **29** |
+| Tier 3 candidates | Bash, MongoDB | 1–2 |
+| **Potential total** | | **30–31** |
 
-The 26-language set covers systems, web, JVM, scripting, infrastructure, config, functional, schema, and query domains.
+The 29-language set covers systems, web, JVM, scripting, infrastructure, config, functional, schema, query, and Nix/functional-package-manager domains.
