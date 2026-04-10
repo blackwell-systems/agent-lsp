@@ -4,7 +4,26 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode/utf8"
 )
+
+// utf16Offset returns the number of UTF-16 code units that precede
+// byteOffset in the UTF-8 string line, per LSP spec §3.4.
+// byteOffset must fall on a rune boundary within line.
+func utf16Offset(line string, byteOffset int) int {
+	units := 0
+	i := 0
+	for i < byteOffset {
+		r, size := utf8.DecodeRuneInString(line[i:])
+		if r >= 0x10000 {
+			units += 2 // surrogate pair in UTF-16
+		} else {
+			units++
+		}
+		i += size
+	}
+	return units
+}
 
 // ResolvePositionPattern resolves a "@@" cursor marker in a text pattern to
 // a 1-indexed line and column in the given file.
@@ -39,14 +58,16 @@ func ResolvePositionPattern(filePath, pattern string) (line, col int, err error)
 	// line is 1-indexed: count newlines before offset
 	line = strings.Count(fileContent[:offset], "\n") + 1
 
-	// col is 1-indexed: distance from the last newline before offset
+	// col is 1-indexed UTF-16 code-unit offset from the start of the line.
+	var lineStart int
 	lastNL := strings.LastIndex(fileContent[:offset], "\n")
 	if lastNL < 0 {
-		// no newline before offset means we're on the first line
-		col = offset + 1
+		lineStart = 0
 	} else {
-		col = offset - lastNL
+		lineStart = lastNL + 1
 	}
+	lineContent := fileContent[lineStart:offset]
+	col = utf16Offset(lineContent, len(lineContent)) + 1
 
 	return line, col, nil
 }
