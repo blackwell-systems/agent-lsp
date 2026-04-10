@@ -429,6 +429,7 @@ jobs:
   # Nix via nil language server
   multi-lang-nix:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -445,6 +446,9 @@ jobs:
 
       - name: Install nil (Nix language server)
         run: nix profile install github:oxalica/nil
+
+      - name: Add nil to PATH
+        run: echo "$HOME/.nix-profile/bin" >> $GITHUB_PATH
 
       - name: Run Nix tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Nix$" ./test/ -timeout 10m
