@@ -26,7 +26,7 @@ func HandleAddWorkspaceFolder(ctx context.Context, client *lsp.LSPClient, args m
 		return types.ErrorResult("path is required"), nil
 	}
 
-	if err := client.AddWorkspaceFolder(path); err != nil {
+	if err := client.AddWorkspaceFolder(ctx, path); err != nil {
 		return types.ErrorResult(fmt.Sprintf("add_workspace_folder: %s", err)), nil
 	}
 
@@ -42,7 +42,7 @@ func HandleAddWorkspaceFolder(ctx context.Context, client *lsp.LSPClient, args m
 }
 
 // HandleRemoveWorkspaceFolder removes a directory from the LSP workspace.
-func HandleRemoveWorkspaceFolder(_ context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleRemoveWorkspaceFolder(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -52,7 +52,7 @@ func HandleRemoveWorkspaceFolder(_ context.Context, client *lsp.LSPClient, args 
 		return types.ErrorResult("path is required"), nil
 	}
 
-	if err := client.RemoveWorkspaceFolder(path); err != nil {
+	if err := client.RemoveWorkspaceFolder(ctx, path); err != nil {
 		return types.ErrorResult(fmt.Sprintf("remove_workspace_folder: %s", err)), nil
 	}
 
