@@ -51,7 +51,9 @@ func HandleRestartLspServer(ctx context.Context, client *lsp.LSPClient, args map
 	if err := client.Restart(ctx, rootDir); err != nil {
 		return types.ErrorResult(fmt.Sprintf("failed to restart LSP server: %s", err)), nil
 	}
-	return types.TextResult("LSP server restarted successfully"), nil
+	// M4: In multi-server configurations only the default client is restarted.
+	// Other configured servers remain running. Restart each independently if needed.
+	return types.TextResult("LSP server restarted successfully. Note: in multi-server configurations only the default server was restarted; other configured servers are unaffected."), nil
 }
 
 // HandleOpenDocument opens a document in the LSP server.

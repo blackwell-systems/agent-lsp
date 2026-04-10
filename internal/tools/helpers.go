@@ -23,8 +23,17 @@ func ValidateFilePath(filePath, rootDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("invalid file path: %w", err)
 	}
+	// L2: Resolve symlinks so in-workspace symlinks to out-of-workspace targets
+	// do not bypass the prefix check. EvalSymlinks errors on non-existent paths;
+	// fall back to lexical path to allow validation of not-yet-created files.
+	if resolved, evalErr := filepath.EvalSymlinks(clean); evalErr == nil {
+		clean = resolved
+	}
 	if rootDir != "" {
 		absRoot, _ := filepath.Abs(rootDir)
+		if resolvedRoot, evalErr := filepath.EvalSymlinks(absRoot); evalErr == nil {
+			absRoot = resolvedRoot
+		}
 		if clean != absRoot && !strings.HasPrefix(clean, absRoot+string(filepath.Separator)) {
 			return "", fmt.Errorf("file path %q is outside workspace root %q", clean, absRoot)
 		}
