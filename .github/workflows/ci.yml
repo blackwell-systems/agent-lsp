@@ -399,3 +399,76 @@ jobs:
 
       - name: Run SQL tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^SQL$" ./test/ -timeout 10m
+
+  # Clojure via clojure-lsp (native binary, no JVM needed)
+  multi-lang-clojure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install clojure-lsp
+        run: |
+          CLOJURE_LSP_VERSION=$(curl -fsSL https://api.github.com/repos/clojure-lsp/clojure-lsp/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          wget -q "https://github.com/clojure-lsp/clojure-lsp/releases/download/${CLOJURE_LSP_VERSION}/clojure-lsp-native-linux-amd64.zip" -O /tmp/clojure-lsp.zip
+          sudo unzip -q /tmp/clojure-lsp.zip -d /usr/local/bin
+          sudo chmod +x /usr/local/bin/clojure-lsp
+
+      - name: Run Clojure tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^Clojure$" ./test/ -timeout 10m
+
+  # Nix via nil language server
+  multi-lang-nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install nil (Nix language server)
+        run: |
+          NIL_VERSION=$(curl -fsSL https://api.github.com/repos/oxalica/nil/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          wget -q "https://github.com/oxalica/nil/releases/download/${NIL_VERSION}/nil-x86_64-unknown-linux-musl.tar.gz" -O /tmp/nil.tar.gz
+          sudo tar -xzf /tmp/nil.tar.gz -C /usr/local/bin --strip-components=1
+          sudo chmod +x /usr/local/bin/nil
+
+      - name: Run Nix tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^Nix$" ./test/ -timeout 10m
+
+  # Dart via dart analysis-server
+  multi-lang-dart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install Dart SDK
+        run: |
+          sudo apt-get install -y apt-transport-https
+          wget -qO- https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/dart.gpg
+          echo 'deb [signed-by=/usr/share/keyrings/dart.gpg arch=amd64] https://storage.googleapis.com/download.dartlang.org/linux/debian stable main' | sudo tee /etc/apt/sources.list.d/dart_stable.list
+          sudo apt-get update
+          sudo apt-get install -y dart
+
+      - name: Run Dart tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^Dart$" ./test/ -timeout 10m
