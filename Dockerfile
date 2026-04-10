@@ -33,6 +33,7 @@ COPY --from=builder /out/agent-lsp /usr/local/bin/agent-lsp
 
 # Copy and enable the entrypoint script (written by Agent C)
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY docker/lsp-servers.yaml /etc/agent-lsp/lsp-servers.yaml
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Create the LSP server cache directory used by the entrypoint for
