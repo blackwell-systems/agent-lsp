@@ -1,7 +1,0 @@
-{
-  "name": "fixture",
-  "version": "1.0.0",
-  "dependencies": {
-    "@prisma/client": "^6"
-  }
-}
