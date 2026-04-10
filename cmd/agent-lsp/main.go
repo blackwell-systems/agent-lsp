@@ -18,6 +18,11 @@ import (
 const gracefulShutdownTimeout = 5 * time.Second
 
 func main() {
+	if len(os.Args) == 2 && (os.Args[1] == "--version" || os.Args[1] == "-version") {
+		fmt.Println(Version)
+		os.Exit(0)
+	}
+
 	logging.SetLevelFromEnv()
 	parsed, err := config.ParseArgs(os.Args[1:])
 	if err != nil {

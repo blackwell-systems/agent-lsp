@@ -240,7 +240,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "agent-lsp",
-		Version: "0.1.0",
+		Version: Version,
 	}, &mcp.ServerOptions{
 		// Wire MCP log notifications once the client session initializes.
 		InitializedHandler: func(_ context.Context, req *mcp.InitializedRequest) {
