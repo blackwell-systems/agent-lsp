@@ -5,6 +5,12 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (2026-04-09) — Language expansion (25 languages)
+- **Gleam integration test** — `gleam lsp` (built-in to the Gleam binary, `serverArgs: ["lsp"]`); fixture at `test/fixtures/gleam/` with `gleam.toml`, `src/person.gleam`, `src/greeter.gleam`; full Tier 2 coverage including rename, highlights, code actions, and inlay hints; dedicated `multi-lang-gleam` CI job (downloads binary from GitHub releases)
+- **Elixir integration test** — `elixir-ls` (`language_server.sh` symlinked as `elixir-ls`); fixture at `test/fixtures/elixir/` with `mix.exs`, `lib/person.ex`, `lib/greeter.ex`; rename and inlay hints skipped (`renameSymbolLine: 0`, `inlayHintEndLine: 0` — ElixirLS does not implement those); dedicated `multi-lang-elixir` CI job using `erlef/setup-beam@v1` (Elixir 1.16 / OTP 26), `continue-on-error: true` due to ElixirLS cold-start variability
+- **Prisma integration test** — `prisma-language-server --stdio` (`npm i -g @prisma/language-server`); fixture at `test/fixtures/prisma/schema.prisma` — two-model schema (`Person`, `Post`) with a relation; call site and definition both in the same file (schema is a single-file language); inlay hints skipped; dedicated `multi-lang-prisma` CI job
+- **Language count updated 22 → 25** — README badge, prose, Tier 2 table, Language IDs list, comparison table, `docs/language-support.md`, `docs/tools.md`
+
 ### Added (2026-04-09) — Skills expansion (continued)
 - **`format_document` step folded into `/lsp-safe-edit` and `/lsp-verify`** — `format_document` → `apply_edit` is now an optional final step in both skills; in `/lsp-safe-edit` it fires after diagnostics are clean (Step 8, before the report); in `/lsp-verify` it fires after all three layers pass as a pre-commit cleanup; skipped when there are unresolved errors or the user did not request formatting; `format_document` added to `allowed-tools` in both skills
 - **`/lsp-format-code` skill** — format a file or selection via the language server's formatter (`gofmt` via gopls, `prettier` via tsserver, `rustfmt` via rust-analyzer, etc.); `format_document` for full file, `format_range` for selection; both return `TextEdit[]` applied via `apply_edit`; optional `get_server_capabilities` pre-check for `documentFormattingProvider`; post-apply `get_diagnostics` guard; multi-file protocol runs format calls in parallel then applies per-file sequentially; language notes table covers Go/TypeScript/Rust/Python/C

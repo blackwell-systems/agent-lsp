@@ -1,0 +1,609 @@
+title: 'Add SQL integration test with live PostgreSQL service container'
+feature_slug: sql-integration-test
+verdict: SUITABLE
+suitability_assessment: |-
+  The work decomposes into three disjoint file sets: (A) SQL fixture files, (B) the
+  CI job in ci.yml, and (C) the langConfig entry in multi_lang_test.go. Each agent
+  owns distinct files with no overlapping modifications. The interface between A and C
+  is the exact fixture file paths and line/column positions — fully specifiable before
+  implementation. Agent B only needs the agreed test name "SQL" to write the CI job.
+
+  Suitability questions:
+  1. File decomposition: 3 new fixture files (agent A), 1 edit to multi_lang_test.go
+     (agent C), 1 edit to ci.yml (agent B). Fully disjoint.
+  2. Investigation-first: No root cause analysis needed. sqls behavior is documented
+     and the test harness pattern is established across 25 existing languages.
+  3. Interface discoverability: Cross-agent interfaces are the fixture file paths and
+     calibrated positions — fully specifiable before implementation.
+  4. Pre-implementation status: No prior SQL integration exists. Pure TODO.
+  5. Parallelization value: Three independent agents with disjoint files, moderate
+     task complexity (fixture content calibration + Go edit + YAML authoring).
+
+  Estimated times:
+  - Scout phase: ~10 min
+  - Agent execution: ~3 agents x ~6 min avg = ~6 min with parallelism
+  - Merge and verification: ~3 min
+  Total SAW time: ~19 min
+
+  Sequential baseline: ~3 x 6 min = ~18 min + overhead
+  Time savings: marginal on time but coordination value is high — fixture calibration
+  is error-prone and benefits from dedicated focused ownership.
+
+  Recommendation: Proceed.
+
+test_command: GOWORK=off go test ./test/ -run TestMultiLanguage/^SQL$
+lint_command: GOWORK=off go vet ./...
+state: SCOUT_PENDING
+
+quality_gates:
+  level: standard
+  gates:
+    - type: build
+      command: GOWORK=off go build ./...
+      required: true
+    - type: lint
+      command: GOWORK=off go vet ./...
+      required: true
+    - type: test
+      command: GOWORK=off go test ./internal/... ./cmd/...
+      required: true
+
+scaffolds: []
+
+file_ownership:
+  - file: test/fixtures/sql/schema.sql
+    agent: A
+    wave: 1
+    action: new
+    depends_on: []
+  - file: test/fixtures/sql/query.sql
+    agent: A
+    wave: 1
+    action: new
+    depends_on: []
+  - file: test/fixtures/sql/.sqls.yml
+    agent: A
+    wave: 1
+    action: new
+    depends_on: []
+  - file: test/multi_lang_test.go
+    agent: C
+    wave: 2
+    action: modify
+    v048_exempt: true
+    depends_on: []
+  - file: .github/workflows/ci.yml
+    agent: B
+    wave: 1
+    action: modify
+    depends_on: []
+
+interface_contracts:
+  - name: SQL langConfig entry
+    description: |-
+      The langConfig struct literal appended to buildLanguageConfigs() in
+      test/multi_lang_test.go. All positions are calibrated against query.sql.
+      Agent C must add this entry verbatim. Agent A's fixture content must
+      match these positions exactly.
+    definition: |
+      langConfig{
+          name:               "SQL",
+          id:                 "sql",
+          binary:             "sqls",
+          serverArgs:         []string{"--config", filepath.Join(fixtureBase, "sql", ".sqls.yml")},
+          fixture:            filepath.Join(fixtureBase, "sql"),
+          file:               filepath.Join(fixtureBase, "sql", "query.sql"),
+          hoverLine:          7,
+          hoverColumn:        6,
+          definitionLine:     7,
+          definitionColumn:   6,
+          callSiteLine:       8,
+          callSiteColumn:     6,
+          referenceLine:      7,
+          referenceColumn:    6,
+          completionLine:     4,
+          completionColumn:   5,
+          workspaceSymbol:    "person",
+          supportsFormatting: false,
+          symbolName:         "person",
+          highlightLine:      7,
+          highlightColumn:    6,
+          inlayHintEndLine:   0,
+          renameSymbolLine:   0,
+          codeActionLine:     7,
+          codeActionEndLine:  9,
+      }
+    location: test/multi_lang_test.go
+
+  - name: SQL CI job
+    description: |-
+      A new GitHub Actions job named multi-lang-sql that uses a postgres:16
+      service container and runs only the SQL subtest. Runs sqls and psql
+      which are installed as part of the job steps.
+    definition: |
+      job name: multi-lang-sql
+      postgres service: image=postgres:16, POSTGRES_PASSWORD=postgres,
+        POSTGRES_DB=testdb, port 5432:5432,
+        health-check: pg_isready -U postgres
+      steps:
+        - checkout, setup-go
+        - build (GOWORK=off go build ./...)
+        - install psql client: sudo apt-get install -y postgresql-client
+        - setup schema: psql -h localhost -U postgres -d testdb -f test/fixtures/sql/schema.sql
+          with env PGPASSWORD=postgres
+        - install sqls: go install github.com/lighttiger2505/sqls@latest
+        - run test: GOWORK=off go test -v -run "TestMultiLanguage/^SQL$" ./test/ -timeout 10m
+    location: .github/workflows/ci.yml
+
+  - name: query.sql fixture content
+    description: |-
+      The primary SQL fixture file. Line/column positions in langConfig are
+      calibrated against this exact content. Agent A must write query.sql with
+      exactly this content; agent C uses the positions from this spec.
+    definition: |
+      Line 1:  -- Get all persons with their posts
+      Line 2:  SELECT
+      Line 3:    p.id,
+      Line 4:    p.name,
+      Line 5:    p.age,
+      Line 6:    po.title
+      Line 7:  FROM person p
+      Line 8:  JOIN post po ON po.author_id = p.id
+      Line 9:  WHERE p.age > 18;
+      Line 10: (blank line)
+      Line 11: -- Count posts per person
+      Line 12: SELECT
+      Line 13:   p.name,
+      Line 14:   COUNT(po.id) AS post_count
+      Line 15: FROM person p
+      Line 16: LEFT JOIN post po ON po.author_id = p.id
+      Line 17: GROUP BY p.name
+      Line 18: ORDER BY post_count DESC;
+
+      Position calibration:
+        hoverLine=7, hoverColumn=6: "FROM person p" — col 6 is "n" within "person"
+        completionLine=4, completionColumn=5: "  p.name," — col 5 is "n" after "p."
+        callSiteLine=8, callSiteColumn=6: "JOIN post po ON ..." — col 6 is "p" of "post"
+        referenceLine=7, referenceColumn=6: same as hover
+        highlightLine=7, highlightColumn=6: same as hover
+        codeActionLine=7, codeActionEndLine=9: spans FROM/JOIN/WHERE block
+    location: test/fixtures/sql/query.sql
+
+  - name: schema.sql fixture content
+    description: |-
+      DDL creating person and post tables. Loaded into testdb via psql before
+      running the SQL test in CI. sqls reads live schema from the DB to return
+      DB-aware completions (column names) rather than keyword-only.
+    definition: |
+      CREATE TABLE person (
+        id   SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        age  INTEGER      NOT NULL
+      );
+
+      CREATE TABLE post (
+        id        SERIAL PRIMARY KEY,
+        title     VARCHAR(200) NOT NULL,
+        author_id INTEGER      NOT NULL REFERENCES person(id)
+      );
+    location: test/fixtures/sql/schema.sql
+
+  - name: .sqls.yml fixture content
+    description: |-
+      sqls configuration file. The path to this file is passed via serverArgs using
+      filepath.Join(fixtureBase, "sql", ".sqls.yml") so the absolute path is resolved
+      at test execution time. The config uses localhost:5432 which is available in CI
+      via the postgres service container. Local runs skip gracefully when sqls is not
+      on PATH (exec.LookPath in the harness handles this).
+    definition: |
+      connections:
+        - alias: testdb
+          driver: postgresql
+          dataSourceName: host=localhost port=5432 user=postgres password=postgres dbname=testdb sslmode=disable
+    location: test/fixtures/sql/.sqls.yml
+
+waves:
+  - number: 1
+    agents:
+      - id: A
+        task: |-
+          ## Role
+          SQL fixture file author. Creates three files under test/fixtures/sql/.
+
+          ## What to implement
+
+          ### 1. Create test/fixtures/sql/schema.sql
+
+          File path: /Users/dayna.blackwell/code/agent-lsp/test/fixtures/sql/schema.sql
+
+          Content:
+          ```sql
+          CREATE TABLE person (
+            id   SERIAL PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            age  INTEGER      NOT NULL
+          );
+
+          CREATE TABLE post (
+            id        SERIAL PRIMARY KEY,
+            title     VARCHAR(200) NOT NULL,
+            author_id INTEGER      NOT NULL REFERENCES person(id)
+          );
+          ```
+
+          ### 2. Create test/fixtures/sql/query.sql
+
+          File path: /Users/dayna.blackwell/code/agent-lsp/test/fixtures/sql/query.sql
+
+          CRITICAL: Write this content EXACTLY as shown. Line numbers are calibrated
+          for the langConfig positions in multi_lang_test.go. Do not reformat,
+          reorder, or add/remove lines.
+
+          ```sql
+          -- Get all persons with their posts
+          SELECT
+            p.id,
+            p.name,
+            p.age,
+            po.title
+          FROM person p
+          JOIN post po ON po.author_id = p.id
+          WHERE p.age > 18;
+
+          -- Count posts per person
+          SELECT
+            p.name,
+            COUNT(po.id) AS post_count
+          FROM person p
+          LEFT JOIN post po ON po.author_id = p.id
+          GROUP BY p.name
+          ORDER BY post_count DESC;
+          ```
+
+          The file must have exactly 18 lines. Calibration summary:
+          - Line 7: "FROM person p" — hover column 6 hits "n" within "person"
+          - Line 8: "JOIN post po ON po.author_id = p.id" — callsite col 6 hits "p" of "post"
+          - Line 4: "  p.name," — completion col 5 hits "n" after "p." prefix
+
+          ### 3. Create test/fixtures/sql/.sqls.yml
+
+          File path: /Users/dayna.blackwell/code/agent-lsp/test/fixtures/sql/.sqls.yml
+
+          Content:
+          ```yaml
+          connections:
+            - alias: testdb
+              driver: postgresql
+              dataSourceName: host=localhost port=5432 user=postgres password=postgres dbname=testdb sslmode=disable
+          ```
+
+          ## Verification gate
+
+          1. All three fixture files exist:
+             ```
+             ls /Users/dayna.blackwell/code/agent-lsp/test/fixtures/sql/
+             ```
+             Expected: schema.sql  query.sql  .sqls.yml
+
+          2. query.sql has exactly 18 lines:
+             ```
+             wc -l /Users/dayna.blackwell/code/agent-lsp/test/fixtures/sql/query.sql
+             ```
+             Expected: 18
+
+          3. schema.sql contains both table definitions:
+             ```
+             grep -c 'CREATE TABLE' /Users/dayna.blackwell/code/agent-lsp/test/fixtures/sql/schema.sql
+             ```
+             Expected: 2
+
+          4. .sqls.yml contains the postgresql driver:
+             ```
+             grep -c 'driver: postgresql' /Users/dayna.blackwell/code/agent-lsp/test/fixtures/sql/.sqls.yml
+             ```
+             Expected: 1
+
+          ## Constraints
+          - Do NOT modify any files outside your ownership list (the three fixture files).
+          - Do NOT alter the line structure or indentation of query.sql — positions are
+            calibrated. Even changing two-space indent to four-space would shift column
+            numbers and break hover/completion.
+          - Do NOT put a trailing newline after line 18 of query.sql that would change
+            the wc -l count (a single trailing newline is acceptable as it makes the
+            count 18; a blank line after the last statement would make it 19).
+
+        files:
+          - test/fixtures/sql/schema.sql
+          - test/fixtures/sql/query.sql
+          - test/fixtures/sql/.sqls.yml
+        dependencies: []
+
+      - id: B
+        task: |-
+          ## Role
+          CI job author. Adds a new GitHub Actions job for the SQL integration test.
+
+          ## What to implement
+
+          Append a new job to /Users/dayna.blackwell/code/agent-lsp/.github/workflows/ci.yml.
+
+          The last job in ci.yml is `speculative-test`. Find the exact end of the file —
+          the final lines currently read:
+
+          ```yaml
+              - name: Run speculative session tests
+                run: GOWORK=off go test -v -run TestSpeculativeSessions ./test/ -timeout 10m
+          ```
+
+          After the last line of the speculative-test job (there is no trailing blank line
+          in the file), append the following block. Note: the new job must be at the same
+          indentation level as other top-level jobs (2-space indent under `jobs:`):
+
+          ```yaml
+
+            # SQL via sqls (requires live PostgreSQL service)
+            multi-lang-sql:
+              runs-on: ubuntu-latest
+              services:
+                postgres:
+                  image: postgres:16
+                  env:
+                    POSTGRES_PASSWORD: postgres
+                    POSTGRES_DB: testdb
+                  ports:
+                    - 5432:5432
+                  options: >-
+                    --health-cmd "pg_isready -U postgres"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+              steps:
+                - uses: actions/checkout@v4
+
+                - uses: actions/setup-go@v5
+                  with:
+                    go-version-file: 'go.mod'
+                    cache: true
+
+                - name: Build
+                  run: GOWORK=off go build ./...
+
+                - name: Install PostgreSQL client
+                  run: sudo apt-get install -y postgresql-client
+
+                - name: Load schema into testdb
+                  env:
+                    PGPASSWORD: postgres
+                  run: psql -h localhost -U postgres -d testdb -f test/fixtures/sql/schema.sql
+
+                - name: Install sqls
+                  run: go install github.com/lighttiger2505/sqls@latest
+
+                - name: Run SQL tests
+                  run: GOWORK=off go test -v -run "TestMultiLanguage/^SQL$" ./test/ -timeout 10m
+          ```
+
+          ## Verification gate
+
+          1. YAML parses without errors:
+             ```
+             python3 -c "import yaml; yaml.safe_load(open('/Users/dayna.blackwell/code/agent-lsp/.github/workflows/ci.yml'))"
+             ```
+             Expected: exit 0, no output.
+
+          2. New job name appears exactly once:
+             ```
+             grep -c 'multi-lang-sql:' /Users/dayna.blackwell/code/agent-lsp/.github/workflows/ci.yml
+             ```
+             Expected: 1
+
+          3. postgres:16 service image appears:
+             ```
+             grep -c 'postgres:16' /Users/dayna.blackwell/code/agent-lsp/.github/workflows/ci.yml
+             ```
+             Expected: 1
+
+          4. pg_isready health check appears:
+             ```
+             grep -c 'pg_isready' /Users/dayna.blackwell/code/agent-lsp/.github/workflows/ci.yml
+             ```
+             Expected: 1
+
+          5. sqls install step appears:
+             ```
+             grep -c 'lighttiger2505/sqls' /Users/dayna.blackwell/code/agent-lsp/.github/workflows/ci.yml
+             ```
+             Expected: 1
+
+          6. Build still passes:
+             ```
+             cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go build ./...
+             ```
+             Expected: exit 0.
+
+          ## Constraints
+          - Do NOT modify any files outside your ownership list (.github/workflows/ci.yml).
+          - Do NOT change the test filter; it must be exactly "TestMultiLanguage/^SQL$".
+          - Do NOT omit PGPASSWORD on the psql step — psql will hang waiting for a password
+            prompt without it.
+          - Do NOT add continue-on-error: true — the postgres service container is reliable
+            in CI and failures must be visible.
+          - Do NOT alter the indentation level of existing jobs when appending the new one.
+
+        files:
+          - .github/workflows/ci.yml
+        dependencies: []
+
+  - number: 2
+    type: integration
+    agents:
+      - id: C
+        task: |-
+          ## Role
+          Test config integrator. Adds the SQL langConfig entry to multi_lang_test.go.
+
+          ## What to implement
+
+          Add a new langConfig entry for "SQL" to the buildLanguageConfigs() function in
+          /Users/dayna.blackwell/code/agent-lsp/test/multi_lang_test.go.
+
+          The function returns a []langConfig slice. The last entry in the slice is the
+          Prisma entry, which ends with:
+
+          ```go
+          			codeActionLine:     10,
+          			codeActionEndLine:  15,
+          		},
+          	}
+          }
+          ```
+
+          Use the Edit tool to replace that exact text with the following (inserting the
+          new SQL entry before the closing braces of the slice):
+
+          ```go
+          			codeActionLine:     10,
+          			codeActionEndLine:  15,
+          		},
+          		{
+          			name:               "SQL",
+          			id:                 "sql",
+          			binary:             "sqls",
+          			serverArgs:         []string{"--config", filepath.Join(fixtureBase, "sql", ".sqls.yml")},
+          			fixture:            filepath.Join(fixtureBase, "sql"),
+          			file:               filepath.Join(fixtureBase, "sql", "query.sql"),
+          			hoverLine:          7,
+          			hoverColumn:        6,
+          			definitionLine:     7,
+          			definitionColumn:   6,
+          			callSiteLine:       8,
+          			callSiteColumn:     6,
+          			referenceLine:      7,
+          			referenceColumn:    6,
+          			completionLine:     4,
+          			completionColumn:   5,
+          			workspaceSymbol:    "person",
+          			supportsFormatting: false,
+          			symbolName:         "person",
+          			highlightLine:      7,
+          			highlightColumn:    6,
+          			inlayHintEndLine:   0,
+          			renameSymbolLine:   0,
+          			codeActionLine:     7,
+          			codeActionEndLine:  9,
+          		},
+          	}
+          }
+          ```
+
+          Notes on the positions (these are calibrated to query.sql — do not change them):
+          - hoverLine=7 / hoverColumn=6: cursor on "n" of "person" in "FROM person p"
+          - completionLine=4 / completionColumn=5: cursor on "n" after "p." in "  p.name,"
+            — sqls returns column names of the person table here
+          - callSiteLine=8 / callSiteColumn=6: cursor on "p" of "post" in the JOIN line
+          - renameSymbolLine=0: sqls does not support rename
+          - inlayHintEndLine=0: sqls does not support inlay hints
+          - supportsFormatting: false: sqls does not implement textDocument/formatting
+
+          ## Verification gate
+
+          1. Build compiles without errors:
+             ```
+             cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go build ./...
+             ```
+             Expected: exit 0.
+
+          2. Vet passes:
+             ```
+             cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go vet ./...
+             ```
+             Expected: exit 0.
+
+          3. SQL entry is present:
+             ```
+             grep -c '"SQL"' /Users/dayna.blackwell/code/agent-lsp/test/multi_lang_test.go
+             ```
+             Expected: 1
+
+          4. serverArgs uses filepath.Join (not a hardcoded absolute path):
+             ```
+             grep 'filepath.Join(fixtureBase, "sql", ".sqls.yml")' /Users/dayna.blackwell/code/agent-lsp/test/multi_lang_test.go
+             ```
+             Expected: at least 1 match.
+
+          5. The entry was inserted inside the slice (not after the closing brace):
+             ```
+             grep -A2 '"SQL"' /Users/dayna.blackwell/code/agent-lsp/test/multi_lang_test.go | head -5
+             ```
+             Expected: shows id: "sql", binary: "sqls" lines inside the struct.
+
+          ## Constraints
+          - Do NOT modify any files outside your ownership list (multi_lang_test.go).
+          - Do NOT change any existing langConfig entries — only add the new SQL entry.
+          - Do NOT hardcode an absolute path in serverArgs; use
+            filepath.Join(fixtureBase, "sql", ".sqls.yml") exactly as shown.
+          - Do NOT set renameSymbolLine or inlayHintEndLine to non-zero values; sqls
+            does not support those features.
+          - Do NOT place the new entry after the closing } of the slice — it must be
+            inserted before the final closing braces.
+
+        files:
+          - test/multi_lang_test.go
+        dependencies: []
+
+pre_mortem:
+  overall_risk: low
+  rows:
+    - scenario: |-
+        sqls returns keyword-only completions instead of DB-aware (column name)
+        completions because the DB connection fails at test time.
+      likelihood: medium
+      impact: medium
+      mitigation: |-
+        The test harness calls start_lsp with IsError=true guard (t.Skipf). If sqls
+        cannot connect to the DB it will fail to initialize and the test will be skipped
+        rather than failed. In CI the postgres service container guarantees DB availability.
+        Locally the test skips when sqls is not on PATH via exec.LookPath.
+    - scenario: |-
+        The fixture positions (hoverLine, completionColumn, etc.) don't align with
+        query.sql content because agent A changed the line structure.
+      likelihood: low
+      impact: high
+      mitigation: |-
+        The interface contract specifies query.sql content line-by-line and calibration
+        notes. Agent A's verification gate checks wc -l = 18. Agent C uses the
+        positions from the interface contract verbatim without re-deriving them.
+    - scenario: |-
+        serverArgs in the langConfig uses a hardcoded absolute path instead of
+        filepath.Join(fixtureBase, ...), causing the test to fail on any CI runner.
+      likelihood: medium
+      impact: high
+      mitigation: |-
+        Agent C's constraints and verification gate explicitly require and check for
+        filepath.Join(fixtureBase, "sql", ".sqls.yml"). The grep postcondition will
+        catch a hardcoded path before the agent completes.
+    - scenario: |-
+        The SQL langConfig entry is inserted outside the slice return value (after the
+        closing brace of buildLanguageConfigs), causing a compile error.
+      likelihood: low
+      impact: high
+      mitigation: |-
+        Agent C uses the verbatim anchor text that includes the Prisma entry's closing
+        brace and the slice terminator, so the Edit tool will match and replace the
+        correct location. The build verification gate catches compile errors immediately.
+    - scenario: |-
+        CI job YAML indentation is wrong, causing GitHub Actions to reject the workflow.
+      likelihood: low
+      impact: medium
+      mitigation: |-
+        Agent B's verification gate runs python3 yaml.safe_load on the file. Invalid
+        YAML (including indentation errors) will cause an exception and exit 1, surfacing
+        the error before the agent completes.
+    - scenario: |-
+        psql schema load step fails because postgresql-client is not available on ubuntu-latest.
+      likelihood: low
+      impact: medium
+      mitigation: |-
+        postgresql-client is a standard Ubuntu package available on ubuntu-latest runners.
+        The apt-get install step runs before the psql command and will fail visibly if
+        the package is unavailable.

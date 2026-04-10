@@ -1,6 +1,6 @@
 # Language Support
 
-## Current (22 languages, CI-tested)
+## Current (25 languages, CI-tested)
 
 | Language | Language Server | Status |
 |---|---|---|
@@ -26,6 +26,9 @@
 | HTML | vscode-html-language-server | ✅ passing |
 | Terraform | terraform-ls | ✅ passing |
 | Scala | metals | ⚠️ best-effort (cold-start; continue-on-error CI job) |
+| Gleam | gleam (built-in lsp) | ✅ passing |
+| Elixir | elixir-ls | ⚠️ best-effort (continue-on-error CI job) |
+| Prisma | prisma-language-server | ✅ passing |
 
 ---
 
@@ -40,6 +43,9 @@
 | `multi-lang-lua` | Lua | ubuntu-latest |
 | `multi-lang-swift` | Swift | macos-latest |
 | `multi-lang-scala` | Scala | ubuntu-latest (continue-on-error) |
+| `multi-lang-gleam` | Gleam | ubuntu-latest |
+| `multi-lang-elixir` | Elixir | ubuntu-latest (continue-on-error) |
+| `multi-lang-prisma` | Prisma | ubuntu-latest |
 | `speculative-test` | session lifecycle (gopls) | ubuntu-latest |
 
 ---
@@ -110,8 +116,8 @@ Each new language needs three things:
 
 | Tier | Languages | Count |
 |---|---|---|
-| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Swift, Zig, CSS, HTML, Terraform, Scala | **22** |
-| Tier 3 candidates | Bash, (Haskell — hard) | 1–2 |
-| **Potential total** | | **23–24** |
+| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Swift, Zig, CSS, HTML, Terraform, Scala, Gleam, Elixir, Prisma | **25** |
+| Tier 3 candidates | SQL (sqls + live DB), Bash, R | 1–3 |
+| **Potential total** | | **26–28** |
 
-The 22-language set covers the most common development scenarios across systems, web, JVM, scripting, infrastructure, and config domains.
+The 25-language set covers systems, web, JVM, scripting, infrastructure, config, functional, and schema domains.
