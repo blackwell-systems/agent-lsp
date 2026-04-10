@@ -320,6 +320,8 @@ jobs:
       - name: Install ElixirLS
         run: |
           ELS_VERSION=$(curl -fsSL https://api.github.com/repos/elixir-lsp/elixir-ls/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          ELS_VERSION="${ELS_VERSION:-v0.22.0}"
+          echo "Installing ElixirLS ${ELS_VERSION}"
           wget -q "https://github.com/elixir-lsp/elixir-ls/releases/download/${ELS_VERSION}/elixir-ls.zip" -O /tmp/els.zip
           sudo mkdir -p /opt/elixir-ls
           sudo unzip -q /tmp/els.zip -d /opt/elixir-ls
