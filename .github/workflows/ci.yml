@@ -355,3 +355,44 @@ jobs:
 
       - name: Run speculative session tests
         run: GOWORK=off go test -v -run TestSpeculativeSessions ./test/ -timeout 10m
+
+  # SQL via sqls (requires live PostgreSQL service)
+  multi-lang-sql:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Load schema into testdb
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d testdb -f test/fixtures/sql/schema.sql
+
+      - name: Install sqls
+        run: go install github.com/lighttiger2505/sqls@latest
+
+      - name: Run SQL tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^SQL$" ./test/ -timeout 10m
