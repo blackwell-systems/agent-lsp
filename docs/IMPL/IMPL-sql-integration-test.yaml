@@ -579,5 +579,5 @@ pre_mortem:
             postgresql-client is a standard Ubuntu package available on ubuntu-latest runners.
             The apt-get install step runs before the psql command and will fail visibly if
             the package is unavailable.
-state: SCOUT_PENDING
+state: "REVIEWED"
 original_branch: main
