@@ -1,3 +1,4 @@
+completion_date: "2026-04-09"
 title: Add Clojure, Nix, and Dart to Multi-Language Integration Test Suite
 feature_slug: clojure-nix-dart-integration
 verdict: SUITABLE
@@ -687,6 +688,7 @@ waves:
             - Use filepath.Join(fixtureBase, ...) — never hardcoded absolute paths.
           files:
             - test/multi_lang_test.go
+          context_source: prepared-brief
 quality_gates:
     level: standard
     gates:
@@ -768,6 +770,14 @@ completion_reports:
             - .github/workflows/ci.yml
         verification: PASS
         notes: Appended multi-lang-clojure, multi-lang-nix, multi-lang-dart jobs to ci.yml. All grep checks, build, and vet pass. Existing SQL job untouched.
+    E:
+        status: complete
+        branch: main
+        commit: 3f81b0a
+        files_changed:
+            - test/multi_lang_test.go
+        verification: PASS
+        notes: Wired 3 langConfig entries (Clojure, Nix, Dart) into buildLanguageConfigs() in multi_lang_test.go for wave 2
 pre_mortem:
     overall_risk: low
     rows:
@@ -819,6 +829,5 @@ critic_report:
     summary: All four agent briefs verified against the codebase. The three new fixture directories (clojure, nix, dart) do not yet exist — confirming action:new files are genuinely new. The ci.yml exists and its last job (multi-lang-sql) and last step text match the anchor described in Agent D's brief exactly. All langConfig struct fields referenced in the interface contracts (callSiteFile, completionFile, secondFile, inlayHintEndLine, renameSymbolLine, renameSymbolColumn, renameSymbolName, codeActionLine, codeActionEndLine, highlightLine, highlightColumn) exist in the actual langConfig struct in multi_lang_test.go. Column position derivations for Clojure, Nix, and Dart were manually verified against the fixture content specified in each brief and are correct. The post_merge_checklist anchor text was verified via hex dump against the actual SQL entry closing lines in multi_lang_test.go — the tab indentation pattern (3 tabs for codeActionLine/codeActionEndLine fields, 2 tabs for closing },, 1 tab for slice }, no indent for function }) matches exactly. File ownership is disjoint across all four Wave 1 agents. No agent exceeds the 8-file complexity threshold.
     reviewed_at: "2026-04-10T01:43:43Z"
     issue_count: 0
-state: WAVE_COMPLETE
-original_branch: main
+state: COMPLETE
 injection_method: manual-fallback

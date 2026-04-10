@@ -3,7 +3,7 @@
 [![Blackwell Systems](https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg)](https://github.com/blackwell-systems)
 [![CI](https://github.com/blackwell-systems/agent-lsp/actions/workflows/ci.yml/badge.svg)](https://github.com/blackwell-systems/agent-lsp/actions)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
-[![Languages](https://img.shields.io/badge/languages-26_CI--verified-brightgreen.svg)](#multi-language-support)
+[![Languages](https://img.shields.io/badge/languages-29_CI--verified-brightgreen.svg)](#multi-language-support)
 [![Tools](https://img.shields.io/badge/tools-47-blue.svg)](#tools)
 [![CI Coverage](https://img.shields.io/badge/CI--verified_tools-28%2F47-brightgreen.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)

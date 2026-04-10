@@ -1,6 +1,6 @@
 # Language Support
 
-## Current (26 languages, CI-tested)
+## Current (29 languages, CI-tested)
 
 | Language | Language Server | Status |
 |---|---|---|

@@ -1,0 +1,599 @@
+title: Add MongoDB to multi-language integration test suite
+feature_slug: mongodb-integration
+verdict: SUITABLE
+suitability_assessment: |-
+    The work decomposes into three disjoint file sets: (A) MongoDB fixture files under
+    test/fixtures/mongodb/, (B) the CI job in .github/workflows/ci.yml, and (C) the
+    langConfig entry in test/multi_lang_test.go. Each agent owns distinct files with no
+    overlapping modifications. The interface between A and C is the exact fixture file
+    paths and calibrated line/column positions — fully specifiable before implementation.
+    Agent B only needs the agreed test name "MongoDB" to write the CI job.
+
+    Suitability questions:
+    1. File decomposition: 2 new fixture files (agent A), 1 edit to multi_lang_test.go
+       (agent C), 1 edit to ci.yml (agent B). Fully disjoint.
+    2. Investigation-first: No root cause analysis needed. The mongodb-language-server
+       behavior is documented and the test harness pattern is established across 27
+       existing languages including the reference SQL pattern.
+    3. Interface discoverability: Cross-agent interfaces are the fixture file paths and
+       calibrated positions — fully specifiable before implementation by reading the
+       fixture content we define here.
+    4. Pre-implementation status: No prior MongoDB integration exists. Pure TODO.
+       SQL was added as the reference pattern (docs/IMPL/complete/IMPL-sql-integration-test.yaml).
+    5. Parallelization value: Three independent agents with disjoint files, moderate
+       task complexity (fixture content calibration + Go edit + YAML authoring).
+       The test file (>2000 lines) is marked v048_exempt: true.
+
+    Estimated times:
+    - Scout phase: ~10 min
+    - Agent execution: ~3 agents x ~6 min avg = ~6 min with parallelism
+    - Merge and verification: ~3 min
+    Total SAW time: ~19 min
+
+    Sequential baseline: ~3 x 6 min = ~18 min + overhead
+    Time savings: marginal on time but coordination value is high — fixture
+    calibration is error-prone and benefits from dedicated focused ownership.
+
+    Recommendation: Proceed. Follows the SQL pattern exactly.
+test_command: GOWORK=off go test ./test/ -run TestMultiLanguage/^MongoDB$
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: test/fixtures/mongodb/query.mongodb
+      agent: A
+      wave: 1
+      action: new
+    - file: test/fixtures/mongodb/schema.mongodb
+      agent: A
+      wave: 1
+      action: new
+    - file: .github/workflows/ci.yml
+      agent: B
+      wave: 1
+      action: modify
+    - file: test/multi_lang_test.go
+      agent: C
+      wave: 2
+      action: modify
+      v048_exempt: true
+interface_contracts:
+    - name: MongoDB langConfig entry
+      description: |-
+        The langConfig struct literal appended to buildLanguageConfigs() in
+        test/multi_lang_test.go. All positions are calibrated against query.mongodb.
+        Agent C must add this entry verbatim. Agent A's fixture content must
+        match these positions exactly.
+      definition: |
+        langConfig{
+            name:               "MongoDB",
+            id:                 "mongodb",
+            binary:             "mongodb-language-server",
+            serverArgs:         []string{"--stdio"},
+            fixture:            filepath.Join(fixtureBase, "mongodb"),
+            file:               filepath.Join(fixtureBase, "mongodb", "query.mongodb"),
+            secondFile:         filepath.Join(fixtureBase, "mongodb", "schema.mongodb"),
+            hoverLine:          9,
+            hoverColumn:        12,
+            definitionLine:     9,
+            definitionColumn:   12,
+            callSiteLine:       11,
+            callSiteColumn:     12,
+            referenceLine:      9,
+            referenceColumn:    12,
+            completionLine:     9,
+            completionColumn:   19,
+            workspaceSymbol:    "",
+            supportsFormatting: false,
+            symbolName:         "find",
+            highlightLine:      9,
+            highlightColumn:    12,
+            inlayHintEndLine:   0,
+            renameSymbolLine:   0,
+            codeActionLine:     9,
+            codeActionEndLine:  14,
+        }
+      location: test/multi_lang_test.go
+    - name: MongoDB CI job
+      description: |-
+        A new GitHub Actions job named multi-lang-mongodb that uses a mongo:7
+        service container and runs only the MongoDB subtest. Installs
+        @mongodb-js/mongodb-language-server via npm.
+      definition: |
+        job name: multi-lang-mongodb
+        mongo service: image=mongo:7, port 27017:27017,
+          health-check: mongosh --eval "db.adminCommand('ping')"
+        steps:
+          - checkout, setup-go
+          - build (GOWORK=off go build ./...)
+          - install mongodb-language-server: npm install -g @mongodb-js/mongodb-language-server
+          - run test: GOWORK=off go test -v -run "TestMultiLanguage/^MongoDB$" ./test/ -timeout 10m
+      location: .github/workflows/ci.yml
+    - name: query.mongodb fixture content
+      description: |-
+        The primary MongoDB fixture file. Line/column positions in langConfig are
+        calibrated against this exact content. Agent A must write query.mongodb with
+        exactly this content; agent C uses the positions from this spec.
+      definition: |
+        Line 1:  // Person collection queries
+        Line 2:  use('testdb');
+        Line 3:  (blank line)
+        Line 4:  db.persons.insertMany([
+        Line 5:    { name: "Alice", age: 30 },
+        Line 6:    { name: "Bob", age: 25 },
+        Line 7:  ]);
+        Line 8:  (blank line)
+        Line 9:  db.persons.find({ age: { $gt: 18 } });
+        Line 10: (blank line)
+        Line 11: db.persons.aggregate([
+        Line 12:   { $match: { age: { $gt: 18 } } },
+        Line 13:   { $group: { _id: "$name", count: { $sum: 1 } } },
+        Line 14: ]);
+
+        Position calibration (1-indexed lines and columns):
+          hoverLine=9, hoverColumn=12:
+            Line 9 is "db.persons.find({ age: { $gt: 18 } });"
+            "db.persons." is 11 chars; col 12 = 'f' of "find"
+            mongodb-language-server provides hover info on method names.
+          completionLine=9, completionColumn=19:
+            "db.persons.find({" is 17 chars; col 18 = '{'; col 19 = ' ' (inside the filter object)
+            This position is inside the query filter object, triggering field-name completions.
+          callSiteLine=11, callSiteColumn=12:
+            Line 11 is "db.persons.aggregate(["
+            "db.persons." is 11 chars; col 12 = 'a' of "aggregate"
+          referenceLine=9, referenceColumn=12: same as hover (on "find")
+          highlightLine=9, highlightColumn=12: same as hover
+          codeActionLine=9, codeActionEndLine=14: spans find + aggregate block
+      location: test/fixtures/mongodb/query.mongodb
+    - name: schema.mongodb fixture content
+      description: |-
+        The cross-file MongoDB fixture. Contains a createCollection with $jsonSchema
+        validator defining the Person collection schema (name: string, age: int).
+        Used as secondFile in the langConfig so the harness opens it in addition
+        to the primary fixture.
+      definition: |
+        Line 1:  // Person schema definition
+        Line 2:  use('testdb');
+        Line 3:  (blank line)
+        Line 4:  db.createCollection('persons', {
+        Line 5:    validator: {
+        Line 6:      $jsonSchema: {
+        Line 7:        bsonType: 'object',
+        Line 8:        required: ['name', 'age'],
+        Line 9:        properties: {
+        Line 10:          name: { bsonType: 'string', description: 'must be a string' },
+        Line 11:          age:  { bsonType: 'int',    description: 'must be an integer' },
+        Line 12:        },
+        Line 13:      },
+        Line 14:    },
+        Line 15: });
+      location: test/fixtures/mongodb/schema.mongodb
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |-
+            ## Role
+            MongoDB fixture file author. Creates two .mongodb files under test/fixtures/mongodb/.
+
+            ## What to implement
+
+            ### 1. Create test/fixtures/mongodb/query.mongodb
+
+            File path: /Users/dayna.blackwell/code/agent-lsp/test/fixtures/mongodb/query.mongodb
+
+            CRITICAL: Write this content EXACTLY as shown. Line numbers are calibrated
+            for the langConfig positions in multi_lang_test.go. Do not reformat,
+            reorder, or add/remove lines.
+
+            ```
+            // Person collection queries
+            use('testdb');
+
+            db.persons.insertMany([
+              { name: "Alice", age: 30 },
+              { name: "Bob", age: 25 },
+            ]);
+
+            db.persons.find({ age: { $gt: 18 } });
+
+            db.persons.aggregate([
+              { $match: { age: { $gt: 18 } } },
+              { $group: { _id: "$name", count: { $sum: 1 } } },
+            ]);
+            ```
+
+            The file must have exactly 14 lines. Calibration summary:
+            - Line 9: "db.persons.find({ age: { $gt: 18 } });" — hover/completion col 12 = 'f' of "find"
+            - Line 11: "db.persons.aggregate([" — callSite col 12 = 'a' of "aggregate"
+            - The file uses 2-space indentation throughout; do not change indent to 4-space.
+
+            ### 2. Create test/fixtures/mongodb/schema.mongodb
+
+            File path: /Users/dayna.blackwell/code/agent-lsp/test/fixtures/mongodb/schema.mongodb
+
+            Content:
+            ```
+            // Person schema definition
+            use('testdb');
+
+            db.createCollection('persons', {
+              validator: {
+                $jsonSchema: {
+                  bsonType: 'object',
+                  required: ['name', 'age'],
+                  properties: {
+                    name: { bsonType: 'string', description: 'must be a string' },
+                    age:  { bsonType: 'int',    description: 'must be an integer' },
+                  },
+                },
+              },
+            });
+            ```
+
+            ## Verification gate
+
+            1. Both fixture files exist:
+               ```
+               ls /Users/dayna.blackwell/code/agent-lsp/test/fixtures/mongodb/
+               ```
+               Expected: query.mongodb  schema.mongodb
+
+            2. query.mongodb has exactly 14 lines:
+               ```
+               wc -l /Users/dayna.blackwell/code/agent-lsp/test/fixtures/mongodb/query.mongodb
+               ```
+               Expected: 14
+
+            3. query.mongodb line 9 contains "find":
+               ```
+               sed -n '9p' /Users/dayna.blackwell/code/agent-lsp/test/fixtures/mongodb/query.mongodb
+               ```
+               Expected: db.persons.find({ age: { $gt: 18 } });
+
+            4. query.mongodb line 11 contains "aggregate":
+               ```
+               sed -n '11p' /Users/dayna.blackwell/code/agent-lsp/test/fixtures/mongodb/query.mongodb
+               ```
+               Expected: db.persons.aggregate([
+
+            5. schema.mongodb contains "createCollection":
+               ```
+               grep -c 'createCollection' /Users/dayna.blackwell/code/agent-lsp/test/fixtures/mongodb/schema.mongodb
+               ```
+               Expected: 1
+
+            6. schema.mongodb contains both name and age fields:
+               ```
+               grep -c 'bsonType' /Users/dayna.blackwell/code/agent-lsp/test/fixtures/mongodb/schema.mongodb
+               ```
+               Expected: at least 3
+
+            ## Constraints
+            - Do NOT modify any files outside your ownership list (the two fixture files).
+            - Do NOT alter the line structure or indentation of query.mongodb — positions are
+              calibrated. Even changing two-space indent to four-space would shift column
+              numbers and break hover/completion/callSite detection.
+            - Do NOT add extra blank lines between sections in query.mongodb — the blank lines
+              at lines 3, 8, and 10 are part of the calibration.
+            - Do NOT put a trailing blank line after line 14 of query.mongodb (a single
+              trailing newline is acceptable; a blank line would make wc -l report 15).
+          files:
+            - test/fixtures/mongodb/query.mongodb
+            - test/fixtures/mongodb/schema.mongodb
+        - id: B
+          task: |-
+            ## Role
+            CI job author. Adds a new GitHub Actions job for the MongoDB integration test.
+
+            ## What to implement
+
+            Append a new job to /Users/dayna.blackwell/code/agent-lsp/.github/workflows/ci.yml.
+
+            The last job in ci.yml is `multi-lang-dart`. Find the exact end of the file —
+            the final lines currently read:
+
+            ```yaml
+                  - name: Run Dart tests
+                    run: GOWORK=off go test -v -run "TestMultiLanguage/^Dart$" ./test/ -timeout 10m
+            ```
+
+            After the last line of the multi-lang-dart job (there is no trailing blank line
+            in the file), append the following block. The new job must be at the same
+            indentation level as other top-level jobs (2-space indent under `jobs:`):
+
+            ```yaml
+
+              # MongoDB via @mongodb-js/mongodb-language-server (requires live mongo:7 service)
+              multi-lang-mongodb:
+                runs-on: ubuntu-latest
+                services:
+                  mongo:
+                    image: mongo:7
+                    ports:
+                      - 27017:27017
+                    options: >-
+                      --health-cmd "mongosh --eval \"db.adminCommand('ping')\""
+                      --health-interval 10s
+                      --health-timeout 5s
+                      --health-retries 5
+                steps:
+                  - uses: actions/checkout@v4
+
+                  - uses: actions/setup-go@v5
+                    with:
+                      go-version-file: 'go.mod'
+                      cache: true
+
+                  - name: Build
+                    run: GOWORK=off go build ./...
+
+                  - name: Install mongodb-language-server
+                    run: npm install -g @mongodb-js/mongodb-language-server
+
+                  - name: Run MongoDB tests
+                    run: GOWORK=off go test -v -run "TestMultiLanguage/^MongoDB$" ./test/ -timeout 10m
+            ```
+
+            ## Verification gate
+
+            1. YAML parses without errors:
+               ```
+               python3 -c "import yaml; yaml.safe_load(open('/Users/dayna.blackwell/code/agent-lsp/.github/workflows/ci.yml'))"
+               ```
+               Expected: exit 0, no output.
+
+            2. New job name appears exactly once:
+               ```
+               grep -c 'multi-lang-mongodb:' /Users/dayna.blackwell/code/agent-lsp/.github/workflows/ci.yml
+               ```
+               Expected: 1
+
+            3. mongo:7 service image appears:
+               ```
+               grep -c 'mongo:7' /Users/dayna.blackwell/code/agent-lsp/.github/workflows/ci.yml
+               ```
+               Expected: 1
+
+            4. mongosh health check appears:
+               ```
+               grep -c 'mongosh' /Users/dayna.blackwell/code/agent-lsp/.github/workflows/ci.yml
+               ```
+               Expected: 1
+
+            5. mongodb-language-server install step appears:
+               ```
+               grep -c 'mongodb-language-server' /Users/dayna.blackwell/code/agent-lsp/.github/workflows/ci.yml
+               ```
+               Expected: 2 (install step + test run comment heading)
+
+            6. Build still passes:
+               ```
+               cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go build ./...
+               ```
+               Expected: exit 0.
+
+            ## Constraints
+            - Do NOT modify any files outside your ownership list (.github/workflows/ci.yml).
+            - Do NOT change the test filter; it must be exactly "TestMultiLanguage/^MongoDB$".
+            - Do NOT add continue-on-error: true — failures should be visible.
+            - Do NOT alter the indentation level of existing jobs when appending the new one.
+            - Do NOT include a MongoDB client installation step — the mongodb-language-server
+              npm package is the only prerequisite; no separate mongo CLI setup is needed in
+              the test runner.
+          files:
+            - .github/workflows/ci.yml
+    - number: 2
+      type: integration
+      agents:
+        - id: C
+          task: |-
+            ## Role
+            Test config integrator. Adds the MongoDB langConfig entry to multi_lang_test.go.
+
+            ## What to implement
+
+            Add a new langConfig entry for "MongoDB" to the buildLanguageConfigs() function in
+            /Users/dayna.blackwell/code/agent-lsp/test/multi_lang_test.go.
+
+            The function returns a []langConfig slice. The last entry in the slice is the
+            SQL entry, which ends with:
+
+            ```go
+            				codeActionLine:     7,
+            				codeActionEndLine:  9,
+            			},
+            		}
+            }
+            ```
+
+            Use the Edit tool to replace that exact text with the following (inserting the
+            new MongoDB entry before the closing braces of the slice):
+
+            ```go
+            				codeActionLine:     7,
+            				codeActionEndLine:  9,
+            			},
+            		{
+            			name:               "MongoDB",
+            			id:                 "mongodb",
+            			binary:             "mongodb-language-server",
+            			serverArgs:         []string{"--stdio"},
+            			fixture:            filepath.Join(fixtureBase, "mongodb"),
+            			file:               filepath.Join(fixtureBase, "mongodb", "query.mongodb"),
+            			secondFile:         filepath.Join(fixtureBase, "mongodb", "schema.mongodb"),
+            			hoverLine:          9,
+            			hoverColumn:        12,
+            			definitionLine:     9,
+            			definitionColumn:   12,
+            			callSiteLine:       11,
+            			callSiteColumn:     12,
+            			referenceLine:      9,
+            			referenceColumn:    12,
+            			completionLine:     9,
+            			completionColumn:   19,
+            			workspaceSymbol:    "",
+            			supportsFormatting: false,
+            			symbolName:         "find",
+            			highlightLine:      9,
+            			highlightColumn:    12,
+            			inlayHintEndLine:   0,
+            			renameSymbolLine:   0,
+            			codeActionLine:     9,
+            			codeActionEndLine:  14,
+            		},
+            	}
+            }
+            ```
+
+            Notes on the positions (calibrated to query.mongodb — do not change them):
+            - hoverLine=9 / hoverColumn=12: cursor on 'f' of "find" in "db.persons.find({"
+              ("db.persons." is 11 chars, so col 12 is the first char of "find")
+            - completionLine=9 / completionColumn=19: cursor inside the filter object
+              ("db.persons.find({" is 17 chars, col 18 = '{', col 19 = first position inside)
+            - callSiteLine=11 / callSiteColumn=12: cursor on 'a' of "aggregate"
+              ("db.persons." is 11 chars, col 12 is the first char of "aggregate")
+            - renameSymbolLine=0: mongodb-language-server does not support rename
+            - inlayHintEndLine=0: mongodb-language-server does not support inlay hints
+            - supportsFormatting: false: mongodb-language-server does not implement formatting
+            - workspaceSymbol: "" (empty string): workspace symbol search is not well-supported;
+              leave empty so the harness skips that subtest
+
+            ## Verification gate
+
+            1. Build compiles without errors:
+               ```
+               cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go build ./...
+               ```
+               Expected: exit 0.
+
+            2. Vet passes:
+               ```
+               cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go vet ./...
+               ```
+               Expected: exit 0.
+
+            3. MongoDB entry is present:
+               ```
+               grep -c '"MongoDB"' /Users/dayna.blackwell/code/agent-lsp/test/multi_lang_test.go
+               ```
+               Expected: 1
+
+            4. binary is set correctly:
+               ```
+               grep 'mongodb-language-server' /Users/dayna.blackwell/code/agent-lsp/test/multi_lang_test.go
+               ```
+               Expected: at least 1 match (the binary: field and serverArgs).
+
+            5. secondFile is set:
+               ```
+               grep 'schema.mongodb' /Users/dayna.blackwell/code/agent-lsp/test/multi_lang_test.go
+               ```
+               Expected: at least 1 match.
+
+            6. The entry was inserted inside the slice (not after the closing brace):
+               ```
+               grep -A3 '"MongoDB"' /Users/dayna.blackwell/code/agent-lsp/test/multi_lang_test.go | head -6
+               ```
+               Expected: shows id: "mongodb", binary: "mongodb-language-server" lines inside the struct.
+
+            ## Constraints
+            - Do NOT modify any files outside your ownership list (multi_lang_test.go).
+            - Do NOT change any existing langConfig entries — only add the new MongoDB entry.
+            - Do NOT hardcode an absolute path in fixture or file fields; use
+              filepath.Join(fixtureBase, "mongodb", ...) exactly as shown.
+            - Do NOT set renameSymbolLine or inlayHintEndLine to non-zero values; mongodb-language-server
+              does not support those features.
+            - Do NOT place the new entry after the closing } of the slice — it must be
+              inserted before the final closing braces.
+            - Do NOT set workspaceSymbol to a non-empty string; leave it as "" to skip
+              the workspace symbol subtest.
+          files:
+            - test/multi_lang_test.go
+          context_source: prepared-brief
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |-
+            mongodb-language-server is not on PATH at test time (locally or in CI)
+            because it's an npm package and npm global bin may not be in PATH.
+          likelihood: medium
+          impact: low
+          mitigation: |-
+            The test harness calls exec.LookPath(lang.binary) and calls t.Skipf if not
+            found, so the test skips gracefully rather than failing. In CI the npm
+            install -g step puts the binary in /usr/local/bin (standard npm global bin
+            on ubuntu-latest), which is on PATH.
+        - scenario: |-
+            The fixture positions (hoverLine, completionColumn, etc.) don't align with
+            query.mongodb content because agent A changed the line structure or indentation.
+          likelihood: low
+          impact: high
+          mitigation: |-
+            The interface contract specifies query.mongodb content line-by-line and
+            calibration notes. Agent A's verification gate checks wc -l = 14 and
+            checks the exact content of lines 9 and 11 via sed. Agent C uses the
+            positions from the interface contract verbatim without re-deriving them.
+        - scenario: |-
+            The MongoDB langConfig entry is inserted outside the slice return value
+            (after the closing brace of buildLanguageConfigs), causing a compile error.
+          likelihood: low
+          impact: high
+          mitigation: |-
+            Agent C uses the verbatim anchor text that includes the SQL entry's closing
+            brace and the slice terminator, so the Edit tool will match and replace the
+            correct location. The build verification gate catches compile errors immediately.
+        - scenario: CI job YAML indentation is wrong, causing GitHub Actions to reject the workflow.
+          likelihood: low
+          impact: medium
+          mitigation: |-
+            Agent B's verification gate runs python3 yaml.safe_load on the file. Invalid
+            YAML (including indentation errors) will cause an exception and exit 1,
+            surfacing the error before the agent completes.
+        - scenario: |-
+            mongosh health check command contains unescaped quotes in the YAML options
+            field, causing the workflow YAML to be invalid.
+          likelihood: medium
+          impact: medium
+          mitigation: |-
+            The interface contract specifies the exact health-cmd string with escaped
+            inner quotes. Agent B's verification gate runs yaml.safe_load which will
+            catch any quoting issues before the agent completes.
+        - scenario: |-
+            mongodb-language-server does not provide hover/completion responses for
+            .mongodb files and the test fails even when the server starts.
+          likelihood: medium
+          impact: medium
+          mitigation: |-
+            The harness does not assert on hover/completion content — it only asserts
+            that the tool call does not return IsError=true. The server returning an
+            empty result or null hover is treated as a pass at the Tier 1 level.
+            Tier 2 tool failures are logged but do not fail the test run (they set
+            tier2 status to "fail" which is visible in the summary).
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+    summary: All three agent briefs verified against the codebase. Agent A creates two new fixture files in a directory that does not yet exist (correct for action:new). Agent B's brief accurately describes ci.yml's current final job (multi-lang-dart) and the append pattern used throughout the file. Agent C's anchor text matches the actual end of buildLanguageConfigs() in multi_lang_test.go exactly (lines 839-843), and all langConfig struct fields referenced in the brief (secondFile, highlightLine, highlightColumn, inlayHintEndLine, renameSymbolLine, codeActionLine, codeActionEndLine) are confirmed present in the struct definition. No disjoint ownership violations, no missed callers, no import chain issues. Wave execution may proceed.
+    reviewed_at: "2026-04-10T01:59:36Z"
+    issue_count: 0
+state: SCOUT_PENDING
+original_branch: main
