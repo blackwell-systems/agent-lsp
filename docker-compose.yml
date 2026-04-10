@@ -1,0 +1,39 @@
+# agent-lsp docker-compose — local development
+# Copy .env.example to .env and set WORKSPACE_DIR before use.
+# See DOCKER.md for full usage and MCP client configuration.
+#
+# Usage:
+#   docker compose run --rm agent-lsp go:gopls
+#   docker compose run --rm agent-lsp typescript:typescript-language-server,--stdio
+#   LSP_SERVERS=gopls docker compose run --rm agent-lsp  # runtime install
+
+services:
+  agent-lsp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/blackwell-systems/agent-lsp:base
+    stdin_open: true
+    tty: false
+    volumes:
+      - ${WORKSPACE_DIR:?Set WORKSPACE_DIR in .env}:/workspace:rw
+      - lsp-server-cache:/var/cache/lsp-servers
+    working_dir: /workspace
+    environment:
+      - LSP_SERVERS=${LSP_SERVERS:-}
+      - HOME=/root
+    command: []  # Override with language args: go:gopls typescript:typescript-language-server,--stdio
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+          cpus: '2'
+        reservations:
+          memory: 1g
+          cpus: '0.5'
+    env_file:
+      - .env
+
+volumes:
+  lsp-server-cache:
+    driver: local

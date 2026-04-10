@@ -1,0 +1,40 @@
+# Version control
+.git
+.gitignore
+
+# Documentation (not needed for build)
+docs/
+*.md
+CHANGELOG.md
+
+# Test fixtures (large, not needed in build context)
+test/
+
+# Development artifacts
+*.test
+*.out
+coverage.html
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Editor artifacts
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Skills (not needed in image)
+skills/
+
+# Assets
+assets/
+
+# Inspections
+inspections/
