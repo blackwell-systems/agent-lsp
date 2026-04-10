@@ -1,0 +1,780 @@
+title: Add Clojure, Nix, and Dart to Multi-Language Integration Test Suite
+feature_slug: clojure-nix-dart-integration
+verdict: SUITABLE
+suitability_assessment: |
+    The work decomposes cleanly across four disjoint Wave 1 agents:
+    - Three fixture agents (A, B, C) each own an independent new directory under test/fixtures/
+    - One CI agent (D) appends three independent new jobs to ci.yml (append-only pattern)
+
+    File ownership is fully disjoint in Wave 1. The langConfig wiring in
+    test/multi_lang_test.go is deferred to post_merge_checklist because that file
+    has 2224 lines and exceeds the V048 2000-line agent ownership budget. The wiring
+    is a minimal ~90-line insertion done manually after Wave 1 merges.
+
+    All five questions resolve cleanly:
+    1. File decomposition: fixture dirs are fully independent; ci.yml additions are
+       append-only; multi_lang_test.go edit is in post_merge_checklist (V048 exemption).
+    2. No investigation needed — fixture format is established from Gleam/SQL examples.
+    3. Interface contracts fully definable: langConfig struct is frozen; fixture content
+       and line/column positions are derived in this doc.
+    4. No prior attempts found; three new languages genuinely needed.
+    5. Parallelization value: three fixture agents run in parallel with meaningful scope;
+       CI job additions are independent. Clear speedup.
+
+    Note on V048 LOC budget:
+    test/multi_lang_test.go has 2224 lines, exceeding the 2000-line agent ownership
+    budget (V048). The langConfig wiring (three entries, ~90 lines) is excluded from
+    file_ownership and documented in post_merge_checklist for manual application after
+    Wave 1 completes.
+
+    Estimated times:
+    - Scout phase: ~10 min (reading existing fixtures, calibrating positions)
+    - Agent execution: ~20 min (4 parallel Wave 1 agents x ~5 min avg)
+    - Merge and post-merge checklist: ~10 min
+    Total SAW time: ~40 min
+    Sequential baseline: ~60 min
+    Time savings: ~20 min (33% faster)
+    Recommendation: Clear speedup from parallel fixture creation.
+test_command: GOWORK=off go test ./test/ -timeout 45m
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: test/fixtures/clojure/deps.edn
+      agent: A
+      wave: 1
+      action: new
+    - file: test/fixtures/clojure/src/fixture/core.clj
+      agent: A
+      wave: 1
+      action: new
+    - file: test/fixtures/nix/flake.nix
+      agent: B
+      wave: 1
+      action: new
+    - file: test/fixtures/dart/pubspec.yaml
+      agent: C
+      wave: 1
+      action: new
+    - file: test/fixtures/dart/lib/fixture.dart
+      agent: C
+      wave: 1
+      action: new
+    - file: test/fixtures/dart/lib/caller.dart
+      agent: C
+      wave: 1
+      action: new
+    - file: .github/workflows/ci.yml
+      agent: D
+      wave: 1
+      action: modify
+    - file: test/multi_lang_test.go
+      agent: E
+      wave: 2
+      action: modify
+      v048_exempt: true
+interface_contracts:
+    - name: langConfig (Clojure entry)
+      description: |
+        langConfig struct literal for clojure-lsp. Calibrated against test/fixtures/clojure/src/fixture/core.clj (7 lines, content below).
+      definition: |
+        // Fixture content (for position verification):
+        // Line 1: (ns fixture.core)
+        // Line 2: (blank)
+        // Line 3: (defn greet [name]
+        // Line 4:   (str "Hello, " name))
+        // Line 5: (blank)
+        // Line 6: (defn main []
+        // Line 7:   (println (greet "Alice")))
+        //
+        // Column derivation:
+        // Line 3 "greet": (=1 d=2 e=3 f=4 n=5 _=6 g=7  → hoverColumn=7
+        // Line 7 "greet": __=1,2 (=3 p=4..n=10 _=11 (=12 g=13 → callSiteColumn=13
+        {
+            name:               "Clojure",
+            id:                 "clojure",
+            binary:             "clojure-lsp",
+            serverArgs:         []string{},
+            fixture:            filepath.Join(fixtureBase, "clojure"),
+            file:               filepath.Join(fixtureBase, "clojure", "src", "fixture", "core.clj"),
+            hoverLine:          3,
+            hoverColumn:        7,
+            definitionLine:     3,
+            definitionColumn:   7,
+            callSiteLine:       7,
+            callSiteColumn:     13,
+            referenceLine:      3,
+            referenceColumn:    7,
+            completionLine:     7,
+            completionColumn:   13,
+            workspaceSymbol:    "greet",
+            supportsFormatting: true,
+            symbolName:         "greet",
+            highlightLine:      3,
+            highlightColumn:    7,
+            inlayHintEndLine:   0,
+            renameSymbolLine:   3,
+            renameSymbolColumn: 7,
+            renameSymbolName:   "renamed-greet",
+            codeActionLine:     3,
+            codeActionEndLine:  5,
+        },
+      location: test/multi_lang_test.go
+    - name: langConfig (Nix entry)
+      description: |
+        langConfig struct literal for nil (Nix language server). Calibrated against test/fixtures/nix/flake.nix (9 lines, content below).
+      definition: |
+        // Fixture content (for position verification):
+        // Line 1: {
+        // Line 2:   description = "fixture";
+        // Line 3: (blank)
+        // Line 4:   outputs = { self }: {
+        // Line 5:     helper = name: "Hello, ${name}";
+        // Line 6: (blank)
+        // Line 7:     greeting = self.helper "Alice";
+        // Line 8:   };
+        // Line 9: }
+        //
+        // Column derivation:
+        // Line 5 "helper": 4 spaces then h=5 → hoverColumn=5
+        // Line 7 "helper" in self.helper:
+        //   "    greeting = self." = 4+8+3+5 chars:
+        //   ____=4, g=5,r=6,e=7,e=8,t=9,i=10,n=11,g=12, =13,==14, =15,s=16,e=17,l=18,f=19,.=20,h=21
+        //   → callSiteColumn=21
+        {
+            name:               "Nix",
+            id:                 "nix",
+            binary:             "nil",
+            serverArgs:         []string{},
+            fixture:            filepath.Join(fixtureBase, "nix"),
+            file:               filepath.Join(fixtureBase, "nix", "flake.nix"),
+            hoverLine:          5,
+            hoverColumn:        5,
+            definitionLine:     5,
+            definitionColumn:   5,
+            callSiteLine:       7,
+            callSiteColumn:     21,
+            referenceLine:      5,
+            referenceColumn:    5,
+            completionLine:     7,
+            completionColumn:   21,
+            workspaceSymbol:    "helper",
+            supportsFormatting: false,
+            symbolName:         "helper",
+            highlightLine:      5,
+            highlightColumn:    5,
+            inlayHintEndLine:   0,
+            renameSymbolLine:   0,
+            codeActionLine:     5,
+            codeActionEndLine:  6,
+        },
+      location: test/multi_lang_test.go
+    - name: langConfig (Dart entry)
+      description: |
+        langConfig struct literal for dart analysis-server. Calibrated against test/fixtures/dart/lib/fixture.dart and test/fixtures/dart/lib/caller.dart.
+      definition: |
+        // fixture.dart content (for position verification):
+        // Line 1: class Greeter {
+        // Line 2:   String greet(String name) {
+        // Line 3:     return 'Hello, $name';
+        // Line 4:   }
+        // Line 5: }
+        //
+        // caller.dart content (for position verification):
+        // Line 1: import 'fixture.dart';
+        // Line 2: (blank)
+        // Line 3: void main() {
+        // Line 4:   final g = Greeter();
+        // Line 5:   print(g.greet('Alice'));
+        // Line 6: }
+        //
+        // Column derivation:
+        // fixture.dart line 1 "Greeter": "class " = 6 chars, G=7 → hoverColumn=7
+        // fixture.dart line 2 "greet":  "  String " = 9 chars, g=10 → definitionColumn=10
+        // caller.dart  line 4 "Greeter": "  final g = " = 12 chars, G=13 → callSiteColumn=13
+        // caller.dart  line 5 "greet":  "  print(g." = 10 chars, g=11 → completionColumn=11
+        {
+            name:               "Dart",
+            id:                 "dart",
+            binary:             "dart",
+            serverArgs:         []string{"language-server", "--client-id=agent-lsp"},
+            fixture:            filepath.Join(fixtureBase, "dart"),
+            file:               filepath.Join(fixtureBase, "dart", "lib", "fixture.dart"),
+            hoverLine:          1,
+            hoverColumn:        7,
+            definitionLine:     2,
+            definitionColumn:   10,
+            callSiteLine:       4,
+            callSiteColumn:     13,
+            callSiteFile:       filepath.Join(fixtureBase, "dart", "lib", "caller.dart"),
+            referenceLine:      1,
+            referenceColumn:    7,
+            completionLine:     5,
+            completionColumn:   11,
+            completionFile:     filepath.Join(fixtureBase, "dart", "lib", "caller.dart"),
+            workspaceSymbol:    "Greeter",
+            supportsFormatting: true,
+            secondFile:         filepath.Join(fixtureBase, "dart", "lib", "caller.dart"),
+            symbolName:         "Greeter",
+            highlightLine:      1,
+            highlightColumn:    7,
+            inlayHintEndLine:   5,
+            renameSymbolLine:   1,
+            renameSymbolColumn: 7,
+            renameSymbolName:   "RenamedGreeter",
+            codeActionLine:     1,
+            codeActionEndLine:  5,
+        },
+      location: test/multi_lang_test.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Agent A — Clojure Fixture
+
+            Create the Clojure fixture files for the clojure-lsp integration test.
+
+            ### Files to create
+
+            **test/fixtures/clojure/deps.edn**
+
+            clojure-lsp requires a deps.edn at the project root to recognize it as a
+            Clojure project. Create this file with exactly this content (an empty map):
+
+            ```
+            {}
+            ```
+
+            **test/fixtures/clojure/src/fixture/core.clj**
+
+            Create this file with exactly this content:
+
+            ```clojure
+            (ns fixture.core)
+
+            (defn greet [name]
+              (str "Hello, " name))
+
+            (defn main []
+              (println (greet "Alice")))
+            ```
+
+            ### Position calibration notes (do NOT change this content)
+
+            The langConfig consumer (applied post-merge) uses these 1-based positions:
+            - Line 3 `(defn greet [name]`: `greet` starts at column 7
+              (`(=1 d=2 e=3 f=4 n=5 _=6 g=7`)
+            - Line 7 `  (println (greet "Alice"))`: `greet` starts at column 13
+              (`__=1,2 (=3 p=4 r=5 i=6 n=7 t=8 l=9 n=10 _=11 (=12 g=13`)
+
+            The fixture content must match exactly. Do not add extra blank lines,
+            comments, or whitespace — positions are calibrated to this exact layout.
+
+            ### What NOT to do
+            - Do NOT create a project.clj (that is Leiningen, not tools.deps)
+            - Do NOT add any other source files
+            - Do NOT create a .clj-kondo/ config directory
+            - Do NOT modify any existing files
+
+            ### Verification gate
+            ```bash
+            test -f test/fixtures/clojure/deps.edn || exit 1
+            test -f test/fixtures/clojure/src/fixture/core.clj || exit 1
+            grep -q "defn greet" test/fixtures/clojure/src/fixture/core.clj || exit 1
+            grep -q "fixture.core" test/fixtures/clojure/src/fixture/core.clj || exit 1
+            # Verify exactly 7 lines in core.clj (no accidental extra content)
+            test "$(wc -l < test/fixtures/clojure/src/fixture/core.clj)" -eq 7 || exit 1
+            GOWORK=off go build ./...
+            ```
+          files:
+            - test/fixtures/clojure/deps.edn
+            - test/fixtures/clojure/src/fixture/core.clj
+        - id: B
+          task: |
+            ## Agent B — Nix Fixture
+
+            Create the Nix fixture file for the nil language server integration test.
+
+            ### Files to create
+
+            **test/fixtures/nix/flake.nix**
+
+            nil recognizes any `.nix` file without requiring additional project config.
+            Create this file with exactly this content:
+
+            ```nix
+            {
+              description = "fixture";
+
+              outputs = { self }: {
+                helper = name: "Hello, ${name}";
+
+                greeting = self.helper "Alice";
+              };
+            }
+            ```
+
+            ### Position calibration notes (do NOT change this content)
+
+            The langConfig consumer (applied post-merge) uses these 1-based positions:
+            - Line 5 `    helper = name: "Hello, ${name}";`:
+              `helper` starts at column 5 (4 leading spaces, then `h`)
+            - Line 7 `    greeting = self.helper "Alice";`:
+              `helper` (in `self.helper`) starts at column 21:
+              `____g=5 r=6 e=7 e=8 t=9 i=10 n=11 g=12 _=13 ==14 _=15 s=16 e=17 l=18 f=19 .=20 h=21`
+
+            The fixture must be exactly 9 lines matching the above layout.
+
+            ### What NOT to do
+            - Do NOT create a default.nix or any other .nix files
+            - Do NOT create a flake.lock file
+            - Do NOT modify any existing files
+
+            ### Verification gate
+            ```bash
+            test -f test/fixtures/nix/flake.nix || exit 1
+            grep -q "helper" test/fixtures/nix/flake.nix || exit 1
+            grep -q "self.helper" test/fixtures/nix/flake.nix || exit 1
+            # Verify exactly 9 lines
+            test "$(wc -l < test/fixtures/nix/flake.nix)" -eq 9 || exit 1
+            GOWORK=off go build ./...
+            ```
+          files:
+            - test/fixtures/nix/flake.nix
+        - id: C
+          task: |
+            ## Agent C — Dart Fixture
+
+            Create the Dart fixture files for the dart analysis-server integration test.
+
+            ### Files to create
+
+            **test/fixtures/dart/pubspec.yaml**
+
+            ```yaml
+            name: fixture
+            description: Dart fixture for agent-lsp integration tests
+            version: 1.0.0
+            environment:
+              sdk: ">=3.0.0 <4.0.0"
+            ```
+
+            **test/fixtures/dart/lib/fixture.dart**
+
+            ```dart
+            class Greeter {
+              String greet(String name) {
+                return 'Hello, $name';
+              }
+            }
+            ```
+
+            **test/fixtures/dart/lib/caller.dart**
+
+            ```dart
+            import 'fixture.dart';
+
+            void main() {
+              final g = Greeter();
+              print(g.greet('Alice'));
+            }
+            ```
+
+            ### Position calibration notes (do NOT change this content)
+
+            The langConfig consumer (applied post-merge) uses these 1-based positions:
+
+            fixture.dart:
+            - Line 1 `class Greeter {`: `Greeter` starts at column 7
+              (`c=1 l=2 a=3 s=4 s=5 _=6 G=7`)
+            - Line 2 `  String greet(String name) {`: `greet` starts at column 10
+              (`_=1 _=2 S=3 t=4 r=5 i=6 n=7 g=8 _=9 g=10`)
+
+            caller.dart:
+            - Line 4 `  final g = Greeter();`: `Greeter` starts at column 13
+              (`_=1 _=2 f=3 i=4 n=5 a=6 l=7 _=8 g=9 _=10 ==11 _=12 G=13`)
+            - Line 5 `  print(g.greet('Alice'));`: `greet` starts at column 11
+              (`_=1 _=2 p=3 r=4 i=5 n=6 t=7 (=8 g=9 .=10 g=11`)
+
+            fixture.dart must be exactly 5 lines. caller.dart must be exactly 6 lines.
+
+            ### What NOT to do
+            - Do NOT add a `main()` function to fixture.dart (keep it a library file)
+            - Do NOT run `dart pub get` or generate any lockfiles
+            - Do NOT create any other files in the dart fixture directory
+            - Do NOT modify any existing files
+
+            ### Verification gate
+            ```bash
+            test -f test/fixtures/dart/pubspec.yaml || exit 1
+            test -f test/fixtures/dart/lib/fixture.dart || exit 1
+            test -f test/fixtures/dart/lib/caller.dart || exit 1
+            grep -q "class Greeter" test/fixtures/dart/lib/fixture.dart || exit 1
+            grep -q "Greeter()" test/fixtures/dart/lib/caller.dart || exit 1
+            test "$(wc -l < test/fixtures/dart/lib/fixture.dart)" -eq 5 || exit 1
+            test "$(wc -l < test/fixtures/dart/lib/caller.dart)" -eq 6 || exit 1
+            GOWORK=off go build ./...
+            ```
+          files:
+            - test/fixtures/dart/pubspec.yaml
+            - test/fixtures/dart/lib/fixture.dart
+            - test/fixtures/dart/lib/caller.dart
+        - id: D
+          task: |
+            ## Agent D — CI Jobs
+
+            Append three new CI job definitions to `.github/workflows/ci.yml`.
+
+            ### Confirmed last job
+
+            The current last job in ci.yml is `multi-lang-sql`. Its last step is:
+
+            ```yaml
+                - name: Run SQL tests
+                  run: GOWORK=off go test -v -run "TestMultiLanguage/^SQL$" ./test/ -timeout 10m
+            ```
+
+            The file ends immediately after this step with a trailing newline.
+            Do NOT modify any existing content.
+
+            ### Content to append
+
+            Use the Edit tool to add the following block at the end of the file, after the
+            existing SQL job's last step. Match the exact indentation style (2-space indent
+            for job names, 4-space for steps keys, 6-space for step values):
+
+            ```yaml
+
+              # Clojure via clojure-lsp (native binary, no JVM needed)
+              multi-lang-clojure:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@v4
+
+                  - uses: actions/setup-go@v5
+                    with:
+                      go-version-file: 'go.mod'
+                      cache: true
+
+                  - name: Build
+                    run: GOWORK=off go build ./...
+
+                  - name: Install clojure-lsp
+                    run: |
+                      CLOJURE_LSP_VERSION=$(curl -fsSL https://api.github.com/repos/clojure-lsp/clojure-lsp/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+                      wget -q "https://github.com/clojure-lsp/clojure-lsp/releases/download/${CLOJURE_LSP_VERSION}/clojure-lsp-native-linux-amd64.zip" -O /tmp/clojure-lsp.zip
+                      sudo unzip -q /tmp/clojure-lsp.zip -d /usr/local/bin
+                      sudo chmod +x /usr/local/bin/clojure-lsp
+
+                  - name: Run Clojure tests
+                    run: GOWORK=off go test -v -run "TestMultiLanguage/^Clojure$" ./test/ -timeout 10m
+
+              # Nix via nil language server
+              multi-lang-nix:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@v4
+
+                  - uses: actions/setup-go@v5
+                    with:
+                      go-version-file: 'go.mod'
+                      cache: true
+
+                  - name: Build
+                    run: GOWORK=off go build ./...
+
+                  - name: Install nil (Nix language server)
+                    run: |
+                      NIL_VERSION=$(curl -fsSL https://api.github.com/repos/oxalica/nil/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+                      wget -q "https://github.com/oxalica/nil/releases/download/${NIL_VERSION}/nil-x86_64-unknown-linux-musl.tar.gz" -O /tmp/nil.tar.gz
+                      sudo tar -xzf /tmp/nil.tar.gz -C /usr/local/bin --strip-components=1
+                      sudo chmod +x /usr/local/bin/nil
+
+                  - name: Run Nix tests
+                    run: GOWORK=off go test -v -run "TestMultiLanguage/^Nix$" ./test/ -timeout 10m
+
+              # Dart via dart analysis-server
+              multi-lang-dart:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@v4
+
+                  - uses: actions/setup-go@v5
+                    with:
+                      go-version-file: 'go.mod'
+                      cache: true
+
+                  - name: Build
+                    run: GOWORK=off go build ./...
+
+                  - name: Install Dart SDK
+                    run: |
+                      sudo apt-get install -y apt-transport-https
+                      wget -qO- https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/dart.gpg
+                      echo 'deb [signed-by=/usr/share/keyrings/dart.gpg arch=amd64] https://storage.googleapis.com/download.dartlang.org/linux/debian stable main' | sudo tee /etc/apt/sources.list.d/dart_stable.list
+                      sudo apt-get update
+                      sudo apt-get install -y dart
+
+                  - name: Run Dart tests
+                    run: GOWORK=off go test -v -run "TestMultiLanguage/^Dart$" ./test/ -timeout 10m
+            ```
+
+            ### What NOT to do
+            - Do NOT modify any existing job definitions
+            - Do NOT change indentation of existing content
+            - Do NOT add `continue-on-error: true` (these are first-class tests)
+            - Do NOT touch any file other than .github/workflows/ci.yml
+
+            ### Verification gate
+            ```bash
+            grep -q "multi-lang-clojure:" .github/workflows/ci.yml || exit 1
+            grep -q "multi-lang-nix:" .github/workflows/ci.yml || exit 1
+            grep -q "multi-lang-dart:" .github/workflows/ci.yml || exit 1
+            grep -q "clojure-lsp-native-linux-amd64" .github/workflows/ci.yml || exit 1
+            grep -q "oxalica/nil" .github/workflows/ci.yml || exit 1
+            grep -q "dartlang.org" .github/workflows/ci.yml || exit 1
+            # Confirm existing last job still present and unchanged
+            grep -q "multi-lang-sql:" .github/workflows/ci.yml || exit 1
+            GOWORK=off go build ./...
+            ```
+          files:
+            - .github/workflows/ci.yml
+    - number: 2
+      type: integration
+      agents:
+        - id: E
+          task: |
+            ## Role
+            Test config integrator. Adds the Clojure, Nix, and Dart langConfig entries to multi_lang_test.go.
+
+            ## What to implement
+
+            Add three new langConfig entries to the buildLanguageConfigs() function in
+            /Users/dayna.blackwell/code/agent-lsp/test/multi_lang_test.go.
+
+            The file is large (V048 exempt). Find the end of the SQL entry — the last entry
+            currently in the slice. It ends with:
+
+            ```go
+            			codeActionLine:     7,
+            			codeActionEndLine:  9,
+            		},
+            	}
+            }
+            ```
+
+            Use the Edit tool to replace that anchor with the SQL closing brace followed by
+            the three new entries, then the slice and function closing braces:
+
+            ```go
+            			codeActionLine:     7,
+            			codeActionEndLine:  9,
+            		},
+            		{
+            			name:               "Clojure",
+            			id:                 "clojure",
+            			binary:             "clojure-lsp",
+            			serverArgs:         []string{},
+            			fixture:            filepath.Join(fixtureBase, "clojure"),
+            			file:               filepath.Join(fixtureBase, "clojure", "src", "fixture", "core.clj"),
+            			hoverLine:          3,
+            			hoverColumn:        7,
+            			definitionLine:     3,
+            			definitionColumn:   7,
+            			callSiteLine:       7,
+            			callSiteColumn:     13,
+            			referenceLine:      3,
+            			referenceColumn:    7,
+            			completionLine:     7,
+            			completionColumn:   13,
+            			workspaceSymbol:    "greet",
+            			supportsFormatting: true,
+            			symbolName:         "greet",
+            			highlightLine:      3,
+            			highlightColumn:    7,
+            			inlayHintEndLine:   0,
+            			renameSymbolLine:   3,
+            			renameSymbolColumn: 7,
+            			renameSymbolName:   "renamed-greet",
+            			codeActionLine:     3,
+            			codeActionEndLine:  5,
+            		},
+            		{
+            			name:               "Nix",
+            			id:                 "nix",
+            			binary:             "nil",
+            			serverArgs:         []string{},
+            			fixture:            filepath.Join(fixtureBase, "nix"),
+            			file:               filepath.Join(fixtureBase, "nix", "flake.nix"),
+            			hoverLine:          5,
+            			hoverColumn:        5,
+            			definitionLine:     5,
+            			definitionColumn:   5,
+            			callSiteLine:       7,
+            			callSiteColumn:     21,
+            			referenceLine:      5,
+            			referenceColumn:    5,
+            			completionLine:     7,
+            			completionColumn:   21,
+            			workspaceSymbol:    "helper",
+            			supportsFormatting: false,
+            			symbolName:         "helper",
+            			highlightLine:      5,
+            			highlightColumn:    5,
+            			inlayHintEndLine:   0,
+            			renameSymbolLine:   0,
+            			codeActionLine:     5,
+            			codeActionEndLine:  6,
+            		},
+            		{
+            			name:               "Dart",
+            			id:                 "dart",
+            			binary:             "dart",
+            			serverArgs:         []string{"language-server", "--client-id=agent-lsp"},
+            			fixture:            filepath.Join(fixtureBase, "dart"),
+            			file:               filepath.Join(fixtureBase, "dart", "lib", "fixture.dart"),
+            			hoverLine:          1,
+            			hoverColumn:        7,
+            			definitionLine:     2,
+            			definitionColumn:   10,
+            			callSiteLine:       4,
+            			callSiteColumn:     13,
+            			callSiteFile:       filepath.Join(fixtureBase, "dart", "lib", "caller.dart"),
+            			referenceLine:      1,
+            			referenceColumn:    7,
+            			completionLine:     5,
+            			completionColumn:   11,
+            			completionFile:     filepath.Join(fixtureBase, "dart", "lib", "caller.dart"),
+            			workspaceSymbol:    "Greeter",
+            			supportsFormatting: true,
+            			secondFile:         filepath.Join(fixtureBase, "dart", "lib", "caller.dart"),
+            			symbolName:         "Greeter",
+            			highlightLine:      1,
+            			highlightColumn:    7,
+            			inlayHintEndLine:   5,
+            			renameSymbolLine:   1,
+            			renameSymbolColumn: 7,
+            			renameSymbolName:   "RenamedGreeter",
+            			codeActionLine:     1,
+            			codeActionEndLine:  5,
+            		},
+            	}
+            }
+            ```
+
+            ## Verification gate
+
+            1. Build compiles without errors:
+               GOWORK=off go build ./...
+
+            2. Vet passes:
+               GOWORK=off go vet ./...
+
+            3. All three entries present:
+               grep -q '"Clojure"' test/multi_lang_test.go
+               grep -q '"Nix"' test/multi_lang_test.go
+               grep -q '"Dart"' test/multi_lang_test.go
+
+            4. Entries use filepath.Join (not hardcoded paths):
+               grep 'filepath.Join(fixtureBase, "clojure")' test/multi_lang_test.go
+               grep 'filepath.Join(fixtureBase, "nix")' test/multi_lang_test.go
+               grep 'filepath.Join(fixtureBase, "dart")' test/multi_lang_test.go
+
+            ## Constraints
+            - Only modify test/multi_lang_test.go. No other files.
+            - Do not change any existing langConfig entries.
+            - Insert entries inside the slice before the final closing braces.
+            - Use filepath.Join(fixtureBase, ...) — never hardcoded absolute paths.
+          files:
+            - test/multi_lang_test.go
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+post_merge_checklist:
+    groups:
+        - title: Wire langConfig entries (V048 large-file deferral)
+          items:
+            - description: |
+                test/multi_lang_test.go has 2224 lines (exceeds V048 2000-line agent budget).
+                After Wave 1 merges, apply the three langConfig entries from interface_contracts.
+
+                In buildLanguageConfigs(), find the exact anchor that ends the SQL entry:
+
+                    			codeActionLine:     7,
+                    			codeActionEndLine:  9,
+                    		},
+                    	}
+                    }
+
+                Insert the Clojure, Nix, and Dart langConfig entries (from interface_contracts
+                in this IMPL doc) between the SQL closing brace (},) and the slice/function
+                closing braces (} then }). The exact struct literals with calibrated positions
+                are in interface_contracts: "langConfig (Clojure entry)", "langConfig (Nix entry)",
+                and "langConfig (Dart entry)".
+
+                After editing, verify:
+                  GOWORK=off go build ./...
+                  GOWORK=off go vet ./...
+                  grep -q '"Clojure"' test/multi_lang_test.go
+                  grep -q '"Nix"' test/multi_lang_test.go
+                  grep -q '"Dart"' test/multi_lang_test.go
+              command: grep -q '"Clojure"' test/multi_lang_test.go && grep -q '"Nix"' test/multi_lang_test.go && grep -q '"Dart"' test/multi_lang_test.go
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |
+            Column positions in the langConfig entries are wrong because the fixture file content differs from what was specified (extra blank line, different whitespace). The most common mistake is the fixture agent adding a trailing newline that shifts line numbers, or using different indentation than specified.
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Each agent task specifies exact line counts via wc -l verification gates. fixture.dart must be exactly 5 lines, caller.dart exactly 6, core.clj exactly 7, flake.nix exactly 9. If line counts are wrong, the column derivations in the post_merge_checklist entry will be incorrect.
+        - scenario: |
+            The nil tar.gz does not have a top-level directory, so --strip-components=1 in the CI install step extracts wrongly or errors out.
+          likelihood: low
+          impact: low
+          mitigation: |
+            If nil's release asset structure changes, the install step will fail loudly. Agent D can add a fallback: extract to /tmp/nil-extract/ then cp the binary. Acceptable to leave as-is for now since it fails loudly and is easy to fix.
+        - scenario: |
+            clojure-lsp release asset name is versioned differently (e.g. includes the version string in the zip filename, so extracting to /usr/local/bin/clojure-lsp does not work because the zip contains a differently-named binary).
+          likelihood: low
+          impact: medium
+          mitigation: |
+            The unzip -d /usr/local/bin will extract whatever is in the zip. If the binary inside the zip is named differently from "clojure-lsp", the PATH lookup will fail. Agent D should verify the zip contents name — the current release at time of writing uses "clojure-lsp" as the binary name inside the zip.
+        - scenario: |
+            Dart SDK apt PPA is unavailable on the ubuntu-latest runner (currently Ubuntu 24.04). The dart.dev PPA may require an apt-get update that takes too long or fails.
+          likelihood: low
+          impact: medium
+          mitigation: |
+            The install script uses the official Dart storage.googleapis.com PPA which is the canonical method per dart.dev. If it fails, add `continue-on-error: true` to the multi-lang-dart job as a fallback, matching the pattern used by multi-lang-scala and multi-lang-prisma.
+        - scenario: |
+            post_merge_checklist edit inserts at the wrong location — for example, inside the SQL struct literal rather than after its closing brace. The two trailing braces (`},` then `}` then `}`) are easy to miscount.
+          likelihood: low
+          impact: high
+          mitigation: |
+            The post_merge_checklist entry includes verbatim context (last two SQL fields plus closing braces) as an exact-match anchor. Use the Edit tool with exact string matching on the multi-line anchor. Verify with grep -q after editing.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+    summary: All four agent briefs verified against the codebase. The three new fixture directories (clojure, nix, dart) do not yet exist — confirming action:new files are genuinely new. The ci.yml exists and its last job (multi-lang-sql) and last step text match the anchor described in Agent D's brief exactly. All langConfig struct fields referenced in the interface contracts (callSiteFile, completionFile, secondFile, inlayHintEndLine, renameSymbolLine, renameSymbolColumn, renameSymbolName, codeActionLine, codeActionEndLine, highlightLine, highlightColumn) exist in the actual langConfig struct in multi_lang_test.go. Column position derivations for Clojure, Nix, and Dart were manually verified against the fixture content specified in each brief and are correct. The post_merge_checklist anchor text was verified via hex dump against the actual SQL entry closing lines in multi_lang_test.go — the tab indentation pattern (3 tabs for codeActionLine/codeActionEndLine fields, 2 tabs for closing },, 1 tab for slice }, no indent for function }) matches exactly. File ownership is disjoint across all four Wave 1 agents. No agent exceeds the 8-file complexity threshold.
+    reviewed_at: "2026-04-10T01:43:43Z"
+    issue_count: 0
+state: SCOUT_PENDING
+original_branch: main
+injection_method: manual-fallback

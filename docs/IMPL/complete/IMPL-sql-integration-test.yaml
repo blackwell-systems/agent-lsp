@@ -1,3 +1,4 @@
+completion_date: "2026-04-09"
 title: Add SQL integration test with live PostgreSQL service container
 feature_slug: sql-integration-test
 verdict: SUITABLE
@@ -399,6 +400,7 @@ waves:
             - Do NOT alter the indentation level of existing jobs when appending the new one.
           files:
             - .github/workflows/ci.yml
+      base_commit: 3e279e5e8fb5892bf69caa0ff2f37fc02d520419
     - number: 2
       type: integration
       agents:
@@ -513,6 +515,7 @@ waves:
               inserted before the final closing braces.
           files:
             - test/multi_lang_test.go
+          context_source: prepared-brief
 quality_gates:
     level: standard
     gates:
@@ -525,6 +528,37 @@ quality_gates:
         - type: test
           command: GOWORK=off go test ./internal/... ./cmd/...
           required: true
+completion_reports:
+    A:
+        status: complete
+        branch: saw/sql-integration-test/wave1-agent-A
+        commit: 8dc84ea
+        files_changed:
+            - test/fixtures/sql/schema.sql
+            - test/fixtures/sql/query.sql
+            - test/fixtures/sql/.sqls.yml
+        files_created:
+            - test/fixtures/sql/schema.sql
+            - test/fixtures/sql/query.sql
+            - test/fixtures/sql/.sqls.yml
+        verification: PASS
+        notes: All three SQL fixture files created. query.sql has exactly 18 lines with positions calibrated per spec. Build, vet, and tests pass. Agent C must add the langConfig entry using the positions from the interface contracts.
+    B:
+        status: complete
+        branch: saw/sql-integration-test/wave1-agent-B
+        commit: 4439ab0
+        files_changed:
+            - .github/workflows/ci.yml
+        verification: PASS
+        notes: Appended multi-lang-sql job to ci.yml. YAML valid, all grep checks pass (1 occurrence each of multi-lang-sql, postgres:16, pg_isready, lighttiger2505/sqls). Go build clean.
+    C:
+        status: complete
+        branch: main
+        commit: 2aead87
+        files_changed:
+            - test/multi_lang_test.go
+        verification: PASS
+        notes: Added SQL langConfig entry to buildLanguageConfigs() in multi_lang_test.go. Build and vet pass. All 5 brief verification checks pass.
 pre_mortem:
     overall_risk: low
     rows:
@@ -579,5 +613,5 @@ pre_mortem:
             postgresql-client is a standard Ubuntu package available on ubuntu-latest runners.
             The apt-get install step runs before the psql command and will fail visibly if
             the package is unavailable.
-state: "REVIEWED"
+state: COMPLETE
 original_branch: main

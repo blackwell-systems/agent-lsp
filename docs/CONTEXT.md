@@ -35,3 +35,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-speculative-sessions.yaml
 - **normalize-return-types**: completed 2026-04-09, 3 waves, 4 agents
   - IMPL doc: docs/IMPL/complete/IMPL-normalize-return-types.yaml
+- **sql-integration-test**: completed 2026-04-09, 2 waves, 3 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-sql-integration-test.yaml
