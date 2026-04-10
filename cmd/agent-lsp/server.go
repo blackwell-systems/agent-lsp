@@ -1012,8 +1012,8 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		}
 	}
 
-	// Mark server as initialized and start on stdio transport.
-	logging.MarkServerInitialized()
+	// Start the MCP server on stdio transport. The server-initialized marker
+	// is set from InitializedHandler above once the MCP session is established.
 	logging.Log(logging.LevelInfo, "agent-lsp server starting")
 
 	transport := &mcp.StdioTransport{}
