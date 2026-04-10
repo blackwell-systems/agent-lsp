@@ -288,13 +288,13 @@ Safe what-if analysis: simulate edits in-memory, evaluate diagnostic changes (er
 | `create_simulation_session` | Create a session with baseline diagnostics for a file |
 | `simulate_edit` | Apply an in-memory edit to the session (no disk write) |
 | `simulate_edit_atomic` | Apply an edit, evaluate diagnostics, and discard in one call; returns net error delta; accepts optional `session_id` to reuse an existing session |
-| `simulate_chain` | Apply a sequence of edits and evaluate after each step |
+| `simulate_chain` | Apply a sequence of edits and evaluate after each step; use as a **refactor preview** or **safe rename preview** — chain definition + call-site edits, check `cumulative_delta == 0`, commit or discard |
 | `evaluate_session` | Compare current in-memory diagnostics against baseline; returns errors introduced and resolved |
 | `commit_session` | Write the session's edits to disk |
 | `discard_session` | Revert in-memory edits without touching disk |
 | `destroy_session` | Release all session resources |
 
-See [docs/speculative-execution.md](./docs/speculative-execution.md) for full workflow examples.
+See [docs/speculative-execution.md](./docs/speculative-execution.md) for session lifecycle examples and [docs/refactor-preview.md](./docs/refactor-preview.md) for refactor and rename preview workflows.
 
 **Recommended agent workflow:**
 ```
