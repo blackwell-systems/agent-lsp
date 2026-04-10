@@ -18,40 +18,45 @@ Replace `:go` with any per-language tag and adjust the trailing argument to matc
 | Tag | Contents | Approx. Size |
 |-----|----------|--------------|
 | `latest` / `base` | agent-lsp binary only | ~50 MB |
-| `go`, `typescript`, `python`, ... | One language server baked in | ~150–500 MB |
+| `go`, `typescript`, `python`, `ruby`, `cpp`, `php` | One language server baked in | ~150–500 MB |
 | `web` | TypeScript + Python | ~400 MB |
 | `backend` | Go + Python | ~500 MB |
 | `fullstack` | Go + TypeScript + Python | ~600 MB |
-| `full` | All 18 supported servers | ~2–3 GB |
+| `full` | All automatable servers (Go, TypeScript, Python, Ruby, C/C++, PHP) | ~1–2 GB |
 
-> **Warning:** The `full` image is approximately 2–3 GB. Unless you need all
-> language servers immediately available, prefer a per-language tag or a combo
-> tag (`web`, `backend`, `fullstack`).
+> **Warning:** The `full` image is approximately 1–2 GB. Unless you need all
+> baked-in language servers immediately available, prefer a per-language tag or
+> a combo tag (`web`, `backend`, `fullstack`).
 
 ## Per-Language Tags
 
-One `docker run` per language. Mount your project at `/workspace` and pass the language and server binary as arguments.
+These tags are published to ghcr.io and have a language server baked in.
 
 | Language | Tag | Command |
 |----------|-----|---------|
 | Go | `go` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:go go:gopls` |
 | TypeScript | `typescript` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:typescript typescript:typescript-language-server,--stdio` |
 | Python | `python` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:python python:pyright-langserver,--stdio` |
-| Rust | `rust` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:rust rust:rust-analyzer` |
-| Java | `java` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:java java:jdtls` |
 | Ruby | `ruby` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:ruby ruby:solargraph` |
 | C / C++ | `cpp` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:cpp cpp:clangd` |
-| C# | `csharp` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:csharp csharp:csharp-ls` |
-| Kotlin | `kotlin` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:kotlin kotlin:kotlin-language-server` |
 | PHP | `php` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:php php:intelephense` |
-| Scala | `scala` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:scala scala:metals` |
-| Lua | `lua` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:lua lua:lua-language-server` |
-| Elixir | `elixir` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:elixir elixir:elixir-ls` |
-| Clojure | `clojure` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:clojure clojure:clojure-lsp` |
-| Dart | `dart` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:dart dart:dart` |
-| Zig | `zig` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:zig zig:zls` |
-| Haskell | `haskell` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:haskell haskell:haskell-language-server-wrapper` |
-| Swift | `swift` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:swift swift:sourcekit-lsp` |
+
+The following languages require platform-specific toolchains that can't be reliably baked into a generic Debian image. Use [`LSP_SERVERS`](#runtime-install-lsp_servers) to install them at runtime, or build your own image on top of `base`:
+
+| Language | `LSP_SERVERS` value | Notes |
+|----------|--------------------|----|
+| Rust | `rust-analyzer` | Install via `rustup component add rust-analyzer` |
+| Java | `jdtls` | Download from eclipse.org/jdtls |
+| C# | `csharp-ls` | `csharp-ls` NuGet package lacks global tool manifest |
+| Kotlin | `kotlin-language-server` | Binary release from GitHub |
+| Dart | `dart` | Requires Google's apt PPA |
+| Scala | `metals` | Requires sbt compilation |
+| Lua | `lua-language-server` | Binary release from GitHub |
+| Elixir | `elixir-ls` | Build from source |
+| Clojure | `clojure-lsp` | Binary release from GitHub |
+| Zig | `zls` | Must match your Zig version exactly |
+| Haskell | `haskell-language-server-wrapper` | Install via GHCup |
+| Swift | `sourcekit-lsp` | Ships with Xcode; macOS only |
 
 ## Runtime Install (LSP_SERVERS)
 
