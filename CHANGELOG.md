@@ -5,6 +5,21 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (2026-04-10) — Docker image distribution (ghcr.io)
+
+Tiered Docker image distribution published to `ghcr.io/blackwell-systems/agent-lsp`:
+
+- **`:latest` (base)** — binary only, no language servers, ~50MB. Supports `LSP_SERVERS=gopls,pyright,...` env var for runtime install with `/var/cache/lsp-servers` volume caching.
+- **Per-language tags** (`:go`, `:typescript`, `:python`, `:ruby`, `:cpp`, `:csharp`, `:php`, `:dart`) — extend base, one language server pre-installed.
+- **Combo tags** (`:web`, `:backend`, `:fullstack`) — curated multi-language images for common stacks.
+- **`:full`** — all package-manager-installable language servers (~2–3GB).
+- `Dockerfile`, `Dockerfile.lang`, `Dockerfile.full` — multi-stage builds on `debian:bookworm-slim`.
+- `docker/entrypoint.sh` — POSIX sh runtime installer; `docker/lsp-servers.yaml` — registry of all 18 supported servers.
+- `.github/workflows/docker.yml` — separate workflow (not release.yml) building all tiers in parallel, pushing to ghcr.io on `main` push (`:edge`) and version tags.
+- `docker-compose.yml` + `.env.example` for local development.
+- `DOCKER.md` rewritten with per-language one-liners, `LSP_SERVERS` usage, volume caching, MCP client config.
+- `README.md` gains a `## Docker` section with the four most common one-liners.
+
 ### Added (2026-04-10) — Architecture diagram
 
 - `docs/architecture.drawio` — draw.io diagram of the full system: MCP client → server.go (toolDeps) → 4 tool registration files → internal/tools handlers → internal/lsp client layer → gopls subprocess. Includes internal/session, leaf packages, and layer rule annotation.

@@ -1,3 +1,4 @@
+completion_date: "2026-04-10"
 title: Tiered Docker Image Distribution for agent-lsp
 feature_slug: docker-distribution
 verdict: SUITABLE
@@ -1267,6 +1268,7 @@ waves:
             - C
             - D
             - E
+      base_commit: 9707b09e72aead3f662788c73ccf62e7a127a766
 quality_gates:
     level: standard
     gates:
@@ -1337,6 +1339,15 @@ completion_reports:
             - .dockerignore
         verification: PASS
         notes: All three files created. 9/9 verification checks pass. Go build clean. Resource limits (4g RAM, 2 CPU), WORKSPACE_DIR mount, lsp-server-cache volume, and .dockerignore exclusions all in place.
+    F:
+        status: complete
+        branch: saw/docker-distribution/wave2-agent-F
+        commit: d8fbac0
+        files_changed:
+            - DOCKER.md
+            - README.md
+        verification: PASS
+        notes: 'DOCKER.md completely rewritten: overview, quick start, image tiers table (base/per-language/combo/full), all 18 per-language one-liners table, LSP_SERVERS runtime install with volume caching, MCP client config (docker run + docker compose), docker-compose setup, resource limits, notes. README.md: Docker section inserted before ## Installation with 4 common examples and link to DOCKER.md (~20 lines, within 40-line constraint). All 8 verification gates pass. No Go source files modified.'
 pre_mortem:
     overall_risk: low
     rows:
@@ -1439,6 +1450,6 @@ critic_report:
     summary: 'All 6 agents verified against the agent-lsp codebase. Wave 1 agents (A–E) all create action:new files; confirmed none of the 9 target files exist yet. Wave 2 agent F modifies DOCKER.md and README.md; both exist, README.md has ## Installation at line 62 and is ~379 lines as stated. The go.mod module path (github.com/blackwell-systems/agent-lsp), Go version (1.25.0), binary entrypoint (cmd/agent-lsp/main.go), and existing workflow references (ci.yml, release.yml with actions/checkout@v4) all match brief claims exactly. Interface contracts are naming/config conventions with no Go type signatures — all syntactically valid. One advisory warning on Agent D: the brief''s example YAML uses docker/build-push-action@v6 which the pre-mortem already flags as potentially non-existent; the agent is instructed to use latest stable, so this is self-correcting. No errors found.'
     reviewed_at: "2026-04-10T19:32:00Z"
     issue_count: 1
-state: REVIEWED
+state: COMPLETE
 original_branch: main
 injection_method: hook
