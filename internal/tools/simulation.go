@@ -326,13 +326,17 @@ func HandleSimulateEditAtomic(ctx context.Context, mgr *session.SessionManager, 
 	if err != nil {
 		// Discard before returning to revert LSP in-memory state; Destroy
 		// (registered as defer above) does not revert LSP document content.
-		_ = mgr.Discard(ctx, sessionID)
+		if discardErr := mgr.Discard(ctx, sessionID); discardErr != nil {
+			return types.ErrorResult(fmt.Sprintf("evaluate failed: %s; LSP state revert also failed: %s", err, discardErr)), nil
+		}
 		return types.ErrorResult(fmt.Sprintf("evaluate failed: %s", err)), nil
 	}
 
 	// Discard to revert LSP state before Destroy — ensures gopls sees clean
 	// file content for subsequent calls, not the modified in-memory version.
-	_ = mgr.Discard(ctx, sessionID)
+	if discardErr := mgr.Discard(ctx, sessionID); discardErr != nil {
+		return types.ErrorResult(fmt.Sprintf("LSP state revert failed: %s", discardErr)), nil
+	}
 
 	data, mErr := json.Marshal(evalResult)
 	if mErr != nil {
