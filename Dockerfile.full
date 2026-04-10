@@ -1,0 +1,60 @@
+# agent-lsp full image — ALL supported language servers
+# WARNING: This image is 2-3 GB. For zero-setup use only.
+# For targeted use, prefer per-language tags: ghcr.io/blackwell-systems/agent-lsp:<lang>
+#
+# Pull: docker pull ghcr.io/blackwell-systems/agent-lsp:full
+
+ARG BASE_TAG=base
+FROM ghcr.io/blackwell-systems/agent-lsp:${BASE_TAG}
+
+# Install Node.js (needed for npm-based servers)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# npm-based language servers
+RUN npm install -g \
+    typescript-language-server typescript \
+    pyright \
+    intelephense \
+    yaml-language-server \
+    vscode-langservers-extracted \
+    dockerfile-language-server-nodejs \
+    @prisma/language-server \
+    && npm cache clean --force
+
+# Go + gopls
+RUN apt-get update && apt-get install -y --no-install-recommends golang-go \
+    && GOPATH=/usr/local go install golang.org/x/tools/gopls@latest \
+    && rm -rf /var/lib/apt/lists/*
+
+# Ruby + solargraph
+RUN apt-get update && apt-get install -y --no-install-recommends ruby-full \
+    && gem install solargraph \
+    && rm -rf /var/lib/apt/lists/*
+
+# C/C++ via clangd
+RUN apt-get update && apt-get install -y --no-install-recommends clangd \
+    && rm -rf /var/lib/apt/lists/*
+
+# .NET + csharp-ls
+RUN apt-get update && apt-get install -y --no-install-recommends dotnet-sdk-8.0 \
+    && dotnet tool install -g csharp-ls \
+    && rm -rf /var/lib/apt/lists/*
+
+# The following language servers require platform-specific installation and are
+# NOT included in the full image. Use LSP_SERVERS or install manually:
+# - rust-analyzer (Rust): rustup component add rust-analyzer
+# - jdtls (Java): see https://download.eclipse.org/jdtls/snapshots/
+# - kotlin-language-server (Kotlin): see https://github.com/fwcd/kotlin-language-server/releases
+# - sourcekit-lsp (Swift): ships with Xcode on macOS only
+# - elixir-ls (Elixir): build from source
+# - clojure-lsp (Clojure): binary release from GitHub
+# - dart language-server (Dart): install Dart SDK
+# - lua-language-server (Lua): binary release from GitHub
+# - zls (Zig): match Zig version exactly
+# - metals (Scala): requires sbt compilation
+# - haskell-language-server (Haskell): install via GHCup
+# - terraform-ls (Terraform): binary release from hashicorp.com
+
+LABEL org.opencontainers.image.description="agent-lsp with all supported language servers (~2-3 GB)"
