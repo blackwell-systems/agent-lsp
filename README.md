@@ -5,7 +5,7 @@
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 [![Languages](https://img.shields.io/badge/languages-30_CI--verified-brightgreen.svg)](#multi-language-support)
 [![Tools](https://img.shields.io/badge/tools-50-blue.svg)](#tools)
-[![CI Coverage](https://img.shields.io/badge/CI--verified_tools-49%2F50-brightgreen.svg)](#tools)
+[![CI Coverage](https://img.shields.io/badge/CI--verified_tools-50%2F50-brightgreen.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Agent Skills](assets/badge-agentskills.svg)](https://agentskills.io)
 
@@ -249,7 +249,7 @@ Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout
 
 All tools require `start_lsp` to be called first.
 
-**CI coverage:** The following tools are end-to-end integration-tested against real language servers on every CI run across all 30 languages (34 tools in the multi-language harness; 47/50 total across all test suites):
+**CI coverage:** The following tools are end-to-end integration-tested against real language servers on every CI run across all 30 languages (34 tools in the multi-language harness; 50/50 total across all test suites):
 
 - **Tier 1** (4 tools, all 30 languages): `start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`
 - **Tier 2** (34 tools): `get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`, `get_info_on_location`, `call_hierarchy`, `get_semantic_tokens`, `get_signature_help`, `get_document_highlights`, `get_inlay_hints`, `get_code_actions`, `prepare_rename`, `rename_symbol`, `get_server_capabilities`, `add_workspace_folder`, `go_to_type_definition`, `go_to_implementation`, `format_range`, `apply_edit`, `detect_lsp_servers`, `close_document`, `did_change_watched_files`, `run_build`, `run_tests`, `get_tests_for_file`, `get_symbol_source`, `go_to_symbol`, `restart_lsp_server`, `set_log_level`, `execute_command`
