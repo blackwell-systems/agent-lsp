@@ -270,7 +270,7 @@ jobs:
         run: GOWORK=off go build ./...
 
       - name: Install Prisma language server and CLI
-        run: npm install -g @prisma/language-server prisma
+        run: npm install -g @prisma/language-server@6 prisma@6
 
       - name: Initialize Prisma fixture project
         run: |
