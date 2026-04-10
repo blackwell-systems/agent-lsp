@@ -270,7 +270,7 @@ jobs:
         run: GOWORK=off go build ./...
 
       - name: Install Prisma language server and CLI
-        run: npm install -g @prisma/language-server@6 prisma@6
+        run: npm install -g @prisma/language-server@5 prisma@5
 
       - name: Initialize Prisma fixture project
         run: |
@@ -279,7 +279,10 @@ jobs:
           prisma generate
 
       - name: Run Prisma tests
-        run: GOWORK=off go test -v -run "TestMultiLanguage/^Prisma$" ./test/ -timeout 10m
+        env:
+          LOG_LEVEL: debug
+          CHECKPOINT_DISABLE: "1"
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^Prisma$" ./test/ -timeout 10m 2>&1
 
   # Gleam via gleam lsp (built-in to the gleam binary)
   multi-lang-gleam:
