@@ -9,46 +9,46 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Agent Skills](assets/badge-agentskills.svg)](https://agentskills.io)
 
-Language servers are the intelligence layer behind IDE features — go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships. AI agents should be able to use them. Most can't, for two reasons.
+Language servers are the intelligence layer behind IDE features: go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships. AI agents should be able to use them. Most can't, for two reasons.
 
 **First, existing MCP-LSP implementations are stateless bridges.** They cold-start the language server on every call, which means no warm index, no cross-file awareness, and no way to maintain session state across a multi-step workflow. The agent pays the indexing cost every time.
 
-**Second, raw tools don't get used.** You can expose 47 tools to an agent, but in non-SDK human-in-the-loop workflows, agents routinely skip them — even when they're available. A safe rename requires `prepare_rename` → `rename_symbol` → `apply_edit` in sequence. An agent that has to reason its way to the correct sequence on every invocation will often skip steps or use the wrong tool. The tools exist but the workflow doesn't reliably happen.
+**Second, raw tools don't get used.** You can expose 47 tools to an agent, but in non-SDK human-in-the-loop workflows, agents routinely skip them, even when available. A safe rename requires `prepare_rename` → `rename_symbol` → `apply_edit` in sequence. An agent that has to reason its way to the correct sequence on every invocation will often skip steps or use the wrong tool. The tools exist but the workflow doesn't reliably happen.
 
-agent-lsp solves both problems. It is a **stateful runtime** over real language servers — not a bridge. It maintains a persistent warm session and adds a **skill layer** that wraps correct tool sequences into single-command workflows agents actually use.
+agent-lsp solves both problems. It is a **stateful runtime** over real language servers, not a bridge. It maintains a persistent warm session and adds a **skill layer** that wraps correct tool sequences into single-command workflows agents actually use.
 
-**47 tools** across navigation, analysis, refactoring, and formatting — **28 CI-verified** end-to-end against real language servers across **25 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+**47 tools** across navigation, analysis, refactoring, and formatting; **28 CI-verified** end-to-end against real language servers across **25 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
-**Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One agent-lsp process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright — no reconfiguration when you switch projects.
+**Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One agent-lsp process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright; no reconfiguration when you switch projects.
 
-**Persistent session, warm index.** Unlike per-request bridges, agent-lsp maintains a live language server session. `start_lsp` indexes the workspace once; every subsequent call hits the warm index. `get_references` returns all 12 call sites without loading files into context. `get_diagnostics` returns only the errors. `get_info_on_location` returns the type signature at one position without loading the module. The language server's index stays fresh automatically — agent-lsp watches the workspace using kernel-level filesystem events (inotify/kqueue/FSEvents) and forwards changes to keep the session synchronized. High-churn directories (`.git/`, `node_modules/`, etc.) are excluded; rapid edits are debounced at 150ms. No `did_change_watched_files` calls required.
+**Persistent session, warm index.** Unlike per-request bridges, agent-lsp maintains a live language server session. `start_lsp` indexes the workspace once; every subsequent call hits the warm index. `get_references` returns all 12 call sites without loading files into context. `get_diagnostics` returns only the errors. `get_info_on_location` returns the type signature at one position without loading the module. The language server's index stays fresh automatically: agent-lsp watches the workspace using kernel-level filesystem events (inotify/kqueue/FSEvents) and forwards changes to keep the session synchronized. High-churn directories (`.git/`, `node_modules/`, etc.) are excluded; rapid edits are debounced at 150ms. No `did_change_watched_files` calls required.
 
-**Fuzzy position fallback.** When an AI assistant gets a line/column slightly wrong, `go_to_definition`, `get_references`, and `rename_symbol` fall back to workspace symbol search by hover name and retry — returning results instead of silently returning empty.
+**Fuzzy position fallback.** When an AI assistant gets a line/column slightly wrong, `go_to_definition`, `get_references`, and `rename_symbol` fall back to workspace symbol search by hover name and retry, returning results instead of silently returning empty.
 
-**Semantic token classification.** `get_semantic_tokens` classifies every token in a range as `function`, `parameter`, `variable`, `type`, `keyword`, etc. — the same data an IDE uses to colorize code. No other MCP-LSP server exposes this.
+**Semantic token classification.** `get_semantic_tokens` classifies every token in a range as `function`, `parameter`, `variable`, `type`, `keyword`, etc.; the same data an IDE uses to colorize code. No other MCP-LSP server exposes this.
 
 ## Skills
 
-The skill layer is the behavioral reliability layer. Raw tools get ignored; skills get used. Each skill encodes the correct tool sequence for a workflow — the agent reads the skill, follows the steps, and uses the tools in the right order without per-prompt orchestration instructions. This is the difference between tools that are available and workflows that actually happen.
+The skill layer is the behavioral reliability layer. Raw tools get ignored; skills get used. Each skill encodes the correct tool sequence for a workflow; the agent reads the skill, follows the steps, and uses the tools in the right order without per-prompt orchestration instructions. This is the difference between tools that are available and workflows that actually happen.
 
 Fourteen skills ship with agent-lsp:
 
 | Skill | Purpose |
 |-------|---------|
 | `/lsp-safe-edit` | Speculative preview before disk write, then before/after diagnostic diff; surfaces code actions on introduced errors; multi-file aware |
-| `/lsp-edit-export` | Safe editing of exported symbols — finds all callers first |
+| `/lsp-edit-export` | Safe editing of exported symbols; finds all callers first |
 | `/lsp-edit-symbol` | Edit a named symbol without knowing its file or position |
 | `/lsp-rename` | `prepare_rename` safety gate, preview all sites, confirm, then apply atomically |
 | `/lsp-verify` | Full three-layer check: diagnostics + build + tests; apply code actions on errors |
-| `/lsp-simulate` | Speculative editing — test changes without touching the file |
+| `/lsp-simulate` | Speculative editing: test changes without touching the file |
 | `/lsp-impact` | Blast-radius analysis before renaming or deleting a symbol |
 | `/lsp-dead-code` | Detect zero-reference exports and unreachable symbols |
 | `/lsp-implement` | Find all concrete implementations of an interface or abstract type |
-| `/lsp-docs` | Three-tier documentation lookup: hover → offline toolchain (`go doc`, `pydoc`) → source |
-| `/lsp-cross-repo` | Multi-root workspace analysis — add a consumer repo and find all cross-repo callers, references, and implementations of a library symbol |
-| `/lsp-local-symbols` | File-scoped analysis — list all symbols in a file, find all usages of a symbol within the file, get type info; faster than workspace search for local queries |
-| `/lsp-test-correlation` | Find and run only the tests that cover an edited file — faster than the full suite for targeted post-edit verification |
-| `/lsp-format-code` | Format a file or selection using the language server's formatter (`gofmt`, `prettier`, `rustfmt`) — full-file or range, applies edits to disk |
+| `/lsp-docs` | Three-tier documentation lookup: hover, offline toolchain (`go doc`, `pydoc`), source |
+| `/lsp-cross-repo` | Multi-root workspace analysis: add a consumer repo and find all cross-repo callers, references, and implementations of a library symbol |
+| `/lsp-local-symbols` | File-scoped analysis: list all symbols, find all usages within the file, get type info; faster than workspace search for local queries |
+| `/lsp-test-correlation` | Find and run only the tests that cover an edited file; faster than the full suite for targeted post-edit verification |
+| `/lsp-format-code` | Format a file or selection using the language server's formatter (`gofmt`, `prettier`, `rustfmt`); full-file or range, applies edits to disk |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.
 
@@ -66,7 +66,7 @@ See [docs/tools.md](./docs/tools.md) for full parameter details.
 
 ## Installation
 
-**Requires Go 1.21+** — [install Go](https://go.dev/dl/) if needed.
+**Requires Go 1.21+.** [Install Go](https://go.dev/dl/) if needed.
 
 ```bash
 go install github.com/blackwell-systems/agent-lsp@latest
@@ -80,9 +80,9 @@ export PATH="$PATH:$(go env GOPATH)/bin"   # add to ~/.zshrc or ~/.bashrc to per
 
 ## Setup
 
-### Step 1 — Install language servers for your stack
+### Step 1: Install language servers for your stack
 
-agent-lsp runs on top of real language servers — install the servers for your stack and agent-lsp handles the rest.
+agent-lsp runs on top of real language servers. Install the servers for your stack and agent-lsp handles the rest.
 
 | Language | Server | Install |
 |----------|--------|---------|
@@ -110,7 +110,7 @@ agent-lsp runs on top of real language servers — install the servers for your 
 | Elixir | `elixir-ls` | [GitHub releases](https://github.com/elixir-lsp/elixir-ls/releases) |
 | Prisma | `prisma-language-server` | `npm i -g @prisma/language-server` |
 
-### Step 2 — Add to your AI config
+### Step 2: Add to your AI config
 
 Add to `.mcp.json` (project) or your AI tool's global MCP config. List only the languages you use:
 
@@ -132,7 +132,7 @@ Add to `.mcp.json` (project) or your AI tool's global MCP config. List only the 
 
 Each arg is `language:server-binary` (comma-separate server args). Single language? Use `"args": ["go", "gopls"]`. Complex setup with many servers or per-server options? Use `"args": ["--config", "/path/to/agent-lsp.json"]`.
 
-### Step 3 — Start working
+### Step 3: Start working
 
 Once your AI session opens, call `start_lsp` with your project root to initialize:
 
@@ -140,7 +140,7 @@ Once your AI session opens, call `start_lsp` with your project root to initializ
 start_lsp(root_dir="/your/project")
 ```
 
-Then use any of the 47 tools. The session persists — no need to restart when switching files.
+Then use any of the 47 tools. The session persists; no need to restart when switching files.
 
 ## Why agent-lsp
 
@@ -164,16 +164,16 @@ Then use any of the 47 tools. The session persists — no need to restart when s
 
 ## Use Cases
 
-- **Multi-project AI sessions** — point your AI assistant at `~/code/`, work across any project without reconfiguring
-- **Polyglot development** — Go backend + TypeScript frontend + Python scripts in one session
-- **Large monorepos** — one server handles all languages, routes by file extension
-- **Code migration** — refactor across repos (e.g., extracting a Go library used by 3 services)
-- **CI pipelines** — validate against real language server behavior
+- **Multi-project AI sessions**: point your AI assistant at `~/code/`, work across any project without reconfiguring
+- **Polyglot development**: Go backend + TypeScript frontend + Python scripts in one session
+- **Large monorepos**: one server handles all languages, routes by file extension
+- **Code migration**: refactor across repos (e.g., extracting a Go library used by 3 services)
+- **CI pipelines**: validate against real language server behavior
 
 
 ## Multi-Language Support
 
-Every language below is integration-tested on every CI run with a real language server binary and a real fixture codebase. The test harness verifies **Tier 1** (`start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`) and **Tier 2** (27 tools including navigation, analysis, refactoring, workspace, and session lifecycle) for each language. No other MCP-LSP implementation has an equivalent test matrix — competitors list supported languages in config examples but do not run integration tests against them.
+Every language below is integration-tested on every CI run with a real language server binary and a real fixture codebase. The test harness verifies **Tier 1** (`start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`) and **Tier 2** (27 tools including navigation, analysis, refactoring, workspace, and session lifecycle) for each language. No other MCP-LSP implementation has an equivalent test matrix; competitors list supported languages in config examples but do not run integration tests against them.
 
 Tier 2 results per language from the latest CI run:
 
@@ -205,7 +205,7 @@ Tier 2 results per language from the latest CI run:
 | Elixir | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
 | Prisma | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
 
-Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout (a known jdtls cold-start characteristic, not a tool bug). Scala (metals) runs in a separate CI job with `continue-on-error: true` and a 30-minute timeout — metals requires sbt compilation on first start; results are informational. Swift (`sourcekit-lsp`) runs on a `macos-latest` runner since sourcekit-lsp ships with Xcode. `type_hierarchy` is tested on Java (jdtls) and TypeScript (typescript-language-server); TypeScript skips when the server does not return a hierarchy item at the configured position.
+Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout (a known jdtls cold-start characteristic, not a tool bug). Scala (metals) runs in a separate CI job with `continue-on-error: true` and a 30-minute timeout; metals requires sbt compilation on first start and results are informational. Swift (`sourcekit-lsp`) runs on a `macos-latest` runner since sourcekit-lsp ships with Xcode. `type_hierarchy` is tested on Java (jdtls) and TypeScript (typescript-language-server); TypeScript skips when the server does not return a hierarchy item at the configured position.
 
 ## Tools
 
@@ -229,27 +229,27 @@ Speculative session tools (`create_simulation_session`, `simulate_edit`, `simula
 ### Analysis
 | Tool | Description |
 |------|-------------|
-| `get_diagnostics` | Errors and warnings — omit `file_path` for whole project |
+| `get_diagnostics` | Errors and warnings; omit `file_path` for whole project |
 | `get_info_on_location` | Hover info (type signatures, docs) at a position |
 | `get_completions` | Completion suggestions at a position |
 | `get_signature_help` | Function signature and active parameter at a call site |
 | `get_code_actions` | Quick fixes and refactors for a range |
 | `get_document_symbols` | All symbols in a file (functions, classes, variables) |
 | `get_workspace_symbols` | Search symbols by name across the workspace; `detail_level=hover` enriches results with type signatures and docs without loading files into context |
-| `get_semantic_tokens` | Classify tokens in a range as function/parameter/variable/type/keyword/etc — same data IDEs use for syntax highlighting |
-| `get_inlay_hints` | Inline type annotations and parameter name labels for a range — inferred type hints IDEs overlay on source code (Type and Parameter kinds) |
+| `get_semantic_tokens` | Classify tokens in a range as function/parameter/variable/type/keyword/etc; the same data IDEs use for syntax highlighting |
+| `get_inlay_hints` | Inline type annotations and parameter name labels for a range; inferred type hints IDEs overlay on source code (Type and Parameter kinds) |
 
 ### Navigation
 | Tool | Description |
 |------|-------------|
 | `get_references` | All references to a symbol across the workspace |
-| `get_document_highlights` | All occurrences of a symbol in the current file — file-scoped, instant, returns read/write/text kinds; faster than `get_references` for local usage analysis |
+| `get_document_highlights` | All occurrences of a symbol in the current file; file-scoped, instant, returns read/write/text kinds; faster than `get_references` for local usage analysis |
 | `go_to_definition` | Jump to where a symbol is defined (with fuzzy position fallback) |
 | `go_to_type_definition` | Jump to the type definition of a symbol |
 | `go_to_implementation` | Jump to all implementations of an interface or abstract method |
-| `go_to_declaration` | Jump to the declaration of a symbol (distinct from definition — e.g. C/C++ headers) |
-| `call_hierarchy` | Callers and/or callees of a function — `direction: "incoming"`, `"outgoing"`, or `"both"` (default) |
-| `type_hierarchy` | Supertypes and/or subtypes of a type — `direction: "supertypes"`, `"subtypes"`, or `"both"` (default) |
+| `go_to_declaration` | Jump to the declaration of a symbol (distinct from definition; e.g. C/C++ headers) |
+| `call_hierarchy` | Callers and/or callees of a function; `direction: "incoming"`, `"outgoing"`, or `"both"` (default) |
+| `type_hierarchy` | Supertypes and/or subtypes of a type; `direction: "supertypes"`, `"subtypes"`, or `"both"` (default) |
 
 ### Refactoring
 | Tool | Description |
@@ -264,28 +264,28 @@ Speculative session tools (`create_simulation_session`, `simulate_edit`, `simula
 ### Utilities
 | Tool | Description |
 |------|-------------|
-| `did_change_watched_files` | Manually notify the server of file changes — not needed for normal edits (auto-watch handles those); use when an external process changes files outside the session |
-| `get_server_capabilities` | Return the server capability map and classify every tool as supported or unsupported — use before calling capability-gated tools |
+| `did_change_watched_files` | Manually notify the server of file changes; not needed for normal edits (auto-watch handles those); use when an external process changes files outside the session |
+| `get_server_capabilities` | Return the server capability map and classify every tool as supported or unsupported; use before calling capability-gated tools |
 | `set_log_level` | Change log verbosity at runtime |
-| `detect_lsp_servers` | Scan a workspace for source languages and check PATH for installed LSP servers — returns detected languages, server paths, and a `suggested_config` array ready to paste into your MCP config |
+| `detect_lsp_servers` | Scan a workspace for source languages and check PATH for installed LSP servers; returns detected languages, server paths, and a `suggested_config` array ready to paste into your MCP config |
 
 ### Workspace
 | Tool | Description |
 |------|-------------|
-| `add_workspace_folder` | Add a directory to the LSP workspace — enables cross-repo references, definitions, and diagnostics across library + consumer repos in one session |
+| `add_workspace_folder` | Add a directory to the LSP workspace; enables cross-repo references, definitions, and diagnostics across library + consumer repos in one session |
 | `remove_workspace_folder` | Remove a directory from the LSP workspace |
 | `list_workspace_folders` | Return the current workspace folder list |
 
 ### Speculative Execution
-Safe what-if analysis — simulate edits in-memory, evaluate diagnostic changes (errors introduced/resolved), then commit or discard atomically. No disk writes until you call `commit_session`.
+Safe what-if analysis: simulate edits in-memory, evaluate diagnostic changes (errors introduced/resolved), then commit or discard atomically. No disk writes until you call `commit_session`.
 
 | Tool | Description |
 |------|-------------|
 | `create_simulation_session` | Create a session with baseline diagnostics for a file |
 | `simulate_edit` | Apply an in-memory edit to the session (no disk write) |
-| `simulate_edit_atomic` | Apply an edit, evaluate diagnostics, and discard in one call — returns net error delta; accepts optional `session_id` to reuse an existing session |
+| `simulate_edit_atomic` | Apply an edit, evaluate diagnostics, and discard in one call; returns net error delta; accepts optional `session_id` to reuse an existing session |
 | `simulate_chain` | Apply a sequence of edits and evaluate after each step |
-| `evaluate_session` | Compare current in-memory diagnostics against baseline — returns errors introduced and resolved |
+| `evaluate_session` | Compare current in-memory diagnostics against baseline; returns errors introduced and resolved |
 | `commit_session` | Write the session's edits to disk |
 | `discard_session` | Revert in-memory edits without touching disk |
 | `destroy_session` | Release all session resources |
@@ -303,7 +303,7 @@ close_document(...)
 
 **Keeping the index fresh:**
 
-agent-lsp watches the workspace root for file changes and automatically notifies the language server — no `did_change_watched_files` calls required after edits. The watcher skips high-churn directories (`.git/`, `node_modules/`, `target/`, etc.) and debounces rapid edits at 150ms.
+agent-lsp watches the workspace root for file changes and automatically notifies the language server; no `did_change_watched_files` calls required after edits. The watcher skips high-churn directories (`.git/`, `node_modules/`, `target/`, etc.) and debounces rapid edits at 150ms.
 
 `did_change_watched_files` is still available for cases where files are changed by an external process that the watcher may not see immediately, or for explicit control over change notifications.
 
@@ -319,7 +319,7 @@ apply_edit(edit=<WorkspaceEdit>)                           # writes all changed 
 
 ## Resources
 
-Diagnostic resources support real-time subscriptions — the server sends `notifications/resources/updated` when diagnostics change for a subscribed file.
+Diagnostic resources support real-time subscriptions; the server sends `notifications/resources/updated` when diagnostics change for a subscribed file.
 
 | Scheme | Description |
 |--------|-------------|
@@ -342,8 +342,8 @@ The server sends `notifications/resources/updated` each time the language server
 agent-lsp is implemented directly against the [LSP 3.17 specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/) and validated through integration testing against real language servers. Coverage includes:
 
 - Full lifecycle (`initialize` → `initialized` → `shutdown`) with graceful SIGINT/SIGTERM handling
-- Progress protocol — workspace-ready detection waits for all `$/progress` tokens to complete before sending references
-- Server-initiated requests (`workspace/configuration`, `window/workDoneProgress/create`, dynamic registration) — all correctly responded to, unblocking servers that gate workspace loading on these responses
+- Progress protocol: workspace-ready detection waits for all `$/progress` tokens to complete before sending references
+- Server-initiated requests (`workspace/configuration`, `window/workDoneProgress/create`, dynamic registration): all correctly responded to, unblocking servers that gate workspace loading on these responses
 - Correct JSON-RPC framing, error code handling, and response shape normalization across hover, completion, code actions, and diagnostics
 
 See [docs/lsp-conformance.md](./docs/lsp-conformance.md) for the full method coverage matrix and spec section references.
