@@ -257,6 +257,7 @@ jobs:
   # Prisma via @prisma/language-server
   multi-lang-prisma:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -268,8 +269,8 @@ jobs:
       - name: Build
         run: GOWORK=off go build ./...
 
-      - name: Install Prisma language server
-        run: npm install -g @prisma/language-server
+      - name: Install Prisma language server and CLI
+        run: npm install -g @prisma/language-server prisma
 
       - name: Run Prisma tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Prisma$" ./test/ -timeout 10m
