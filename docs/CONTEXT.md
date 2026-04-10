@@ -59,3 +59,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-ci-coverage-expansion.yaml
 - **coverage-expansion**: completed 2026-04-10, 1 waves, 5 agents
   - IMPL doc: docs/IMPL/complete/IMPL-coverage-expansion.yaml
+- **test-coverage-gaps**: completed 2026-04-10, 2 waves, 6 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-test-coverage-gaps.yaml
