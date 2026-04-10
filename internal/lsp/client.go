@@ -124,6 +124,7 @@ type LSPClient struct {
 	// workspace readiness ($/progress)
 	progressMu     sync.Mutex
 	progressTokens map[interface{}]struct{} // active begin tokens
+	progressCond   *sync.Cond // signalled when progressTokens becomes empty
 
 	// server capabilities and identity (from initialize response)
 	capsMu          sync.RWMutex
@@ -145,6 +146,7 @@ type LSPClient struct {
 	// of file changes automatically, keeping the LSP index fresh.
 	watcherMu   sync.Mutex // guards watcherStop (C2: prevents data race)
 	watcherStop chan struct{}
+	watcher     *fsnotify.Watcher  // C1: held so addWatcherRoot can Add() new dirs
 }
 
 // NewLSPClient creates a new, unstarted LSP client.
@@ -159,6 +161,7 @@ func NewLSPClient(serverPath string, serverArgs []string) *LSPClient {
 		capabilities:   make(map[string]interface{}),
 	}
 	c.nextID.Store(0)
+	c.progressCond = sync.NewCond(&c.progressMu)
 	return c
 }
 
@@ -194,6 +197,9 @@ func (c *LSPClient) start() error {
 		err := cmd.Wait()
 		exitErr := fmt.Errorf("lsp process exited: %w", err)
 		c.rejectPending(exitErr)
+		c.mu.Lock()
+		c.initialized = false
+		c.mu.Unlock()
 		if err != nil {
 			c.stderrMu.Lock()
 			buf := string(c.stderrBuf)
@@ -389,27 +395,29 @@ func (c *LSPClient) handleProgress(params json.RawMessage) {
 		logging.Log(logging.LevelDebug, fmt.Sprintf("$/progress report token=%v", p.Token))
 	case "end":
 		delete(c.progressTokens, p.Token)
+		if len(c.progressTokens) == 0 {
+			c.progressCond.Broadcast()
+		}
 	}
 }
 
-// waitForWorkspaceReady blocks until activeProgressTokens is empty or 60s timeout.
+// waitForWorkspaceReady blocks until activeProgressTokens is empty or 60s
+// elapses. Uses a condition variable so handleProgress can signal immediately
+// rather than relying on a 100ms polling interval.
 func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
 	deadline := time.Now().Add(60 * time.Second)
-	for {
-		c.progressMu.Lock()
-		ready := len(c.progressTokens) == 0
-		c.progressMu.Unlock()
-		if ready {
-			return
-		}
+	c.progressMu.Lock()
+	defer c.progressMu.Unlock()
+	for len(c.progressTokens) > 0 {
 		if time.Now().After(deadline) {
 			return
 		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(100 * time.Millisecond):
+		default:
 		}
+		c.progressCond.Wait()
 	}
 }
 
@@ -1820,7 +1828,7 @@ func (c *LSPClient) GetWorkspaceFolders() []workspaceFolder {
 // AddWorkspaceFolder adds a directory to the workspace via
 // workspace/didChangeWorkspaceFolders. The LSP server re-indexes the new root
 // and cross-folder references become available immediately.
-func (c *LSPClient) AddWorkspaceFolder(path string) error {
+func (c *LSPClient) AddWorkspaceFolder(ctx context.Context, path string) error {
 	folderURI := (&url.URL{Scheme: "file", Path: path}).String()
 	folder := workspaceFolder{URI: folderURI, Name: path}
 
@@ -1843,15 +1851,16 @@ func (c *LSPClient) AddWorkspaceFolder(path string) error {
 		return err
 	}
 
-	// Extend the auto-watcher to cover the new folder.
-	// H2: was incorrectly passing c.rootDir; pass path so the new folder is watched.
-	c.startWatcher(path)
+	// Extend the auto-watcher to cover the new folder without restarting it.
+	// C1: addWatcherRoot adds the new path to the existing watcher goroutine
+	// so the original workspace root remains watched.
+	c.addWatcherRoot(path)
 	return nil
 }
 
 // RemoveWorkspaceFolder removes a directory from the workspace via
 // workspace/didChangeWorkspaceFolders.
-func (c *LSPClient) RemoveWorkspaceFolder(path string) error {
+func (c *LSPClient) RemoveWorkspaceFolder(ctx context.Context, path string) error {
 	folderURI := (&url.URL{Scheme: "file", Path: path}).String()
 	folder := workspaceFolder{URI: folderURI, Name: path}
 
@@ -1941,7 +1950,16 @@ func (c *LSPClient) startWatcher(rootDir string) {
 			logging.Log(logging.LevelDebug, "auto-watcher: failed to create watcher: "+err.Error())
 			return
 		}
+		// Register Close first so nil-assignment defer (registered after) runs first (LIFO).
 		defer watcher.Close()
+		c.watcherMu.Lock()
+		c.watcher = watcher
+		c.watcherMu.Unlock()
+		defer func() {
+			c.watcherMu.Lock()
+			c.watcher = nil
+			c.watcherMu.Unlock()
+		}()
 
 		// Walk the workspace and add all non-excluded directories.
 		_ = filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
@@ -2036,6 +2054,29 @@ func (c *LSPClient) stopWatcherLocked() {
 		close(c.watcherStop)
 		c.watcherStop = nil
 	}
+}
+
+// addWatcherRoot adds path and its subdirectories to the existing running
+// watcher. It is a no-op if no watcher is running (c.watcher == nil).
+// This allows AddWorkspaceFolder to extend coverage without restarting
+// the watcher and losing the original workspace root.
+func (c *LSPClient) addWatcherRoot(path string) {
+	c.watcherMu.Lock()
+	w := c.watcher
+	c.watcherMu.Unlock()
+	if w == nil {
+		return
+	}
+	_ = filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {
+		if err != nil || !d.IsDir() {
+			return nil
+		}
+		if watcherSkipDirs[d.Name()] || (strings.HasPrefix(d.Name(), ".") && d.Name() != ".") {
+			return filepath.SkipDir
+		}
+		_ = w.Add(p)
+		return nil
+	})
 }
 
 // GetSemanticTokenLegend returns the token type and modifier name arrays
