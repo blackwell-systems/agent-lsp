@@ -58,6 +58,30 @@ cd skills && ./install.sh
 
 See [docs/tools.md](./docs/tools.md) for full parameter details.
 
+## Docker
+
+Pre-built images on GitHub Container Registry for all major languages:
+
+```bash
+# Go
+docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:go go:gopls
+
+# TypeScript
+docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:typescript typescript:typescript-language-server,--stdio
+
+# Python
+docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:python python:pyright-langserver,--stdio
+
+# Multi-language (runtime install)
+docker run --rm -i -v /your/project:/workspace \
+  -e LSP_SERVERS=gopls,typescript-language-server \
+  ghcr.io/blackwell-systems/agent-lsp:latest \
+  go:gopls typescript:typescript-language-server,--stdio
+```
+
+See [DOCKER.md](./DOCKER.md) for full tier documentation, all 18 language tags,
+docker-compose setup, and volume caching.
+
 ## Installation
 
 **Requires Go 1.21+.** [Install Go](https://go.dev/dl/) if needed.
