@@ -47,3 +47,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-audit-6-fixes.yaml
 - **new-tools**: completed 2026-04-09, 2 waves, 4 agents
   - IMPL doc: docs/IMPL/complete/IMPL-new-tools.yaml
+- **inspector-fixes**: completed 2026-04-10, 1 waves, 6 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-inspector-fixes.yaml

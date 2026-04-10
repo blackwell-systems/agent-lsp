@@ -1,3 +1,4 @@
+completion_date: "2026-04-10"
 title: 'Inspector Fixes: Bug Fixes and Code Quality Improvements'
 feature_slug: inspector-fixes
 verdict: SUITABLE
@@ -827,6 +828,7 @@ waves:
             - Do NOT change function signatures.
           files:
             - internal/session/manager.go
+      base_commit: 31ac4e66a2e3c1f21ecf3f5ac8e4acddbd728ba1
 quality_gates:
     level: standard
     gates:
@@ -839,6 +841,72 @@ quality_gates:
         - type: test
           command: GOWORK=off go test ./internal/... ./cmd/...
           required: true
+completion_reports:
+    A:
+        status: complete
+        branch: saw/inspector-fixes/wave1-agent-A
+        commit: "01803e4"
+        files_changed:
+            - internal/lsp/normalize_test.go
+        tests_added:
+            - TestNormalizeDocumentSymbols_SymbolInformationVariant
+        verification: PASS
+        notes: 'Removed 5-line stale bug comment and replaced dead _ = root.Children with active assertions: len(root.Children)==1 and root.Children[0].Name=="MyField". All tests pass including full internal/... suite. grep for stale bug markers returns 0.'
+    B:
+        status: complete
+        branch: saw/inspector-fixes/wave1-agent-B
+        commit: cdee47b
+        files_changed:
+            - internal/lsp/client.go
+        verification: PASS
+        notes: Added panic recovery defer as first statement in readLoop (Finding 3) and startWatcher goroutine (Finding 4). Added runtime/debug import. Added context.Background() comment at line 324 (Finding 9). All 3 grep checks pass, build/vet/test clean.
+    C:
+        status: complete
+        branch: saw/inspector-fixes/wave1-agent-C
+        commit: 5a36e54
+        files_changed:
+            - cmd/agent-lsp/server.go
+            - cmd/agent-lsp/tools_workspace.go
+            - cmd/agent-lsp/tools_navigation.go
+            - cmd/agent-lsp/tools_analysis.go
+            - cmd/agent-lsp/tools_session.go
+        files_created:
+            - cmd/agent-lsp/tools_workspace.go
+            - cmd/agent-lsp/tools_navigation.go
+            - cmd/agent-lsp/tools_analysis.go
+            - cmd/agent-lsp/tools_session.go
+        verification: PASS
+        notes: Decomposed 832-line Run() into 4 registration files. server.go now 379 lines. Build, vet, and all tests pass. toolDeps struct defined in server.go as required.
+    D:
+        status: complete
+        branch: saw/inspector-fixes/wave1-agent-D
+        commit: 7fbee16
+        files_changed:
+            - internal/lsp/manager.go
+            - internal/tools/change_impact.go
+            - internal/tools/change_impact_test.go
+        tests_added:
+            - TestLangIDFromPath
+        verification: PASS
+        notes: Exported LanguageIDFromPath from manager.go covering 10 languages. Removed langIDFromPath from change_impact.go (3 call sites replaced). Test updated to call lsp.LanguageIDFromPath with 3 new cases (csharp, haskell, ruby). All 14 test cases pass. grep confirms 0 langIDFromPath references remain in change_impact.go.
+    E:
+        status: complete
+        branch: saw/inspector-fixes/wave1-agent-E
+        commit: 9ae3bf2
+        files_changed:
+            - internal/tools/helpers.go
+        tests_added:
+            - TestURIToFilePath_InvalidURI
+        verification: PASS
+        notes: Replaced url.Parse call in URIToFilePath with uriPkg.URIToPath delegation. net/url retained for CreateFileURI. All tests pass.
+    F:
+        status: complete
+        branch: saw/inspector-fixes/wave1-agent-F
+        commit: "8780660"
+        files_changed:
+            - internal/session/manager.go
+        verification: PASS
+        notes: Wrapped bare return err in Discard (line 375) and Destroy (line 416) with fmt.Errorf. Build, vet, and tests all pass.
 pre_mortem:
     overall_risk: low
     rows:
@@ -955,5 +1023,5 @@ critic_report:
     summary: 'All six agents reviewed against codebase. File existence checks pass: all modify-action files exist and no new-action files conflict. Symbol accuracy is high — readLoop, startWatcher, inferLanguageID, Discard, Destroy, URIToPath, langIDFromPath, and logging.Log all exist with the exact signatures the briefs rely on. One minor inaccuracy found in Agent D''s brief: it states ''4 call sites'' for langIDFromPath in change_impact.go but the actual count is 3 (lines 121, 147, 170); the explicit line list that follows is correct. Agent C owns 5 of 11 total files (45%), triggering the complexity_balance advisory. No interface contract violations or import chain errors found.'
     reviewed_at: "2026-04-10T15:36:23Z"
     issue_count: 2
-state: "REVIEWED"
+state: COMPLETE
 original_branch: main

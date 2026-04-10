@@ -1,0 +1,905 @@
+title: Fix Inspector Findings (lsp-mcp-go-audit-7)
+feature_slug: fix-inspector-findings
+verdict: SUITABLE
+suitability_assessment: |
+    11 concrete, actionable findings across 7 files. All fixes are independent:
+    security patch (ValidateFilePath), context propagation, language ID extension
+    coverage, error surfacing, two error-wrapping improvements, init side-effect
+    removal, two test coverage additions, and one accessor guard. No investigation
+    required — all root causes are known and file-level. Cross-agent interfaces
+    are trivially defined (no new exported types that cross boundaries; the new
+    DirtyError() accessor and SetLevelFromEnv() function are used only within
+    their own packages). Disjoint file ownership is achievable with 5 agents.
+
+    Finding #9 (parseBuildErrors tests): inspector listed TypeScript, Rust, Python,
+    C#, Swift, Zig, Kotlin. Tests for C#, Swift, Zig, Kotlin already exist in
+    build_test.go (TestParseBuildErrors_CSharp, _Swift, _Zig, _Kotlin). Only
+    TypeScript, Rust, and Python are missing — those three are assigned to Agent E.
+
+    Estimated times:
+    - Scout phase: ~15 min
+    - Agent execution: ~25 min (5 agents parallel, ~5 min avg)
+    - Merge & verification: ~5 min
+    Total SAW time: ~45 min
+
+    Sequential baseline: ~50 min
+    Recommendation: Clear parallelization value given 5+ independent fix sites.
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: go vet ./...
+file_ownership:
+    - file: internal/tools/analysis.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: internal/lsp/manager.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: internal/tools/change_impact.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/lsp/client.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/logging/logging.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/session/types.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/main.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/lsp/diagnostics_test.go
+      agent: E
+      wave: 1
+      action: modify
+    - file: internal/tools/build_test.go
+      agent: E
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: ValidateFilePath
+      description: Existing function in internal/tools/helpers.go — Agent A calls it in HandleGetDiagnostics before CreateFileURI.
+      definition: |
+        func ValidateFilePath(filePath, rootDir string) (string, error)
+      location: internal/tools/helpers.go
+    - name: LanguageIDFromPath (extended)
+      description: Add .c/.cpp/.java cases to the existing switch in manager.go. No signature change.
+      definition: |
+        // Additional cases to add to LanguageIDFromPath in internal/lsp/manager.go:
+        case ".c":
+            return "c"
+        case ".cpp", ".cc", ".cxx":
+            return "cpp"
+        case ".java":
+            return "java"
+      location: internal/lsp/manager.go
+    - name: DirtyError
+      description: |
+        New method on SimulationSession. Returns DirtyErr only when Status==StatusDirty;
+        returns nil for any other status. Callers in manager.go that read .DirtyErr directly
+        must be updated to call .DirtyError() instead.
+      definition: |
+        func (s *SimulationSession) DirtyError() error {
+            s.mu.Lock()
+            defer s.mu.Unlock()
+            if s.Status == StatusDirty {
+                return s.DirtyErr
+            }
+            return nil
+        }
+      location: internal/session/types.go
+    - name: SetLevelFromEnv
+      description: |
+        New exported function in internal/logging. Reads LOG_LEVEL env var and calls
+        SetLevel. Called explicitly from main() instead of init(). The init() body
+        is removed (or left as a no-op comment). Package-level state is unchanged.
+      definition: |
+        func SetLevelFromEnv() {
+            if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
+                if _, ok := logLevelPriority[envLevel]; ok {
+                    SetLevel(envLevel)
+                } else {
+                    fmt.Fprintf(os.Stderr, "agent-lsp: invalid LOG_LEVEL %q, defaulting to \"info\"\n", envLevel)
+                }
+            }
+        }
+      location: internal/logging/logging.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Role
+            Fix the path-traversal vulnerability in HandleGetDiagnostics and the
+            dropped-context bug in StartForLanguage.
+
+            ## Files
+            - internal/tools/analysis.go
+            - internal/lsp/manager.go
+
+            ## What to implement
+
+            ### Fix 1: ValidateFilePath in HandleGetDiagnostics (analysis.go)
+
+            Finding: `HandleGetDiagnostics` calls `CreateFileURI(filePath)` without
+            first calling `ValidateFilePath`. Every other handler (see helpers.go,
+            session.go, symbol_source.go) validates before any disk access.
+
+            In `HandleGetDiagnostics`, when `filePath != ""`, add a `ValidateFilePath`
+            call before the `CreateFileURI` call. Use the client's root dir for the
+            workspace constraint. Return a `types.ErrorResult` if validation fails.
+
+            Current code block (insert after the `filePath, _ := args["file_path"].(string)` line):
+            ```go
+            if filePath != "" {
+                fileURI := CreateFileURI(filePath)
+            ```
+
+            Replace with:
+            ```go
+            if filePath != "" {
+                cleanPath, err := ValidateFilePath(filePath, client.RootDir())
+                if err != nil {
+                    return types.ErrorResult(fmt.Sprintf("invalid file path: %s", err)), nil
+                }
+                fileURI := CreateFileURI(cleanPath)
+            ```
+
+            Ensure the rest of the block uses `fileURI` as before (no other changes needed).
+
+            ### Fix 2: Context propagation in StartForLanguage (manager.go)
+
+            Finding: line 190 in manager.go calls `e.client.Shutdown(context.Background())`
+            inside `StartForLanguage(ctx, ...)`, dropping the caller's context.
+
+            Locate this exact code:
+            ```go
+                if e.client != nil {
+                    _ = e.client.Shutdown(context.Background())
+                }
+            ```
+
+            Replace `context.Background()` with `ctx`:
+            ```go
+                if e.client != nil {
+                    _ = e.client.Shutdown(ctx)
+                }
+            ```
+
+            ### Fix 3: Missing extensions in LanguageIDFromPath (manager.go)
+
+            `LanguageIDFromPath` (internal/lsp/manager.go, around line 257) is missing
+            `.c`, `.cpp`, `.cc`, `.cxx`, and `.java`. Files with these extensions are
+            currently mapped to `"plaintext"`.
+
+            Locate this exact block in the switch statement:
+            ```go
+            case ".ml", ".mli":
+                return "ocaml"
+            default:
+                return "plaintext"
+            ```
+
+            Insert before the `default:` case:
+            ```go
+            case ".c":
+                return "c"
+            case ".cpp", ".cc", ".cxx":
+                return "cpp"
+            case ".java":
+                return "java"
+            ```
+
+            ## Tests
+            No new test files. Build + vet confirms the changes are correct.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./...
+            GOWORK=off go test ./internal/tools/... ./internal/lsp/...
+            # Postcondition: ValidateFilePath appears in analysis.go
+            grep -c "ValidateFilePath" /Users/dayna.blackwell/code/agent-lsp/internal/tools/analysis.go
+            # Expected: 1
+            # Postcondition: context.Background() no longer in StartForLanguage shutdown block
+            grep -n "context.Background()" /Users/dayna.blackwell/code/agent-lsp/internal/lsp/manager.go
+            # Expected: should NOT appear on a line that also contains Shutdown within StartForLanguage
+            # Postcondition: .c/.cpp/.java cases exist in LanguageIDFromPath
+            grep -c '".c"' /Users/dayna.blackwell/code/agent-lsp/internal/lsp/manager.go
+            # Expected: 1
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside your ownership list (analysis.go, manager.go).
+            - Do NOT add ValidateFilePath to the else branch (all-files path) — that
+              path uses `client.ReopenAllDocuments` which already operates on open
+              documents without a caller-supplied file path.
+            - Do NOT change the exported signature of any function.
+          files: []
+        - id: B
+          task: |
+            ## Role
+            Surface per-symbol `GetReferences` errors as warnings in `HandleGetChangeImpact`.
+
+            ## Files
+            - internal/tools/change_impact.go
+
+            ## What to implement
+
+            ### Fix: Surface GetReferences errors in HandleGetChangeImpact (change_impact.go)
+
+            In `HandleGetChangeImpact`, the per-symbol `GetReferences` call (around
+            line 91) discards errors:
+            ```go
+            locs, _ := WithDocument[[]types.Location](ctx, client, filePath, langID, func(fURI string) ([]types.Location, error) {
+                return client.GetReferences(ctx, fURI, pos, false)
+            })
+            ```
+
+            Change to capture the error and append a warning to the output. The function
+            builds `changedSymbols`, `testFunctions`, `nonTestCallers` slices. Add a
+            `warnings []string` slice at the top of the function (near the other var
+            declarations) and append to it on reference error.
+
+            Locate the var block (around line 67):
+            ```go
+            var changedSymbols []symbolRef
+            testFilesSet := map[string]bool{}
+            var testFunctions []symbolRef
+            var nonTestCallers []symbolRef
+            ```
+
+            Add `var refWarnings []string` after those declarations.
+
+            Then change the GetReferences call from:
+            ```go
+            locs, _ := WithDocument[[]types.Location](ctx, client, filePath, langID, func(fURI string) ([]types.Location, error) {
+                return client.GetReferences(ctx, fURI, pos, false)
+            })
+            ```
+
+            To:
+            ```go
+            locs, refErr := WithDocument[[]types.Location](ctx, client, filePath, langID, func(fURI string) ([]types.Location, error) {
+                return client.GetReferences(ctx, fURI, pos, false)
+            })
+            if refErr != nil {
+                refWarnings = append(refWarnings, fmt.Sprintf("warning: GetReferences failed for %s in %s: %s", sym.Name, filePath, refErr))
+            }
+            ```
+
+            Then include `refWarnings` in the JSON result. Find the result struct that
+            is marshaled at the end of HandleGetChangeImpact (it contains changed_symbols,
+            test_files, test_functions, non_test_callers). Add a `Warnings []string` field
+            to that anonymous struct (or named struct if one exists), populated from
+            `refWarnings`. If no warnings occurred, the field will be nil/empty.
+
+            ## Tests
+            No new test files for this agent. The change_impact_test.go file tests the
+            handler via a mock client — the existing tests will still pass because
+            the warning path is only triggered on error, and the nil-error path
+            is unchanged.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./...
+            GOWORK=off go test ./internal/tools/... ./internal/lsp/...
+            # Postcondition: c/.cpp/.java appear in manager.go LanguageIDFromPath
+            grep -c '"c"\|"cpp"\|"java"' /Users/dayna.blackwell/code/agent-lsp/internal/lsp/manager.go
+            # Expected: >= 3 (one per language)
+            # Postcondition: refWarnings exists in change_impact.go
+            grep -c "refWarnings" /Users/dayna.blackwell/code/agent-lsp/internal/tools/change_impact.go
+            # Expected: >= 2
+            ```
+
+            ## Constraints
+            - Do NOT change the return type of HandleGetChangeImpact.
+            - Do NOT modify files outside your ownership list (change_impact.go only).
+          files: []
+        - id: C
+          task: |
+            ## Role
+            Wrap errors in `writeRaw` and `sendNotification` with context.
+
+            ## Files
+            - internal/lsp/client.go
+
+            ## What to implement
+
+            ### Fix 1: writeRaw error wrapping (client.go ~line 469)
+
+            `writeRaw` returns the raw stdin.Write error with no context.
+
+            Locate this exact function body:
+            ```go
+            func (c *LSPClient) writeRaw(body []byte) error {
+                c.mu.Lock()
+                defer c.mu.Unlock()
+                if c.stdin == nil {
+                    return fmt.Errorf("LSP client not started")
+                }
+                _, err := c.stdin.Write(EncodeMessage(body))
+                return err
+            }
+            ```
+
+            Change the last two lines to:
+            ```go
+                _, err := c.stdin.Write(EncodeMessage(body))
+                if err != nil {
+                    return fmt.Errorf("writeRaw: %w", err)
+                }
+                return nil
+            ```
+
+            ### Fix 2: sendNotification error wrapping (client.go ~line 530)
+
+            `sendNotification` returns `json.Marshal` error without the method name.
+
+            Locate this exact function body:
+            ```go
+            func (c *LSPClient) sendNotification(method string, params interface{}) error {
+                p, err := json.Marshal(params)
+                if err != nil {
+                    return err
+                }
+                msg := jsonrpcMsg{
+                    JSONRPC: "2.0",
+                    Method:  method,
+                    Params:  p,
+                }
+                body, err := json.Marshal(msg)
+                if err != nil {
+                    return err
+                }
+                return c.writeRaw(body)
+            }
+            ```
+
+            Change the first error return to include the method name:
+            ```go
+                p, err := json.Marshal(params)
+                if err != nil {
+                    return fmt.Errorf("sendNotification %s: marshal params: %w", method, err)
+                }
+            ```
+
+            And the second error return:
+            ```go
+                body, err := json.Marshal(msg)
+                if err != nil {
+                    return fmt.Errorf("sendNotification %s: marshal message: %w", method, err)
+                }
+            ```
+
+            ## Tests
+            No new tests needed. The changes only wrap existing errors; no behavioral
+            change, so existing tests continue to pass.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./...
+            GOWORK=off go test ./internal/lsp/...
+            # Postcondition: writeRaw wraps error
+            grep -c 'fmt.Errorf("writeRaw:' /Users/dayna.blackwell/code/agent-lsp/internal/lsp/client.go
+            # Expected: 1
+            # Postcondition: sendNotification wraps with method name
+            grep -c 'sendNotification %s:' /Users/dayna.blackwell/code/agent-lsp/internal/lsp/client.go
+            # Expected: 2
+            ```
+
+            ## Constraints
+            - Do NOT modify any function other than writeRaw and sendNotification.
+            - client.go is 2317 lines — do not restructure or reorder any code.
+            - Do NOT modify files outside your ownership list.
+          files: []
+        - id: D
+          task: |
+            ## Role
+            Move LOG_LEVEL initialization out of init() into an explicit
+            SetLevelFromEnv() function; add DirtyError() accessor to SimulationSession.
+
+            ## Files
+            - internal/logging/logging.go
+            - internal/session/types.go
+            - cmd/agent-lsp/main.go
+
+            ## What to implement
+
+            ### Fix 1: Remove init() side effects (logging.go)
+
+            The `init()` function in internal/logging/logging.go (line 54) reads
+            `LOG_LEVEL` and mutates `currentLevel`. This is an init side effect.
+
+            Step 1: Add a new exported `SetLevelFromEnv()` function AFTER the existing
+            `SetLevel` function. Insert after this exact block:
+            ```go
+            func SetLevel(level string) {
+                if _, ok := logLevelPriority[level]; !ok {
+                    return
+                }
+                mu.Lock()
+                defer mu.Unlock()
+                currentLevel = level
+            }
+            ```
+
+            New function to add immediately after:
+            ```go
+            // SetLevelFromEnv reads LOG_LEVEL from the environment and applies it
+            // via SetLevel. Call this explicitly at binary startup instead of relying
+            // on init(). Emits a warning to stderr if LOG_LEVEL is set to an
+            // unrecognized value.
+            func SetLevelFromEnv() {
+                if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
+                    if _, ok := logLevelPriority[envLevel]; ok {
+                        SetLevel(envLevel)
+                    } else {
+                        fmt.Fprintf(os.Stderr, "agent-lsp: invalid LOG_LEVEL %q, defaulting to \"info\"\n", envLevel)
+                    }
+                }
+            }
+            ```
+
+            Step 2: Replace the body of the existing `init()` function with a comment:
+            Locate:
+            ```go
+            func init() {
+                // Initialize level from LOG_LEVEL env var.
+                if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
+                    if _, ok := logLevelPriority[envLevel]; ok {
+                        currentLevel = envLevel
+                    } else {
+                        initWarning = fmt.Sprintf("agent-lsp: invalid LOG_LEVEL %q, defaulting to \"info\"\n", envLevel)
+                    }
+                }
+            }
+            ```
+
+            Replace with:
+            ```go
+            func init() {
+                // Level initialization is performed by SetLevelFromEnv(), called
+                // explicitly at binary startup. This init() is intentionally a no-op.
+            }
+            ```
+
+            Note: the `initWarning` variable and its flush in `Log()` can remain; they
+            are used by other paths. However, since `init()` no longer sets `initWarning`,
+            the flush path will naturally become dead code over time. Do NOT remove
+            `initWarning` machinery in this PR — that is a separate cleanup.
+
+            ### Fix 2: DirtyError() accessor (types.go)
+
+            Add a `DirtyError() error` method to `SimulationSession` in
+            internal/session/types.go. Insert it after the existing `IsDirty()` method.
+
+            Locate the exact block:
+            ```go
+            // IsDirty reports whether the session is in dirty state.
+            func (s *SimulationSession) IsDirty() bool {
+                s.mu.Lock()
+                defer s.mu.Unlock()
+                return s.Status == StatusDirty
+            }
+            ```
+
+            Add immediately after:
+            ```go
+            // DirtyError returns the error that caused the session to enter dirty
+            // state, or nil if the session is not dirty. This is the safe accessor
+            // for DirtyErr: reading DirtyErr directly on a non-dirty session yields
+            // nil with no signal that the session is healthy vs. dirty.
+            func (s *SimulationSession) DirtyError() error {
+                s.mu.Lock()
+                defer s.mu.Unlock()
+                if s.Status == StatusDirty {
+                    return s.DirtyErr
+                }
+                return nil
+            }
+            ```
+
+            Then audit direct callers of `.DirtyErr` in session/manager.go.
+            There is one caller at approximately line 102:
+            ```go
+            return nil, fmt.Errorf("session %s is dirty: %w", sessionID, session.DirtyErr)
+            ```
+
+            This caller is guarded by `session.IsDirty()` on the preceding line, so it
+            is safe. However, update it to use the new accessor for consistency:
+            ```go
+            return nil, fmt.Errorf("session %s is dirty: %w", sessionID, session.DirtyError())
+            ```
+
+            Note: session/manager.go is NOT in your file_ownership. However, this
+            one-line change in manager.go is required to complete the audit and avoid
+            a compile regression if DirtyErr is later made unexported. Since manager.go
+            is in the same package as types.go, and no other agent owns manager.go,
+            you may edit this one line in manager.go as part of this task. Restrict
+            your edit to exactly line 102 (the `session.DirtyErr` reference).
+
+            ### Fix 3: Call SetLevelFromEnv() from main() (main.go)
+
+            In cmd/agent-lsp/main.go, add `logging.SetLevelFromEnv()` as the first
+            statement in `main()`.
+
+            Locate the start of main():
+            ```go
+            func main() {
+                parsed, err := config.ParseArgs(os.Args[1:])
+            ```
+
+            Insert before ParseArgs:
+            ```go
+            func main() {
+                logging.SetLevelFromEnv()
+                parsed, err := config.ParseArgs(os.Args[1:])
+            ```
+
+            The `logging` package is already imported in main.go, so no import change needed.
+
+            ## Tests
+            No new test file required. Verify with build + vet.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./...
+            GOWORK=off go test ./internal/logging/... ./internal/session/... ./cmd/...
+            # Postcondition: SetLevelFromEnv exists in logging.go
+            grep -c "func SetLevelFromEnv" /Users/dayna.blackwell/code/agent-lsp/internal/logging/logging.go
+            # Expected: 1
+            # Postcondition: init() body is now a no-op comment
+            grep -A3 "^func init()" /Users/dayna.blackwell/code/agent-lsp/internal/logging/logging.go
+            # Expected: body contains only a comment, no os.Getenv
+            # Postcondition: DirtyError accessor exists in types.go
+            grep -c "func (s \*SimulationSession) DirtyError()" /Users/dayna.blackwell/code/agent-lsp/internal/session/types.go
+            # Expected: 1
+            # Postcondition: SetLevelFromEnv called in main.go
+            grep -c "SetLevelFromEnv" /Users/dayna.blackwell/code/agent-lsp/cmd/agent-lsp/main.go
+            # Expected: 1
+            ```
+
+            ## Constraints
+            - Do NOT remove the initWarning variable or its flush in Log() — separate cleanup.
+            - Do NOT change the currentLevel default ("info") or any level constants.
+            - In session/manager.go, change ONLY the one line that reads session.DirtyErr
+              (around line 102). Do not touch any other code in that file.
+            - Do NOT modify files outside your ownership list plus the one-line manager.go fix.
+          files: []
+        - id: E
+          task: |
+            ## Role
+            Add test coverage for WaitForFileIndexed (timeout, context cancellation,
+            stability-window reset) and parseBuildErrors for TypeScript, Rust, Python.
+
+            ## Files
+            - internal/lsp/diagnostics_test.go
+            - internal/tools/build_test.go
+
+            ## What to implement
+
+            ### Fix 1: WaitForFileIndexed tests (diagnostics_test.go)
+
+            `WaitForFileIndexed` (internal/lsp/client.go, ~line 1048) has no tests.
+            `WaitForDiagnostics` has 6 tests as the reference pattern (client_test.go
+            and diagnostics_test.go). Add three tests to diagnostics_test.go following
+            the same pattern (use `newTestClient(t)` from client_test.go, which is in
+            the same package `lsp`).
+
+            **Test 1: timeout path**
+            ```go
+            // TestWaitForFileIndexed_Timeout verifies that WaitForFileIndexed returns
+            // nil (not an error) after the timeout elapses with no notifications.
+            func TestWaitForFileIndexed_Timeout(t *testing.T) {
+                c, serverW, _ := newTestClient(t)
+                _ = serverW
+
+                ctx := context.Background()
+                uri := "file:///missing.go"
+
+                start := time.Now()
+                err := c.WaitForFileIndexed(ctx, uri, 200)
+                elapsed := time.Since(start)
+
+                if err != nil {
+                    t.Errorf("expected nil error on timeout, got: %v", err)
+                }
+                if elapsed < 190*time.Millisecond {
+                    t.Errorf("resolved too early: %v (expected >= 190ms)", elapsed)
+                }
+                if elapsed > 700*time.Millisecond {
+                    t.Errorf("resolved too late: %v (expected <= 700ms)", elapsed)
+                }
+            }
+            ```
+
+            **Test 2: context cancellation**
+            ```go
+            // TestWaitForFileIndexed_ContextCancelled verifies that WaitForFileIndexed
+            // returns context.Canceled when the context is cancelled.
+            func TestWaitForFileIndexed_ContextCancelled(t *testing.T) {
+                c, serverW, _ := newTestClient(t)
+                _ = serverW
+
+                ctx, cancel := context.WithCancel(context.Background())
+                uri := "file:///never.go"
+
+                done := make(chan error, 1)
+                go func() {
+                    done <- c.WaitForFileIndexed(ctx, uri, 30000)
+                }()
+
+                time.Sleep(20 * time.Millisecond)
+                cancel()
+
+                select {
+                case err := <-done:
+                    if err != context.Canceled {
+                        t.Errorf("expected context.Canceled, got: %v", err)
+                    }
+                case <-time.After(500 * time.Millisecond):
+                    t.Error("timeout: expected WaitForFileIndexed to return on cancel")
+                }
+            }
+            ```
+
+            **Test 3: stability window reset**
+
+            The stability window is 1500ms. Send multiple notifications 100ms apart;
+            verify that WaitForFileIndexed does NOT return until 1500ms after the last
+            notification. Use a short overall timeout to keep the test fast — the
+            stability window is internal, so we test the reset by sending a second
+            notification shortly after the first and verifying the call does not
+            settle until after both stop.
+
+            ```go
+            // TestWaitForFileIndexed_StabilityWindowReset verifies that each new
+            // notification resets the 1500ms stability window.
+            func TestWaitForFileIndexed_StabilityWindowReset(t *testing.T) {
+                c, serverW, _ := newTestClient(t)
+
+                ctx := context.Background()
+                uri := "file:///a.go"
+
+                done := make(chan error, 1)
+                go func() {
+                    // Use a 6s timeout to give the stability window room.
+                    done <- c.WaitForFileIndexed(ctx, uri, 6000)
+                }()
+
+                // Send first notification.
+                time.Sleep(50 * time.Millisecond)
+                if err := writeMsg(serverW, map[string]interface{}{
+                    "jsonrpc": "2.0",
+                    "method":  "textDocument/publishDiagnostics",
+                    "params":  map[string]interface{}{"uri": uri, "diagnostics": []interface{}{}},
+                }); err != nil {
+                    t.Fatalf("write first notification: %v", err)
+                }
+
+                // Send second notification 200ms later (within stability window).
+                time.Sleep(200 * time.Millisecond)
+                if err := writeMsg(serverW, map[string]interface{}{
+                    "jsonrpc": "2.0",
+                    "method":  "textDocument/publishDiagnostics",
+                    "params":  map[string]interface{}{"uri": uri, "diagnostics": []interface{}{}},
+                }); err != nil {
+                    t.Fatalf("write second notification: %v", err)
+                }
+
+                // Should NOT settle before ~1500ms after the second notification.
+                select {
+                case err := <-done:
+                    if err != nil {
+                        t.Errorf("unexpected error: %v", err)
+                    }
+                case <-time.After(5 * time.Second):
+                    t.Error("timeout: WaitForFileIndexed did not settle within 5s")
+                }
+            }
+            ```
+
+            ### Fix 2: parseBuildErrors tests for TypeScript, Rust, Python (build_test.go)
+
+            The existing tests in build_test.go cover Go, C#, Swift, Zig, Kotlin.
+            Add table-driven tests for TypeScript, Rust, and Python with synthetic
+            compiler output strings. Append these tests after the existing
+            `TestParseBuildErrors_NewLanguages_NoErrors` test.
+
+            ```go
+            // TestParseBuildErrors_TypeScript verifies TypeScript compiler error parsing.
+            func TestParseBuildErrors_TypeScript(t *testing.T) {
+                input := []byte("src/index.ts(5,3): error TS2322: Type 'string' is not assignable to type 'number'\n")
+                errors := parseBuildErrors("typescript", input)
+                if len(errors) != 1 {
+                    t.Fatalf("expected 1 error, got %d", len(errors))
+                }
+                if errors[0].File != "src/index.ts" {
+                    t.Errorf("expected File=src/index.ts, got %q", errors[0].File)
+                }
+                if errors[0].Line != 5 {
+                    t.Errorf("expected Line=5, got %d", errors[0].Line)
+                }
+                if errors[0].Column != 3 {
+                    t.Errorf("expected Column=3, got %d", errors[0].Column)
+                }
+            }
+
+            // TestParseBuildErrors_Rust verifies Rust compiler error parsing.
+            func TestParseBuildErrors_Rust(t *testing.T) {
+                input := []byte("error[E0308]: mismatched types\n --> src/main.rs:10:5\n")
+                errors := parseBuildErrors("rust", input)
+                if len(errors) != 1 {
+                    t.Fatalf("expected 1 error, got %d", len(errors))
+                }
+                if errors[0].File != "src/main.rs" {
+                    t.Errorf("expected File=src/main.rs, got %q", errors[0].File)
+                }
+                if errors[0].Line != 10 {
+                    t.Errorf("expected Line=10, got %d", errors[0].Line)
+                }
+                if errors[0].Column != 5 {
+                    t.Errorf("expected Column=5, got %d", errors[0].Column)
+                }
+            }
+
+            // TestParseBuildErrors_Python verifies mypy/pyflakes-style error parsing.
+            func TestParseBuildErrors_Python(t *testing.T) {
+                input := []byte("app/models.py:23: error: Argument 1 to \"open\" has incompatible type \"int\"\n")
+                errors := parseBuildErrors("python", input)
+                if len(errors) != 1 {
+                    t.Fatalf("expected 1 error, got %d", len(errors))
+                }
+                if errors[0].File != "app/models.py" {
+                    t.Errorf("expected File=app/models.py, got %q", errors[0].File)
+                }
+                if errors[0].Line != 23 {
+                    t.Errorf("expected Line=23, got %d", errors[0].Line)
+                }
+            }
+
+            // TestParseBuildErrors_NoErrors_TypeScript_Rust_Python verifies clean output.
+            func TestParseBuildErrors_NoErrors_TypeScript_Rust_Python(t *testing.T) {
+                languages := []string{"typescript", "rust", "python"}
+                for _, lang := range languages {
+                    t.Run(lang, func(t *testing.T) {
+                        result := parseBuildErrors(lang, []byte("Build succeeded.\n"))
+                        if len(result) != 0 {
+                            t.Errorf("expected 0 errors for clean output, got %d", len(result))
+                        }
+                    })
+                }
+            }
+            ```
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./...
+            GOWORK=off go test ./internal/lsp/... -run TestWaitForFileIndexed -v
+            GOWORK=off go test ./internal/tools/... -run TestParseBuildErrors -v
+            # Postcondition: 3 new WaitForFileIndexed tests exist
+            grep -c "func TestWaitForFileIndexed_" /Users/dayna.blackwell/code/agent-lsp/internal/lsp/diagnostics_test.go
+            # Expected: 3
+            # Postcondition: 3 new parseBuildErrors language tests exist
+            grep -c "func TestParseBuildErrors_TypeScript\|func TestParseBuildErrors_Rust\|func TestParseBuildErrors_Python" /Users/dayna.blackwell/code/agent-lsp/internal/tools/build_test.go
+            # Expected: 3
+            ```
+
+            ## Constraints
+            - Do NOT modify any non-test files (no changes to client.go or build.go).
+            - In diagnostics_test.go, add tests at the END of the file after the
+              existing TestWaitForDiagnostics_* tests.
+            - In build_test.go, add tests at the END of the file after the existing
+              TestParseBuildErrors_NewLanguages_NoErrors test.
+            - Do NOT modify files outside your ownership list.
+          files: []
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |
+            Agent A and Agent B both edit manager.go (different functions). If agents
+            apply edits to overlapping line ranges or both edit the switch statement,
+            git merge will conflict.
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Agent A edits only the StartForLanguage function body (~line 190).
+            Agent B edits only the LanguageIDFromPath switch (~line 257). These
+            are completely different functions. Ensure each agent uses exact
+            verbatim text anchors. If a merge conflict occurs, resolve by applying
+            both edits manually — they are non-overlapping.
+        - scenario: |
+            Agent D edits session/manager.go (one line) which is not in file_ownership.
+            Another future agent or the human might have also touched manager.go,
+            causing confusion about ownership.
+          likelihood: low
+          impact: low
+          mitigation: |
+            Agent D's manager.go edit is constrained to exactly one line (~line 102)
+            and is in the same package as types.go. The task description is explicit
+            about the line. No other agent owns manager.go in this wave.
+        - scenario: |
+            Agent E's WaitForFileIndexed stability window test (TestWaitForFileIndexed_StabilityWindowReset)
+            may be flaky if the test machine is slow, since it relies on timing.
+          likelihood: low
+          impact: low
+          mitigation: |
+            Use generous timeouts (5s outer, 6s WaitForFileIndexed timeout). The
+            stability window is 1500ms; sending two notifications 200ms apart ensures
+            the window resets. Use a 5s outer timeout to catch hangs. If flaky,
+            increase sleep margins.
+        - scenario: |
+            The `refWarnings` field added to the HandleGetChangeImpact result struct
+            may break the existing change_impact_test.go if the test asserts on exact
+            JSON structure.
+          likelihood: low
+          impact: medium
+          mitigation: |
+            Agent B must check change_impact_test.go before finalizing. The warnings
+            field is additive (nil/empty when no errors occur), so JSON unmarshaling
+            tests that only check named fields will pass. Tests that compare raw JSON
+            strings may need updating.
+known_issues:
+    - title: V048 LOC budget exceeded for client.go
+      description: |
+        Agent C owns internal/lsp/client.go which is 2317 lines, exceeding the
+        2000-line LOC budget enforced by V048. The inspector finding explicitly
+        states NOT to decompose client.go ("do NOT include a decomposition wave
+        unless it can be done safely"). Agent C actual edit scope is approximately
+        10 lines across two functions (writeRaw and sendNotification). The file
+        cannot be split without a separate decomposition effort. Human override
+        required at wave execution time: proceed with Agent C despite the V048 error.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+            issues:
+                - check: pattern_accuracy
+                  severity: warning
+                  description: Agent B constraints section says "In manager.go, ONLY edit the LanguageIDFromPath function switch" — this is stale text from before the I1 fix moved manager.go to Agent A. Agent B does not own manager.go and should not edit it. The instruction is harmless (B will not touch the file) but may confuse the agent into attempting a manager.go edit.
+                  file: internal/tools/change_impact.go
+                  symbol: HandleGetChangeImpact
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+        E:
+            agent_id: E
+            verdict: PASS
+    summary: 'All five agent briefs verified against the codebase. File existence checks pass for all owned files (all action:modify files exist). Symbol accuracy confirmed: ValidateFilePath signature matches exactly, RootDir() exists on LSPClient, context.Background() at manager.go line 190 confirmed, LanguageIDFromPath switch structure matches the brief''s insertion point, writeRaw and sendNotification bodies match exactly, init() in logging.go matches the brief, IsDirty() exists at the correct location in types.go, session.DirtyErr at line 102 of session/manager.go confirmed, logging already imported in main.go, WaitForFileIndexed exists at client.go line 1048, newTestClient and writeMsg are in the same lsp package. One warning: Agent B''s constraints section contains stale text referencing manager.go edits (a leftover from when B also owned that file); since B does not own manager.go, the instruction is harmless but confusing. No errors found. Wave execution may proceed.'
+    reviewed_at: "2026-04-10T16:28:38Z"
+    issue_count: 1
+state: SCOUT_PENDING
+original_branch: main
+injection_method: hook
