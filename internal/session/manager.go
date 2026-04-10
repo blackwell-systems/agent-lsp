@@ -372,7 +372,7 @@ func (m *SessionManager) Commit(ctx context.Context, sessionID, target string, a
 func (m *SessionManager) Discard(ctx context.Context, sessionID string) error {
 	session, err := m.GetSession(sessionID)
 	if err != nil {
-		return err
+		return fmt.Errorf("discard: %w", err)
 	}
 
 	// Check session is not terminal.
@@ -413,7 +413,7 @@ func (m *SessionManager) Discard(ctx context.Context, sessionID string) error {
 func (m *SessionManager) Destroy(ctx context.Context, sessionID string) error {
 	session, err := m.GetSession(sessionID)
 	if err != nil {
-		return err
+		return fmt.Errorf("destroy: %w", err)
 	}
 
 	// Write-lock sessions map.
