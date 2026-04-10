@@ -182,7 +182,7 @@ func TestLSPClient_DocumentTracking(t *testing.T) {
 	}
 	<-done
 
-	if !c.IsDocumentOpen("file:///foo.go") {
+	if !c.isDocumentOpen("file:///foo.go") {
 		t.Error("expected document to be open")
 	}
 
@@ -200,7 +200,7 @@ func TestLSPClient_DocumentTracking(t *testing.T) {
 	}
 	<-done2
 
-	if c.IsDocumentOpen("file:///foo.go") {
+	if c.isDocumentOpen("file:///foo.go") {
 		t.Error("expected document to be closed")
 	}
 }
