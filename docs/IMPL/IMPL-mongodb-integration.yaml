@@ -381,7 +381,7 @@ waves:
               the test runner.
           files:
             - .github/workflows/ci.yml
-      base_commit: 91cfd05f0af333d6937e06de7126948a71dd6691
+      base_commit: 7e70218e2569e27480d22be188df5714598012df
     - number: 2
       type: integration
       agents:
@@ -522,6 +522,35 @@ quality_gates:
         - type: test
           command: GOWORK=off go test ./internal/... ./cmd/...
           required: true
+completion_reports:
+    A:
+        status: complete
+        branch: saw/mongodb-integration/wave1-agent-A
+        commit: 8527b2f
+        files_changed:
+            - test/fixtures/mongodb/query.mongodb
+            - test/fixtures/mongodb/schema.mongodb
+        files_created:
+            - test/fixtures/mongodb/query.mongodb
+            - test/fixtures/mongodb/schema.mongodb
+        verification: PASS
+        notes: Both fixture files created with exact calibrated positions. query.mongodb is 14 lines; line 9 = find, line 11 = aggregate. schema.mongodb has createCollection with bsonType validator. All quality gates pass.
+    B:
+        status: complete
+        branch: saw/mongodb-integration/wave1-agent-B
+        commit: d4f4cb5
+        files_changed:
+            - .github/workflows/ci.yml
+        verification: PASS
+        notes: 'MongoDB CI job appended after multi-lang-dart. YAML parses cleanly. Build, vet, and unit tests all pass. Note: grep count for ''mongodb-language-server'' is 3 (comment heading + step name + npm command), not 2 as stated in brief — the spec block itself is the source of truth and was followed verbatim.'
+    C:
+        status: complete
+        branch: main
+        commit: 9e1ddd0
+        files_changed:
+            - test/multi_lang_test.go
+        verification: PASS
+        notes: Wired MongoDB langConfig entry into buildLanguageConfigs() in test/multi_lang_test.go. Build and vet pass.
 pre_mortem:
     overall_risk: low
     rows:
@@ -596,5 +625,4 @@ critic_report:
     summary: All three agent briefs verified against the codebase. Agent A creates two new fixture files in a directory that does not yet exist (correct for action:new). Agent B's brief accurately describes ci.yml's current final job (multi-lang-dart) and the append pattern used throughout the file. Agent C's anchor text matches the actual end of buildLanguageConfigs() in multi_lang_test.go exactly (lines 839-843), and all langConfig struct fields referenced in the brief (secondFile, highlightLine, highlightColumn, inlayHintEndLine, renameSymbolLine, codeActionLine, codeActionEndLine) are confirmed present in the struct definition. No disjoint ownership violations, no missed callers, no import chain issues. Wave execution may proceed.
     reviewed_at: "2026-04-10T01:59:36Z"
     issue_count: 0
-state: REVIEWED
-original_branch: main
+state: WAVE_VERIFIED
