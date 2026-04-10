@@ -250,3 +250,34 @@ func inferLanguageID(entry config.ServerEntry) string {
 		return ext
 	}
 }
+
+// LanguageIDFromPath maps a file path's extension to an LSP language ID.
+// Canonical implementation shared by internal/lsp and internal/tools (E5 deduplication).
+// Covers Go, TypeScript, JavaScript, Python, Rust, and common language server languages.
+func LanguageIDFromPath(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".go":
+		return "go"
+	case ".ts", ".tsx":
+		return "typescript"
+	case ".js", ".jsx":
+		return "javascript"
+	case ".py":
+		return "python"
+	case ".rs":
+		return "rust"
+	case ".cs":
+		return "csharp"
+	case ".hs", ".lhs":
+		return "haskell"
+	case ".rb":
+		return "ruby"
+	case ".kt", ".kts":
+		return "kotlin"
+	case ".ml", ".mli":
+		return "ocaml"
+	default:
+		return "plaintext"
+	}
+}

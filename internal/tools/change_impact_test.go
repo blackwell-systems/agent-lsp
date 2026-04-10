@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 )
 
 func TestIsTestFile(t *testing.T) {
@@ -54,6 +56,9 @@ func TestLangIDFromPath(t *testing.T) {
 		{"src/App.jsx", "javascript"},
 		{"models.py", "python"},
 		{"src/lib.rs", "rust"},
+		{"File.cs", "csharp"},
+		{"main.hs", "haskell"},
+		{"app.rb", "ruby"},
 		{"config.xyz", "plaintext"},
 		{"README.md", "plaintext"},
 		{"Makefile", "plaintext"},
@@ -61,9 +66,9 @@ func TestLangIDFromPath(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.path, func(t *testing.T) {
-			got := langIDFromPath(tc.path)
+			got := lsp.LanguageIDFromPath(tc.path)
 			if got != tc.want {
-				t.Errorf("langIDFromPath(%q) = %q, want %q", tc.path, got, tc.want)
+				t.Errorf("lsp.LanguageIDFromPath(%q) = %q, want %q", tc.path, got, tc.want)
 			}
 		})
 	}

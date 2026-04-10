@@ -25,24 +25,6 @@ func isTestFile(path string) bool {
 	return false
 }
 
-// langIDFromPath maps a file extension to an LSP language ID.
-func langIDFromPath(path string) string {
-	ext := strings.ToLower(filepath.Ext(path))
-	switch ext {
-	case ".go":
-		return "go"
-	case ".ts", ".tsx":
-		return "typescript"
-	case ".js", ".jsx":
-		return "javascript"
-	case ".py":
-		return "python"
-	case ".rs":
-		return "rust"
-	default:
-		return "plaintext"
-	}
-}
 
 // symbolRef is a reference to a named symbol at a file location.
 type symbolRef struct {
@@ -118,7 +100,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 					if isTestFile(refPath) {
 						testFilesSet[refPath] = true
 						// Find enclosing function in the test file.
-						refSyms, sErr := WithDocument[[]types.DocumentSymbol](ctx, client, refPath, langIDFromPath(refPath), func(fURI string) ([]types.DocumentSymbol, error) {
+						refSyms, sErr := WithDocument[[]types.DocumentSymbol](ctx, client, refPath, lsp.LanguageIDFromPath(refPath), func(fURI string) ([]types.DocumentSymbol, error) {
 							return client.GetDocumentSymbols(ctx, fURI)
 						})
 						if sErr == nil {
@@ -144,7 +126,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 								Line:      loc.Range.Start.Line,
 								Character: loc.Range.Start.Character,
 							}
-							transLocs, _ := WithDocument[[]types.Location](ctx, client, refPath, langIDFromPath(refPath), func(fURI string) ([]types.Location, error) {
+							transLocs, _ := WithDocument[[]types.Location](ctx, client, refPath, lsp.LanguageIDFromPath(refPath), func(fURI string) ([]types.Location, error) {
 								return client.GetReferences(ctx, fURI, transitivePos, false)
 							})
 							for _, tLoc := range transLocs {
@@ -167,7 +149,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 
 	var warnings []string
 	for _, file := range changedFiles {
-		langID := langIDFromPath(file)
+		langID := lsp.LanguageIDFromPath(file)
 		symbols, err := WithDocument[[]types.DocumentSymbol](ctx, client, file, langID, func(fURI string) ([]types.DocumentSymbol, error) {
 			return client.GetDocumentSymbols(ctx, fURI)
 		})
