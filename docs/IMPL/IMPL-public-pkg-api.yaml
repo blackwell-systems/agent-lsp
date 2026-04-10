@@ -1094,4 +1094,5 @@ critic_report:
     reviewed_at: "2026-04-10T20:56:04Z"
     issue_count: 2
 state: SCOUT_PENDING
-injection_method: manual-fallback
+original_branch: main
+injection_method: hook
