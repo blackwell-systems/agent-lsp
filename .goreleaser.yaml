@@ -1,0 +1,38 @@
+version: 2
+
+builds:
+  - id: agent-lsp
+    main: ./cmd/agent-lsp
+    binary: agent-lsp
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.Version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    env:
+      - CGO_ENABLED=0
+      - GOWORK=off
+
+archives:
+  - id: agent-lsp
+    builds: [agent-lsp]
+    format: tar.gz
+    name_template: "agent-lsp_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+
+# Homebrew formula is maintained manually in blackwell-systems/homebrew-tap
+# Do not enable brews: section — it conflicts with manual formula updates
