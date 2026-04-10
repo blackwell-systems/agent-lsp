@@ -1,3 +1,4 @@
+completion_date: "2026-04-10"
 title: 'New MCP Tools: get_change_impact, get_cross_repo_references, and simulate_chain refactor-preview docs'
 feature_slug: new-tools
 verdict: SUITABLE
@@ -638,6 +639,7 @@ waves:
             - A
             - B
             - C
+      base_commit: 5a10418698eed2bed10b4e15a488fd90df63ef02
 quality_gates:
     level: standard
     gates:
@@ -650,6 +652,12 @@ quality_gates:
         - type: test
           command: GOWORK=off go test ./internal/... ./cmd/...
           required: true
+post_merge_checklist:
+    groups:
+        - title: Background Service Initialization
+          items:
+            - description: Verify if change_impact_test.go needs initialization in Server constructor
+            - description: Verify if cross_repo_test.go needs initialization in Server constructor
 completion_reports:
     A:
         status: complete
@@ -696,6 +704,14 @@ completion_reports:
             - docs/refactor-preview.md
         verification: PASS
         notes: Created docs/refactor-preview.md with four worked example sections (safe rename preview, change impact preview, multi-file refactor with checkpoint, key response fields). Updated README.md simulate_chain table entry and speculative execution link. All verification postconditions pass.
+    D:
+        status: complete
+        branch: saw/new-tools/wave2-agent-D
+        commit: c9b873a
+        files_changed:
+            - cmd/agent-lsp/server.go
+        verification: PASS
+        notes: Registered get_change_impact and get_cross_repo_references MCP tools. Added safeFirstFile helper. Updated simulate_chain description. Updated tool count comment to 50. Build, vet, and all tests pass.
 pre_mortem:
     overall_risk: low
     rows:
@@ -789,5 +805,5 @@ critic_report:
     summary: 'All four agent briefs verified against the codebase. Agent A and B are creating new files; their new-file symbols are excluded from symbol_accuracy per the action:new rule. The API surface they depend on (WithDocument, CheckInitialized, URIToFilePath, GetDocumentSymbols, GetReferences, GetInfoOnLocation, extractPosition, types.DocumentSymbol/Location/Position/ToolResult) all exist with the exact signatures described. Agent B''s AddWorkspaceFolder signature at lsp/client.go:1831 is (ctx context.Context, path string) error — exactly as stated in the brief. Agent C''s anchor texts in README.md at lines 291 and 297 match verbatim. Agent D''s insertion anchors in server.go are accurate: clientForFile is at line 138, safeFirstFile does not yet exist (no conflict), the HandleGetSymbolDocumentation block and resources comment anchor match at lines 905-909, the simulate_chain Description text at line 826 matches the brief find-text verbatim, and clientForFileWithAutoInit exists as a closure inside Run. The tool count comment says 45 but actual mcp.AddTool count is 48; Agent D is correctly instructed to grep the live count before editing. Pre-write, the IMPL doc had a schema-invalid known_issues field (map instead of sequence) which was corrected before this review could be written. No errors found in any agent brief. All files have disjoint ownership within each wave.'
     reviewed_at: "2026-04-10T05:12:37Z"
     issue_count: 1
-state: REVIEWED
+state: COMPLETE
 original_branch: main

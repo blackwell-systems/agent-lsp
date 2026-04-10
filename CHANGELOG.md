@@ -5,6 +5,17 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (2026-04-10) — Three new MCP tools for code-impact analysis
+
+#### `get_change_impact`
+Answers "what breaks if I change this file?" without running tests. Given a list of changed files, it enumerates all exported symbols in those files via `get_document_symbols`, resolves every reference via `get_references`, and partitions the results into test callers (with enclosing test function names extracted) and non-test callers. Supports optional one-level transitive following to surface second-order impact. Useful before any refactor to understand blast radius and which tests will need updating.
+
+#### `get_cross_repo_references`
+First-class cross-repo caller analysis. Given a symbol (file + position) and a list of consumer repo roots, adds each consumer as a workspace folder and calls `get_references` across all of them. Results are partitioned by repo root prefix so callers in each consumer are reported separately. Designed for library authors who need to know which downstream consumers reference a symbol before changing its signature.
+
+#### `simulate_chain` — refactor preview framing
+`simulate_chain` is now documented and surfaced as a "refactor preview" tool: apply a rename/signature change speculatively, walk the chain of dependent edits, and read `cumulative_delta` + `safe_to_apply_through_step` before writing a single byte to disk. Added `docs/refactor-preview.md` with four worked examples (safe rename preview, change impact preview, multi-file refactor with checkpoint, key response fields reference). README updated with refactor-preview framing in the tools table.
+
 ### Fixed (2026-04-09) — Audit-6 batch: 12 bugs and quality fixes
 
 #### Critical
