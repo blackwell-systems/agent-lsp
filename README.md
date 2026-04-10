@@ -11,16 +11,20 @@
 
 **agent-lsp makes code operations reliable for AI agents.**
 
-It is a **stateful runtime** over real language servers, not a bridge. It keeps a warm semantic index and adds a **skill layer** that turns multi-step code operations into single, correct workflows.
+It is a **stateful runtime** over real language servers, not a bridge. It keeps the language server's semantic index warm and adds a **skill layer** that turns multi-step code operations into single, correct workflows.
 
-Most MCP-LSP tools fail in practice — for two reasons:
+Most MCP-LSP tools fail in practice:
 
-- **They are stateless bridges.** Every call cold-starts the language server: no session, no context, no cross-file awareness. The agent pays the indexing cost every time.
-- **They expose raw tools.** Agents routinely skip steps or use tools incorrectly. A safe rename is not one tool — it's `prepare_rename` → `rename_symbol` → `apply_edit` in sequence. An agent reasoning its way to the correct sequence on every invocation will often get it wrong. The tools exist; the workflow doesn't reliably happen.
+- **Stateless bridges** — no session, no context, no cross-file awareness
+- **Raw tools** — agents skip steps or use them incorrectly
 
-agent-lsp fixes both. The **persistent session** indexes your workspace once and keeps it warm. The **skill layer** encodes correct tool sequences so workflows actually happen — not just tools that are available.
+The tools exist. The workflow doesn't reliably happen.
 
-**50 tools** across navigation, analysis, refactoring, and formatting; **49 CI-verified** end-to-end against real language servers across **30 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+agent-lsp fixes both. The **persistent session** indexes your workspace once and keeps it warm. The **skill layer** encodes correct tool sequences so workflows actually happen.
+
+**Example:** call `/lsp-rename` and it will validate the rename, preview all affected files, show diagnostic impact, and apply atomically. One command. No missed steps.
+
+**50 tools. 49 CI-verified end-to-end. 30 languages.** Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
 **Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One agent-lsp process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright; no reconfiguration when you switch projects.
 
