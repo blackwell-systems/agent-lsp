@@ -213,8 +213,6 @@ Observes current session state. Calls `WaitForDiagnostics`, diffs against baseli
   "errors_introduced": [{ "line": 42, "col": 5, "message": "cannot use string as int", "severity": "error" }],
   "errors_resolved": [],
   "net_delta": 1,
-  "affected_symbols": ["HandleRequest"],
-  "edit_risk_score": 0.73,
   "scope": "file",
   "confidence": "high",
   "timeout": false,
@@ -224,7 +222,7 @@ Observes current session state. Calls `WaitForDiagnostics`, diffs against baseli
 
 A caller may call `simulate_edit` multiple times before calling `evaluate_session`. The evaluation reflects the cumulative state.
 
-**Atomic convenience wrapper:** `simulate_edit_atomic` is internally a create → apply → evaluate → discard cycle. Accepts an optional `session_id` to reuse an existing session; if omitted, creates and destroys a temporary session automatically. Useful for single-edit what-if checks without managing session lifecycle.
+**Atomic convenience wrapper:** `simulate_edit_atomic` is internally a create → apply → evaluate → discard cycle. It always manages its own session lifecycle — pass `workspace_root` + `language` (not a `session_id`). Returns an `EvaluationResult` directly. Useful for single-edit what-if checks without managing session IDs.
 
 ---
 
