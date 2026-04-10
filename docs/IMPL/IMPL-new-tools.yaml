@@ -490,6 +490,7 @@ waves:
           files:
             - docs/refactor-preview.md
             - README.md
+      base_commit: 152cb3f95484fe9e1bafec6dfe6ca417dc048723
     - number: 2
       type: integration
       agents:
@@ -649,6 +650,52 @@ quality_gates:
         - type: test
           command: GOWORK=off go test ./internal/... ./cmd/...
           required: true
+completion_reports:
+    A:
+        status: complete
+        branch: saw/new-tools/wave1-agent-A
+        commit: d72186b
+        files_changed:
+            - internal/tools/change_impact.go
+            - internal/tools/change_impact_test.go
+        files_created:
+            - internal/tools/change_impact.go
+            - internal/tools/change_impact_test.go
+        tests_added:
+            - TestIsTestFile
+            - TestLangIDFromPath
+            - TestHandleGetChangeImpact_EmptyFiles
+            - TestHandleGetChangeImpact_NilClient
+        verification: PASS
+        notes: HandleGetChangeImpact implemented with isTestFile and langIDFromPath helpers. All 4 targeted tests pass. Registration in server.go is Agent D scope (Wave 2). Test comment clarifies that CheckInitialized runs before changed_files validation, so nil-client tests always get the initialization error.
+    B:
+        status: complete
+        branch: saw/new-tools/wave1-agent-B
+        commit: "9291744"
+        files_changed:
+            - internal/tools/cross_repo.go
+            - internal/tools/cross_repo_test.go
+        files_created:
+            - internal/tools/cross_repo.go
+            - internal/tools/cross_repo_test.go
+        tests_added:
+            - TestRepoForFile
+            - TestHandleGetCrossRepoReferences_EmptyRoots
+            - TestHandleGetCrossRepoReferences_EmptyRootsSlice
+            - TestHandleGetCrossRepoReferences_NilClient
+        verification: PASS
+        notes: HandleGetCrossRepoReferences and repoForFile implemented. consumer_roots validation runs before CheckInitialized so arg errors surface regardless of client state — required by test spec. All 4 tests pass. Registration in server.go is Wave 2 Agent D scope.
+    C:
+        status: complete
+        branch: saw/new-tools/wave1-agent-C
+        commit: d58f385
+        files_changed:
+            - docs/refactor-preview.md
+            - README.md
+        files_created:
+            - docs/refactor-preview.md
+        verification: PASS
+        notes: Created docs/refactor-preview.md with four worked example sections (safe rename preview, change impact preview, multi-file refactor with checkpoint, key response fields). Updated README.md simulate_chain table entry and speculative execution link. All verification postconditions pass.
 pre_mortem:
     overall_risk: low
     rows:
