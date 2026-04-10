@@ -39,3 +39,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-sql-integration-test.yaml
 - **clojure-nix-dart-integration**: completed 2026-04-09, 2 waves, 5 agents
   - IMPL doc: docs/IMPL/complete/IMPL-clojure-nix-dart-integration.yaml
+- **mongodb-integration**: completed 2026-04-09, 2 waves, 3 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-mongodb-integration.yaml

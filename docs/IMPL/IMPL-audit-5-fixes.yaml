@@ -1,0 +1,1411 @@
+title: 'Audit-5 Findings: 16-item bug and quality fix batch'
+feature_slug: audit-5-fixes
+verdict: SUITABLE
+suitability_assessment: |
+    All five suitability gate questions resolve cleanly.
+
+    1. File decomposition: 16 findings across 8 distinct files plus one new package (internal/uri).
+       The work splits cleanly into clusters: (a) internal/lsp/client.go fixes (Agent A),
+       (b) internal/lsp/client_test.go update for L3 rename (Agent A2),
+       (c) internal/lsp/manager.go (Agent B), (d) diagnostics.go (Agent C),
+       (e) internal/tools fixes (Agent D), (f) session/manager.go dedup (Agent E),
+       (g) cmd/agent-lsp fixes (Agent F). All file ownerships are disjoint within Wave 1.
+
+    2. No investigation-first items: all findings are structural reads with high confidence.
+       M5 (WaitForDiagnostics timing) is the only medium-confidence finding; its fix is
+       mechanical (add quiet-window check to the notify arm).
+
+    3. Interface contracts: the new internal/uri package exports URIToPath(uri string) string
+       and ApplyRangeEdit(content string, rng types.Range, newText string) string. Both
+       signatures are determinable before implementation starts. The L3 rename contract
+       (IsDocumentOpen -> isDocumentOpen) is binding for Agent A2.
+
+    4. Pre-implementation status check: all 16 findings are TODO — none were present in any
+       prior audit IMPL docs and the codebase confirms the bugs as described.
+
+    5. Parallelization value: GOWORK=off go test ./internal/... ./cmd/... takes several
+       seconds. Agents own 1-3 files each, with non-trivial logic. Clear speedup over
+       sequential.
+
+    Estimated times:
+    - Scout phase: ~15 min
+    - Agent execution: ~7 agents x 10 min avg with parallelism = ~20 min wall clock
+    - Merge and verification: ~5 min
+    Total SAW time: ~40 min
+    Sequential baseline: ~70 min
+    Time savings: ~30 min (43% faster)
+    Recommendation: Clear speedup. Proceed.
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: internal/lsp/client.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: internal/lsp/client_test.go
+      agent: A2
+      wave: 2
+      action: modify
+      depends_on:
+        - A
+    - file: internal/lsp/manager.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/lsp/diagnostics.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/tools/simulation.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/tools/helpers.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/tools/session.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/session/manager.go
+      agent: E
+      wave: 1
+      action: modify
+    - file: internal/session/manager_test.go
+      agent: E
+      wave: 1
+      action: modify
+    - file: internal/uri/uri.go
+      agent: E
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/server.go
+      agent: F
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/main.go
+      agent: F
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: uri.URIToPath
+      description: |
+        Canonical URI-to-path conversion extracted from the duplicated uriToPath in
+        internal/lsp/client.go and internal/session/manager.go (M3 deduplication).
+        Both packages replace their local unexported copy with a call to this function.
+        The scaffold provides the stub; Agent E writes the final implementation.
+      definition: |
+        // package uri
+        func URIToPath(uri string) string
+      location: internal/uri/uri.go
+    - name: uri.ApplyRangeEdit
+      description: |
+        Canonical line-splice algorithm extracted from applyRangeEdit in
+        internal/session/manager.go and the inline loop in
+        internal/lsp/client.go:applyEditsToFile (L5 deduplication).
+        Processes a single edit; the lsp client loop calls it per-edit in reverse order.
+      definition: |
+        // package uri
+        func ApplyRangeEdit(content string, rng types.Range, newText string) string
+      location: internal/uri/uri.go
+    - name: LSPClient.isDocumentOpen
+      description: |
+        L3: IsDocumentOpen (exported) is called only from client_test.go. Renamed to
+        isDocumentOpen (unexported). client_test.go is in package lsp (same package),
+        so the unexported name remains accessible. Agent A renames in client.go;
+        Agent A2 updates the two call sites in client_test.go.
+      definition: |
+        func (c *LSPClient) isDocumentOpen(uri string) bool
+      location: internal/lsp/client.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Agent A — internal/lsp/client.go: C1, C2, H1, H2, M1, L3, M3, L5
+
+            You are fixing eight findings in internal/lsp/client.go.
+
+            The scaffold file internal/uri/uri.go already exists with URIToPath and
+            ApplyRangeEdit. Add this import to client.go:
+              "github.com/blackwell-systems/agent-lsp/internal/uri"
+
+            ### C1 — Restart does not clear openDocs, diags, legendTypes, legendModifiers
+
+            In the Restart method, add the missing resets AFTER resetting capabilities
+            and BEFORE calling Initialize. Find this exact text:
+
+            ```go
+            	c.capsMu.Lock()
+            	c.capabilities = make(map[string]interface{})
+            	c.capsMu.Unlock()
+
+            	return c.Initialize(ctx, rootDir)
+            ```
+
+            Replace it with:
+
+            ```go
+            	c.capsMu.Lock()
+            	c.capabilities = make(map[string]interface{})
+            	c.capsMu.Unlock()
+
+            	// C1: clear per-session state so the fresh server receives didOpen
+            	// (not didChange) for all documents and serves no stale diagnostics.
+            	c.mu.Lock()
+            	c.openDocs = make(map[string]docMeta)
+            	c.mu.Unlock()
+            	c.diagMu.Lock()
+            	c.diags = make(map[string][]types.LSPDiagnostic)
+            	c.diagMu.Unlock()
+            	c.legendMu.Lock()
+            	c.legendTypes = nil
+            	c.legendModifiers = nil
+            	c.legendMu.Unlock()
+
+            	return c.Initialize(ctx, rootDir)
+            ```
+
+            ### C2 — watcherStop accessed without a lock: data race
+
+            Add a dedicated mutex field to the LSPClient struct. Find the struct field:
+
+            ```go
+            	// auto-watcher: watches the workspace root and notifies the server
+            	// of file changes automatically, keeping the LSP index fresh.
+            	watcherStop chan struct{}
+            ```
+
+            Replace with:
+
+            ```go
+            	// auto-watcher: watches the workspace root and notifies the server
+            	// of file changes automatically, keeping the LSP index fresh.
+            	watcherMu   sync.Mutex // guards watcherStop (C2: prevents data race)
+            	watcherStop chan struct{}
+            ```
+
+            Update startWatcher to hold watcherMu around reads/writes of watcherStop.
+            Find:
+
+            ```go
+            func (c *LSPClient) startWatcher(rootDir string) {
+            	c.stopWatcher()
+
+            	stop := make(chan struct{})
+            	c.watcherStop = stop
+            ```
+
+            Replace with:
+
+            ```go
+            func (c *LSPClient) startWatcher(rootDir string) {
+            	c.watcherMu.Lock()
+            	c.stopWatcherLocked()
+            	stop := make(chan struct{})
+            	c.watcherStop = stop
+            	c.watcherMu.Unlock()
+            ```
+
+            Replace the existing stopWatcher function with two functions:
+
+            Find:
+
+            ```go
+            // stopWatcher stops the auto-watcher if one is running.
+            func (c *LSPClient) stopWatcher() {
+            	if c.watcherStop != nil {
+            		close(c.watcherStop)
+            		c.watcherStop = nil
+            	}
+            }
+            ```
+
+            Replace with:
+
+            ```go
+            // stopWatcher stops the auto-watcher if one is running.
+            func (c *LSPClient) stopWatcher() {
+            	c.watcherMu.Lock()
+            	c.stopWatcherLocked()
+            	c.watcherMu.Unlock()
+            }
+
+            // stopWatcherLocked is the lock-free inner body of stopWatcher.
+            // Caller must hold c.watcherMu.
+            func (c *LSPClient) stopWatcherLocked() {
+            	if c.watcherStop != nil {
+            		close(c.watcherStop)
+            		c.watcherStop = nil
+            	}
+            }
+            ```
+
+            ### H1 — applyDocumentChanges swallows filesystem errors
+
+            In applyDocumentChanges, find and replace the create/rename/delete cases:
+
+            ```go
+            		case "create":
+            			var op struct {
+            				URI string `json:"uri"`
+            			}
+            			if err := json.Unmarshal(entry, &op); err == nil && op.URI != "" {
+            				path := uriToPath(op.URI)
+            				if _, err := os.Stat(path); os.IsNotExist(err) {
+            					_ = os.WriteFile(path, []byte{}, 0644)
+            				}
+            			}
+            		case "rename":
+            			var op struct {
+            				OldURI string `json:"oldUri"`
+            				NewURI string `json:"newUri"`
+            			}
+            			if err := json.Unmarshal(entry, &op); err == nil {
+            				_ = os.Rename(uriToPath(op.OldURI), uriToPath(op.NewURI))
+            			}
+            		case "delete":
+            			var op struct {
+            				URI string `json:"uri"`
+            			}
+            			if err := json.Unmarshal(entry, &op); err == nil && op.URI != "" {
+            				_ = os.Remove(uriToPath(op.URI))
+            			}
+            ```
+
+            Replace with:
+
+            ```go
+            		case "create":
+            			var op struct {
+            				URI string `json:"uri"`
+            			}
+            			if err := json.Unmarshal(entry, &op); err == nil && op.URI != "" {
+            				path := uri.URIToPath(op.URI)
+            				if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+            					if writeErr := os.WriteFile(path, []byte{}, 0644); writeErr != nil {
+            						return fmt.Errorf("applyDocumentChanges create %s: %w", path, writeErr)
+            					}
+            				}
+            			}
+            		case "rename":
+            			var op struct {
+            				OldURI string `json:"oldUri"`
+            				NewURI string `json:"newUri"`
+            			}
+            			if err := json.Unmarshal(entry, &op); err == nil {
+            				oldPath := uri.URIToPath(op.OldURI)
+            				newPath := uri.URIToPath(op.NewURI)
+            				if renameErr := os.Rename(oldPath, newPath); renameErr != nil {
+            					return fmt.Errorf("applyDocumentChanges rename %s -> %s: %w", oldPath, newPath, renameErr)
+            				}
+            			}
+            		case "delete":
+            			var op struct {
+            				URI string `json:"uri"`
+            			}
+            			if err := json.Unmarshal(entry, &op); err == nil && op.URI != "" {
+            				path := uri.URIToPath(op.URI)
+            				if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
+            					return fmt.Errorf("applyDocumentChanges delete %s: %w", path, removeErr)
+            				}
+            			}
+            ```
+
+            ### H2 — AddWorkspaceFolder watches rootDir instead of new path
+
+            Find the comment and startWatcher call at the end of AddWorkspaceFolder:
+
+            ```go
+            	// Extend the auto-watcher to cover the new folder.
+            	c.startWatcher(c.rootDir)
+            	return nil
+            ```
+
+            Replace with:
+
+            ```go
+            	// Extend the auto-watcher to cover the new folder.
+            	// H2: was incorrectly passing c.rootDir; pass path so the new folder is watched.
+            	c.startWatcher(path)
+            	return nil
+            ```
+
+            ### M1 — applyDocumentChanges returns nil on array-unmarshal failure
+
+            Find:
+
+            ```go
+            	b, _ := json.Marshal(dc)
+            	var raw []json.RawMessage
+            	if err := json.Unmarshal(b, &raw); err != nil {
+            		return nil // not an array; ignore
+            	}
+            ```
+
+            Replace with:
+
+            ```go
+            	b, _ := json.Marshal(dc)
+            	var raw []json.RawMessage
+            	if err := json.Unmarshal(b, &raw); err != nil {
+            		return fmt.Errorf("applyDocumentChanges: documentChanges is not a JSON array: %w", err)
+            	}
+            ```
+
+            ### L3 — Unexport IsDocumentOpen
+
+            Find:
+
+            ```go
+            // IsDocumentOpen reports whether uri is currently tracked as open.
+            func (c *LSPClient) IsDocumentOpen(uri string) bool {
+            ```
+
+            Replace with:
+
+            ```go
+            // isDocumentOpen reports whether uri is currently tracked as open.
+            func (c *LSPClient) isDocumentOpen(uri string) bool {
+            ```
+
+            ### M3 — Replace local uriToPath with uri.URIToPath; delete local function
+
+            Replace ALL occurrences of `uriToPath(` with `uri.URIToPath(` in client.go.
+            There are multiple call sites throughout the file (lines ~779, ~937, ~1620,
+            ~1631, ~1638, ~1701, and others). Search the entire file.
+
+            After replacing all call sites, delete the local uriToPath function
+            (the one at the bottom of the file starting with the comment
+            "// uriToPath converts a file:// URI to a local path"):
+
+            ```go
+            // uriToPath converts a file:// URI to a local path, correctly decoding
+            // percent-encoded characters (e.g. %20 -> space) per RFC 3986.
+            func uriToPath(uri string) string {
+            	if u, err := url.Parse(uri); err == nil && u.Path != "" {
+            		return u.Path
+            	}
+            	// Fallback: strip scheme prefix without decoding.
+            	if strings.HasPrefix(uri, "file://") {
+            		return uri[len("file://"):]
+            	}
+            	return uri
+            }
+            ```
+
+            Delete this entire function. Check if "net/url" is still imported elsewhere
+            in client.go after deletion (it is used in AddWorkspaceFolder and
+            RemoveWorkspaceFolder for url.URL{} — keep the import).
+
+            ### L5 — Replace inline line-splice in applyEditsToFile with uri.ApplyRangeEdit
+
+            In applyEditsToFile, find the line that initializes lines from data:
+
+            ```go
+            	lines := strings.Split(string(data), "\n")
+
+            	// Apply edits in reverse order (bottom-to-top).
+            	for i := len(edits) - 1; i >= 0; i-- {
+            		e := edits[i]
+            		startLine := e.Range.Start.Line
+            		startChar := e.Range.Start.Character
+            		endLine := e.Range.End.Line
+            		endChar := e.Range.End.Character
+
+            		// Clamp bounds.
+            		if startLine >= len(lines) {
+            			startLine = len(lines) - 1
+            		}
+            		if endLine >= len(lines) {
+            			endLine = len(lines) - 1
+            		}
+
+            		before := ""
+            		if startLine >= 0 && startLine < len(lines) {
+            			l := lines[startLine]
+            			if startChar > len(l) {
+            				startChar = len(l)
+            			}
+            			before = l[:startChar]
+            		}
+            		after := ""
+            		if endLine >= 0 && endLine < len(lines) {
+            			l := lines[endLine]
+            			if endChar > len(l) {
+            				endChar = len(l)
+            			}
+            			after = l[endChar:]
+            		}
+
+            		newLines := strings.Split(e.NewText, "\n")
+            		newLines[0] = before + newLines[0]
+            		newLines[len(newLines)-1] += after
+
+            		// Splice lines.
+            		result := make([]string, 0, len(lines)-(endLine-startLine)+len(newLines))
+            		result = append(result, lines[:startLine]...)
+            		result = append(result, newLines...)
+            		result = append(result, lines[endLine+1:]...)
+            		lines = result
+            	}
+
+            	newContent := strings.Join(lines, "\n")
+            ```
+
+            Replace with:
+
+            ```go
+            	// Apply edits in reverse order (bottom-to-top) using the canonical
+            	// ApplyRangeEdit from internal/uri (L5 deduplication).
+            	content := string(data)
+            	for i := len(edits) - 1; i >= 0; i-- {
+            		content = uri.ApplyRangeEdit(content, edits[i].Range, edits[i].NewText)
+            	}
+
+            	newContent := content
+            ```
+
+            After this change, verify `strings` is still used elsewhere in client.go
+            (it is — in many other functions). Keep the strings import.
+
+            ### Add import for internal/uri
+
+            Add `"github.com/blackwell-systems/agent-lsp/internal/uri"` to the import
+            block in client.go. The existing imports include "net/url", "os", "strings",
+            etc. Add uri alongside the other internal imports.
+
+            ### Constraints
+
+            - Do NOT modify internal/lsp/client_test.go — that file is owned by Agent A2.
+            - Do NOT define any functions in internal/uri/uri.go — the scaffold already
+              contains the canonical implementations. Just import and call them.
+            - Do NOT modify any file outside internal/lsp/client.go.
+
+            ### Verification gate
+
+            ```
+            cd /Users/dayna.blackwell/code/agent-lsp
+            GOWORK=off go build ./internal/lsp/...
+            GOWORK=off go vet ./internal/lsp/...
+            GOWORK=off go test ./internal/lsp/... -run TestLSPClient
+            # Postconditions:
+            grep -c 'func isDocumentOpen' internal/lsp/client.go   # expect 1
+            grep -n 'func IsDocumentOpen' internal/lsp/client.go   # expect 0 matches
+            grep -c 'uri\.URIToPath' internal/lsp/client.go        # expect >= 5
+            grep -n 'func uriToPath' internal/lsp/client.go        # expect 0 matches
+            grep -c 'watcherMu' internal/lsp/client.go             # expect >= 3
+            grep -c 'uri\.ApplyRangeEdit' internal/lsp/client.go   # expect 1
+            ```
+          files:
+            - internal/lsp/client.go
+        - id: B
+          task: |
+            ## Agent B — internal/lsp/manager.go: M2
+
+            You are fixing M2 in internal/lsp/manager.go.
+
+            ### M2 — StartAll rollback uses context.Background() and discards errors
+
+            In StartAll, two rollback loops use context.Background() and discard errors
+            with `_ =`. Fix both to use the caller's ctx and log shutdown errors.
+
+            Find the first rollback loop (pre-created client branch):
+
+            ```go
+            			if err := e.client.Initialize(ctx, rootDir); err != nil {
+            				for _, c := range started {
+            					_ = c.Shutdown(context.Background())
+            				}
+            				return fmt.Errorf("initialize pre-created client: %w", err)
+            			}
+            ```
+
+            Replace with:
+
+            ```go
+            			if err := e.client.Initialize(ctx, rootDir); err != nil {
+            				for _, c := range started {
+            					if shutErr := c.Shutdown(ctx); shutErr != nil {
+            						logging.Log(logging.LevelDebug, fmt.Sprintf("StartAll rollback shutdown: %v", shutErr))
+            					}
+            				}
+            				return fmt.Errorf("initialize pre-created client: %w", err)
+            			}
+            ```
+
+            Find the second rollback loop (multi-server command branch):
+
+            ```go
+            		if err := client.Initialize(ctx, rootDir); err != nil {
+            			for _, c := range started {
+            				_ = c.Shutdown(context.Background())
+            			}
+            			return fmt.Errorf("initialize server %s: %w", e.command[0], err)
+            		}
+            ```
+
+            Replace with:
+
+            ```go
+            		if err := client.Initialize(ctx, rootDir); err != nil {
+            			for _, c := range started {
+            				if shutErr := c.Shutdown(ctx); shutErr != nil {
+            					logging.Log(logging.LevelDebug, fmt.Sprintf("StartAll rollback shutdown: %v", shutErr))
+            				}
+            			}
+            			return fmt.Errorf("initialize server %s: %w", e.command[0], err)
+            		}
+            ```
+
+            After these changes, check if `"context"` is still used in manager.go
+            (StartAll signature uses context.Context, so the import stays). Verify that
+            `context.Background()` no longer appears in manager.go.
+
+            ### Constraints
+
+            - Do NOT modify any file outside internal/lsp/manager.go.
+            - Do NOT modify context.Background() usages that may exist in other methods
+              (check: there should be none after this fix, but verify).
+
+            ### Verification gate
+
+            ```
+            cd /Users/dayna.blackwell/code/agent-lsp
+            GOWORK=off go build ./internal/lsp/...
+            GOWORK=off go vet ./internal/lsp/...
+            GOWORK=off go test ./internal/lsp/...
+            # Postconditions:
+            grep -n 'context\.Background()' internal/lsp/manager.go   # expect 0 matches
+            grep -c 'shutErr' internal/lsp/manager.go                  # expect 2
+            ```
+          files:
+            - internal/lsp/manager.go
+        - id: C
+          task: |
+            ## Agent C — internal/lsp/diagnostics.go: M5
+
+            You are fixing M5 in internal/lsp/diagnostics.go.
+
+            ### M5 — WaitForDiagnostics quiet-window checked only on ticker ticks
+
+            The notify channel arm currently only wakes the select loop without
+            immediately checking the quiet window. This can cause up to 50ms premature
+            return when diagnostics arrive in a burst.
+
+            Find the for/select loop with the notify arm. Replace just the notify arm:
+
+            ```go
+            		case <-notify:
+            			// Notification received; let ticker check quiet window.
+            ```
+
+            Replace with:
+
+            ```go
+            		case <-notify:
+            			// Notification received. Check the quiet window immediately to
+            			// avoid waiting up to 50ms for the next tick (M5 fix).
+            			if time.Now().After(deadline) {
+            				return nil
+            			}
+            			mu.Lock()
+            			gotAll := allReceived()
+            			quiet := time.Since(lastEvent) >= quietWindow
+            			mu.Unlock()
+            			if gotAll && quiet {
+            				return nil
+            			}
+            ```
+
+            No other changes are needed in this file.
+
+            ### Constraints
+
+            - Do NOT modify any file outside internal/lsp/diagnostics.go.
+            - Do NOT change the ticker arm or the overall loop structure.
+
+            ### Verification gate
+
+            ```
+            cd /Users/dayna.blackwell/code/agent-lsp
+            GOWORK=off go build ./internal/lsp/...
+            GOWORK=off go vet ./internal/lsp/...
+            GOWORK=off go test ./internal/lsp/... -run TestWaitForDiagnostics
+            # Postconditions (if test name differs, run all lsp tests):
+            GOWORK=off go test ./internal/lsp/...
+            grep -c 'gotAll && quiet' internal/lsp/diagnostics.go    # expect 2 (ticker + notify arms)
+            grep -c 'case <-notify:' internal/lsp/diagnostics.go     # expect 1
+            ```
+          files:
+            - internal/lsp/diagnostics.go
+        - id: D
+          task: |
+            ## Agent D — internal/tools: H3, M4, L2
+
+            You are fixing three findings across internal/tools.
+
+            ### H3 — HandleSimulateEditAtomic swallows Discard errors (simulation.go)
+
+            In internal/tools/simulation.go, find the error-path Discard call:
+
+            ```go
+            		// Discard before returning to revert LSP in-memory state; Destroy
+            		// (registered as defer above) does not revert LSP document content.
+            		_ = mgr.Discard(ctx, sessionID)
+            		return types.ErrorResult(fmt.Sprintf("evaluate failed: %s", err)), nil
+            ```
+
+            Replace with:
+
+            ```go
+            		// Discard before returning to revert LSP in-memory state; Destroy
+            		// (registered as defer above) does not revert LSP document content.
+            		if discardErr := mgr.Discard(ctx, sessionID); discardErr != nil {
+            			return types.ErrorResult(fmt.Sprintf("evaluate failed: %s; LSP state revert also failed: %s", err, discardErr)), nil
+            		}
+            		return types.ErrorResult(fmt.Sprintf("evaluate failed: %s", err)), nil
+            ```
+
+            Find the success-path Discard call:
+
+            ```go
+            	// Discard to revert LSP state before Destroy — ensures gopls sees clean
+            	// file content for subsequent calls, not the modified in-memory version.
+            	_ = mgr.Discard(ctx, sessionID)
+            ```
+
+            Replace with:
+
+            ```go
+            	// Discard to revert LSP state before Destroy — ensures gopls sees clean
+            	// file content for subsequent calls, not the modified in-memory version.
+            	if discardErr := mgr.Discard(ctx, sessionID); discardErr != nil {
+            		return types.ErrorResult(fmt.Sprintf("LSP state revert failed: %s", discardErr)), nil
+            	}
+            ```
+
+            ### M4 — HandleRestartLspServer only restarts default client (session.go)
+
+            In internal/tools/session.go, find:
+
+            ```go
+            	if err := client.Restart(ctx, rootDir); err != nil {
+            		return types.ErrorResult(fmt.Sprintf("failed to restart LSP server: %s", err)), nil
+            	}
+            	return types.TextResult("LSP server restarted successfully"), nil
+            ```
+
+            Replace with:
+
+            ```go
+            	if err := client.Restart(ctx, rootDir); err != nil {
+            		return types.ErrorResult(fmt.Sprintf("failed to restart LSP server: %s", err)), nil
+            	}
+            	// M4: In multi-server configurations only the default client is restarted.
+            	// Other configured servers remain running. Restart each independently if needed.
+            	return types.TextResult("LSP server restarted successfully. Note: in multi-server configurations only the default server was restarted; other configured servers are unaffected."), nil
+            ```
+
+            ### L2 — ValidateFilePath does not resolve symlinks (helpers.go)
+
+            In internal/tools/helpers.go, find the ValidateFilePath body:
+
+            ```go
+            	clean, err := filepath.Abs(filepath.Clean(filePath))
+            	if err != nil {
+            		return "", fmt.Errorf("invalid file path: %w", err)
+            	}
+            	if rootDir != "" {
+            		absRoot, _ := filepath.Abs(rootDir)
+            		if clean != absRoot && !strings.HasPrefix(clean, absRoot+string(filepath.Separator)) {
+            			return "", fmt.Errorf("file path %q is outside workspace root %q", clean, absRoot)
+            		}
+            	}
+            	return clean, nil
+            ```
+
+            Replace with:
+
+            ```go
+            	clean, err := filepath.Abs(filepath.Clean(filePath))
+            	if err != nil {
+            		return "", fmt.Errorf("invalid file path: %w", err)
+            	}
+            	// L2: Resolve symlinks so in-workspace symlinks to out-of-workspace targets
+            	// do not bypass the prefix check. EvalSymlinks errors on non-existent paths;
+            	// fall back to lexical path to allow validation of not-yet-created files.
+            	if resolved, evalErr := filepath.EvalSymlinks(clean); evalErr == nil {
+            		clean = resolved
+            	}
+            	if rootDir != "" {
+            		absRoot, _ := filepath.Abs(rootDir)
+            		if resolvedRoot, evalErr := filepath.EvalSymlinks(absRoot); evalErr == nil {
+            			absRoot = resolvedRoot
+            		}
+            		if clean != absRoot && !strings.HasPrefix(clean, absRoot+string(filepath.Separator)) {
+            			return "", fmt.Errorf("file path %q is outside workspace root %q", clean, absRoot)
+            		}
+            	}
+            	return clean, nil
+            ```
+
+            ### Constraints
+
+            - Do NOT modify any file outside internal/tools/simulation.go,
+              internal/tools/helpers.go, internal/tools/session.go.
+            - Do NOT add new imports beyond what the replacements require
+              (all needed packages are already imported in these files).
+
+            ### Verification gate
+
+            ```
+            cd /Users/dayna.blackwell/code/agent-lsp
+            GOWORK=off go build ./internal/tools/...
+            GOWORK=off go vet ./internal/tools/...
+            GOWORK=off go test ./internal/tools/...
+            # Postconditions:
+            grep -n '_ = mgr\.Discard' internal/tools/simulation.go    # expect 0 matches
+            grep -c 'EvalSymlinks' internal/tools/helpers.go            # expect 2
+            grep -c 'multi-server' internal/tools/session.go            # expect >= 1
+            ```
+          files:
+            - internal/tools/simulation.go
+            - internal/tools/helpers.go
+            - internal/tools/session.go
+        - id: E
+          task: |
+            ## Agent E — internal/uri/uri.go + internal/session/manager.go: M3, L5
+
+            You are:
+            1. Finalizing internal/uri/uri.go (the scaffold is pre-created; verify/complete it).
+            2. Migrating internal/session/manager.go to use the shared uri package (M3, L5).
+            3. Updating internal/session/manager_test.go for the deleted local uriToPath.
+
+            ### Step 1 — Verify internal/uri/uri.go
+
+            The scaffold at internal/uri/uri.go should already contain URIToPath and
+            ApplyRangeEdit. Read the file and verify both functions are present and
+            correct. If the scaffold was not created, create it now with this content:
+
+            ```go
+            package uri
+
+            import (
+            	"net/url"
+            	"strings"
+
+            	"github.com/blackwell-systems/agent-lsp/internal/types"
+            )
+
+            // URIToPath converts a file:// URI to a local filesystem path,
+            // correctly decoding percent-encoded characters per RFC 3986.
+            func URIToPath(uri string) string {
+            	if u, err := url.Parse(uri); err == nil && u.Path != "" {
+            		return u.Path
+            	}
+            	if strings.HasPrefix(uri, "file://") {
+            		return uri[len("file://"):]
+            	}
+            	return uri
+            }
+
+            // ApplyRangeEdit applies a single range edit to content in-memory and
+            // returns the new content string. Canonical implementation shared by
+            // internal/lsp and internal/session (L5 deduplication).
+            func ApplyRangeEdit(content string, rng types.Range, newText string) string {
+            	lines := strings.Split(content, "\n")
+
+            	startLine := rng.Start.Line
+            	startChar := rng.Start.Character
+            	endLine := rng.End.Line
+            	endChar := rng.End.Character
+
+            	if startLine >= len(lines) {
+            		startLine = len(lines) - 1
+            	}
+            	if endLine >= len(lines) {
+            		endLine = len(lines) - 1
+            	}
+
+            	before := ""
+            	if startLine >= 0 && startLine < len(lines) {
+            		l := lines[startLine]
+            		if startChar > len(l) {
+            			startChar = len(l)
+            		}
+            		before = l[:startChar]
+            	}
+
+            	after := ""
+            	if endLine >= 0 && endLine < len(lines) {
+            		l := lines[endLine]
+            		if endChar > len(l) {
+            			endChar = len(l)
+            		}
+            		after = l[endChar:]
+            	}
+
+            	newLines := strings.Split(newText, "\n")
+            	newLines[0] = before + newLines[0]
+            	newLines[len(newLines)-1] += after
+
+            	result := make([]string, 0, len(lines)-(endLine-startLine)+len(newLines))
+            	result = append(result, lines[:startLine]...)
+            	result = append(result, newLines...)
+            	result = append(result, lines[endLine+1:]...)
+
+            	return strings.Join(result, "\n")
+            }
+            ```
+
+            ### Step 2 — Migrate internal/session/manager.go (M3, L5)
+
+            Add import alias for the uri package to avoid collision with the local
+            variable named `uri` that appears in a range loop in manager.go:
+
+            ```go
+            import (
+                internaluri "github.com/blackwell-systems/agent-lsp/internal/uri"
+            )
+            ```
+
+            Replace all calls to the local `uriToPath(` with `internaluri.URIToPath(`.
+            There are three call sites:
+            - Line ~128: `path := uriToPath(fileURI)` — replace with `path := internaluri.URIToPath(fileURI)`
+            - Line ~343 in the Commit method, inside a range loop: the loop variable is
+              named `uri` which would shadow the package import. The loop is:
+
+            ```go
+            		for uri, content := range session.Contents {
+            			path := uriToPath(uri)
+            ```
+
+            Rename the loop variable to `fileURI` and replace the call:
+
+            ```go
+            		for fileURI, content := range session.Contents {
+            			path := internaluri.URIToPath(fileURI)
+            ```
+
+            Update all uses of `uri` within that loop body to use `fileURI` instead
+            (check for `uri` references inside the loop block after the path line).
+
+            After replacing all call sites, delete the local uriToPath function
+            (lines ~485–495):
+
+            ```go
+            // uriToPath converts a file:// URI to a filesystem path,
+            // correctly decoding percent-encoded characters per RFC 3986.
+            func uriToPath(uri string) string {
+            	if u, err := url.Parse(uri); err == nil && u.Path != "" {
+            		return u.Path
+            	}
+            	if strings.HasPrefix(uri, "file://") {
+            		return uri[len("file://"):]
+            	}
+            	return uri
+            }
+            ```
+
+            Delete this entire function.
+
+            Check if `"net/url"` is still used in manager.go after deleting uriToPath.
+            Scan the whole file: url.URL{} may appear in other methods. If it does not
+            appear elsewhere, remove the net/url import. If it does, keep it.
+
+            ### Step 3 — Replace inline applyRangeEdit with delegation (L5)
+
+            Find the full applyRangeEdit function in manager.go:
+
+            ```go
+            // applyRangeEdit applies a range edit to content in-memory and returns the new content.
+            // Algorithm mirrors LSPClient.applyEditsToFile in internal/lsp/client.go.
+            // SYNC: if applyEditsToFile changes its line-splice logic, update this function too.
+            func applyRangeEdit(content string, rng types.Range, newText string) string {
+            ```
+
+            Replace the entire function body (keep the signature unchanged so callers
+            inside manager.go still compile) with a single delegation to internaluri:
+
+            ```go
+            // applyRangeEdit applies a range edit to content in-memory and returns the new content.
+            // Delegates to internaluri.ApplyRangeEdit — canonical shared implementation (L5).
+            func applyRangeEdit(content string, rng types.Range, newText string) string {
+            	return internaluri.ApplyRangeEdit(content, rng, newText)
+            }
+            ```
+
+            After this change verify that `strings` is still imported (it may be used
+            in other functions such as languageToExtension — check before removing).
+
+            ### Step 4 — Update manager_test.go
+
+            The test TestUriToPath_PercentDecoded calls the local `uriToPath` function
+            directly. After deletion of the local function this test will not compile.
+            Add the import alias and update the call:
+
+            In internal/session/manager_test.go, add the import:
+            ```go
+            internaluri "github.com/blackwell-systems/agent-lsp/internal/uri"
+            ```
+
+            Find (approximately line 559):
+            ```go
+            		got := uriToPath(tc.uri)
+            ```
+
+            Replace with:
+            ```go
+            		got := internaluri.URIToPath(tc.uri)
+            ```
+
+            Also update the test comment if it says "uriToPath" to refer to
+            "internaluri.URIToPath" for accuracy.
+
+            ### Constraints
+
+            - Do NOT modify internal/lsp/client.go (owned by Agent A).
+            - Do NOT define ApplyRangeEdit or URIToPath again in manager.go — they live
+              in internal/uri/uri.go. Only import and call them.
+            - Do NOT modify any file outside internal/uri/uri.go,
+              internal/session/manager.go, internal/session/manager_test.go.
+
+            ### Verification gate
+
+            ```
+            cd /Users/dayna.blackwell/code/agent-lsp
+            GOWORK=off go build ./internal/uri/... ./internal/session/...
+            GOWORK=off go vet ./internal/uri/... ./internal/session/...
+            GOWORK=off go test ./internal/uri/... ./internal/session/...
+            # Postconditions:
+            grep -n 'func uriToPath' internal/session/manager.go        # expect 0 matches
+            grep -c 'internaluri\.' internal/session/manager.go         # expect >= 3
+            grep -n 'SYNC:' internal/session/manager.go                 # expect 0 matches
+            grep -c 'func URIToPath' internal/uri/uri.go                # expect 1
+            grep -c 'func ApplyRangeEdit' internal/uri/uri.go           # expect 1
+            ```
+          files:
+            - internal/uri/uri.go
+            - internal/session/manager.go
+            - internal/session/manager_test.go
+        - id: F
+          task: |
+            ## Agent F — cmd/agent-lsp: H4, L1, L4
+
+            You are fixing three findings in cmd/agent-lsp/server.go and
+            cmd/agent-lsp/main.go.
+
+            ### H4 — LogMessage discards json.Marshal error; context.Background() documented
+
+            In cmd/agent-lsp/server.go, find:
+
+            ```go
+            func (s *mcpSessionSender) LogMessage(level, logger, message string) error {
+            	data, _ := json.Marshal(message)
+            	return s.ss.Log(context.Background(), &mcp.LoggingMessageParams{
+            		Level:  mcp.LoggingLevel(level),
+            		Logger: logger,
+            		Data:   json.RawMessage(data),
+            	})
+            }
+            ```
+
+            Replace with:
+
+            ```go
+            func (s *mcpSessionSender) LogMessage(level, logger, message string) error {
+            	// H4: LogMessage has no context parameter (interface constraint from
+            	// logging.SetServer). context.Background() is intentional: log sends
+            	// during shutdown may proceed after the main ctx is cancelled, which is
+            	// acceptable for best-effort diagnostic output.
+            	data, err := json.Marshal(message)
+            	if err != nil {
+            		// Fallback: encode an error description rather than sending JSON null.
+            		data, _ = json.Marshal(fmt.Sprintf("[marshal error: %v] %s", err, message))
+            	}
+            	return s.ss.Log(context.Background(), &mcp.LoggingMessageParams{
+            		Level:  mcp.LoggingLevel(level),
+            		Logger: logger,
+            		Data:   json.RawMessage(data),
+            	})
+            }
+            ```
+
+            Verify `"fmt"` is already imported in server.go (check the import block).
+            If not, add it.
+
+            ### L4 — toolArgsToMap discards json.Unmarshal error
+
+            In cmd/agent-lsp/server.go, find:
+
+            ```go
+            func toolArgsToMap(v interface{}) map[string]interface{} {
+            	data, err := json.Marshal(v)
+            	if err != nil {
+            		return map[string]interface{}{}
+            	}
+            	m := map[string]interface{}{}
+            	_ = json.Unmarshal(data, &m)
+            	return m
+            }
+            ```
+
+            Replace with:
+
+            ```go
+            func toolArgsToMap(v interface{}) map[string]interface{} {
+            	data, err := json.Marshal(v)
+            	if err != nil {
+            		return map[string]interface{}{}
+            	}
+            	m := map[string]interface{}{}
+            	if err := json.Unmarshal(data, &m); err != nil {
+            		// This should not happen in practice (Marshal produced valid JSON).
+            		// Return empty map so callers receive field-required errors, not panics.
+            		logging.Log(logging.LevelDebug, fmt.Sprintf("toolArgsToMap: unmarshal error: %v", err))
+            		return map[string]interface{}{}
+            	}
+            	return m
+            }
+            ```
+
+            ### L1 — runWithRecovery panic leaves runErr = nil, process exits 0
+
+            In cmd/agent-lsp/main.go, find the recover block inside runWithRecovery:
+
+            ```go
+            	defer func() {
+            		if r := recover(); r != nil {
+            			logging.Log(logging.LevelError, fmt.Sprintf("panic recovered: %v", r))
+            			// Attempt graceful shutdown after panic.
+            			shutdownCtx, cancel := context.WithTimeout(context.Background(), gracefulShutdownTimeout)
+            			defer cancel()
+            			_ = resolver.Shutdown(shutdownCtx)
+            		}
+            	}()
+            ```
+
+            Replace with:
+
+            ```go
+            	defer func() {
+            		if r := recover(); r != nil {
+            			logging.Log(logging.LevelError, fmt.Sprintf("panic recovered: %v", r))
+            			// L1: Set runErr so the caller exits with code 1.
+            			// Without this, process supervisors with restart-on-nonzero policies
+            			// will not restart the process after a panic.
+            			runErr = fmt.Errorf("panic: %v", r)
+            			// Attempt graceful shutdown after panic.
+            			shutdownCtx, cancel := context.WithTimeout(context.Background(), gracefulShutdownTimeout)
+            			defer cancel()
+            			_ = resolver.Shutdown(shutdownCtx)
+            		}
+            	}()
+            ```
+
+            The named return variable `runErr` is already declared in the function
+            signature `func runWithRecovery(...) (runErr error)`. Do NOT change the
+            function signature.
+
+            ### Constraints
+
+            - Do NOT modify any file outside cmd/agent-lsp/server.go and
+              cmd/agent-lsp/main.go.
+            - Do NOT change the signature of runWithRecovery or LogMessage.
+
+            ### Verification gate
+
+            ```
+            cd /Users/dayna.blackwell/code/agent-lsp
+            GOWORK=off go build ./cmd/...
+            GOWORK=off go vet ./cmd/...
+            GOWORK=off go test ./cmd/...
+            # Postconditions:
+            grep -c 'marshal error' cmd/agent-lsp/server.go         # expect >= 1
+            grep -n '_ = json\.Unmarshal' cmd/agent-lsp/server.go  # expect 0 matches
+            grep -c 'runErr = fmt\.Errorf' cmd/agent-lsp/main.go   # expect 1
+            ```
+          files:
+            - cmd/agent-lsp/server.go
+            - cmd/agent-lsp/main.go
+    - number: 2
+      agents:
+        - id: A2
+          task: |
+            ## Agent A2 — internal/lsp/client_test.go: L3 test rename
+
+            You are updating internal/lsp/client_test.go to use the renamed method
+            isDocumentOpen (was IsDocumentOpen, now unexported per L3 fix in Wave 1).
+
+            Agent A (Wave 1) renamed IsDocumentOpen to isDocumentOpen in client.go.
+            client_test.go is in package lsp (same package), so the unexported name
+            is accessible from tests. Update both call sites.
+
+            Find (first occurrence, approximately line 185):
+            ```go
+            	if !c.IsDocumentOpen("file:///foo.go") {
+            		t.Error("expected document to be open")
+            	}
+            ```
+
+            Replace with:
+            ```go
+            	if !c.isDocumentOpen("file:///foo.go") {
+            		t.Error("expected document to be open")
+            	}
+            ```
+
+            Find (second occurrence, approximately line 203):
+            ```go
+            	if c.IsDocumentOpen("file:///foo.go") {
+            		t.Error("expected document to be closed")
+            	}
+            ```
+
+            Replace with:
+            ```go
+            	if c.isDocumentOpen("file:///foo.go") {
+            		t.Error("expected document to be closed")
+            	}
+            ```
+
+            No other changes are needed in client_test.go.
+
+            ### Constraints
+
+            - Do NOT modify internal/lsp/client.go — that file was modified by Agent A
+              in Wave 1 and is already merged.
+            - Do NOT modify any file outside internal/lsp/client_test.go.
+            - The unexported name isDocumentOpen is accessible because the test file
+              is in package lsp (not package lsp_test).
+
+            ### Verification gate
+
+            ```
+            cd /Users/dayna.blackwell/code/agent-lsp
+            GOWORK=off go build ./internal/lsp/...
+            GOWORK=off go test ./internal/lsp/... -run TestLSPClient_OpenClose
+            # Postconditions:
+            grep -n 'IsDocumentOpen' internal/lsp/client_test.go    # expect 0 matches
+            grep -c 'isDocumentOpen' internal/lsp/client_test.go    # expect 2
+            ```
+          files:
+            - internal/lsp/client_test.go
+          dependencies:
+            - A
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+scaffolds:
+    - file_path: internal/uri/uri.go
+      contents: |
+        package uri
+
+        import (
+            "net/url"
+            "strings"
+
+            "github.com/blackwell-systems/agent-lsp/internal/types"
+        )
+
+        // URIToPath converts a file:// URI to a local filesystem path,
+        // correctly decoding percent-encoded characters per RFC 3986.
+        // Canonical implementation shared by internal/lsp and internal/session (M3).
+        func URIToPath(uri string) string {
+            if u, err := url.Parse(uri); err == nil && u.Path != "" {
+                return u.Path
+            }
+            if strings.HasPrefix(uri, "file://") {
+                return uri[len("file://"):]
+            }
+            return uri
+        }
+
+        // ApplyRangeEdit applies a single range edit to content in-memory and
+        // returns the new content string. Canonical implementation shared by
+        // internal/lsp and internal/session (L5 deduplication).
+        func ApplyRangeEdit(content string, rng types.Range, newText string) string {
+            lines := strings.Split(content, "\n")
+
+            startLine := rng.Start.Line
+            startChar := rng.Start.Character
+            endLine := rng.End.Line
+            endChar := rng.End.Character
+
+            if startLine >= len(lines) {
+                startLine = len(lines) - 1
+            }
+            if endLine >= len(lines) {
+                endLine = len(lines) - 1
+            }
+
+            before := ""
+            if startLine >= 0 && startLine < len(lines) {
+                l := lines[startLine]
+                if startChar > len(l) {
+                    startChar = len(l)
+                }
+                before = l[:startChar]
+            }
+
+            after := ""
+            if endLine >= 0 && endLine < len(lines) {
+                l := lines[endLine]
+                if endChar > len(l) {
+                    endChar = len(l)
+                }
+                after = l[endChar:]
+            }
+
+            newLines := strings.Split(newText, "\n")
+            newLines[0] = before + newLines[0]
+            newLines[len(newLines)-1] += after
+
+            result := make([]string, 0, len(lines)-(endLine-startLine)+len(newLines))
+            result = append(result, lines[:startLine]...)
+            result = append(result, newLines...)
+            result = append(result, lines[endLine+1:]...)
+
+            return strings.Join(result, "\n")
+        }
+      import_path: github.com/blackwell-systems/agent-lsp/internal/uri
+      status: committed
+pre_mortem:
+    overall_risk: medium
+    rows:
+        - scenario: |
+            Agent A replaces all uriToPath( calls with uri.URIToPath( but misses one
+            occurrence (e.g., inside applyEditsToFile before the loop), causing a
+            compile error ("undefined: uriToPath").
+          likelihood: medium
+          impact: high
+          mitigation: |
+            Agent A's verification gate greps for 'func uriToPath' (expect 0) and
+            'uri\.URIToPath' (expect >= 5). The build gate catches any missed site.
+            Agent should search the entire file, not just the known line numbers.
+        - scenario: |
+            Agent E's range loop variable `uri` at line ~343 shadows the internaluri
+            package import, causing either a compile error or silently using the wrong
+            variable in the URIToPath call.
+          likelihood: high
+          impact: high
+          mitigation: |
+            Agent E's task prescribes renaming the loop variable to fileURI before
+            replacing the uriToPath call. The build step catches shadowing compile errors.
+            Agent must also check all uses of the old `uri` variable inside the loop body.
+        - scenario: |
+            The scaffold internal/uri/uri.go is not created before Wave 1 agents launch.
+            Agents A and E fail to compile because the import path does not exist.
+          likelihood: low
+          impact: high
+          mitigation: |
+            Scaffold is listed in scaffolds[] with file_path internal/uri/uri.go.
+            The orchestrator creates scaffolds before dispatching Wave 1. Do not skip
+            the scaffold creation step.
+        - scenario: |
+            Agent A's L5 fix changes the edit accumulation strategy from a lines-slice
+            to per-edit content-string calls. If ApplyRangeEdit has a subtle difference
+            in clamping behavior vs the old loop, test failures will appear.
+          likelihood: low
+          impact: medium
+          mitigation: |
+            The canonical ApplyRangeEdit in internal/uri/uri.go is verbatim from the
+            tested applyRangeEdit in session/manager.go. The existing LSP client tests
+            will catch any behavioral divergence before merge.
+        - scenario: |
+            Agent F sets runErr in the recover block but the function signature is
+            accidentally changed to non-named return, making `runErr = ...` a compile
+            error.
+          likelihood: low
+          impact: low
+          mitigation: |
+            Agent F's task explicitly states "do NOT change the function signature".
+            The build gate catches the error immediately.
+        - scenario: |
+            Agent A2 updates client_test.go to use isDocumentOpen, but Agent A's
+            client.go worktree is not yet merged when A2's worktree compiles. The
+            unexported isDocumentOpen does not exist in A2's worktree, causing a
+            build failure.
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Both A and A2 are in Wave 1 with isolated worktrees. A2's worktree will
+            not see A's rename in isolation. However, A2's worktree still has the
+            original IsDocumentOpen (exported) — the rename to isDocumentOpen only
+            breaks A2 if A's changes are already applied. To handle this: A2's
+            verification gate should build with the current file state. Since A2's
+            worktree starts from main (before A's changes), IsDocumentOpen still
+            exists as the exported form and isDocumentOpen does not yet — A2's task
+            only renames test calls, which means isDocumentOpen won't resolve in A2's
+            isolated worktree.
+
+            Resolution: Move A2 to Wave 2 so it runs after A merges. A2's task is
+            trivial (2-line rename) and does not need parallelism with A. This is
+            the correct sequencing since A2 depends on A's rename being visible.
+known_issues:
+    - title: finalize-scout false-positive test cascade and wave_structure errors
+      description: |
+        sawtools finalize-scout reports test_cascade errors for stdlib "strings" package
+        (sawtools matches the word "strings" in agent task prompts and then finds it in
+        all test files across the repo — this is a false positive; no agent changes the
+        stdlib strings package). Similarly, "uri" is flagged as a cascade because agent E
+        creates internal/uri, but the test file matches are local variables named `uri`,
+        not imports of the new package. The wave_structure errors for "fileURI", "uriToPath",
+        "strings", and "uri" are similarly false positives from the pattern matcher.
+        These do not represent real inter-agent dependencies or test cascade risks.
+        The schema validation step (step 1) passed with 0 errors.
+    - title: V048 LOC budget exceeded for internal/lsp/client.go
+      description: |
+        internal/lsp/client.go has 2248 lines and exceeds the 2000-line agent ownership
+        budget (V048). It is a pre-existing large file that cannot be split into multiple
+        files because all findings (C1, C2, H1, H2, M1, L3, M3, L5) live in different
+        methods scattered throughout the file. The agent (A) makes targeted edits to
+        ~8 distinct locations rather than a wholesale rewrite. This is a known V048
+        exemption: file cannot be split, changes are necessary, and the agent scope
+        (8 distinct method edits) is well-defined.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        A2:
+            agent_id: A2
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+        E:
+            agent_id: E
+            verdict: PASS
+            issues:
+                - check: symbol_accuracy
+                  severity: warning
+                  description: 'Brief states there are three call sites for uriToPath() in manager.go, but only two exist: line 128 (uriToPath(fileURI)) and line 343 (uriToPath(uri)). The function definition at line 487 was counted as a third call site. The instruction to replace all occurrences is correct and complete; the miscounted total does not cause execution failure.'
+                  file: internal/session/manager.go
+                  symbol: uriToPath
+        F:
+            agent_id: F
+            verdict: PASS
+    summary: 'All agent briefs verified against the codebase. File existence checks pass: all action:modify files exist; internal/uri/uri.go does not exist (action:new, correct). Symbol accuracy checks pass for all agents: LSPClient struct fields (openDocs, diags, legendTypes, legendModifiers, watcherStop) match exactly; Restart, startWatcher, stopWatcher, applyDocumentChanges, applyEditsToFile, AddWorkspaceFolder, IsDocumentOpen, uriToPath, applyRangeEdit all exist with signatures matching brief descriptions; diagnostics.go WaitForDiagnostics notify arm matches find pattern; simulation.go Discard swallow sites match; helpers.go ValidateFilePath body matches; session.go HandleRestartLspServer return statement matches; server.go LogMessage and toolArgsToMap match; main.go runWithRecovery recover block matches. One advisory: Agent E brief states ''three call sites'' for uriToPath in manager.go but only two exist (lines 128 and 343); the function definition at line 487 was miscounted. Agent is instructed to replace ''all calls'' so this does not cause execution failure. No import cycle: internal/uri imports only net/url, strings, internal/types — no dependency on internal/lsp or internal/session. logging and fmt already imported in all files that need them (manager.go, server.go). No disjoint ownership violations. Zero error-severity issues found.'
+    reviewed_at: "2026-04-10T03:40:45Z"
+    issue_count: 1
+state: SCOUT_PENDING
+original_branch: main
