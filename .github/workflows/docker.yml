@@ -94,10 +94,7 @@ jobs:
             lsp_package: intelephense
             lsp_binary: intelephense
             package_mgr: npm
-          - lang: dart
-            lsp_package: dart
-            lsp_binary: dart
-            package_mgr: apt
+          # dart: not in standard bookworm repos; use LSP_SERVERS=dart at runtime
 
     steps:
       - uses: actions/checkout@v4
@@ -169,8 +166,19 @@ jobs:
           FROM ghcr.io/blackwell-systems/agent-lsp:${BASE_TAG}
           ARG NPM_PACKAGES
           ARG GO_PACKAGES
-          RUN if [ -n "$NPM_PACKAGES" ]; then npm install -g $NPM_PACKAGES; fi
-          RUN if [ -n "$GO_PACKAGES" ]; then go install $GO_PACKAGES; fi
+          RUN if [ -n "${NPM_PACKAGES}" ]; then \
+                apt-get update && apt-get install -y --no-install-recommends nodejs npm && \
+                npm install -g ${NPM_PACKAGES} && \
+                rm -rf /var/lib/apt/lists/*; \
+              fi
+          RUN if [ -n "${GO_PACKAGES}" ]; then \
+                LATEST_GO=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -1) && \
+                curl -fsSL "https://dl.google.com/go/${LATEST_GO}.linux-amd64.tar.gz" -o /tmp/go.tar.gz && \
+                tar -C /usr/local -xzf /tmp/go.tar.gz && \
+                rm /tmp/go.tar.gz && \
+                GOPATH=/usr/local /usr/local/go/bin/go install ${GO_PACKAGES}; \
+              fi
+          ENV PATH=$PATH:/usr/local/go/bin
           DOCKERFILE
 
           docker buildx build \

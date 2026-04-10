@@ -1,8 +1,0 @@
-{
-  "testCommand": "GOWORK=off go test ./internal/... ./cmd/...",
-  "lintCommand": "GOWORK=off go vet ./...",
-  "buildCommand": "GOWORK=off go build ./...",
-  "repos": [
-    {"name": "agent-lsp", "path": "/Users/dayna.blackwell/code/agent-lsp"}
-  ]
-}

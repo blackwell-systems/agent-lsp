@@ -28,3 +28,6 @@ test/fixtures/swift/.build/
 
 # SAW state files generated during wave execution
 docs/IMPL/.saw-state/
+
+# SAW local config (contains machine-specific absolute paths)
+saw.config.json

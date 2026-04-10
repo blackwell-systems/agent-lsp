@@ -23,13 +23,17 @@ RUN npm install -g \
     @prisma/language-server \
     && npm cache clean --force
 
-# Go + gopls
-RUN apt-get update && apt-get install -y --no-install-recommends golang-go \
-    && GOPATH=/usr/local go install golang.org/x/tools/gopls@latest \
-    && rm -rf /var/lib/apt/lists/*
+# Go + gopls (bookworm's golang-go is too old for gopls; install from go.dev)
+RUN LATEST_GO=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -1) \
+    && curl -fsSL "https://dl.google.com/go/${LATEST_GO}.linux-amd64.tar.gz" -o /tmp/go.tar.gz \
+    && tar -C /usr/local -xzf /tmp/go.tar.gz \
+    && rm /tmp/go.tar.gz \
+    && GOPATH=/usr/local /usr/local/go/bin/go install golang.org/x/tools/gopls@latest
 
-# Ruby + solargraph
-RUN apt-get update && apt-get install -y --no-install-recommends ruby-full \
+ENV PATH=$PATH:/usr/local/go/bin
+
+# Ruby + solargraph (build-essential needed for prism native C extension)
+RUN apt-get update && apt-get install -y --no-install-recommends ruby-full build-essential \
     && gem install solargraph \
     && rm -rf /var/lib/apt/lists/*
 
@@ -37,10 +41,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends ruby-full \
 RUN apt-get update && apt-get install -y --no-install-recommends clangd \
     && rm -rf /var/lib/apt/lists/*
 
-# .NET + csharp-ls
-RUN apt-get update && apt-get install -y --no-install-recommends dotnet-sdk-8.0 \
+# .NET + csharp-ls (dotnet-sdk-8.0 requires Microsoft apt repository)
+RUN curl -fsSL https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -o /tmp/ms-prod.deb \
+    && dpkg -i /tmp/ms-prod.deb \
+    && rm /tmp/ms-prod.deb \
+    && apt-get update && apt-get install -y --no-install-recommends dotnet-sdk-8.0 \
     && dotnet tool install -g csharp-ls \
     && rm -rf /var/lib/apt/lists/*
+
+ENV PATH=$PATH:/root/.dotnet/tools
 
 # The following language servers require platform-specific installation and are
 # NOT included in the full image. Use LSP_SERVERS or install manually:
