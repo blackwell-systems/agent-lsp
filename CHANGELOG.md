@@ -5,6 +5,20 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed (2026-04-10) — Inspector-surfaced bugs and quality fixes
+
+#### Errors fixed
+- **Panic recovery in long-lived goroutines** — `readLoop` and `startWatcher` goroutines had no `recover()`. A panic in `dispatch()` or `fsnotify` would terminate the entire process; `runWithRecovery` in main cannot catch goroutine panics. Both goroutines now have a deferred recovery that logs the panic and stack trace at error level and returns, keeping the server alive.
+- **`Run()` decomposed from 832 to 379 lines** — The monolithic `Run()` function in `cmd/agent-lsp/server.go` held ~50 tool registrations, inline arg struct definitions, resource handlers, diagnostic subscription, and transport startup as a single untestable unit. Extracted into four themed registration files: `tools_navigation.go` (10 tools), `tools_analysis.go` (13 tools), `tools_workspace.go` (19 tools), `tools_session.go` (8 tools), each taking a `toolDeps` struct.
+- **`normalize_test.go` was asserting broken behavior** — `TestNormalizeDocumentSymbols_SymbolInformationVariant` used `_ = root.Children` to silence a failing assertion, masking the bug and preventing regression detection. Updated to assert `len(root.Children) == 1` and `root.Children[0].Name == "MyField"`.
+
+#### Warnings fixed
+- **Duplicate extension→languageID mapping** — `langIDFromPath` in `change_impact.go` and `inferLanguageID` in `manager.go` both mapped file extensions to LSP language IDs with different coverage (`.cs`, `.hs`, `.rb` were silently labeled `"plaintext"` in impact reports). Replaced with a single exported `lsp.LanguageIDFromPath` function covering all extensions; `langIDFromPath` removed.
+- **Duplicate URI-to-path conversion** — `tools.URIToFilePath` duplicated the logic in `uri.URIToPath` with different error behavior. `URIToFilePath` now delegates to `uri.URIToPath`, preserving the `(string, error)` signature.
+- **Bare error returns in session manager** — `Discard` and `Destroy` returned bare `err` from `GetSession`, losing call-site context. Wrapped as `fmt.Errorf("discard: %w", err)` and `fmt.Errorf("destroy: %w", err)`.
+- **`waitForWorkspaceReady` could block indefinitely** — The cond var refactor (audit-6 L2) introduced a bug: the 60s deadline was only checked after `cond.Wait()` returned, but if gopls dropped a progress token without emitting the corresponding `end` notification, `Wait()` never returned. Added a timer goroutine that broadcasts at the deadline, guaranteeing the wait unblocks.
+- **gopls inherited shell `GOWORK` env var** — `exec.Command` inherits the full parent environment; a `GOWORK` value pointing at a different workspace caused gopls to fail package metadata loading for the target repo. The subprocess environment now has `GOWORK` stripped via `removeEnv`, letting gopls discover the correct go.work naturally from `root_dir`.
+
 ### Added (2026-04-10) — Three new MCP tools for code-impact analysis
 
 #### `get_change_impact`
