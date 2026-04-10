@@ -4,36 +4,36 @@
 
 | Language | Language Server | Status |
 |---|---|---|
-| TypeScript | typescript-language-server | ✅ passing |
-| Python | pyright-langserver | ✅ passing |
-| Go | gopls | ✅ passing |
-| Rust | rust-analyzer | ✅ passing |
-| Java | jdtls | ⚠️ flaky (cold-start indexing) |
-| C | clangd | ✅ passing |
-| PHP | intelephense | ✅ passing |
-| C++ | clangd | ✅ passing |
-| JavaScript | typescript-language-server | ✅ passing |
-| Ruby | solargraph | ✅ passing |
-| YAML | yaml-language-server | ✅ passing |
-| JSON | vscode-json-language-server | ✅ passing |
-| Dockerfile | docker-langserver | ✅ passing |
-| C# | csharp-ls | ✅ passing |
-| Kotlin | kotlin-language-server | ✅ passing |
-| Lua | lua-language-server | ✅ passing |
-| Swift | sourcekit-lsp | ✅ passing (macos-latest runner) |
-| Zig | zls | ✅ passing |
-| CSS | vscode-css-language-server | ✅ passing |
-| HTML | vscode-html-language-server | ✅ passing |
-| Terraform | terraform-ls | ✅ passing |
-| Scala | metals | ⚠️ best-effort (cold-start; continue-on-error CI job) |
-| Gleam | gleam (built-in lsp) | ✅ passing |
-| Elixir | elixir-ls | ⚠️ best-effort (continue-on-error CI job) |
-| Prisma | prisma-language-server | 🔍 investigating (continue-on-error; server requires VS Code extension host) |
-| SQL | sqls | ✅ passing (postgres:16 service container) |
-| Clojure | clojure-lsp | ✅ passing |
-| Nix | nil | ✅ passing |
-| Dart | dart language-server | ✅ passing |
-| MongoDB | mongodb-language-server | 🔍 investigating (continue-on-error; server bundled in VS Code extension, not published standalone) |
+| TypeScript | typescript-language-server | passing |
+| Python | pyright-langserver | passing |
+| Go | gopls | passing |
+| Rust | rust-analyzer | passing |
+| Java | jdtls | flaky (cold-start indexing) |
+| C | clangd | passing |
+| PHP | intelephense | passing |
+| C++ | clangd | passing |
+| JavaScript | typescript-language-server | passing |
+| Ruby | solargraph | passing |
+| YAML | yaml-language-server | passing |
+| JSON | vscode-json-language-server | passing |
+| Dockerfile | docker-langserver | passing |
+| C# | csharp-ls | passing |
+| Kotlin | kotlin-language-server | passing |
+| Lua | lua-language-server | passing |
+| Swift | sourcekit-lsp | passing (macos-latest runner) |
+| Zig | zls | passing |
+| CSS | vscode-css-language-server | passing |
+| HTML | vscode-html-language-server | passing |
+| Terraform | terraform-ls | passing |
+| Scala | metals | best-effort (cold-start; continue-on-error CI job) |
+| Gleam | gleam (built-in lsp) | passing |
+| Elixir | elixir-ls | best-effort (continue-on-error CI job) |
+| Prisma | prisma-language-server | investigating (continue-on-error; server requires VS Code extension host) |
+| SQL | sqls | passing (postgres:16 service container) |
+| Clojure | clojure-lsp | passing |
+| Nix | nil | passing |
+| Dart | dart language-server | passing |
+| MongoDB | mongodb-language-server | investigating (continue-on-error; server bundled in VS Code extension, not published standalone) |
 
 ---
 

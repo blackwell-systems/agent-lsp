@@ -2501,7 +2501,7 @@ etc.) whose range contains a given cursor position. Composes
 - `findInnermostSymbol` walks the DocumentSymbol tree recursively and returns the deepest symbol whose range contains the cursor — so clicking inside a method body returns the method, not the enclosing class.
 - `start_line` and `end_line` are 1-based.
 - Provide `line`+`character`, or `position_pattern` with `@@` — at least one position input is required.
-- CI-verified across all 25 languages via `testGetSymbolSource`.
+- CI-verified across all 30 languages via `testGetSymbolSource`.
 
 ---
 

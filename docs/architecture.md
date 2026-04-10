@@ -8,7 +8,10 @@ agent-lsp is a [Model Context Protocol](https://modelcontextprotocol.io/) server
 
 ```
 cmd/agent-lsp/
-  main.go               ← CLI entrypoint; argument parsing, signal handling, panic recovery
+  main.go               ← CLI entrypoint; argument parsing, signal handling, panic recovery;
+                           --version flag prints Version (injected by GoReleaser, falls back to "dev")
+  version.go            ← var Version = "dev"; set at build time via -ldflags="-X main.Version=x.y.z"
+  doc.go                ← package-level doc comment
   server.go             ← MCP server construction; tool/resource registration; mcpSessionSender
                            (tool registration was extracted from server.go in a decomposition wave;
                            server.go now delegates to the four tool files below)
@@ -103,6 +106,26 @@ internal/logging/
 internal/extensions/
   registry.go      ← ExtensionRegistry; Activate, RegisterFactory, GetToolHandlers, etc.
 
+pkg/
+  lsp/
+    lsp.go         ← type aliases re-exporting internal/lsp types (LSPClient, ServerManager,
+                     ClientResolver, Position, etc.)
+    lsp_test.go    ← smoke tests verifying alias targets are non-nil
+    doc.go         ← package-level doc comment
+  session/
+    session.go     ← type aliases re-exporting internal/session types (SessionManager,
+                     SimulationSession, SessionStatus, etc.)
+    session_test.go ← smoke tests verifying alias targets are non-nil
+    doc.go         ← package-level doc comment
+  types/
+    types.go       ← (empty; types provided via alias from lsp and session packages)
+    types_test.go  ← smoke tests verifying alias targets are non-nil
+    doc.go         ← package-level doc comment
+
+All 8 non-config internal packages (`lsp`, `session`, `tools`, `resources`, `types`, `uri`,
+`logging`, `extensions`) have a `doc.go` with a package-level doc comment. `internal/config`
+uses inline file-level comments instead.
+
 skills/            ← Agent Skills (SKILL.md directories)
   install.sh       ← Installer: symlinks or copies skill dirs to ~/.claude/skills/
   lsp-verify/      ← Three-layer verification (diagnostics + build + tests)
@@ -142,6 +165,11 @@ The `pkg/` packages contain no logic; they are purely re-export layers. All
 implementation lives in `internal/`. This design keeps the public surface
 minimal and allows the internal implementation to evolve without breaking
 external callers as long as the alias targets are preserved.
+
+Each `pkg/` package includes a smoke test (`lsp_test.go`, `session_test.go`,
+`types_test.go`) that verifies alias targets are non-nil at compile time. This
+ensures the re-export layer stays consistent with `internal/` as the
+implementation evolves.
 
 ### Layer rules
 
