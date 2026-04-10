@@ -5,6 +5,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (2026-04-10) — Architecture diagram
+
+- `docs/architecture.drawio` — draw.io diagram of the full system: MCP client → server.go (toolDeps) → 4 tool registration files → internal/tools handlers → internal/lsp client layer → gopls subprocess. Includes internal/session, leaf packages, and layer rule annotation.
+
 ### Fixed (2026-04-10) — Inspector audit-7: 11 bugs and quality improvements
 
 #### Security
