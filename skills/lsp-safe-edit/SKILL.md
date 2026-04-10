@@ -1,7 +1,7 @@
 ---
 name: lsp-safe-edit
 description: Wrap any code edit with before/after diagnostic comparison. Speculatively previews the change first (simulate_edit_atomic), then applies to disk only if the error delta is acceptable. If post-edit errors appear, surfaces code actions for quick fixes. Handles single and multi-file edits.
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_diagnostics mcp__lsp__simulate_edit_atomic mcp__lsp__get_code_actions mcp__lsp__format_document mcp__lsp__apply_edit Edit Write Bash
+allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_diagnostics mcp__lsp__simulate_edit_atomic mcp__lsp__simulate_chain mcp__lsp__get_code_actions mcp__lsp__format_document mcp__lsp__apply_edit Edit Write Bash
 ---
 
 > Requires the agent-lsp MCP server.
@@ -83,6 +83,54 @@ deltas. If any file shows `net_delta > 0`, pause before continuing.
 
 **When to skip Step 3:** If the intended change is a new file (Write), there is
 no existing file to simulate against. Skip to Step 4.
+
+### Step 3b — Refactor preview with simulate_chain (renames and signature changes)
+
+Use this step **instead of or after** Step 3 when the change is a rename,
+signature change, or any edit with dependent follow-on edits (e.g., updating
+all call sites after adding a parameter).
+
+`simulate_chain` applies a sequence of speculative edits in-memory and reports
+whether the cumulative change is safe — without touching disk:
+
+```
+mcp__lsp__simulate_chain({
+  "workspace_root": "/abs/path/to/workspace",
+  "language": "go",
+  "edits": [
+    {
+      "file_path": "/abs/path/to/file.go",
+      "start_line": <N>, "start_column": <col>,
+      "end_line": <N>,   "end_column": <col>,
+      "new_text": "<replacement>"
+    },
+    // additional dependent edits (e.g. call site updates) ...
+  ]
+})
+```
+
+Returns:
+- `cumulative_delta` — net error change across all steps
+- `safe_to_apply_through_step` — how many steps are safe to apply in sequence
+
+**Decision:**
+
+| `cumulative_delta` | `safe_to_apply_through_step` | Action |
+|--------------------|------------------------------|--------|
+| ≤ 0 | = total steps | All steps safe. Proceed to Step 4. |
+| ≤ 0 | < total steps | Safe up to that step. Review remaining steps. |
+| > 0 | any | Net regression. Report to user before proceeding. |
+
+**When to use Step 3b:**
+- Renaming an exported symbol and updating its call sites
+- Adding/removing a parameter and updating all callers
+- Any multi-file refactor where edits are order-dependent
+
+**When to skip Step 3b:**
+- Simple in-place edits with no dependent follow-on edits (Step 3 is sufficient)
+- New file creation (no existing text to simulate against)
+
+See `docs/refactor-preview.md` for worked examples.
 
 ### Step 4 — Apply the edit to disk
 

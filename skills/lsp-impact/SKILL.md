@@ -1,27 +1,60 @@
 ---
 name: lsp-impact
-description: Blast-radius analysis for a symbol — shows all callers, type supertypes/subtypes, and reference count before you change it. Use when refactoring, deleting, or changing the signature of any function, type, or method.
-argument-hint: "[symbol-name]"
-allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__call_hierarchy mcp__lsp__type_hierarchy mcp__lsp__get_references mcp__lsp__get_server_capabilities
+description: Blast-radius analysis for a symbol or file — shows all callers, type supertypes/subtypes, and reference count before you change it. Use when refactoring, deleting, or changing the signature of any function, type, or method. Also accepts a file path to surface all exported-symbol impact in one shot.
+argument-hint: "[symbol-name | file-path]"
+allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__call_hierarchy mcp__lsp__type_hierarchy mcp__lsp__get_references mcp__lsp__get_server_capabilities mcp__lsp__get_change_impact
 ---
 
 > Requires the agent-lsp MCP server.
 
 # lsp-impact
 
-Blast-radius analysis for any symbol. Discovers all direct references, callers
-(via call hierarchy), and type relationships before you touch anything.
+Blast-radius analysis for any symbol or file. Discovers all direct references,
+callers (via call hierarchy), and type relationships before you touch anything.
 Read-only — does not modify any files.
 
 Run this skill **before** lsp-edit-export: impact tells you what exists and how
 widespread the change is; lsp-edit-export tells you how to execute the change safely.
 
-**Invocation:** User provides `symbol_name` in dot notation (e.g. `"codec.Encode"`,
-`"Buffer.Reset"`). Optionally provide `workspace_root` to scope the search.
+**Invocation:**
+- **File path** (e.g. `"internal/lsp/client.go"`) → use the File-level entry (Step 0) to surface all exported-symbol impact at once.
+- **Symbol name** in dot notation (e.g. `"codec.Encode"`, `"Buffer.Reset"`) → skip to Step 1.
 
 ---
 
-## Prerequisites
+## Step 0 — File-level entry (when user provides a file path)
+
+Use this shortcut when the user is changing or auditing an entire file rather
+than a single symbol. `get_change_impact` enumerates all exported symbols in
+the file, resolves their references, and returns test callers (with enclosing
+test function names) and non-test callers in a single call.
+
+```
+mcp__lsp__get_change_impact({
+  "changed_files": ["/abs/path/to/file.go"],
+  "follow_transitive": false   // set true to surface second-order callers
+})
+```
+
+Returns:
+- `affected_symbols` — each exported symbol with its reference count
+- `test_callers` — test files + enclosing test function names
+- `non_test_callers` — production call sites
+
+**Decision after Step 0:**
+
+| Result | Action |
+|--------|--------|
+| 0 non-test callers | Low blast radius. Proceed with change. |
+| Few callers, known files | Medium risk. Update each call site. |
+| Many callers across packages | High risk. Consider staged rollout. |
+| Want symbol-level detail | Continue to Steps 1–5 for any specific symbol. |
+
+Skip Steps 1–5 if the file-level summary is sufficient.
+
+---
+
+## Prerequisites (for symbol-level Steps 1–5)
 
 If LSP is not yet initialized, call `mcp__lsp__start_lsp` with the workspace
 root first.
