@@ -52,14 +52,8 @@ type logSender interface {
 }
 
 func init() {
-	// Initialize level from LOG_LEVEL env var.
-	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
-		if _, ok := logLevelPriority[envLevel]; ok {
-			currentLevel = envLevel
-		} else {
-			initWarning = fmt.Sprintf("agent-lsp: invalid LOG_LEVEL %q, defaulting to \"info\"\n", envLevel)
-		}
-	}
+	// Level initialization is performed by SetLevelFromEnv(), called
+	// explicitly at binary startup. This init() is intentionally a no-op.
 }
 
 // SetServer stores a reference to the MCP server notification sender.
@@ -87,6 +81,20 @@ func SetLevel(level string) {
 	mu.Lock()
 	defer mu.Unlock()
 	currentLevel = level
+}
+
+// SetLevelFromEnv reads LOG_LEVEL from the environment and applies it
+// via SetLevel. Call this explicitly at binary startup instead of relying
+// on init(). Emits a warning to stderr if LOG_LEVEL is set to an
+// unrecognized value.
+func SetLevelFromEnv() {
+	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
+		if _, ok := logLevelPriority[envLevel]; ok {
+			SetLevel(envLevel)
+		} else {
+			fmt.Fprintf(os.Stderr, "agent-lsp: invalid LOG_LEVEL %q, defaulting to \"info\"\n", envLevel)
+		}
+	}
 }
 
 // Log emits a log message at the given level.
