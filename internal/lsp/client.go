@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -238,6 +239,11 @@ func (c *LSPClient) drainStderr(r io.Reader) {
 
 // readLoop reads and dispatches all incoming messages.
 func (c *LSPClient) readLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			logging.Log(logging.LevelError, fmt.Sprintf("readLoop panic: %v\n%s", r, debug.Stack()))
+		}
+	}()
 	for {
 		raw, err := c.frameReader.ReadMessage()
 		if err != nil {
@@ -321,6 +327,9 @@ func (c *LSPClient) dispatch(raw []byte) {
 			}
 			var applyErr error
 			if err := json.Unmarshal(msg.Params, &p); err == nil && p.Edit != nil {
+				// Fresh context: readLoop has no per-request context (it processes
+				// server-initiated requests outside any client call). context.Background()
+				// is intentional — consistent with H4 pattern in server.go.
 				applyCtx, applyCancel := context.WithTimeout(context.Background(), defaultTimeout)
 				applyErr = c.ApplyWorkspaceEdit(applyCtx, p.Edit)
 				applyCancel()
@@ -1964,6 +1973,11 @@ func (c *LSPClient) startWatcher(rootDir string) {
 	c.watcherMu.Unlock()
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logging.Log(logging.LevelError, fmt.Sprintf("startWatcher panic: %v\n%s", r, debug.Stack()))
+			}
+		}()
 		watcher, err := fsnotify.NewWatcher()
 		if err != nil {
 			logging.Log(logging.LevelDebug, "auto-watcher: failed to create watcher: "+err.Error())
