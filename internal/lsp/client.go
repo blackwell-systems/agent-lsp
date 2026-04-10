@@ -60,9 +60,11 @@ func timeoutFor(method string) time.Duration {
 }
 
 // jsonrpcMsg is a generic JSON-RPC 2.0 message.
+// ID is json.RawMessage so it accepts both integer and string IDs per the
+// JSON-RPC 2.0 spec (some servers, e.g. prisma-language-server, use strings).
 type jsonrpcMsg struct {
 	JSONRPC string          `json:"jsonrpc"`
-	ID      *int            `json:"id,omitempty"`
+	ID      json.RawMessage `json:"id,omitempty"`
 	Method  string          `json:"method,omitempty"`
 	Params  json.RawMessage `json:"params,omitempty"`
 	Result  json.RawMessage `json:"result,omitempty"`
@@ -243,22 +245,27 @@ func (c *LSPClient) dispatch(raw []byte) {
 		return
 	}
 
-	// Response to one of our requests.
+	// Response to one of our requests (we always send integer IDs).
 	if msg.ID != nil && msg.Method == "" {
-		c.pendingMu.Lock()
-		req, ok := c.pending[*msg.ID]
-		if ok {
-			delete(c.pending, *msg.ID)
-		}
-		c.pendingMu.Unlock()
-		if ok {
-			if msg.Error != nil {
-				req.err <- fmt.Errorf("lsp error %d: %s", msg.Error.Code, msg.Error.Message)
-			} else {
-				req.ch <- msg.Result
+		var intID int
+		if err := json.Unmarshal(msg.ID, &intID); err == nil {
+			c.pendingMu.Lock()
+			req, ok := c.pending[intID]
+			if ok {
+				delete(c.pending, intID)
+			}
+			c.pendingMu.Unlock()
+			if ok {
+				if msg.Error != nil {
+					req.err <- fmt.Errorf("lsp error %d: %s", msg.Error.Code, msg.Error.Message)
+				} else {
+					req.ch <- msg.Result
+				}
+				return
 			}
 		}
-		return
+		// ID present but not an integer we sent — fall through to handle as
+		// a server-initiated request (some servers use string IDs).
 	}
 
 	// Notification or server-initiated request.
@@ -278,7 +285,7 @@ func (c *LSPClient) dispatch(raw []byte) {
 			c.progressMu.Unlock()
 		}
 		if msg.ID != nil {
-			c.sendResponse(*msg.ID, nil)
+			c.sendResponse(msg.ID, nil)
 		}
 	case "workspace/configuration":
 		// Respond with array of nulls.
@@ -290,7 +297,7 @@ func (c *LSPClient) dispatch(raw []byte) {
 				logging.Log(logging.LevelDebug, fmt.Sprintf("workspace/configuration: unmarshal params: %v", err))
 			}
 			nulls := make([]interface{}, len(p.Items))
-			c.sendResponse(*msg.ID, nulls)
+			c.sendResponse(msg.ID, nulls)
 		}
 	case "workspace/applyEdit":
 		// Apply the workspace edit and respond with ApplyWorkspaceEditResult.
@@ -302,29 +309,31 @@ func (c *LSPClient) dispatch(raw []byte) {
 			var applyErr error
 			if err := json.Unmarshal(msg.Params, &p); err == nil && p.Edit != nil {
 				applyCtx, applyCancel := context.WithTimeout(context.Background(), defaultTimeout)
-			applyErr = c.ApplyWorkspaceEdit(applyCtx, p.Edit)
-			applyCancel()
+				applyErr = c.ApplyWorkspaceEdit(applyCtx, p.Edit)
+				applyCancel()
 			}
 			result := map[string]interface{}{"applied": applyErr == nil}
 			if applyErr != nil {
 				result["failureReason"] = applyErr.Error()
 			}
-			c.sendResponse(*msg.ID, result)
+			c.sendResponse(msg.ID, result)
 		}
 	case "client/registerCapability":
 		if msg.ID != nil {
-			c.sendResponse(*msg.ID, nil)
+			c.sendResponse(msg.ID, nil)
 		}
 	default:
 		// Unknown server request — respond null to unblock.
 		if msg.ID != nil {
-			c.sendResponse(*msg.ID, nil)
+			c.sendResponse(msg.ID, nil)
 		}
 	}
 }
 
 // sendResponse sends a JSON-RPC response for a server-initiated request.
-func (c *LSPClient) sendResponse(id int, result interface{}) {
+// id is echoed back verbatim as json.RawMessage, preserving the original type
+// (integer or string) as required by JSON-RPC 2.0.
+func (c *LSPClient) sendResponse(id json.RawMessage, result interface{}) {
 	resp := map[string]interface{}{
 		"jsonrpc": "2.0",
 		"id":      id,
@@ -431,9 +440,10 @@ func (c *LSPClient) sendRequest(ctx context.Context, method string, params inter
 	if err != nil {
 		return nil, err
 	}
+	idJSON, _ := json.Marshal(id)
 	msg := jsonrpcMsg{
 		JSONRPC: "2.0",
-		ID:      &id,
+		ID:      idJSON,
 		Method:  method,
 		Params:  p,
 	}
