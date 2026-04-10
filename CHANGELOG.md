@@ -5,6 +5,14 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed + Added (2026-04-09) — Speculative session test hardening
+- **`discard_path` bug fix** — test was calling `simulate_edit_atomic` with a `session_id`, but `simulate_edit_atomic` is a self-contained tool (creates its own session internally, requires `workspace_root` + `language`); the call was silently returning `IsError: true` and logging it as "may be expected"; fixed to call `simulate_edit` which is the correct tool for applying edits to an existing session
+- **`evaluate_session` response assertions** — existing subtests were only logging the response; now parse the JSON and assert `net_delta == 0` for comment-only edits (with `confidence != "low"` guard for CI timing); `simulate_edit` response now asserts `edit_applied == true`
+- **`simulate_chain` response assertions** — parse `ChainResult` JSON; assert `cumulative_delta == 0` for two-comment chain; assert `safe_to_apply_through_step == 2`
+- **`commit_path` improved** — now applies a comment edit via `simulate_edit` before committing, making the test more meaningful than committing a clean session
+- **`simulate_edit_atomic_standalone` subtest** — proper standalone usage of `simulate_edit_atomic` with `workspace_root` + `language` parameters; asserts response is an `EvaluationResult` with `net_delta == 0` for a comment edit
+- **`error_detection` subtest** — validates the core speculative session value proposition: apply `return 42` in a `func ... string` body (type error), evaluate, assert `net_delta > 0` and `errors_introduced` is non-empty; CI-safe: accepts skip when `confidence == "low"` or `timeout == true` (gopls indexing window)
+
 ### Added (2026-04-09) — Full tool coverage (47/47)
 - **`testSetLogLevel`** — integration test for `set_log_level`; sets level to `"debug"`, verifies confirmation message contains "debug", resets to `"info"`; no LSP required, runs for all 30 languages
 - **`testExecuteCommand`** — integration test for `execute_command`; queries `get_server_capabilities` for `executeCommandProvider.commands`, skips if server advertises none, calls `commands[0]` with a file URI argument; server-level errors treated as skip (dispatch path still exercised); Go-level transport errors are failures; tool coverage 32 → 34 (multi-language harness); 47/47 tools covered across all test suites
