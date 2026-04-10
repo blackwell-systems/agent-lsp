@@ -1,0 +1,746 @@
+title: 'New MCP Tools: get_change_impact, get_cross_repo_references, and simulate_chain refactor-preview docs'
+feature_slug: new-tools
+verdict: SUITABLE
+suitability_assessment: |
+    Three largely independent features. File ownership analysis:
+
+    Feature 1 (get_change_impact): new handler file + server.go registration
+    Feature 2 (get_cross_repo_references): new handler file + server.go registration
+    Feature 3 (simulate_chain docs): server.go description update + new docs/refactor-preview.md + README.md update
+
+    server.go is shared across all three features. To maintain strict I1 (disjoint ownership),
+    wave structure is two waves:
+    - Wave 1: Agents A and B implement handlers in their own new files. Agent C writes docs
+      (refactor-preview.md + README.md). No server.go touches in Wave 1.
+    - Wave 2: Single integration agent D wires both handlers into server.go (two new AddTool
+      registrations) and updates the simulate_chain description. This is a known-wiring
+      integration wave — no worktree isolation needed.
+
+    This structure gives maximum parallelism in Wave 1 (three agents, fully disjoint) and
+    a single clean server.go edit in Wave 2.
+
+    Parallelization value: moderate. Build + test cycle is fast for Go. Primary value is
+    clean coordination and audit trail.
+
+    Estimated times:
+    - Scout: ~15 min
+    - Wave 1 agents: ~3 x 12 min avg in parallel = ~12 min
+    - Wave 2 integration: ~10 min (single agent, serial)
+    - Merge & verification: ~5 min
+    Total SAW time: ~42 min
+    Sequential baseline: ~55 min
+    Recommendation: Clear speedup from Wave 1 parallelism; proceed.
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: go vet ./...
+file_ownership:
+    - file: internal/tools/change_impact.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/tools/change_impact_test.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/tools/cross_repo.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/tools/cross_repo_test.go
+      agent: B
+      wave: 1
+      action: new
+    - file: docs/refactor-preview.md
+      agent: C
+      wave: 1
+      action: new
+    - file: README.md
+      agent: C
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/server.go
+      agent: D
+      wave: 2
+      action: modify
+      depends_on:
+        - A
+        - B
+        - C
+interface_contracts:
+    - name: HandleGetChangeImpact
+      description: |
+        Handler for the get_change_impact MCP tool. Enumerates exported symbols in each
+        changed file via GetDocumentSymbols, calls GetReferences for each symbol, partitions
+        results into test files vs non-test callers, and extracts enclosing test function
+        names for test references.
+      definition: |
+        func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+      location: internal/tools/change_impact.go
+    - name: HandleGetCrossRepoReferences
+      description: |
+        Handler for the get_cross_repo_references MCP tool. Adds each consumer_root as a
+        workspace folder, calls GetReferences on the symbol, then partitions results by which
+        consumer_root prefix they belong to.
+      definition: |
+        func HandleGetCrossRepoReferences(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+      location: internal/tools/cross_repo.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Context
+
+            You are implementing the `get_change_impact` MCP tool handler for the agent-lsp server.
+            Do NOT touch `cmd/agent-lsp/server.go` — that is done in Wave 2 by Agent D.
+
+            Codebase: `/Users/dayna.blackwell/code/agent-lsp`
+            Module: `github.com/blackwell-systems/agent-lsp`
+
+            Read these files before writing any code:
+            - `internal/tools/navigation.go` — HandleGetReferences pattern, locationsResult, formatLocations
+            - `internal/tools/analysis.go` — extractPosition, WithDocument, CheckInitialized, toInt patterns
+            - `internal/tools/helpers.go` — WithDocument, URIToFilePath, CreateFileURI, CheckInitialized
+
+            ## What to implement
+
+            ### 1. Create `internal/tools/change_impact.go`
+
+            Package: `package tools`
+
+            Imports needed:
+            ```go
+            import (
+                "context"
+                "encoding/json"
+                "fmt"
+                "path/filepath"
+                "strings"
+
+                "github.com/blackwell-systems/agent-lsp/internal/lsp"
+                "github.com/blackwell-systems/agent-lsp/internal/types"
+            )
+            ```
+
+            Handler signature:
+            ```go
+            func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            ```
+
+            Arguments (decode with ok-check pattern from `args map[string]interface{}`):
+            - `changed_files` (required) — decode as `args["changed_files"].([]interface{})`, then
+              convert each element to string. Return `types.ErrorResult("changed_files is required")` if missing or empty.
+            - `include_transitive` (bool, optional) — `args["include_transitive"].(bool)` with ok-check, default false.
+
+            Algorithm:
+            1. `CheckInitialized(client)` — return error result if nil.
+            2. Define a package-level helper `isTestFile(path string) bool`:
+               - returns true if `strings.HasSuffix(path, "_test.go")` (Go)
+               - OR `strings.Contains(path, ".test.")` OR `strings.Contains(path, ".spec.")` (JS/TS)
+               - OR `strings.HasPrefix(filepath.Base(path), "test_")` (Python)
+            3. Define a package-level helper `langIDFromPath(path string) string`:
+               - maps `.go` → `"go"`, `.ts`/`.tsx` → `"typescript"`, `.js`/`.jsx` → `"javascript"`,
+                 `.py` → `"python"`, `.rs` → `"rust"`, default → `"plaintext"`
+            4. Result accumulators:
+               ```go
+               type symbolRef struct {
+                   Name string `json:"name"`
+                   File string `json:"file"`
+                   Line int    `json:"line"`
+               }
+               var changedSymbols []symbolRef
+               testFilesSet := map[string]bool{}
+               var testFunctions []symbolRef
+               var nonTestCallers []symbolRef
+               ```
+            5. For each file in changed_files:
+               a. langID := langIDFromPath(file)
+               b. Open doc and get symbols:
+                  ```go
+                  symbols, err := WithDocument[[]types.DocumentSymbol](ctx, client, file, langID, func(fURI string) ([]types.DocumentSymbol, error) {
+                      return client.GetDocumentSymbols(ctx, fURI)
+                  })
+                  ```
+                  If error: include a warning in summary but continue to next file.
+               c. Collect exported symbols (Go: name[0] is uppercase; other languages: all symbols).
+                  Walk children recursively via a local recursive helper.
+                  For each exported symbol, append to changedSymbols with its file path and
+                  `SelectionRange.Start.Line + 1` (LSP is 0-indexed).
+               d. For each exported symbol, call GetReferences:
+                  ```go
+                  pos := types.Position{
+                      Line:      sym.SelectionRange.Start.Line,      // already 0-indexed
+                      Character: sym.SelectionRange.Start.Character,
+                  }
+                  locs, _ := WithDocument[[]types.Location](ctx, client, file, langID, func(fURI string) ([]types.Location, error) {
+                      return client.GetReferences(ctx, fURI, pos, false)
+                  })
+                  ```
+                  Ignore errors from GetReferences (symbol may have no references).
+               e. For each location in locs:
+                  - Convert URI to path via URIToFilePath; skip on error.
+                  - If isTestFile(refPath): add to testFilesSet, then find enclosing function:
+                    call `GetDocumentSymbols` on that file (via WithDocument), walk tree to find
+                    smallest symbol range containing loc.Range.Start.Line, append to testFunctions.
+                  - Else: append symbolRef{Name: sym.Name, File: refPath, Line: loc.Range.Start.Line+1}
+                    to nonTestCallers.
+               f. If include_transitive: for each nonTestCaller, call GetReferences on the caller's
+                  position (use loc.Range.Start as the position, file = refPath). For any NEW test
+                  files found in transitive refs, add to testFilesSet. Do not recursively call
+                  transitive again (one level only).
+            6. Build testFiles []string from testFilesSet keys.
+            7. Marshal response:
+               ```json
+               {
+                 "changed_symbols": [...],
+                 "test_files": [...],
+                 "test_functions": [...],
+                 "non_test_callers": [...],
+                 "summary": "Found N changed symbols with M test references across K test files."
+               }
+               ```
+            8. Return `types.TextResult(string(data)), nil`.
+
+            ### 2. Create `internal/tools/change_impact_test.go`
+
+            Package: `package tools`
+
+            Write table-driven unit tests for the pure helpers (no LSP required):
+            - `TestIsTestFile`: Go suffix, JS `.test.` pattern, Python `test_` prefix, negative cases.
+            - `TestLangIDFromPath`: `.go` → `"go"`, `.ts` → `"typescript"`, `.rs` → `"rust"`, `.xyz` → `"plaintext"`.
+            - `TestHandleGetChangeImpact_EmptyFiles`: call HandleGetChangeImpact with a nil client
+              and empty changed_files — verify the error result text.
+            - `TestHandleGetChangeImpact_NilClient`: call with nil client, non-empty changed_files —
+              verify CheckInitialized error is returned.
+
+            For the nil client tests, you can call HandleGetChangeImpact directly since CheckInitialized
+            returns early before any LSP calls. This matches the pattern in existing test files.
+
+            ## Verification gate
+
+            ```bash
+            GOWORK=off go build ./internal/tools/
+            go vet ./internal/tools/
+            GOWORK=off go test ./internal/tools/ -run "TestIsTestFile|TestLangIDFromPath|TestHandleGetChangeImpact" -v
+            # Postcondition checks:
+            grep -c "func HandleGetChangeImpact" /Users/dayna.blackwell/code/agent-lsp/internal/tools/change_impact.go
+            # expected: 1
+            grep -c "func isTestFile" /Users/dayna.blackwell/code/agent-lsp/internal/tools/change_impact.go
+            # expected: 1
+            grep -c "func langIDFromPath" /Users/dayna.blackwell/code/agent-lsp/internal/tools/change_impact.go
+            # expected: 1
+            ```
+
+            ## Constraints
+
+            - Do NOT touch `cmd/agent-lsp/server.go` — registration is done in Wave 2 by Agent D.
+            - Do NOT define `HandleGetCrossRepoReferences` — that belongs to Agent B.
+            - Argument decoding uses `args["key"].(type)` with ok-check — do NOT use a struct decoder.
+            - `changed_files` arrives as `[]interface{}` via toolArgsToMap even though it's typed
+              `[]string` in the MCP args struct. Always decode as `[]interface{}` in the handler.
+            - `isTestFile` and `langIDFromPath` are package-level unexported helpers. Do NOT
+              define them as methods on a struct.
+          files:
+            - internal/tools/change_impact.go
+            - internal/tools/change_impact_test.go
+        - id: B
+          task: |
+            ## Context
+
+            You are implementing the `get_cross_repo_references` MCP tool handler for agent-lsp.
+            Do NOT touch `cmd/agent-lsp/server.go` — that is done in Wave 2 by Agent D.
+
+            Codebase: `/Users/dayna.blackwell/code/agent-lsp`
+            Module: `github.com/blackwell-systems/agent-lsp`
+
+            Read these files before writing any code:
+            - `internal/tools/workspace_folders.go` — HandleAddWorkspaceFolder, AddWorkspaceFolder call pattern
+            - `internal/tools/navigation.go` — HandleGetReferences, locationsResult, WithDocument usage
+            - `internal/tools/analysis.go` — extractPosition, CheckInitialized, toInt
+            - `internal/lsp/client.go` line 1831 — AddWorkspaceFolder(ctx context.Context, path string) error
+
+            ## What to implement
+
+            ### 1. Create `internal/tools/cross_repo.go`
+
+            Package: `package tools`
+
+            Imports needed:
+            ```go
+            import (
+                "context"
+                "encoding/json"
+                "fmt"
+                "strings"
+
+                "github.com/blackwell-systems/agent-lsp/internal/lsp"
+                "github.com/blackwell-systems/agent-lsp/internal/types"
+            )
+            ```
+
+            Handler signature:
+            ```go
+            func HandleGetCrossRepoReferences(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error)
+            ```
+
+            Arguments (ok-check pattern):
+            - `symbol_file` (string, required) — `args["symbol_file"].(string)` with ok-check
+            - `line` (int, required) — use `extractPosition(args)` which handles both `line` and `column`
+            - `column` (int, required) — extracted together with line via extractPosition
+            - `consumer_roots` ([]interface{}, required) — `args["consumer_roots"].([]interface{})`;
+              return `types.ErrorResult("consumer_roots must be non-empty; use get_references for single-repo lookup")`
+              if missing, not a slice, or empty after decoding.
+            - `language_id` (string, optional) — default `"plaintext"`
+
+            Algorithm:
+            1. `CheckInitialized(client)` — return error result if nil.
+            2. Validate and decode all args. Convert consumer_roots []interface{} → []string.
+            3. Decode line/col via `extractPosition(args)`. Return error result on failure.
+            4. Add each consumer root:
+               ```go
+               var warnings []string
+               for _, root := range consumerRoots {
+                   if err := client.AddWorkspaceFolder(ctx, root); err != nil {
+                       warnings = append(warnings, fmt.Sprintf("add_workspace_folder %q: %s", root, err))
+                   }
+               }
+               ```
+               Continue even if some roots fail.
+            5. Call GetReferences via WithDocument:
+               ```go
+               locs, wErr := WithDocument[[]types.Location](ctx, client, symbolFile, languageID, func(fURI string) ([]types.Location, error) {
+                   pos := types.Position{Line: line - 1, Character: col - 1}
+                   return client.GetReferences(ctx, fURI, pos, false)
+               })
+               ```
+               Return error result on wErr.
+            6. Get symbol name via hover inside the same document opening:
+               Try `client.GetInfoOnLocation` at the same position; extract the first word as symbol name.
+               If hover fails, use `"unknown"`. Implement this as a separate pass (re-open doc or
+               use the hover in a separate WithDocument call).
+            7. Define a package-level helper `repoForFile(filePath string, consumerRoots []string) string`:
+               - Iterates consumerRoots, returns the first root where `strings.HasPrefix(filePath, root)`.
+               - Returns `"primary"` if no root matches.
+            8. Partition locations:
+               ```go
+               type crossRepoRef struct {
+                   File   string `json:"file"`
+                   Line   int    `json:"line"`
+                   Column int    `json:"column"`
+                   Repo   string `json:"repo"`
+               }
+               var refs []crossRepoRef
+               for _, loc := range locs {
+                   fp, err := URIToFilePath(loc.URI)
+                   if err != nil { continue }
+                   refs = append(refs, crossRepoRef{
+                       File:   fp,
+                       Line:   loc.Range.Start.Line + 1,
+                       Column: loc.Range.Start.Character + 1,
+                       Repo:   repoForFile(fp, consumerRoots),
+                   })
+               }
+               ```
+            9. Marshal and return:
+               ```json
+               {
+                 "symbol": "FunctionName",
+                 "references": [...],
+                 "warnings": ["optional warning strings"],
+                 "summary": "Found N references across M repos."
+               }
+               ```
+               Omit `warnings` key if warnings is empty.
+
+            ### 2. Create `internal/tools/cross_repo_test.go`
+
+            Package: `package tools`
+
+            Write unit tests for the pure helpers (no LSP required):
+            - `TestRepoForFile`: given a file path and list of consumer roots, correct root is
+              returned; "primary" returned when no root matches; longest-prefix root wins when
+              roots are nested.
+            - `TestHandleGetCrossRepoReferences_EmptyRoots`: call with nil client and no
+              consumer_roots — verify error result text contains "consumer_roots".
+            - `TestHandleGetCrossRepoReferences_NilClient`: call with nil client, valid consumer_roots
+              — verify CheckInitialized error returned.
+
+            ## Verification gate
+
+            ```bash
+            GOWORK=off go build ./internal/tools/
+            go vet ./internal/tools/
+            GOWORK=off go test ./internal/tools/ -run "TestRepoForFile|TestHandleGetCrossRepo" -v
+            # Postcondition checks:
+            grep -c "func HandleGetCrossRepoReferences" /Users/dayna.blackwell/code/agent-lsp/internal/tools/cross_repo.go
+            # expected: 1
+            grep -c "func repoForFile" /Users/dayna.blackwell/code/agent-lsp/internal/tools/cross_repo.go
+            # expected: 1
+            ```
+
+            ## Constraints
+
+            - Do NOT touch `cmd/agent-lsp/server.go` — registration is done in Wave 2 by Agent D.
+            - Do NOT define `HandleGetChangeImpact` — that belongs to Agent A.
+            - Argument decoding uses `args["key"].(type)` with ok-check — do NOT use a struct decoder.
+            - `consumer_roots` arrives as `[]interface{}` via toolArgsToMap. Always decode as `[]interface{}`.
+            - Do NOT add sleep or polling wait after AddWorkspaceFolder. The existing
+              HandleAddWorkspaceFolder in workspace_folders.go does not wait; match that behavior.
+            - `repoForFile` is a package-level unexported helper, not a method on a struct.
+          files:
+            - internal/tools/cross_repo.go
+            - internal/tools/cross_repo_test.go
+        - id: C
+          task: |
+            ## Context
+
+            You are updating the simulate_chain documentation and adding a refactor-preview
+            worked example. Do NOT touch `cmd/agent-lsp/server.go` in Wave 1 — that is done
+            in Wave 2 by Agent D.
+
+            Codebase: `/Users/dayna.blackwell/code/agent-lsp`
+
+            Read these files before writing:
+            - `docs/speculative-execution.md` — understand existing worked-example style
+            - `README.md` lines 283-300 — the Speculative Execution table and "See docs/" line
+
+            ## What to implement
+
+            ### 1. Create `docs/refactor-preview.md`
+
+            Write a worked example document showing simulate_chain as a refactor/rename preview
+            tool. Use the style of docs/speculative-execution.md as a template (headers,
+            code blocks for MCP tool calls, structured workflow steps).
+
+            Required sections:
+
+            **Title:** `# Refactor Preview with simulate_chain`
+
+            **Intro paragraph:** Explain that simulate_chain chains in-memory edits and evaluates
+            diagnostics after each step, making it ideal for safe refactor preview before committing.
+            Mention the key signal: `cumulative_delta == 0` at the final step means the refactor
+            is safe to commit.
+
+            **Section: Safe rename preview**
+            Show the workflow for renaming a function:
+            1. `create_simulation_session(workspace_root=..., language="go")`
+            2. `simulate_chain(session_id=..., steps=[rename definition, rename call site])`
+            3. Check `steps[-1].cumulative_delta == 0`
+            4. If zero: `commit_session(session_id=..., apply=true)`; if non-zero: `discard_session`
+               and investigate which step first showed `net_delta > 0`.
+            Use placeholder values like `<session_id>`, `<line>`, `<column>` for runtime values.
+
+            **Section: Change impact preview**
+            Show applying a speculative interface change in step 1, observing which steps
+            introduce errors (net_delta > 0 means errors added), identifying call sites that
+            need updating, then discarding. This is a read-only workflow — commit is never called.
+
+            **Section: Multi-file refactor with checkpoint**
+            Show chaining 3 edits across 3 files, using the `safe_through_step` field to
+            identify the largest safe partial application, committing only through that step.
+
+            **Section: Key response fields**
+            Table or bullet list:
+            - `steps[i].net_delta` — error count change after step i (negative = errors resolved)
+            - `steps[i].cumulative_delta` — total error delta from baseline through step i
+            - `safe_through_step` — index of last step where cumulative_delta == 0
+            - Commit with `apply=true` writes all edits to disk atomically; `apply=false` returns a diff
+
+            ### 2. Update `README.md`
+
+            Find this exact text (around line 291):
+            ```
+            | `simulate_chain` | Apply a sequence of edits and evaluate after each step |
+            ```
+
+            Replace that table row with:
+            ```
+            | `simulate_chain` | Apply a sequence of edits and evaluate after each step; use as a **refactor preview** or **safe rename preview** — chain definition + call-site edits, check `cumulative_delta == 0`, commit or discard |
+            ```
+
+            Find this exact text (around line 297):
+            ```
+            See [docs/speculative-execution.md](./docs/speculative-execution.md) for full workflow examples.
+            ```
+
+            Replace it with:
+            ```
+            See [docs/speculative-execution.md](./docs/speculative-execution.md) for session lifecycle examples and [docs/refactor-preview.md](./docs/refactor-preview.md) for refactor and rename preview workflows.
+            ```
+
+            ## Verification gate
+
+            ```bash
+            # No build gate needed for docs-only + README changes.
+            # Postcondition checks:
+            test -f /Users/dayna.blackwell/code/agent-lsp/docs/refactor-preview.md && echo "EXISTS"
+            # expected: EXISTS
+            grep -c "refactor-preview.md" /Users/dayna.blackwell/code/agent-lsp/README.md
+            # expected: 1
+            grep -c "safe rename preview" /Users/dayna.blackwell/code/agent-lsp/README.md
+            # expected: 1
+            ```
+
+            ## Constraints
+
+            - Do NOT touch `cmd/agent-lsp/server.go` in Wave 1 — the description update is done
+              by Agent D in Wave 2.
+            - Do NOT touch `internal/tools/` — those files belong to Agents A and B.
+            - Do NOT modify files not in your ownership list (docs/refactor-preview.md + README.md only).
+            - Use verbatim text matching (not line numbers) for all Edit tool calls on README.md.
+          files:
+            - docs/refactor-preview.md
+            - README.md
+    - number: 2
+      type: integration
+      agents:
+        - id: D
+          task: |
+            ## Context
+
+            You are the integration agent for Wave 2. Agents A and B have implemented two new
+            handler functions; your job is to register them as MCP tools in server.go and also
+            update the simulate_chain tool description (Agent C's doc work is already done).
+
+            Codebase: `/Users/dayna.blackwell/code/agent-lsp`
+            Module: `github.com/blackwell-systems/agent-lsp`
+
+            Read `cmd/agent-lsp/server.go` in full before making any edits. Use LSP or the
+            Read tool to confirm current line content at each edit location.
+
+            The two new handlers you are registering:
+            - `tools.HandleGetChangeImpact` (in `internal/tools/change_impact.go`)
+            - `tools.HandleGetCrossRepoReferences` (in `internal/tools/cross_repo.go`)
+
+            ## What to implement
+
+            ### 1. Add safeFirstFile helper
+
+            Find this exact text block in server.go (around line 138):
+            ```go
+            func clientForFile(resolver lsp.ClientResolver, cs *clientState, filePath string) *lsp.LSPClient {
+            ```
+
+            Insert a new helper function immediately BEFORE that function:
+            ```go
+            // safeFirstFile returns the first element of ss, or "" if ss is empty.
+            // Used by get_change_impact registration to extract a file path for client routing.
+            func safeFirstFile(ss []string) string {
+            	if len(ss) == 0 {
+            		return ""
+            	}
+            	return ss[0]
+            }
+
+            ```
+
+            ### 2. Register get_change_impact tool
+
+            Find this exact text at the end of the tool registration section:
+            ```go
+            		r, err := tools.HandleGetSymbolDocumentation(ctx, toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	// ------- Register resources -------
+            ```
+
+            Insert a new block between the closing `})` and the resources comment:
+            ```go
+
+            	type GetChangeImpactArgs struct {
+            		ChangedFiles      []string `json:"changed_files"`
+            		WorkspaceRoot     string   `json:"workspace_root,omitempty"`
+            		IncludeTransitive bool     `json:"include_transitive,omitempty"`
+            	}
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "get_change_impact",
+            		Description: "Given a list of changed files, find all test files and test functions that reference exported symbols in those files. Answers 'what tests should I run after this change?' using LSP references — works for any language where get_references works. Returns changed_symbols, test_files (absolute paths), test_functions (name/file/line), non_test_callers (blast radius), and a summary. Set include_transitive=true to also find callers-of-callers (one level deep).",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetChangeImpactArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleGetChangeImpact(ctx, clientForFileWithAutoInit(safeFirstFile(args.ChangedFiles)), toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            	type GetCrossRepoReferencesArgs struct {
+            		SymbolFile    string   `json:"symbol_file"`
+            		Line          int      `json:"line"`
+            		Column        int      `json:"column"`
+            		ConsumerRoots []string `json:"consumer_roots"`
+            		LanguageID    string   `json:"language_id,omitempty"`
+            	}
+            	mcp.AddTool(server, &mcp.Tool{
+            		Name:        "get_cross_repo_references",
+            		Description: "Find all references to a symbol across multiple repositories by adding consumer repos as LSP workspace folders. Provide the symbol's file/line/column and a list of consumer_roots (absolute paths of other repos to index). Returns references partitioned by which repo they came from. Requires a language server with multi-root workspace support (gopls, rust-analyzer, typescript-language-server).",
+            	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetCrossRepoReferencesArgs) (*mcp.CallToolResult, any, error) {
+            		r, err := tools.HandleGetCrossRepoReferences(ctx, clientForFileWithAutoInit(args.SymbolFile), toolArgsToMap(args))
+            		return makeCallToolResult(r), nil, err
+            	})
+
+            ```
+
+            ### 3. Update simulate_chain description
+
+            Find this exact text:
+            ```go
+            		Name:        "simulate_chain",
+            		Description: "Apply a sequence of edits and evaluate after each step. Returns per-step diagnostics and identifies the safe-to-apply-through step (last step with net delta == 0). Use this to find the safest partial application of a multi-step change. All line/column positions in each edit are 1-indexed.",
+            ```
+
+            Replace the Description string value (keep Name unchanged) with:
+            ```go
+            		Description: "Apply a sequence of edits and evaluate after each step — use as a refactor preview or safe rename preview. Returns per-step diagnostics and identifies the safe-to-apply-through step (last step with net delta == 0). Canonical use: chain a rename edit on the definition with call-site updates, check cumulative_delta == 0 at the final step, then commit or discard atomically. Also useful as change impact preview: add speculative edits, observe which steps introduce errors, and discard without touching disk. See docs/refactor-preview.md for worked examples. All line/column positions in each edit are 1-indexed.",
+            ```
+
+            ### 4. Update the tool count comment
+
+            Find the comment:
+            ```go
+            	// ------- Register all 45 tools -------
+            ```
+
+            Verify the actual count by grepping before editing:
+            ```bash
+            grep -c "mcp.AddTool" /Users/dayna.blackwell/code/agent-lsp/cmd/agent-lsp/server.go
+            ```
+
+            Update the number in the comment to reflect the new total (current count + 2 for the
+            two new tools). Example: if grep returns 50, update to `Register all 50 tools`.
+
+            ## Verification gate
+
+            ```bash
+            GOWORK=off go build ./...
+            go vet ./cmd/agent-lsp/
+            GOWORK=off go test ./internal/... ./cmd/...
+            # Postcondition checks:
+            grep -c "get_change_impact" /Users/dayna.blackwell/code/agent-lsp/cmd/agent-lsp/server.go
+            # expected: 1
+            grep -c "get_cross_repo_references" /Users/dayna.blackwell/code/agent-lsp/cmd/agent-lsp/server.go
+            # expected: 1
+            grep -c "safeFirstFile" /Users/dayna.blackwell/code/agent-lsp/cmd/agent-lsp/server.go
+            # expected: 2 (definition + call site)
+            grep -c "refactor preview" /Users/dayna.blackwell/code/agent-lsp/cmd/agent-lsp/server.go
+            # expected: 1 (in simulate_chain description)
+            ```
+
+            ## Constraints
+
+            - Only modify `cmd/agent-lsp/server.go`.
+            - Do NOT modify any file in `internal/tools/` — those are Wave 1 artifacts.
+            - Use verbatim text matching (not line numbers) for all Edit tool calls.
+            - The `safeFirstFile` helper goes at package level in server.go (near line 138),
+              NOT inside the `Run` function closure.
+            - Do NOT change any existing tool's Name, Description, or handler beyond the
+              simulate_chain Description update specified above.
+          files:
+            - cmd/agent-lsp/server.go
+          dependencies:
+            - A
+            - B
+            - C
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |
+            Wave 2 Agent D cannot compile because HandleGetChangeImpact or HandleGetCrossRepoReferences
+            are not found. This would happen if Wave 1 agents failed or their files were not merged
+            before Wave 2 launched.
+          likelihood: low
+          impact: high
+          mitigation: |
+            Wave 2 is a type: integration wave that runs after Wave 1 completes and merges.
+            The orchestrator verifies Wave 1 merges before launching Wave 2. Agent D's verification
+            gate includes go build, which will surface this immediately.
+        - scenario: |
+            changed_files and consumer_roots arguments are typed []string in the Args structs
+            but arrive as []interface{} in the handler via toolArgsToMap JSON round-trip. Agent A
+            or B type-asserts as []string and panics at runtime.
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Both Agent A and B task prompts explicitly state: decode as []interface{}, not []string.
+            The constraint section of each agent reiterates this. If a panic occurs, the error will
+            be surfaced immediately in integration tests.
+        - scenario: |
+            Agent C accidentally edits cmd/agent-lsp/server.go in Wave 1 (the simulate_chain
+            description update), creating a conflict when Agent D makes the same change in Wave 2.
+          likelihood: low
+          impact: medium
+          mitigation: |
+            Agent C's task explicitly says "Do NOT touch server.go in Wave 1". Agent C's file
+            ownership list contains only docs/refactor-preview.md and README.md. Agent D owns
+            server.go in Wave 2.
+        - scenario: |
+            Agent A defines isTestFile or langIDFromPath as package-level functions, and a
+            future agent in another file in the same package also defines one of those names,
+            causing a duplicate function error.
+          likelihood: low
+          impact: low
+          mitigation: |
+            Both are unexported helpers with descriptive names unlikely to collide. The package
+            already has many unexported helpers (toInt, extractPosition, etc.) without conflicts.
+            Agent A's vet check will catch any duplicate if it occurs.
+        - scenario: |
+            Agent D's safeFirstFile helper is placed inside the Run() function closure instead
+            of at package level, making it unavailable to other package-level functions or causing
+            compile error if used outside Run's scope.
+          likelihood: low
+          impact: low
+          mitigation: |
+            Agent D's task explicitly states safeFirstFile goes at package level near clientForFile
+            (line ~138), not inside Run. The exact insertion anchor is the clientForFile function
+            signature, which is at package level.
+known_issues:
+    - title: 'test_cascade false positive: net_delta > 0'
+      description: Matches a comment/error string in speculative_test.go, not a Go symbol. Agent C owns docs only.
+      status: known
+      workaround: Safe to ignore in cascade check.
+    - title: 'test_cascade false positive: discard_session'
+      description: Tool name mentioned in README/docs text owned by Agent C; not a changed Go symbol.
+      status: known
+      workaround: Safe to ignore in cascade check.
+    - title: 'test_cascade false positive: github.com/blackwell-systems/agent-lsp'
+      description: Module path matched as a symbol across every import statement in every test file. Agent D adds two new tool registrations only, no existing symbol signatures change.
+      status: known
+      workaround: Safe to ignore in cascade check.
+    - title: 'test_cascade false positive: })'
+      description: Go syntax token matched as a symbol by the cascade checker; not a real symbol.
+      status: known
+      workaround: Safe to ignore in cascade check.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+            issues:
+                - check: pattern_accuracy
+                  severity: warning
+                  description: The tool count comment in server.go says 45 but the actual mcp.AddTool count is 48. Agent D is instructed to grep the count before editing, which will produce the correct result (50 after adding 2). No action needed beyond following the brief as written.
+                  file: cmd/agent-lsp/server.go
+                  symbol: Register all 45 tools
+    summary: 'All four agent briefs verified against the codebase. Agent A and B are creating new files; their new-file symbols are excluded from symbol_accuracy per the action:new rule. The API surface they depend on (WithDocument, CheckInitialized, URIToFilePath, GetDocumentSymbols, GetReferences, GetInfoOnLocation, extractPosition, types.DocumentSymbol/Location/Position/ToolResult) all exist with the exact signatures described. Agent B''s AddWorkspaceFolder signature at lsp/client.go:1831 is (ctx context.Context, path string) error — exactly as stated in the brief. Agent C''s anchor texts in README.md at lines 291 and 297 match verbatim. Agent D''s insertion anchors in server.go are accurate: clientForFile is at line 138, safeFirstFile does not yet exist (no conflict), the HandleGetSymbolDocumentation block and resources comment anchor match at lines 905-909, the simulate_chain Description text at line 826 matches the brief find-text verbatim, and clientForFileWithAutoInit exists as a closure inside Run. The tool count comment says 45 but actual mcp.AddTool count is 48; Agent D is correctly instructed to grep the live count before editing. Pre-write, the IMPL doc had a schema-invalid known_issues field (map instead of sequence) which was corrected before this review could be written. No errors found in any agent brief. All files have disjoint ownership within each wave.'
+    reviewed_at: "2026-04-10T05:12:37Z"
+    issue_count: 1
+state: REVIEWED
+original_branch: main
