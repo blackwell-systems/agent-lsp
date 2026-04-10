@@ -25,3 +25,6 @@ test/fixtures/kotlin/.project
 test/fixtures/kotlin/.settings/
 test/fixtures/swift/.build/
 /agent-lsp
+
+# SAW state files generated during wave execution
+docs/IMPL/.saw-state/
