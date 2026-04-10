@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+	uriPkg "github.com/blackwell-systems/agent-lsp/internal/uri"
 )
 
 // ValidateFilePath resolves filePath to a clean absolute path and, when rootDir
@@ -82,15 +83,12 @@ func CreateFileURI(filePath string) string {
 }
 
 // URIToFilePath converts a file:// URI to an absolute path.
-func URIToFilePath(uri string) (string, error) {
-	if !strings.HasPrefix(uri, "file://") {
-		return "", fmt.Errorf("not a file URI: %s", uri)
+// Delegates to uri.URIToPath — canonical shared implementation (M3).
+func URIToFilePath(rawURI string) (string, error) {
+	if !strings.HasPrefix(rawURI, "file://") {
+		return "", fmt.Errorf("not a file URI: %s", rawURI)
 	}
-	u, err := url.Parse(uri)
-	if err != nil {
-		return "", fmt.Errorf("parsing URI %s: %w", uri, err)
-	}
-	return u.Path, nil
+	return uriPkg.URIToPath(rawURI), nil
 }
 
 // CheckInitialized returns an error if client is nil.
