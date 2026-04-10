@@ -31,10 +31,13 @@ func HandleAddWorkspaceFolder(ctx context.Context, client *lsp.LSPClient, args m
 	}
 
 	folders := client.GetWorkspaceFolders()
-	data, _ := json.Marshal(map[string]interface{}{
-		"added":            path,
+	data, err := json.Marshal(map[string]interface{}{
+		"added":             path,
 		"workspace_folders": folders,
 	})
+	if err != nil {
+		return types.ErrorResult(fmt.Sprintf("marshal response: %s", err)), nil
+	}
 	return types.TextResult(string(data)), nil
 }
 
@@ -54,10 +57,13 @@ func HandleRemoveWorkspaceFolder(_ context.Context, client *lsp.LSPClient, args 
 	}
 
 	folders := client.GetWorkspaceFolders()
-	data, _ := json.Marshal(map[string]interface{}{
-		"removed":          path,
+	data, err := json.Marshal(map[string]interface{}{
+		"removed":           path,
 		"workspace_folders": folders,
 	})
+	if err != nil {
+		return types.ErrorResult(fmt.Sprintf("marshal response: %s", err)), nil
+	}
 	return types.TextResult(string(data)), nil
 }
 
@@ -68,8 +74,11 @@ func HandleListWorkspaceFolders(_ context.Context, client *lsp.LSPClient, _ map[
 	}
 
 	folders := client.GetWorkspaceFolders()
-	data, _ := json.Marshal(map[string]interface{}{
+	data, err := json.Marshal(map[string]interface{}{
 		"workspace_folders": folders,
 	})
+	if err != nil {
+		return types.ErrorResult(fmt.Sprintf("marshal response: %s", err)), nil
+	}
 	return types.TextResult(string(data)), nil
 }
