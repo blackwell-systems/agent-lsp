@@ -80,8 +80,10 @@ jobs:
 
       - name: Install kotlin-language-server
         continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          KLS_VERSION=$(curl -fsSL https://api.github.com/repos/fwcd/kotlin-language-server/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          KLS_VERSION=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/fwcd/kotlin-language-server/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
           wget -q "https://github.com/fwcd/kotlin-language-server/releases/download/${KLS_VERSION}/server.zip" -O /tmp/kls.zip
           sudo unzip -q /tmp/kls.zip -d /opt/kls
           sudo ln -sf /opt/kls/server/bin/kotlin-language-server /usr/local/bin/kotlin-language-server
@@ -174,8 +176,10 @@ jobs:
         run: GOWORK=off go build ./...
 
       - name: Install terraform-ls
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TF_LS_VERSION=$(curl -fsSL https://api.github.com/repos/hashicorp/terraform-ls/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
+          TF_LS_VERSION=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/hashicorp/terraform-ls/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
           wget -q "https://releases.hashicorp.com/terraform-ls/${TF_LS_VERSION}/terraform-ls_${TF_LS_VERSION}_linux_amd64.zip" -O /tmp/terraform-ls.zip
           sudo unzip -o -q /tmp/terraform-ls.zip terraform-ls -d /usr/local/bin
           sudo chmod +x /usr/local/bin/terraform-ls
@@ -198,8 +202,11 @@ jobs:
         run: GOWORK=off go build ./...
 
       - name: Install lua-language-server
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          LLS_VERSION=$(curl -fsSL https://api.github.com/repos/LuaLS/lua-language-server/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          LLS_VERSION=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/LuaLS/lua-language-server/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          echo "Installing lua-language-server ${LLS_VERSION}"
           wget -q "https://github.com/LuaLS/lua-language-server/releases/download/${LLS_VERSION}/lua-language-server-${LLS_VERSION}-linux-x64.tar.gz" -O /tmp/lls.tar.gz
           sudo mkdir -p /opt/lls
           sudo tar -xzf /tmp/lls.tar.gz -C /opt/lls
@@ -301,8 +308,10 @@ jobs:
         run: GOWORK=off go build ./...
 
       - name: Install Gleam
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          GLEAM_VERSION=$(curl -fsSL https://api.github.com/repos/gleam-lang/gleam/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
+          GLEAM_VERSION=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/gleam-lang/gleam/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
           wget -q "https://github.com/gleam-lang/gleam/releases/download/v${GLEAM_VERSION}/gleam-v${GLEAM_VERSION}-x86_64-unknown-linux-musl.tar.gz" -O /tmp/gleam.tar.gz
           sudo tar -xzf /tmp/gleam.tar.gz -C /usr/local/bin
 
@@ -417,8 +426,10 @@ jobs:
         run: GOWORK=off go build ./...
 
       - name: Install clojure-lsp
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          CLOJURE_LSP_VERSION=$(curl -fsSL https://api.github.com/repos/clojure-lsp/clojure-lsp/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          CLOJURE_LSP_VERSION=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/clojure-lsp/clojure-lsp/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
           wget -q "https://github.com/clojure-lsp/clojure-lsp/releases/download/${CLOJURE_LSP_VERSION}/clojure-lsp-native-linux-amd64.zip" -O /tmp/clojure-lsp.zip
           sudo unzip -q /tmp/clojure-lsp.zip -d /usr/local/bin
           sudo chmod +x /usr/local/bin/clojure-lsp
@@ -506,8 +517,10 @@ jobs:
         run: GOWORK=off go build ./...
 
       - name: Install mongodb-language-server (from VS Code extension VSIX)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          MDBVSC_VERSION=$(curl -fsSL https://api.github.com/repos/mongodb-js/vscode/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
+          MDBVSC_VERSION=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/mongodb-js/vscode/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
           wget -q "https://github.com/mongodb-js/vscode/releases/download/v${MDBVSC_VERSION}/mongodb-vscode-${MDBVSC_VERSION}.vsix" -O /tmp/mongodb-vscode.vsix
           sudo mkdir -p /opt/mongodb-vscode
           sudo unzip -q /tmp/mongodb-vscode.vsix -d /opt/mongodb-vscode
