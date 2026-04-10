@@ -8,7 +8,7 @@ on:
 
 jobs:
   # Unit tests + binary smoke tests. No live LSP servers needed.
-  test:
+  unit-and-smoke:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -438,8 +438,11 @@ jobs:
       - name: Build
         run: GOWORK=off go build ./...
 
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v16
+
       - name: Install nil (Nix language server)
-        run: cargo install --git https://github.com/oxalica/nil nil
+        run: nix profile install github:oxalica/nil
 
       - name: Run Nix tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Nix$" ./test/ -timeout 10m

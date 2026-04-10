@@ -5,6 +5,14 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (2026-04-09) — Test coverage + CI cleanup
+- **`testGoToSymbol` and `testRestartLspServer` test functions** — two previously untested tools now covered in `TestMultiLanguage`; `testGoToSymbol` calls `go_to_symbol` with `lang.workspaceSymbol` and verifies at least one result is returned; `testRestartLspServer` restarts the server, waits 5 s for re-indexing, reopens the document, and confirms hover still works; both wired into `tier2Results` with skip guards; tool coverage 28 → 32 (accounting for `go_to_symbol`, `restart_lsp_server`, and two tools added in prior waves)
+- **`test/lang_configs_test.go`** — `buildLanguageConfigs()` extracted from `test/multi_lang_test.go` into its own file (840 lines); `multi_lang_test.go` reduced from 2340 → 1573 lines; only additional import needed was `path/filepath`; no behavior changes
+- **`unit-and-smoke` GHA job** — renamed from `test` for clarity, distinguishing it from the `multi-lang-*` integration jobs
+
+### Fixed (2026-04-09) — Nix CI
+- **`multi-lang-nix` install** — `nil` build script queries `nix` at compile time to generate builtin completions; previous `cargo install --git ... nil` failed with `"Is nix accessible?: NotFound"`; fix: install Nix via `DeterminateSystems/nix-installer-action@v16` before installing nil, then use `nix profile install github:oxalica/nil` to pull from binary cache instead of compiling
+
 ### Added (2026-04-09) — Language expansion (30 languages)
 - **MongoDB integration test** — `mongodb-language-server` (`npm i -g @mongodb-js/mongodb-language-server`); fixture at `test/fixtures/mongodb/` with `query.mongodb` (14-line playground file, `find` at line 9 col 12, `aggregate` at line 11 col 12) and `schema.mongodb` (15-line `createCollection` with `$jsonSchema` validator for `name`/`age` fields); dedicated `multi-lang-mongodb` CI job with `mongo:7` service container on port 27017, `mongosh` health check, and `TestMultiLanguage/^MongoDB$` test; `supportsFormatting: false`; language count updated 29 → 30
 
