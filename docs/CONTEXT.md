@@ -49,3 +49,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-new-tools.yaml
 - **inspector-fixes**: completed 2026-04-10, 1 waves, 6 agents
   - IMPL doc: docs/IMPL/complete/IMPL-inspector-fixes.yaml
+- **fix-inspector-findings**: completed 2026-04-10, 1 waves, 5 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-fix-inspector-findings.yaml

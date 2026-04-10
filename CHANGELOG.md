@@ -5,6 +5,24 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed (2026-04-10) — Inspector audit-7: 11 bugs and quality improvements
+
+#### Security
+- **Path traversal in `HandleGetDiagnostics`** — `HandleGetDiagnostics` accepted a caller-supplied `file_path` and passed it directly to `CreateFileURI` without validation. Every other handler validates with `ValidateFilePath` first. A caller could supply `../../etc/passwd` and the handler would read it via `ReopenDocument`. Fixed by adding a `ValidateFilePath(filePath, client.RootDir())` call before `CreateFileURI`; the sanitized path is used throughout the handler.
+
+#### Fixed
+- **Context dropped in `StartForLanguage` shutdown** — `StartForLanguage(ctx, ...)` called `e.client.Shutdown(context.Background())` when replacing an existing client, discarding the caller's cancellation and deadline. Fixed to pass `ctx`.
+- **`LanguageIDFromPath` missing C/C++/Java extensions** — The exported `LanguageIDFromPath` function (used by `HandleGetChangeImpact`) lacked `.c`, `.cpp`, `.cc`, `.cxx`, and `.java` entries. Those file types were mapped to `"plaintext"`, producing incorrect language IDs in impact reports. Added the missing cases.
+- **`GetReferences` errors silently discarded in `HandleGetChangeImpact`** — Per-symbol reference lookup errors were swallowed (`locs, _ := ...`), causing affected symbols to appear with zero callers instead of surfacing a diagnostic. Errors now appear as a `warnings` field in the tool response.
+- **`writeRaw` error missing context** — Returned the raw `stdin.Write` error with no indication of which operation triggered it. Wrapped as `fmt.Errorf("writeRaw: %w", err)`.
+- **`sendNotification` marshal error missing method name** — Both `json.Marshal` error paths in `sendNotification` returned without the method name, making debug traces opaque. Wrapped as `fmt.Errorf("sendNotification %s: marshal ...: %w", method, err)`.
+- **`init()` side effect in `internal/logging`** — `init()` read `LOG_LEVEL` from the environment and mutated package-level state, coupling test setup to import order. Extracted to `SetLevelFromEnv()`, called explicitly from `main()`; `init()` is now a no-op.
+- **`DirtyErr` accessible on non-dirty sessions** — `SimulationSession.DirtyErr` was a public field readable in any state, giving `nil` with no signal on non-dirty sessions. Added `DirtyError() error` accessor that returns `DirtyErr` only when `Status == StatusDirty`; updated the one internal call site in `session/manager.go`.
+
+#### Test coverage
+- **`WaitForFileIndexed` timeout, cancellation, and stability-window-reset paths untested** — Added three tests matching the `WaitForDiagnostics` pattern: `TestWaitForFileIndexed_Timeout`, `TestWaitForFileIndexed_ContextCancelled`, and `TestWaitForFileIndexed_StabilityWindowReset`.
+- **`parseBuildErrors` missing tests for TypeScript, Rust, and Python** — Added `TestParseBuildErrors_TypeScript`, `TestParseBuildErrors_Rust`, and `TestParseBuildErrors_Python` with synthetic compiler output strings.
+
 ### Fixed (2026-04-10) — Inspector-surfaced bugs and quality fixes
 
 #### Errors fixed
