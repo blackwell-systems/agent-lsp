@@ -1,0 +1,14 @@
+// Person collection queries
+use('testdb');
+
+db.persons.insertMany([
+  { name: "Alice", age: 30 },
+  { name: "Bob", age: 25 },
+]);
+
+db.persons.find({ age: { $gt: 18 } });
+
+db.persons.aggregate([
+  { $match: { age: { $gt: 18 } } },
+  { $group: { _id: "$name", count: { $sum: 1 } } },
+]);
