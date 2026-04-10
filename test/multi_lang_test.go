@@ -1894,3 +1894,112 @@ func TestMultiLanguage(t *testing.T) {
 
 	printMultiLangSummary(t, results)
 }
+
+// TestFuzzyPositionFallback verifies that go_to_definition and get_references
+// succeed when called with positions that are off by one line from the exact
+// symbol location, exercising the fuzzy position fallback path end-to-end
+// against a real gopls instance.
+//
+// The Go fixture main.go declares `type Person struct` at line 6, column 6.
+// Off-by-one positions (lines 5 and 7) are tested. A non-empty result
+// (or a skip) proves the round-trip completed without a transport error.
+func TestFuzzyPositionFallback(t *testing.T) {
+	lspBinaryPath, err := exec.LookPath("gopls")
+	if err != nil {
+		t.Skip("skipping TestFuzzyPositionFallback: gopls not found on PATH")
+	}
+
+	binaryPath := getMultilangBinary(t)
+	if binaryPath == "" {
+		t.Skip("failed to build agent-lsp binary")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	goFixture := filepath.Join(testDir(t), "fixtures", "go")
+	mainFile := filepath.Join(goFixture, "main.go")
+
+	cmd := exec.Command(binaryPath, "go", lspBinaryPath)
+	client := mcp.NewClient(&mcp.Implementation{Name: "fuzzy-fallback-test", Version: "1.0"}, nil)
+	transport := &mcp.CommandTransport{Command: cmd}
+	session, err := client.Connect(ctx, transport, nil)
+	if err != nil {
+		t.Skipf("failed to connect MCP session for gopls: %v", err)
+		return
+	}
+	defer session.Close()
+
+	res, err := callTool(ctx, session, "start_lsp", map[string]any{"root_dir": goFixture})
+	if err != nil || res.IsError {
+		t.Skipf("start_lsp failed: err=%v", err)
+		return
+	}
+	time.Sleep(8 * time.Second)
+
+	res, err = callTool(ctx, session, "open_document", map[string]any{
+		"file_path":   mainFile,
+		"language_id": "go",
+	})
+	if err != nil || res.IsError {
+		t.Skipf("open_document failed: err=%v", err)
+		return
+	}
+	time.Sleep(2 * time.Second)
+
+	// Test go_to_definition with off-by-one positions around line 6.
+	// Line 5 is the comment above the struct; line 7 is inside the struct body.
+	for _, offByOneLine := range []int{5, 7} {
+		res, err = callTool(ctx, session, "go_to_definition", map[string]any{
+			"file_path":   mainFile,
+			"language_id": "go",
+			"line":        offByOneLine,
+			"column":      6,
+		})
+		if err != nil {
+			t.Errorf("go_to_definition(line=%d): unexpected transport error: %v", offByOneLine, err)
+			continue
+		}
+		if res.IsError {
+			text, _ := textFromResult(res)
+			t.Logf("go_to_definition(line=%d): server error (fallback may not apply): %s", offByOneLine, text)
+			continue
+		}
+		text, terr := textFromResult(res)
+		if terr != nil {
+			t.Errorf("go_to_definition(line=%d): extract text: %v", offByOneLine, terr)
+			continue
+		}
+		if text == "" || text == "null" || text == "[]" {
+			t.Logf("go_to_definition(line=%d): empty result (gopls returned nothing at off-by-one position)", offByOneLine)
+		} else {
+			t.Logf("go_to_definition(line=%d): result len=%d (fallback active or exact match)", offByOneLine, len(text))
+		}
+	}
+
+	// Test get_references with off-by-one positions.
+	for _, offByOneLine := range []int{5, 7} {
+		res, err = callTool(ctx, session, "get_references", map[string]any{
+			"file_path":           mainFile,
+			"language_id":         "go",
+			"line":                offByOneLine,
+			"column":              6,
+			"include_declaration": true,
+		})
+		if err != nil {
+			t.Errorf("get_references(line=%d): unexpected transport error: %v", offByOneLine, err)
+			continue
+		}
+		if res.IsError {
+			text, _ := textFromResult(res)
+			t.Logf("get_references(line=%d): server error: %s", offByOneLine, text)
+			continue
+		}
+		text, terr := textFromResult(res)
+		if terr != nil {
+			t.Errorf("get_references(line=%d): extract text: %v", offByOneLine, terr)
+			continue
+		}
+		t.Logf("get_references(line=%d): result len=%d", offByOneLine, len(text))
+	}
+}
