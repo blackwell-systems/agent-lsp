@@ -1,0 +1,874 @@
+title: 'Test Coverage Gaps: Workspace Folders, pkg/ API Smoke Tests, Fuzzy Position E2E, README Badge'
+feature_slug: test-coverage-gaps
+verdict: SUITABLE
+suitability_assessment: |
+    Three independent workstreams plus a trivial README badge fix, all suitable for
+    parallel execution:
+
+    1. Workspace folder gap fill (Easy) — Adds sub-cases to testWorkspaceFolders in
+       test/multi_lang_test.go. The function is self-contained (no cross-agent type
+       dependencies) and the gaps are well-defined.
+
+    2. pkg/ API smoke tests (Medium) — Creates three new test files (pkg/lsp/lsp_test.go,
+       pkg/session/session_test.go, pkg/types/types_test.go). All three pkg/ packages
+       are read-only re-export wrappers; the tests only need to compile against the
+       existing type alias declarations. No new types or functions are defined.
+
+    3. Fuzzy position fallback e2e (Medium) — Adds TestFuzzyPositionFallback to
+       test/multi_lang_test.go. This overlaps in file with workstream 1, but the
+       changes are append-only: workstream 1 modifies the body of testWorkspaceFolders
+       (an existing function) while workstream 3 adds a brand-new top-level function.
+       These are non-overlapping line ranges. Agent C is in Wave 2 (depends on Agent A
+       merge) to avoid any cross-wave diff conflict in the shared file.
+
+    4. README badge fix — Single-line change to README.md; assigned to Agent F as its
+       own small Wave 1 agent to satisfy the per-agent line budget.
+
+    File decomposition check (I1 self-check):
+    - Wave 1: test/multi_lang_test.go owned by A only; README.md owned by F only;
+      pkg/lsp/lsp_test.go by B; pkg/session/session_test.go by D; pkg/types/types_test.go
+      by E. No overlap within Wave 1.
+    - Wave 2: test/multi_lang_test.go owned by C only. No overlap.
+
+    Pre-implementation status: all gaps are TODO (no existing test files in pkg/).
+
+    Estimated times:
+    - Scout phase: ~15 min (LSP analysis of signatures and test harness patterns)
+    - Agent execution: ~8 min (5 Wave 1 agents run in parallel + 1 Wave 2 agent)
+    - Merge and verification: ~5 min
+    Total SAW time: ~28 min
+    Sequential baseline: ~30 min (6 tasks × 5 min avg)
+    Recommendation: Clear speedup for Wave 1 (5-way parallel). Proceed.
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: test/multi_lang_test.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: pkg/lsp/lsp_test.go
+      agent: B
+      wave: 1
+      action: new
+    - file: pkg/session/session_test.go
+      agent: D
+      wave: 1
+      action: new
+    - file: pkg/types/types_test.go
+      agent: E
+      wave: 1
+      action: new
+    - file: README.md
+      agent: F
+      wave: 1
+      action: modify
+    - file: test/multi_lang_test.go
+      agent: C
+      wave: 2
+      action: modify
+      depends_on:
+        - A
+interface_contracts:
+    - name: testWorkspaceFolders
+      description: |
+        Existing function in test/multi_lang_test.go that tests workspace folder lifecycle
+        (list, add, remove). Agent A adds sub-cases for: removing a non-existent folder
+        (error path), listing after add to confirm folder appears, removing and re-listing
+        to confirm it disappears, and adding multiple folders before removing all of them.
+      definition: |
+        func testWorkspaceFolders(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult
+      location: test/multi_lang_test.go
+    - name: TestFuzzyPositionFallback
+      description: |
+        New top-level test function added by Agent C. Starts gopls against the Go fixture,
+        opens main.go, and calls go_to_definition and get_references with positions off by
+        1-2 lines from the actual symbol to exercise the fuzzy position fallback path.
+      definition: |
+        func TestFuzzyPositionFallback(t *testing.T)
+      location: test/multi_lang_test.go
+    - name: pkg/lsp smoke contracts
+      description: |
+        Type alias smoke: var _ lsp.ClientResolver = (*lsp.ServerManager)(nil) verifies
+        ServerManager implements ClientResolver. NewLSPClient and NewSingleServerManager
+        / NewMultiServerManager are verified with correct signatures for compile-only check.
+      definition: |
+        // Constructors (verified in lsp_test.go):
+        NewLSPClient        func(serverPath string, serverArgs []string) *LSPClient
+        NewSingleServerManager func(client *LSPClient) *ServerManager
+        NewMultiServerManager  func(entries []config.ServerEntry) *ServerManager
+        // ClientResolver interface (pkg/lsp/lsp.go):
+        ClientForFile(filePath string) *LSPClient
+        DefaultClient() *LSPClient
+        AllClients() []*LSPClient
+        Shutdown(ctx context.Context) error
+      location: pkg/lsp/lsp.go
+    - name: pkg/session smoke contracts
+      description: |
+        Type alias smoke: NewSessionManager requires a lsp.ClientResolver;
+        NewSerializedExecutor requires no arguments. SessionExecutor interface
+        verified via compile-time assertion against *SerializedExecutor.
+      definition: |
+        // Constructors (verified in session_test.go):
+        NewSessionManager      func(resolver lsp.ClientResolver) *SessionManager
+        NewSerializedExecutor  func() *SerializedExecutor
+        // SessionExecutor interface (pkg/session/session.go):
+        Acquire(ctx context.Context, session *SimulationSession) error
+        Release(session *SimulationSession)
+      location: pkg/session/session.go
+    - name: pkg/types alias spot-check
+      description: |
+        Assignability spot-check: an internaltypes.Position value must be assignable
+        to a pkg/types.Position variable (type alias, not conversion). Same for
+        Range and LSPDiagnostic.
+      definition: |
+        type Position = internaltypes.Position   // struct{ Line int; Character int }
+        type Range = internaltypes.Range         // struct{ Start, End Position }
+        type LSPDiagnostic = internaltypes.LSPDiagnostic
+        type TextEdit = internaltypes.TextEdit   // struct{ Range Range; NewText string }
+        type ToolResult = internaltypes.ToolResult
+      location: pkg/types/doc.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Role
+            Test gap filler — workspace folder sub-cases in test/multi_lang_test.go.
+
+            ## What to implement
+
+            Modify the function `testWorkspaceFolders` in `test/multi_lang_test.go`.
+
+            The function currently:
+            - Step 1: calls list_workspace_folders
+            - Step 2: adds a temp folder, asserts `addResult["added"]` is non-nil
+            - Step 3: removes the folder, returns pass
+
+            The current final lines of the function body are (find this exact text):
+            ```go
+            	// Step 3: remove the folder.
+            	res, err = callTool(ctx, session, "remove_workspace_folder", map[string]any{
+            		"path": tmpDir,
+            	})
+            	if err != nil {
+            		return toolResult{tool: "workspace_folders", status: "fail", detail: err.Error()}
+            	}
+            	if res.IsError {
+            		return toolResult{tool: "workspace_folders", status: "skip",
+            			detail: fmt.Sprintf("remove_workspace_folder not supported: %v", res.Content)}
+            	}
+            	return toolResult{tool: "workspace_folders", status: "pass"}
+            }
+            ```
+
+            Insert the new sub-cases BETWEEN the `if res.IsError { ... skip ... }` block
+            (after it closes) and the final `return toolResult{...status: "pass"}` line.
+
+            **Sub-case A: Verify folder appears in list after add.**
+            After step 2's add call succeeds (the `addResult["added"]` check is already
+            done), add a list call immediately after the add-result check to verify tmpDir
+            appears. Insert this block AFTER the existing `addResult["added"]` check
+            (after `return toolResult{tool: "workspace_folders", status: "fail", ...}`
+            error return for bad add response) and BEFORE "Step 3: remove the folder":
+
+            ```go
+            	// Sub-case A: verify added folder appears in list.
+            	res, err = callTool(ctx, session, "list_workspace_folders", map[string]any{})
+            	if err == nil && !res.IsError {
+            		if listText, lerr := textFromResult(res); lerr == nil {
+            			if !strings.Contains(listText, filepath.Base(tmpDir)) && !strings.Contains(listText, tmpDir) {
+            				t.Logf("[workspace_folders] added folder not found in list_workspace_folders result: %s", listText)
+            			}
+            		}
+            	}
+            ```
+
+            **Sub-case B: Verify folder is gone after remove.**
+            After Step 3's remove call succeeds (after the `if res.IsError { ... skip ... }`
+            block and BEFORE the final return), insert:
+
+            ```go
+            	// Sub-case B: verify removed folder no longer appears in list.
+            	res, err = callTool(ctx, session, "list_workspace_folders", map[string]any{})
+            	if err == nil && !res.IsError {
+            		if listText, lerr := textFromResult(res); lerr == nil {
+            			if strings.Contains(listText, tmpDir) {
+            				return toolResult{tool: "workspace_folders", status: "fail",
+            					detail: fmt.Sprintf("removed folder still present in list: %s", listText)}
+            			}
+            		}
+            	}
+
+            	// Sub-case C: error path — remove a non-existent folder (transport must not error).
+            	nonExistentPath := tmpDir + "-nonexistent"
+            	_, removeErr := callTool(ctx, session, "remove_workspace_folder", map[string]any{
+            		"path": nonExistentPath,
+            	})
+            	if removeErr != nil {
+            		return toolResult{tool: "workspace_folders", status: "fail",
+            			detail: fmt.Sprintf("remove non-existent folder: unexpected transport error: %v", removeErr)}
+            	}
+            	t.Logf("[workspace_folders] remove non-existent folder: no transport error (server may silently ignore)")
+
+            	// Sub-case D: multiple folders — add two, remove two.
+            	tmpDir2, mkErr2 := os.MkdirTemp("", "lsp-mcp-wf-test2-*")
+            	if mkErr2 != nil {
+            		t.Logf("[workspace_folders] skipping multi-folder sub-case: %v", mkErr2)
+            	} else {
+            		defer os.RemoveAll(tmpDir2)
+            		tmpDir3, mkErr3 := os.MkdirTemp("", "lsp-mcp-wf-test3-*")
+            		if mkErr3 == nil {
+            			defer os.RemoveAll(tmpDir3)
+            			for _, extraDir := range []string{tmpDir2, tmpDir3} {
+            				addRes, addErr := callTool(ctx, session, "add_workspace_folder", map[string]any{
+            					"path": extraDir,
+            				})
+            				if addErr != nil || addRes.IsError {
+            					t.Logf("[workspace_folders] multi-folder add skipped for %s", filepath.Base(extraDir))
+            					continue
+            				}
+            				rmRes, rmErr := callTool(ctx, session, "remove_workspace_folder", map[string]any{
+            					"path": extraDir,
+            				})
+            				if rmErr != nil || rmRes.IsError {
+            					t.Logf("[workspace_folders] multi-folder remove failed for %s", filepath.Base(extraDir))
+            				}
+            			}
+            		}
+            	}
+            ```
+
+            Keep the final `return toolResult{tool: "workspace_folders", status: "pass"}` as
+            the last statement in the function.
+
+            ## Tests to write / modify
+            This task modifies an existing test function. No new imports are needed —
+            `os`, `fmt`, `strings`, `filepath`, and `testing` are all already imported.
+
+            ## Verification gate
+            1. Build: `GOWORK=off go build ./...` — must succeed with no errors.
+            2. Vet: `GOWORK=off go vet ./...` — no errors.
+            3. Postcondition — multiple list_workspace_folders calls now exist:
+               ```
+               grep -c "list_workspace_folders" /Users/dayna.blackwell/workspace/code/agent-lsp/test/multi_lang_test.go
+               ```
+               Expected: 3 or more (original call in Step 1 + 2 new calls in sub-cases A and B).
+            4. Postcondition — nonexistent path sub-case:
+               ```
+               grep -c "nonexistent" /Users/dayna.blackwell/workspace/code/agent-lsp/test/multi_lang_test.go
+               ```
+               Expected: 1 or more.
+
+            ## Constraints
+            - Do NOT modify any function other than `testWorkspaceFolders`.
+            - Do NOT add new import statements — all needed packages are already imported.
+            - Do NOT touch any file outside your ownership list (test/multi_lang_test.go only).
+          files:
+            - test/multi_lang_test.go
+        - id: B
+          task: |
+            ## Role
+            pkg/lsp API smoke test author.
+
+            ## What to implement
+
+            Create `/Users/dayna.blackwell/workspace/code/agent-lsp/pkg/lsp/lsp_test.go`
+            with package `lsp_test`.
+
+            The test file must contain a compile-time interface assertion (package-level var)
+            and a single test function `TestPkgLSPCompileSmoke`. No real LSP process is started.
+
+            ### Exact file content to write
+
+            ```go
+            package lsp_test
+
+            import (
+            	"context"
+            	"testing"
+
+            	internallsp "github.com/blackwell-systems/agent-lsp/internal/lsp"
+            	"github.com/blackwell-systems/agent-lsp/internal/config"
+            	publsp "github.com/blackwell-systems/agent-lsp/pkg/lsp"
+            )
+
+            // Compile-time assertion: ServerManager satisfies the ClientResolver interface
+            // declared in pkg/lsp.
+            var _ publsp.ClientResolver = (*publsp.ServerManager)(nil)
+
+            // TestPkgLSPCompileSmoke verifies that pkg/lsp re-exports are type-compatible
+            // with their internal/lsp counterparts. No LSP binary is started.
+            func TestPkgLSPCompileSmoke(t *testing.T) {
+            	t.Skip("compile smoke only — verifies type aliases compile correctly")
+
+            	// NewLSPClient: func(string, []string) *LSPClient
+            	var newClientFn func(string, []string) *publsp.LSPClient = publsp.NewLSPClient
+            	_ = newClientFn
+
+            	// NewSingleServerManager: func(*LSPClient) *ServerManager
+            	var newSingleFn func(*publsp.LSPClient) *publsp.ServerManager = publsp.NewSingleServerManager
+            	_ = newSingleFn
+
+            	// NewMultiServerManager: func([]config.ServerEntry) *ServerManager
+            	var newMultiFn func([]config.ServerEntry) *publsp.ServerManager = publsp.NewMultiServerManager
+            	_ = newMultiFn
+
+            	// Type alias identity: publsp.LSPClient IS internallsp.LSPClient.
+            	var _ *internallsp.LSPClient = (*publsp.LSPClient)(nil)
+            	var _ *internallsp.ServerManager = (*publsp.ServerManager)(nil)
+
+            	// ClientResolver interface method signatures.
+            	var cr publsp.ClientResolver
+            	var ctx context.Context = context.Background()
+            	_ = cr.ClientForFile("/tmp/test.go")
+            	_ = cr.DefaultClient()
+            	_ = cr.AllClients()
+            	_ = cr.Shutdown(ctx)
+            }
+            ```
+
+            Note: `t.Skip` is the first statement so the nil-receiver method calls never
+            execute at runtime, but the compiler still verifies their signatures.
+
+            ## Verification gate
+            1. Build: `GOWORK=off go build ./pkg/lsp/...` — must succeed.
+            2. Test (expect SKIP): `GOWORK=off go test ./pkg/lsp/... -run TestPkgLSPCompileSmoke -v`
+               — output must contain `--- SKIP`.
+            3. Vet: `GOWORK=off go vet ./pkg/lsp/...` — no errors.
+            4. Postcondition:
+               ```
+               grep -c "var _ publsp.ClientResolver" /Users/dayna.blackwell/workspace/code/agent-lsp/pkg/lsp/lsp_test.go
+               ```
+               Expected: 1.
+
+            ## Constraints
+            - Do NOT start any LSP binary or call Initialize.
+            - Do NOT modify pkg/lsp/lsp.go, pkg/lsp/doc.go, or any existing file.
+            - Package declaration must be `package lsp_test` (external test package).
+            - Do NOT call NewMultiServerManager with real data at runtime.
+          files:
+            - pkg/lsp/lsp_test.go
+        - id: D
+          task: |
+            ## Role
+            pkg/session API smoke test author.
+
+            ## What to implement
+
+            Create `/Users/dayna.blackwell/workspace/code/agent-lsp/pkg/session/session_test.go`
+            with package `session_test`.
+
+            The test confirms that the re-export aliases and constructor functions in
+            `pkg/session/session.go` compile correctly and that `*SerializedExecutor`
+            satisfies the `SessionExecutor` interface.
+
+            ### Exact file content to write
+
+            ```go
+            package session_test
+
+            import (
+            	"context"
+            	"testing"
+
+            	internallsp "github.com/blackwell-systems/agent-lsp/internal/lsp"
+            	internalsession "github.com/blackwell-systems/agent-lsp/internal/session"
+            	pubsession "github.com/blackwell-systems/agent-lsp/pkg/session"
+            )
+
+            // Compile-time assertion: *SerializedExecutor satisfies SessionExecutor.
+            var _ pubsession.SessionExecutor = (*internalsession.SerializedExecutor)(nil)
+
+            // TestPkgSessionCompileSmoke verifies that pkg/session re-exports are type-compatible
+            // with their internal/session counterparts. No LSP binary is started.
+            func TestPkgSessionCompileSmoke(t *testing.T) {
+            	t.Skip("compile smoke only — verifies type aliases compile correctly")
+
+            	// NewSerializedExecutor: func() *SerializedExecutor
+            	var newExecFn func() *internalsession.SerializedExecutor = pubsession.NewSerializedExecutor
+            	_ = newExecFn
+
+            	// NewSessionManager: func(lsp.ClientResolver) *SessionManager
+            	// internallsp.ClientResolver and pkg/lsp.ClientResolver are the same interface
+            	// via type alias; use the internal form here to avoid a cross-pkg/ import.
+            	var newMgrFn func(internallsp.ClientResolver) *pubsession.SessionManager = pubsession.NewSessionManager
+            	_ = newMgrFn
+
+            	// Type alias identity.
+            	var _ *internalsession.SessionManager = (*pubsession.SessionManager)(nil)
+            	var _ *internalsession.SimulationSession = (*pubsession.SimulationSession)(nil)
+            	var _ pubsession.SessionStatus = internalsession.StatusCreated
+
+            	// SessionExecutor interface method signatures.
+            	var exec pubsession.SessionExecutor
+            	var sess *pubsession.SimulationSession
+            	var ctx context.Context = context.Background()
+            	_ = exec.Acquire(ctx, sess)
+            	exec.Release(sess)
+            }
+            ```
+
+            Note: `t.Skip` is the first statement so the nil-receiver method calls never
+            execute at runtime.
+
+            ## Verification gate
+            1. Build: `GOWORK=off go build ./pkg/session/...` — must succeed.
+            2. Test (expect SKIP): `GOWORK=off go test ./pkg/session/... -run TestPkgSessionCompileSmoke -v`
+               — output must contain `--- SKIP`.
+            3. Vet: `GOWORK=off go vet ./pkg/session/...` — no errors.
+            4. Postcondition:
+               ```
+               grep -c "SessionExecutor" /Users/dayna.blackwell/workspace/code/agent-lsp/pkg/session/session_test.go
+               ```
+               Expected: 2 or more.
+
+            ## Constraints
+            - Do NOT start any LSP binary or call SessionManager methods at runtime.
+            - Do NOT modify session.go, doc.go, or any existing file.
+            - Package declaration must be `package session_test` (external test package).
+            - Do NOT import `pkg/lsp` — use `internal/lsp` directly to avoid circular imports.
+          files:
+            - pkg/session/session_test.go
+        - id: E
+          task: |
+            ## Role
+            pkg/types alias spot-check test author.
+
+            ## What to implement
+
+            Create `/Users/dayna.blackwell/workspace/code/agent-lsp/pkg/types/types_test.go`
+            with package `types_test`.
+
+            The test verifies that types exported by `pkg/types` are type aliases by
+            demonstrating direct assignability from `internal/types` values without conversion.
+
+            ### Exact file content to write
+
+            ```go
+            package types_test
+
+            import (
+            	"testing"
+
+            	internaltypes "github.com/blackwell-systems/agent-lsp/internal/types"
+            	pubtypes "github.com/blackwell-systems/agent-lsp/pkg/types"
+            )
+
+            // TestPkgTypesAliasAssignability verifies that pkg/types re-exports are true type
+            // aliases of internal/types — values are directly assignable without conversion.
+            func TestPkgTypesAliasAssignability(t *testing.T) {
+            	t.Skip("compile smoke only — verifies type alias assignability")
+
+            	// Position: must be directly assignable (type alias, not distinct type).
+            	internalPos := internaltypes.Position{Line: 1, Character: 5}
+            	var pubPos pubtypes.Position = internalPos
+            	_ = pubPos
+
+            	// Range.
+            	internalRange := internaltypes.Range{
+            		Start: internaltypes.Position{Line: 0, Character: 0},
+            		End:   internaltypes.Position{Line: 0, Character: 10},
+            	}
+            	var pubRange pubtypes.Range = internalRange
+            	_ = pubRange
+
+            	// LSPDiagnostic.
+            	internalDiag := internaltypes.LSPDiagnostic{
+            		Range:    internalRange,
+            		Severity: 1,
+            		Message:  "test error",
+            	}
+            	var pubDiag pubtypes.LSPDiagnostic = internalDiag
+            	_ = pubDiag
+
+            	// TextEdit.
+            	internalEdit := internaltypes.TextEdit{
+            		Range:   internalRange,
+            		NewText: "hello",
+            	}
+            	var pubEdit pubtypes.TextEdit = internalEdit
+            	_ = pubEdit
+
+            	// ToolResult.
+            	internalResult := internaltypes.ToolResult{
+            		Content: []internaltypes.ContentItem{{Type: "text", Text: "ok"}},
+            		IsError: false,
+            	}
+            	var pubResult pubtypes.ToolResult = internalResult
+            	_ = pubResult
+
+            	// Constant aliases.
+            	var _ pubtypes.InlayHintKind = pubtypes.InlayHintKindType
+            	var _ pubtypes.DocumentHighlightKind = pubtypes.DocumentHighlightText
+            }
+            ```
+
+            ## Verification gate
+            1. Build: `GOWORK=off go build ./pkg/types/...` — must succeed.
+            2. Test (expect SKIP): `GOWORK=off go test ./pkg/types/... -run TestPkgTypesAliasAssignability -v`
+               — output must contain `--- SKIP`.
+            3. Vet: `GOWORK=off go vet ./pkg/types/...` — no errors.
+            4. Postcondition:
+               ```
+               grep -c "var pubPos pubtypes.Position" /Users/dayna.blackwell/workspace/code/agent-lsp/pkg/types/types_test.go
+               ```
+               Expected: 1.
+
+            ## Constraints
+            - Do NOT create new types or functions — only assignability assertions.
+            - Package declaration must be `package types_test` (external test package).
+            - Do NOT modify doc.go or any existing file.
+            - Do NOT import `internal/lsp` or `internal/session` — types only.
+          files:
+            - pkg/types/types_test.go
+        - id: F
+          task: |
+            ## Role
+            README badge updater.
+
+            ## What to implement
+
+            Make two targeted edits to `README.md`:
+
+            ### Edit 1: Badge on line 8
+
+            Find this exact line in README.md:
+            ```
+            [![CI Coverage](https://img.shields.io/badge/CI--verified_tools-49%2F50-brightgreen.svg)](#tools)
+            ```
+
+            Replace it with:
+            ```
+            [![CI Coverage](https://img.shields.io/badge/CI--verified_tools-50%2F50-brightgreen.svg)](#tools)
+            ```
+
+            ### Edit 2: CI coverage prose section (around line 252)
+
+            Find this exact text in README.md:
+            ```
+            **CI coverage:** The following tools are end-to-end integration-tested against real language servers on every CI run across all 30 languages (34 tools in the multi-language harness; 47/50 total across all test suites):
+            ```
+
+            Replace only the `47/50` fragment with `50/50`. Do not change any other number
+            in that line. The result should read:
+            ```
+            **CI coverage:** The following tools are end-to-end integration-tested against real language servers on every CI run across all 30 languages (34 tools in the multi-language harness; 50/50 total across all test suites):
+            ```
+
+            If the prose line does not exist exactly as shown, search for `47/50` in the file
+            and replace that instance. If neither match is found, add a footnote after the
+            `[![CI Coverage` badge line:
+            ```
+            <!-- get_symbol_documentation is covered by TestGetSymbolDocumentation in test/documentation_test.go -->
+            ```
+
+            ## Verification gate
+            1. Badge check:
+               ```
+               grep "50%2F50" /Users/dayna.blackwell/workspace/code/agent-lsp/README.md
+               ```
+               Expected: 1 match.
+            2. No `49%2F50` remaining:
+               ```
+               grep "49%2F50" /Users/dayna.blackwell/workspace/code/agent-lsp/README.md
+               ```
+               Expected: 0 matches.
+            3. Prose check:
+               ```
+               grep "47/50" /Users/dayna.blackwell/workspace/code/agent-lsp/README.md
+               ```
+               Expected: 0 matches (replaced with 50/50).
+
+            ## Constraints
+            - Do NOT modify any file besides README.md.
+            - Do NOT change any version numbers, language counts, or other badge values.
+            - Do NOT reformat paragraphs or reflow any text.
+          files:
+            - README.md
+    - number: 2
+      agents:
+        - id: C
+          task: |
+            ## Role
+            Fuzzy position fallback e2e test author.
+
+            ## Context
+            Wave 1 Agent A has already modified `testWorkspaceFolders` in
+            `test/multi_lang_test.go` and the file is merged. Agent C appends a brand-new
+            top-level test function. Do not modify any existing function.
+
+            ## What to implement
+
+            Append a new top-level test function `TestFuzzyPositionFallback` to
+            `test/multi_lang_test.go`. This function goes AFTER the last function in
+            the file.
+
+            Find the last closing brace `}` of `TestGetCrossRepoReferences` (the function
+            ends around line 1730 in the pre-Wave-1 file; after Agent A's changes it may be
+            slightly later — locate it by searching for `TestGetCrossRepoReferences` and
+            finding its closing `}`). Append the new function after that closing brace.
+
+            ### Go fixture reference (verified during Scout analysis)
+
+            `test/fixtures/go/main.go` content:
+            - Line 6: `type Person struct {`  — Person type declaration; col 6 is the `P`
+            - Line 12: `func (p Person) Greet() string {`
+
+            Off-by-one test positions: lines 5 and 7, column 6.
+
+            ### Function to append
+
+            ```go
+            // TestFuzzyPositionFallback verifies that go_to_definition and get_references
+            // succeed when called with positions that are off by one line from the exact
+            // symbol location, exercising the fuzzy position fallback path end-to-end
+            // against a real gopls instance.
+            //
+            // The Go fixture main.go declares `type Person struct` at line 6, column 6.
+            // Off-by-one positions (lines 5 and 7) are tested. A non-empty result
+            // (or a skip) proves the round-trip completed without a transport error.
+            func TestFuzzyPositionFallback(t *testing.T) {
+            	lspBinaryPath, err := exec.LookPath("gopls")
+            	if err != nil {
+            		t.Skip("skipping TestFuzzyPositionFallback: gopls not found on PATH")
+            	}
+
+            	binaryPath := getMultilangBinary(t)
+            	if binaryPath == "" {
+            		t.Skip("failed to build agent-lsp binary")
+            	}
+
+            	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+            	defer cancel()
+
+            	goFixture := filepath.Join(testDir(t), "fixtures", "go")
+            	mainFile := filepath.Join(goFixture, "main.go")
+
+            	cmd := exec.Command(binaryPath, "go", lspBinaryPath)
+            	client := mcp.NewClient(&mcp.Implementation{Name: "fuzzy-fallback-test", Version: "1.0"}, nil)
+            	transport := &mcp.CommandTransport{Command: cmd}
+            	session, err := client.Connect(ctx, transport, nil)
+            	if err != nil {
+            		t.Skipf("failed to connect MCP session for gopls: %v", err)
+            		return
+            	}
+            	defer session.Close()
+
+            	res, err := callTool(ctx, session, "start_lsp", map[string]any{"root_dir": goFixture})
+            	if err != nil || res.IsError {
+            		t.Skipf("start_lsp failed: err=%v", err)
+            		return
+            	}
+            	time.Sleep(8 * time.Second)
+
+            	res, err = callTool(ctx, session, "open_document", map[string]any{
+            		"file_path":   mainFile,
+            		"language_id": "go",
+            	})
+            	if err != nil || res.IsError {
+            		t.Skipf("open_document failed: err=%v", err)
+            		return
+            	}
+            	time.Sleep(2 * time.Second)
+
+            	// Test go_to_definition with off-by-one positions around line 6.
+            	// Line 5 is the comment above the struct; line 7 is inside the struct body.
+            	for _, offByOneLine := range []int{5, 7} {
+            		res, err = callTool(ctx, session, "go_to_definition", map[string]any{
+            			"file_path":   mainFile,
+            			"language_id": "go",
+            			"line":        offByOneLine,
+            			"column":      6,
+            		})
+            		if err != nil {
+            			t.Errorf("go_to_definition(line=%d): unexpected transport error: %v", offByOneLine, err)
+            			continue
+            		}
+            		if res.IsError {
+            			text, _ := textFromResult(res)
+            			t.Logf("go_to_definition(line=%d): server error (fallback may not apply): %s", offByOneLine, text)
+            			continue
+            		}
+            		text, terr := textFromResult(res)
+            		if terr != nil {
+            			t.Errorf("go_to_definition(line=%d): extract text: %v", offByOneLine, terr)
+            			continue
+            		}
+            		if text == "" || text == "null" || text == "[]" {
+            			t.Logf("go_to_definition(line=%d): empty result (gopls returned nothing at off-by-one position)", offByOneLine)
+            		} else {
+            			t.Logf("go_to_definition(line=%d): result len=%d (fallback active or exact match)", offByOneLine, len(text))
+            		}
+            	}
+
+            	// Test get_references with off-by-one positions.
+            	for _, offByOneLine := range []int{5, 7} {
+            		res, err = callTool(ctx, session, "get_references", map[string]any{
+            			"file_path":           mainFile,
+            			"language_id":         "go",
+            			"line":                offByOneLine,
+            			"column":              6,
+            			"include_declaration": true,
+            		})
+            		if err != nil {
+            			t.Errorf("get_references(line=%d): unexpected transport error: %v", offByOneLine, err)
+            			continue
+            		}
+            		if res.IsError {
+            			text, _ := textFromResult(res)
+            			t.Logf("get_references(line=%d): server error: %s", offByOneLine, text)
+            			continue
+            		}
+            		text, terr := textFromResult(res)
+            		if terr != nil {
+            			t.Errorf("get_references(line=%d): extract text: %v", offByOneLine, terr)
+            			continue
+            		}
+            		t.Logf("get_references(line=%d): result len=%d", offByOneLine, len(text))
+            	}
+            }
+            ```
+
+            All imports used in this function (`exec`, `context`, `filepath`, `mcp`, `time`)
+            are already present in the file's import block. Do NOT add new imports.
+
+            ## Verification gate
+            1. Build: `GOWORK=off go build ./...` — must succeed.
+            2. Vet: `GOWORK=off go vet ./...` — no errors.
+            3. Postcondition — function exists:
+               ```
+               grep -c "func TestFuzzyPositionFallback" /Users/dayna.blackwell/workspace/code/agent-lsp/test/multi_lang_test.go
+               ```
+               Expected: 1.
+            4. List check (compiles without gopls required):
+               ```
+               GOWORK=off go test -run TestFuzzyPositionFallback -list . ./test/ 2>&1 | head -5
+               ```
+               Expected: `TestFuzzyPositionFallback` listed with no build errors.
+
+            ## Constraints
+            - Do NOT modify any existing function.
+            - Append only — the new function goes after the closing `}` of
+              `TestGetCrossRepoReferences`.
+            - Do NOT add new import statements.
+            - Do NOT call t.Parallel() in this test.
+            - Do NOT touch any file outside your ownership list.
+          files:
+            - test/multi_lang_test.go
+          dependencies:
+            - A
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/... ./pkg/...
+          required: true
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |
+            Agent A's sub-case A/B parse the list_workspace_folders result to look for
+            tmpDir, but some LSP servers return folder URIs as "file:///tmp/..." rather than
+            bare paths, so strings.Contains(listText, tmpDir) may miss the entry.
+          likelihood: medium
+          impact: low
+          mitigation: |
+            Agent A's brief uses both `filepath.Base(tmpDir)` and `tmpDir` in the Contains
+            check. The full URI will contain the base name. If neither matches, the function
+            logs a warning (t.Logf) rather than failing, since folder-list shape is
+            server-dependent and not under test here.
+        - scenario: |
+            Agent B/D/E compile-smoke tests call methods on nil interface values after the
+            t.Skip. If t.Skip is placed after the nil method calls (incorrect order), the
+            test panics instead of skipping.
+          likelihood: low
+          impact: medium
+          mitigation: |
+            Agent briefs explicitly show t.Skip as the FIRST statement in the function body,
+            before all variable declarations. Verification gate runs the test and checks for
+            `--- SKIP` in output, not FAIL or panic.
+        - scenario: |
+            Agent C appends to test/multi_lang_test.go after Agent A's changes but the
+            merge may shift line numbers, causing the "append after TestGetCrossRepoReferences"
+            instruction to miss if the agent uses line numbers.
+          likelihood: low
+          impact: low
+          mitigation: |
+            Agent C's brief uses text search ("find TestGetCrossRepoReferences and its closing
+            }") rather than line numbers. The function name is unique and stable.
+        - scenario: |
+            Agent D's session_test.go imports internallsp.ClientResolver but
+            pubsession.NewSessionManager is typed as func(lsp.ClientResolver) where lsp
+            refers to internal/lsp. The assignment var newMgrFn func(internallsp.ClientResolver)
+            *pubsession.SessionManager = pubsession.NewSessionManager should compile because
+            they are the same type, but the Go compiler may reject it if the import paths differ.
+          likelihood: low
+          impact: medium
+          mitigation: |
+            Since pkg/session/session.go uses internallsp.ClientResolver (from internal/session's
+            import of internal/lsp), and Agent D also imports internal/lsp directly, the types
+            are identical. The assignment is a direct function variable binding, not an interface
+            assertion, so import path matching is exact. This is safe.
+        - scenario: |
+            The README prose line with "47/50" may not exist verbatim (it may have already
+            been updated in a prior IMPL or the line may differ in whitespace).
+          likelihood: low
+          impact: low
+          mitigation: |
+            Agent F's brief provides a fallback: if the exact text is not found, search for
+            `47/50` anywhere in the file. If that is also absent, add an HTML comment footnote
+            rather than failing.
+known_issues:
+    - title: finalize-scout validate_briefs false positives
+      description: |
+        The validate_briefs step reports false positives for Agents A, C, and F.
+        symbol_missing for filepath, os, strings, testing, testWorkspaceFolders: these
+        exist in test/multi_lang_test.go as package imports (lines 9, 11) and a function
+        declaration (line 1081) but the brief validator only scans declared Go symbols,
+        not import aliases. symbol_missing for P, Person, exec, mcp in Agent C: these
+        appear in code-block prose in the task description, not as claimed symbol
+        references. line_invalid for lines 5, 6, 7, 8, 252: the tool parses
+        prose-embedded line numbers as file:line assertions (false positives).
+        Schema validation, I1/I2/I3, E35, test-cascade, and wave-structure all pass.
+      status: false_positive
+      workaround: |
+        Run /saw wave as normal. The false positives do not affect agent execution.
+        All symbols mentioned (filepath, os, strings, testWorkspaceFolders) are
+        confirmed present in test/multi_lang_test.go via grep.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+            issues:
+                - check: pattern_accuracy
+                  severity: warning
+                  description: Brief states the new TestFuzzyPositionFallback function goes AFTER the last function in the file, but then instructs appending after TestGetCrossRepoReferences specifically. TestGetCrossRepoReferences is NOT the last function — statusIcon (line 1732) and printMultiLangSummary (line 1744) follow it. Both insertion points produce valid Go; the inconsistency is advisory. Agent should append after the final closing brace of the file (after printMultiLangSummary) to be consistent with the opening statement.
+                  file: test/multi_lang_test.go
+                  symbol: TestGetCrossRepoReferences
+        D:
+            agent_id: D
+            verdict: PASS
+        E:
+            agent_id: E
+            verdict: PASS
+        F:
+            agent_id: F
+            verdict: PASS
+    summary: 'All six agent briefs verified against the codebase. File existence checks pass: test/multi_lang_test.go and README.md exist for modification; the three pkg/ test files do not exist (correct for action:new). Symbol accuracy checks pass: testWorkspaceFolders at line 1081 matches the exact snippet shown in Agent A''s brief; textFromResult, callTool, getMultilangBinary, testDir all confirmed present; NewLSPClient/NewSingleServerManager/NewMultiServerManager signatures match internal/lsp exactly; ClientResolver interface methods match pkg/lsp/lsp.go; NewSessionManager/NewSerializedExecutor/Acquire/Release signatures match internal/session exactly; all type aliases in pkg/types/doc.go match the assignability assertions in Agent E''s brief. The README badge (49%2F50 on line 8) and prose (47/50 on line 252) targets exist as described. One advisory warning: Agent C''s brief contradicts itself — it says ''the new function goes AFTER the last function in the file'' but then instructs appending after TestGetCrossRepoReferences, which is followed by statusIcon and printMultiLangSummary helper functions. Either insertion point compiles correctly; the inconsistency is advisory only.'
+    reviewed_at: "2026-04-10T23:25:44Z"
+    issue_count: 1
+state: SCOUT_PENDING
