@@ -10,6 +10,8 @@ jobs:
   # Unit tests + binary smoke tests. No live LSP servers needed.
   unit-and-smoke:
     runs-on: ubuntu-latest
+    env:
+      GOWORK: "off"
     steps:
       - uses: actions/checkout@v4
 
@@ -19,13 +21,13 @@ jobs:
           cache: true
 
       - name: Build
-        run: GOWORK=off go build ./...
+        run: go build ./...
 
       - name: Vet
-        run: GOWORK=off go vet ./...
+        run: go vet ./...
 
       - name: Unit tests
-        run: GOWORK=off go test ./internal/... ./cmd/...
+        run: go test ./internal/... ./cmd/...
 
       - name: Install TypeScript language server
         run: npm install -g typescript-language-server typescript
