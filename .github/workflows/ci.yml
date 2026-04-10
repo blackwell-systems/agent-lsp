@@ -530,3 +530,41 @@ jobs:
 
       - name: Run MongoDB tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^MongoDB$" ./test/ -timeout 10m
+
+  change-impact-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install gopls
+        run: go install golang.org/x/tools/gopls@latest
+
+      - name: Run get_change_impact test
+        run: GOWORK=off go test -v -run TestGetChangeImpact ./test/ -timeout 5m
+
+  cross-repo-references-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install gopls
+        run: go install golang.org/x/tools/gopls@latest
+
+      - name: Run get_cross_repo_references test
+        run: GOWORK=off go test -v -run TestGetCrossRepoReferences ./test/ -timeout 5m
