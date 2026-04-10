@@ -538,6 +538,7 @@ waves:
             ```
           files:
             - .github/workflows/ci.yml
+      base_commit: 31d2efc14c26fa6dd583bf94ae42422a9aefec3e
     - number: 2
       type: integration
       agents:
@@ -724,6 +725,49 @@ post_merge_checklist:
                   grep -q '"Nix"' test/multi_lang_test.go
                   grep -q '"Dart"' test/multi_lang_test.go
               command: grep -q '"Clojure"' test/multi_lang_test.go && grep -q '"Nix"' test/multi_lang_test.go && grep -q '"Dart"' test/multi_lang_test.go
+completion_reports:
+    A:
+        status: complete
+        branch: saw/clojure-nix-dart-integration/wave1-agent-A
+        commit: 9e66ae7
+        files_changed:
+            - test/fixtures/clojure/deps.edn
+            - test/fixtures/clojure/src/fixture/core.clj
+        files_created:
+            - test/fixtures/clojure/deps.edn
+            - test/fixtures/clojure/src/fixture/core.clj
+        verification: PASS
+        notes: Clojure fixture files created with exact content matching position calibration. 7-line core.clj verified. Go build and vet clean.
+    B:
+        status: complete
+        branch: saw/clojure-nix-dart-integration/wave1-agent-B
+        commit: 565283b
+        files_created:
+            - test/fixtures/nix/flake.nix
+        verification: PASS
+        notes: '9-line flake.nix created exactly as specified. Position calibration: helper at line 5 col 5, self.helper at line 7 col 21. Build and vet clean.'
+    C:
+        status: complete
+        branch: saw/clojure-nix-dart-integration/wave1-agent-C
+        commit: d9ded64
+        files_changed:
+            - test/fixtures/dart/pubspec.yaml
+            - test/fixtures/dart/lib/fixture.dart
+            - test/fixtures/dart/lib/caller.dart
+        files_created:
+            - test/fixtures/dart/pubspec.yaml
+            - test/fixtures/dart/lib/fixture.dart
+            - test/fixtures/dart/lib/caller.dart
+        verification: PASS
+        notes: 'Dart fixture files created. All file content checks pass. Line counts verified: fixture.dart=5, caller.dart=6. Position calibration preserved exactly as specified. Go build and vet clean.'
+    D:
+        status: complete
+        branch: saw/clojure-nix-dart-integration/wave1-agent-D
+        commit: d1e5345
+        files_changed:
+            - .github/workflows/ci.yml
+        verification: PASS
+        notes: Appended multi-lang-clojure, multi-lang-nix, multi-lang-dart jobs to ci.yml. All grep checks, build, and vet pass. Existing SQL job untouched.
 pre_mortem:
     overall_risk: low
     rows:
@@ -775,6 +819,6 @@ critic_report:
     summary: All four agent briefs verified against the codebase. The three new fixture directories (clojure, nix, dart) do not yet exist — confirming action:new files are genuinely new. The ci.yml exists and its last job (multi-lang-sql) and last step text match the anchor described in Agent D's brief exactly. All langConfig struct fields referenced in the interface contracts (callSiteFile, completionFile, secondFile, inlayHintEndLine, renameSymbolLine, renameSymbolColumn, renameSymbolName, codeActionLine, codeActionEndLine, highlightLine, highlightColumn) exist in the actual langConfig struct in multi_lang_test.go. Column position derivations for Clojure, Nix, and Dart were manually verified against the fixture content specified in each brief and are correct. The post_merge_checklist anchor text was verified via hex dump against the actual SQL entry closing lines in multi_lang_test.go — the tab indentation pattern (3 tabs for codeActionLine/codeActionEndLine fields, 2 tabs for closing },, 1 tab for slice }, no indent for function }) matches exactly. File ownership is disjoint across all four Wave 1 agents. No agent exceeds the 8-file complexity threshold.
     reviewed_at: "2026-04-10T01:43:43Z"
     issue_count: 0
-state: "REVIEWED"
+state: WAVE_COMPLETE
 original_branch: main
 injection_method: manual-fallback
