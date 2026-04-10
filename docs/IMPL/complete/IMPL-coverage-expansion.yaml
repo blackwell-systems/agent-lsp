@@ -1,3 +1,4 @@
+completion_date: "2026-04-10"
 title: CI Tool Coverage Expansion
 feature_slug: coverage-expansion
 verdict: SUITABLE
@@ -836,6 +837,7 @@ waves:
               for a given language, the table should be adjusted post-merge.
           files:
             - README.md
+      base_commit: 247031c6708e9c8a222dce6cf208a8130ddb8d39
 quality_gates:
     level: standard
     gates:
@@ -851,6 +853,49 @@ quality_gates:
           command: GOWORK=off go test ./internal/... ./cmd/...
           required: true
           repo: agent-lsp
+completion_reports:
+    A:
+        status: complete
+        branch: saw/coverage-expansion/wave1-agent-A
+        commit: b53884b
+        files_changed:
+            - test/multi_lang_test.go
+        tests_added:
+            - TestGetChangeImpact
+            - TestGetCrossRepoReferences
+        verification: PASS
+    A2:
+        status: complete
+        branch: saw/coverage-expansion/wave1-agent-A2
+        commit: 729bd3a
+        files_changed:
+            - .github/workflows/ci.yml
+        verification: PASS
+        notes: Appended change-impact-test and cross-repo-references-test jobs to ci.yml. Both jobs follow the speculative-test pattern (Go + gopls only). YAML valid, grep count = 2.
+    B:
+        status: complete
+        branch: saw/coverage-expansion/wave1-agent-B
+        commit: b89c5cc
+        files_changed:
+            - test/lang_configs_test.go
+        verification: PASS
+        notes: Enriched Lua (supportsFormatting true, renameSymbolLine 5), PHP (highlight/rename/codeAction fields), and Ruby (highlight/rename/codeAction fields) langConfig structs. Build, vet, and test compilation all pass. All four verification grep checks match.
+    C:
+        status: complete
+        branch: saw/coverage-expansion/wave1-agent-C
+        commit: 542e894
+        files_changed:
+            - test/fixtures/lua/person.lua
+        verification: PASS
+        notes: 'Added sentinel line (two trailing spaces) at line 23. All three verification checks pass: trailing whitespace found on line 23, last line is ''return Person'', file is 24 lines.'
+    D:
+        status: complete
+        branch: saw/coverage-expansion/wave1-agent-D
+        commit: "5929442"
+        files_changed:
+            - README.md
+        verification: PASS
+        notes: Updated 5 language rows (Lua, PHP, Ruby, Kotlin, C#) and tool coverage note from 47/50 to 49/50. All grep verification checks pass. No Go files modified.
 pre_mortem:
     overall_risk: low
     rows:
@@ -924,6 +969,5 @@ critic_report:
     summary: 'All five agent briefs verified against the codebase. Files exist as expected (all action:modify files are present). Agent A''s code patterns match speculative_test.go exactly: mcp.NewClient, mcp.CommandTransport{Command: cmd}, callTool helper, textFromResult helper are all confirmed present. Import constraints are satisfied — encoding/json, context, exec, filepath, time, fmt, mcp are all imported in multi_lang_test.go. Agent A2''s insertion point (after the MongoDB test run line) matches the actual last line of ci.yml. Agent B''s three exact replacement strings are all confirmed present in lang_configs_test.go. The Lua block text, PHP block text (ending in symbolName: "Person" with C++ block following), and Ruby block text (ending in symbolName: "Person" with YAML block following) all match. Agent C''s person.lua ends at line 23 with ''return Person''; the brief''s claimed 23-line count and last-6-lines layout are accurate. Agent D''s five README table rows are confirmed present with the exact strings specified for find-and-replace. The coverage note ''will be added in a future CI run'' is confirmed at README line 250. One advisory note: Agent A''s brief references ''mcp.NewClient'' with signature mcp.NewClient(*mcp.Implementation, nil) — this matches the pattern used in speculative_test.go line 39. No errors found across any agent.'
     reviewed_at: "2026-04-10T22:49:10Z"
     issue_count: 0
-state: "REVIEWED"
-original_branch: main
+state: COMPLETE
 injection_method: hook
