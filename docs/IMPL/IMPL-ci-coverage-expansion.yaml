@@ -352,6 +352,7 @@ waves:
           files:
             - .github/workflows/ci.yml
             - test/fixtures/mongodb/mongodb-language-server
+      base_commit: 26f8f83d41add4257d71934afd752b7f896291c1
     - number: 2
       agents:
         - id: B
@@ -541,6 +542,30 @@ quality_gates:
         - type: test
           command: GOWORK=off go test ./internal/... ./cmd/...
           required: true
+completion_reports:
+    A:
+        status: complete
+        branch: saw/ci-coverage-expansion/wave1-agent-A
+        commit: dc302cf
+        files_changed:
+            - test/fixtures/clojure/deps.edn
+            - test/fixtures/dart/pubspec.yaml
+            - test/fixtures/dart/bin/main.dart
+        files_created:
+            - test/fixtures/dart/bin/main.dart
+        verification: PASS
+        notes: 'Clojure deps.edn now has :paths ["src"]. Dart pubspec has publish_to: none. Dart bin/main.dart created with relative import. All build/vet/test gates pass.'
+    C:
+        status: complete
+        branch: saw/ci-coverage-expansion/wave1-agent-C
+        commit: 2b6bb58
+        files_changed:
+            - .github/workflows/ci.yml
+            - test/fixtures/mongodb/mongodb-language-server
+        files_created:
+            - test/fixtures/mongodb/mongodb-language-server
+        verification: PASS
+        notes: 'Replaced no-op MongoDB install step with VSIX download/extraction. Updated multi-lang-mongodb job comment block. Created executable wrapper fixture at test/fixtures/mongodb/mongodb-language-server. All quality gates pass: build, vet, unit tests.'
 pre_mortem:
     overall_risk: medium
     rows:
@@ -619,6 +644,6 @@ critic_report:
     summary: 'All four agents verified against the codebase. File existence checks pass for all ownership entries: deps.edn and pubspec.yaml exist for modification, and the new files (dart/bin/main.dart, mongodb/mongodb-language-server) do not yet exist. Pattern accuracy checks pass: the deps.edn content is exactly {}, pubspec.yaml content matches the brief exactly, ci.yml contains the exact install step text and comment block described for Agent C, the multi-lang-nix job structure matches what Agent B is told to expect, the four all-dashes README rows and the footnote sentence match what Agent D is told to find and replace. The ci.yml multi-lang-mongodb job already has continue-on-error: true as Agent C''s brief states. No i1 ownership conflicts: ci.yml appears in wave 1 (Agent C) and wave 2 (Agent B) in sequential non-overlapping waves. Complexity and caller exhaustiveness checks are clean.'
     reviewed_at: "2026-04-10T22:10:37Z"
     issue_count: 0
-state: "REVIEWED"
+state: REVIEWED
 original_branch: main
 injection_method: hook
