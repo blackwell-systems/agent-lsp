@@ -5,19 +5,22 @@
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 [![Languages](https://img.shields.io/badge/languages-30_CI--verified-brightgreen.svg)](#multi-language-support)
 [![Tools](https://img.shields.io/badge/tools-50-blue.svg)](#tools)
-[![CI Coverage](https://img.shields.io/badge/CI--verified_tools-34%2F50-brightgreen.svg)](#tools)
+[![CI Coverage](https://img.shields.io/badge/CI--verified_tools-49%2F50-brightgreen.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Agent Skills](assets/badge-agentskills.svg)](https://agentskills.io)
 
-Language servers are the intelligence layer behind IDE features: go-to-definition, find-all-references, inline errors, completions. They understand code semantically: types, symbols, scope, cross-file relationships. AI agents should be able to use them. Most can't, for two reasons.
+**agent-lsp makes code operations reliable for AI agents.**
 
-**First, existing MCP-LSP implementations are stateless bridges.** They cold-start the language server on every call, which means no warm index, no cross-file awareness, and no way to maintain session state across a multi-step workflow. The agent pays the indexing cost every time.
+It is a **stateful runtime** over real language servers, not a bridge. It keeps a warm semantic index and adds a **skill layer** that turns multi-step code operations into single, correct workflows.
 
-**Second, raw tools don't get used.** You can expose 50 tools to an agent, but in non-SDK human-in-the-loop workflows, agents routinely skip them, even when available. A safe rename requires `prepare_rename` → `rename_symbol` → `apply_edit` in sequence. An agent that has to reason its way to the correct sequence on every invocation will often skip steps or use the wrong tool. The tools exist but the workflow doesn't reliably happen.
+Most MCP-LSP tools fail in practice — for two reasons:
 
-agent-lsp solves both problems. It is a **stateful runtime** over real language servers, not a bridge. It maintains a persistent warm session and adds a **skill layer** that wraps correct tool sequences into single-command workflows agents actually use.
+- **They are stateless bridges.** Every call cold-starts the language server: no session, no context, no cross-file awareness. The agent pays the indexing cost every time.
+- **They expose raw tools.** Agents routinely skip steps or use tools incorrectly. A safe rename is not one tool — it's `prepare_rename` → `rename_symbol` → `apply_edit` in sequence. An agent reasoning its way to the correct sequence on every invocation will often get it wrong. The tools exist; the workflow doesn't reliably happen.
 
-**50 tools** across navigation, analysis, refactoring, and formatting; **34 CI-verified** end-to-end against real language servers across **30 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+agent-lsp fixes both. The **persistent session** indexes your workspace once and keeps it warm. The **skill layer** encodes correct tool sequences so workflows actually happen — not just tools that are available.
+
+**50 tools** across navigation, analysis, refactoring, and formatting; **49 CI-verified** end-to-end against real language servers across **30 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
 **Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One agent-lsp process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright; no reconfiguration when you switch projects.
 
