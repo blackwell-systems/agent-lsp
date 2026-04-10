@@ -52,8 +52,8 @@ roots. This adds each consumer as a workspace folder, waits for indexing, runs
 ```
 mcp__lsp__get_cross_repo_references({
   "symbol_file": "/abs/path/to/library/file.go",
-  "symbol_line": <line>,
-  "symbol_column": <column>,
+  "line": <line>,
+  "column": <column>,
   "consumer_roots": [
     "/abs/path/to/consumer-a",
     "/abs/path/to/consumer-b"
@@ -130,7 +130,7 @@ start_lsp(root_dir="/repos/config-lib")
 get_workspace_symbols(query="ParseConfig")        # find definition → file:42:6
 get_cross_repo_references(
   symbol_file="/repos/config-lib/pkg/config/parser.go",
-  symbol_line=42, symbol_column=6,
+  line=42, column=6,
   consumer_roots=["/repos/api-service", "/repos/worker-service", "/repos/batch-job"]
 )
 # → library_references: 2

@@ -4,8 +4,8 @@
 [![CI](https://github.com/blackwell-systems/agent-lsp/actions/workflows/ci.yml/badge.svg)](https://github.com/blackwell-systems/agent-lsp/actions)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 [![Languages](https://img.shields.io/badge/languages-30_CI--verified-brightgreen.svg)](#multi-language-support)
-[![Tools](https://img.shields.io/badge/tools-47-blue.svg)](#tools)
-[![CI Coverage](https://img.shields.io/badge/CI--verified_tools-34%2F47-brightgreen.svg)](#tools)
+[![Tools](https://img.shields.io/badge/tools-50-blue.svg)](#tools)
+[![CI Coverage](https://img.shields.io/badge/CI--verified_tools-34%2F50-brightgreen.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Agent Skills](assets/badge-agentskills.svg)](https://agentskills.io)
 
@@ -13,11 +13,11 @@ Language servers are the intelligence layer behind IDE features: go-to-definitio
 
 **First, existing MCP-LSP implementations are stateless bridges.** They cold-start the language server on every call, which means no warm index, no cross-file awareness, and no way to maintain session state across a multi-step workflow. The agent pays the indexing cost every time.
 
-**Second, raw tools don't get used.** You can expose 47 tools to an agent, but in non-SDK human-in-the-loop workflows, agents routinely skip them, even when available. A safe rename requires `prepare_rename` → `rename_symbol` → `apply_edit` in sequence. An agent that has to reason its way to the correct sequence on every invocation will often skip steps or use the wrong tool. The tools exist but the workflow doesn't reliably happen.
+**Second, raw tools don't get used.** You can expose 50 tools to an agent, but in non-SDK human-in-the-loop workflows, agents routinely skip them, even when available. A safe rename requires `prepare_rename` → `rename_symbol` → `apply_edit` in sequence. An agent that has to reason its way to the correct sequence on every invocation will often skip steps or use the wrong tool. The tools exist but the workflow doesn't reliably happen.
 
 agent-lsp solves both problems. It is a **stateful runtime** over real language servers, not a bridge. It maintains a persistent warm session and adds a **skill layer** that wraps correct tool sequences into single-command workflows agents actually use.
 
-**47 tools** across navigation, analysis, refactoring, and formatting; **34 CI-verified** end-to-end against real language servers across **30 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+**50 tools** across navigation, analysis, refactoring, and formatting; **34 CI-verified** end-to-end against real language servers across **30 languages**. Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
 **Work across all your projects in one AI session.** Point your AI assistant at your `~/code/` directory. One agent-lsp process automatically routes `.go` files to gopls, `.ts` files to typescript-language-server, `.py` to pyright; no reconfiguration when you switch projects.
 
@@ -35,17 +35,17 @@ Fourteen skills ship with agent-lsp:
 
 | Skill | Purpose |
 |-------|---------|
-| `/lsp-safe-edit` | Speculative preview before disk write, then before/after diagnostic diff; surfaces code actions on introduced errors; multi-file aware |
+| `/lsp-safe-edit` | Speculative preview before disk write (`simulate_edit_atomic`); refactor/rename preview via `simulate_chain`; before/after diagnostic diff; surfaces code actions on introduced errors; multi-file aware |
 | `/lsp-edit-export` | Safe editing of exported symbols; finds all callers first |
 | `/lsp-edit-symbol` | Edit a named symbol without knowing its file or position |
 | `/lsp-rename` | `prepare_rename` safety gate, preview all sites, confirm, then apply atomically |
 | `/lsp-verify` | Full three-layer check: diagnostics + build + tests; apply code actions on errors |
 | `/lsp-simulate` | Speculative editing: test changes without touching the file |
-| `/lsp-impact` | Blast-radius analysis before renaming or deleting a symbol |
+| `/lsp-impact` | Blast-radius analysis before renaming or deleting a symbol; accepts a file path to surface all exported-symbol impact at once via `get_change_impact` |
 | `/lsp-dead-code` | Detect zero-reference exports and unreachable symbols |
 | `/lsp-implement` | Find all concrete implementations of an interface or abstract type |
 | `/lsp-docs` | Three-tier documentation lookup: hover, offline toolchain (`go doc`, `pydoc`), source |
-| `/lsp-cross-repo` | Multi-root workspace analysis: add a consumer repo and find all cross-repo callers, references, and implementations of a library symbol |
+| `/lsp-cross-repo` | Multi-root cross-repo caller analysis: find all usages of a library symbol across consumer repos in a single `get_cross_repo_references` call; partitioned by repo |
 | `/lsp-local-symbols` | File-scoped analysis: list all symbols, find all usages within the file, get type info; faster than workspace search for local queries |
 | `/lsp-test-correlation` | Find and run only the tests that cover an edited file; faster than the full suite for targeted post-edit verification |
 | `/lsp-format-code` | Format a file or selection using the language server's formatter (`gofmt`, `prettier`, `rustfmt`); full-file or range, applies edits to disk |
@@ -139,14 +139,14 @@ Once your AI session opens, call `start_lsp` with your project root to initializ
 start_lsp(root_dir="/your/project")
 ```
 
-Then use any of the 47 tools. The session persists; no need to restart when switching files.
+Then use any of the 50 tools. The session persists; no need to restart when switching files.
 
 ## Why agent-lsp
 
 | | agent-lsp | other MCP-LSP implementations |
 |--|---------|---------------------|
 | Languages (CI-verified) | **30** (end-to-end integration tests) | config-listed, untested |
-| Tools | **47** | 3–18 |
+| Tools | **50** | 3–18 |
 | Multi-server routing | **✓** (one process, many languages) | varies |
 | LSP spec compliance | **3.17, built to spec** | ad hoc |
 | Connection model | **persistent** (warm index) | per-request or cold-start |
@@ -215,12 +215,12 @@ Java Tier 2 is skipped when jdtls does not finish indexing within the CI timeout
 
 All tools require `start_lsp` to be called first.
 
-**CI coverage:** The following tools are end-to-end integration-tested against real language servers on every CI run across all 30 languages (34 tools in the multi-language harness; 47/47 total across all test suites):
+**CI coverage:** The following tools are end-to-end integration-tested against real language servers on every CI run across all 30 languages (34 tools in the multi-language harness; 47/50 total across all test suites):
 
 - **Tier 1** (4 tools, all 30 languages): `start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`
 - **Tier 2** (34 tools): `get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`, `get_info_on_location`, `call_hierarchy`, `get_semantic_tokens`, `get_signature_help`, `get_document_highlights`, `get_inlay_hints`, `get_code_actions`, `prepare_rename`, `rename_symbol`, `get_server_capabilities`, `add_workspace_folder`, `go_to_type_definition`, `go_to_implementation`, `format_range`, `apply_edit`, `detect_lsp_servers`, `close_document`, `did_change_watched_files`, `run_build`, `run_tests`, `get_tests_for_file`, `get_symbol_source`, `go_to_symbol`, `restart_lsp_server`, `set_log_level`, `execute_command`
 
-Speculative session tools (`create_simulation_session`, `simulate_edit`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session`, `commit_session`, `discard_session`, `destroy_session`) are covered by `TestSpeculativeSessions` in `test/speculative_test.go`. All 47 tools are now covered across the three test suites.
+Speculative session tools (`create_simulation_session`, `simulate_edit`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session`, `commit_session`, `discard_session`, `destroy_session`) are covered by `TestSpeculativeSessions` in `test/speculative_test.go`. 47 of 50 tools are covered across the three test suites; `get_change_impact` and `get_cross_repo_references` will be added in a future CI run.
 
 ### Session
 | Tool | Description |
@@ -242,6 +242,8 @@ Speculative session tools (`create_simulation_session`, `simulate_edit`, `simula
 | `get_workspace_symbols` | Search symbols by name across the workspace; `detail_level=hover` enriches results with type signatures and docs without loading files into context |
 | `get_semantic_tokens` | Classify tokens in a range as function/parameter/variable/type/keyword/etc; the same data IDEs use for syntax highlighting |
 | `get_inlay_hints` | Inline type annotations and parameter name labels for a range; inferred type hints IDEs overlay on source code (Type and Parameter kinds) |
+| `get_change_impact` | Enumerate all exported symbols in one or more files, resolve their references across the workspace, and partition callers into test vs non-test; use before editing a file to understand blast radius |
+| `get_cross_repo_references` | Find all references to a library symbol across one or more consumer repos; adds consumer roots as workspace folders and partitions results by repo; use before changing a shared library API |
 
 ### Navigation
 | Tool | Description |

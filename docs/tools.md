@@ -1,6 +1,6 @@
 # agent-lsp Tool Reference
 
-All 47 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
+All 50 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
 both `line` and `column` in every tool call; the server converts internally to
 the 0-based values the LSP spec requires.
 
@@ -694,6 +694,109 @@ name. Optionally enrich results with hover documentation for a paginated window.
 - With `detail_level=hover`, `symbols[]` always contains the full result set.
   Use `offset` to page through the `enriched[]` window without re-running the
   workspace search.
+
+---
+
+### `get_change_impact`
+
+Enumerate all exported symbols in one or more files, resolve their references
+across the workspace, and partition callers into test vs non-test. Returns
+enclosing test function names for test references. Use before editing a file to
+understand blast radius.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `changed_files` | string[] | yes | Absolute paths to the files whose exported symbols should be analyzed |
+| `include_transitive` | boolean | no | Set to `true` to also resolve references for each caller (second-order callers). Default: `false` |
+
+**Example call**
+
+```json
+{
+  "changed_files": ["/abs/path/to/internal/lsp/client.go"],
+  "include_transitive": false
+}
+```
+
+**Returns**
+
+```json
+{
+  "affected_symbols": [
+    { "name": "LSPClient", "file": "internal/lsp/client.go", "line": 14 }
+  ],
+  "test_callers": [
+    { "name": "TestGetReferences", "file": "internal/lsp/client_test.go", "line": 42 }
+  ],
+  "non_test_callers": [
+    { "name": "HandleGetReferences", "file": "internal/tools/analysis.go", "line": 67 }
+  ]
+}
+```
+
+**Notes**
+
+- Only exported symbols are analyzed (uppercase identifiers in Go; all public symbols in other languages).
+- `test_callers` includes the name of the enclosing test function when available.
+- `non_test_callers` is the blast radius for production code.
+
+---
+
+### `get_cross_repo_references`
+
+Find all references to a library symbol across one or more consumer
+repositories. Adds each consumer root as a workspace folder, waits for
+indexing, then calls `get_references` and partitions results by repo root.
+Use before changing a shared library API to find all downstream callers.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol_file` | string | yes | Absolute path to the file containing the symbol definition |
+| `line` | integer | yes | 1-based line number of the symbol |
+| `column` | integer | yes | 1-based column number of the symbol |
+| `consumer_roots` | string[] | yes | Absolute paths to consumer repo roots to search |
+| `language_id` | string | no | Language ID (e.g. `"go"`); default `"plaintext"` |
+
+**Example call**
+
+```json
+{
+  "symbol_file": "/repos/config-lib/pkg/config/parser.go",
+  "line": 42,
+  "column": 6,
+  "consumer_roots": ["/repos/api-service", "/repos/worker-service"]
+}
+```
+
+**Returns**
+
+```json
+{
+  "library_references": [
+    { "file": "pkg/config/parser_test.go", "line": 18, "column": 3 }
+  ],
+  "consumer_references": {
+    "/repos/api-service": [
+      { "file": "/repos/api-service/main.go", "line": 14, "column": 9 }
+    ],
+    "/repos/worker-service": [
+      { "file": "/repos/worker-service/runner.go", "line": 8, "column": 5 }
+    ]
+  },
+  "warnings": []
+}
+```
+
+**Notes**
+
+- `library_references` covers references within the primary (library) workspace.
+- `consumer_references` maps each consumer root to its reference list.
+- `warnings` lists roots that could not be indexed; re-add manually if non-empty.
+- Requires `start_lsp` on the library root first.
 
 ---
 

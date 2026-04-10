@@ -32,7 +32,7 @@ test function names) and non-test callers in a single call.
 ```
 mcp__lsp__get_change_impact({
   "changed_files": ["/abs/path/to/file.go"],
-  "follow_transitive": false   // set true to surface second-order callers
+  "include_transitive": false   // set true to surface second-order callers
 })
 ```
 

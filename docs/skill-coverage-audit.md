@@ -1,22 +1,24 @@
 # agent-lsp Skill Coverage Audit
 
-**Date:** 2026-04-09 (updated 2026-04-09 post-sprint)  
-**Scope:** All 47 agent-lsp tools vs. 12 skills (10 at audit time, 2 added in sprint)  
+**Date:** 2026-04-09 (updated 2026-04-09 post-tools-sprint)  
+**Scope:** All 50 agent-lsp tools vs. 14 skills (10 at audit time, 4 added across sprints)  
 **Goal:** Identify coverage gaps and recommend new skill candidates
 
 ---
 
 ## Executive Summary
 
-- **Total tools:** 47
-- **Skills at audit:** 10 → **12 after sprint** (`/lsp-cross-repo`, `/lsp-local-symbols` added)
-- **Coverage:** ~33 tools directly surfaced through skills (~70%)
+- **Total tools:** 50
+- **Skills at audit:** 10 → **14 after sprints** (`/lsp-cross-repo`, `/lsp-local-symbols`, `/lsp-test-correlation`, `/lsp-format-code` added)
+- **Coverage:** ~35 tools directly surfaced through skills (~71%)
 - **Partial coverage:** 7 tools mentioned but not as primary workflow drivers
 - **Uncovered:** ~11 tools (down from 14 at audit time)
 
 **Sprint completed (P0):** `/lsp-cross-repo` shipped, `/lsp-local-symbols` shipped, `/lsp-rename` `prepare_rename` gate added, `/lsp-safe-edit` enhanced with `simulate_edit_atomic` pre-flight + `get_code_actions` on errors + multi-file protocol.
 
 **Sprint completed (P1):** `/lsp-verify` `get_tests_for_file` pre-step added, `/lsp-test-correlation` skill shipped, `/lsp-format-code` skill shipped, `format_document` folded into `/lsp-safe-edit` (post-edit) and `/lsp-verify` (post-verification).
+
+**Sprint completed (tools):** `get_change_impact` handler added and wired to `/lsp-impact` (Step 0 file-level entry), `get_cross_repo_references` handler added and wired to `/lsp-cross-repo` (Step 3 primary lookup), `simulate_chain` promoted from partial to fully covered via `/lsp-safe-edit` Step 3b refactor preview gate.
 
 **Remaining key gaps:** `go_to_type_definition` (no type introspection skill), `get_signature_help` (no parameter discovery skill).
 
@@ -53,8 +55,11 @@
 | `run_tests` | `lsp-verify` | Test execution |
 | `get_symbol_source` | `lsp-docs` (Tier 3) | Source text extraction |
 | `get_symbol_documentation` | `lsp-docs` (Tier 2) | Offline toolchain doc lookup |
+| `simulate_chain` | `lsp-safe-edit` | Refactor/rename preview gate (Step 3b) — chain edits, check `cumulative_delta`, commit or discard |
+| `get_change_impact` | `lsp-impact` | File-level blast-radius analysis (Step 0) — exports + test/non-test caller partition in one call |
+| `get_cross_repo_references` | `lsp-cross-repo` | Cross-repo reference lookup (Step 3) — adds consumer roots, partitions by repo, returns warnings |
 
-**Count:** 25 tools fully covered.
+**Count:** 28 tools fully covered.
 
 ---
 
@@ -68,10 +73,9 @@
 | ~~`format_range`~~ | ~~(none)~~ → `lsp-format-code` **(shipped)** | Range formatting | **Fixed:** covered by `/lsp-format-code` standalone skill |
 | `get_completions` | (none) | Code completion | No skill drives agent toward this |
 | `get_signature_help` | (none) | Function signature info | No skill drives agent toward this |
-| `simulate_chain` | `lsp-simulate` | Chained edits with per-step evaluation | Covered but as advanced workflow, not promoted |
 | `get_server_capabilities` | `lsp-impact`, `lsp-implement` | Capability checking | Used as optional prerequisite, not primary workflow driver |
 
-**Count:** 8 tools partially covered.
+**Count:** 7 tools partially covered.
 
 ---
 
@@ -345,9 +349,7 @@ Optional: file path (if working in multiple files)
 
 **Tools composed:**
 - `start_lsp` → initialize on library root
-- `add_workspace_folder` → add consumer repo
-- `list_workspace_folders` → confirm both roots are indexed
-- `get_references` (across both) → find all library symbol uses in consumer
+- `get_cross_repo_references` → add consumer repos, wait for indexing, partition results by repo (primary step, replaces manual add_workspace_folder + get_references)
 - `go_to_implementation` (cross-repo) → find all type implementations in consumer
 - `call_hierarchy` (cross-repo) → show callers in consumer of library functions
 
@@ -588,9 +590,9 @@ Arguments: file_path, line, column (cursor inside argument list)
 
 ## Conclusion
 
-**Post-sprint state:** ~70% of tools covered by 12 skills. P0 sprint completed all four items: `/lsp-cross-repo`, `/lsp-local-symbols`, `/lsp-rename` `prepare_rename` gate, and full `/lsp-safe-edit` enhancement.
+**Post-sprint state:** ~71% of tools covered by 14 skills. P0+P1 sprints added 4 new skills and enhanced 4 existing ones. Tools sprint added `get_change_impact` and `get_cross_repo_references` (50 total tools), promoted `simulate_chain` to fully covered.
 
-**P1 complete.** Remaining gaps (P2):
+**Remaining gaps (P2):**
 1. Type introspection — `go_to_type_definition` still uncovered; `/lsp-type-info` skill or `/lsp-docs` enhancement
 2. Parameter discovery — `get_signature_help` still uncovered; `/lsp-signature-help` skill (narrow but useful)
 3. Document low-level utilities (`close_document`, `restart_lsp_server`, `set_log_level`, etc.) without promoting to skills

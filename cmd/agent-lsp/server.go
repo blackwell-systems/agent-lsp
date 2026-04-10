@@ -906,6 +906,35 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		return makeCallToolResult(r), nil, err
 	})
 
+	type GetChangeImpactArgs struct {
+		ChangedFiles      []string `json:"changed_files"`
+		IncludeTransitive bool     `json:"include_transitive,omitempty"`
+	}
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_change_impact",
+		Description: "Enumerate all exported symbols in the specified files, resolve their references across the workspace, and partition callers into test vs non-test. Returns affected_symbols (name, file, line), test_callers (with enclosing test function names), and non_test_callers. Use before editing a file to understand blast radius. Set include_transitive=true to surface second-order callers (callers of callers).",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetChangeImpactArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleGetChangeImpact(ctx, cs.get(), toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
+	type GetCrossRepoReferencesArgs struct {
+		SymbolFile    string   `json:"symbol_file"`
+		Line          int      `json:"line"`
+		Column        int      `json:"column"`
+		ConsumerRoots []string `json:"consumer_roots"`
+		LanguageID    string   `json:"language_id,omitempty"`
+	}
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_cross_repo_references",
+		Description: "Find all references to a library symbol across one or more consumer repositories. Adds each consumer_root as a workspace folder, waits for indexing, then calls get_references and partitions results by repo. Returns library_references (within the primary repo), consumer_references (map of root → locations), and warnings (roots that could not be indexed). Use before changing a shared library API to find all downstream callers.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetCrossRepoReferencesArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleGetCrossRepoReferences(ctx, cs.get(), toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
 	// ------- Register resources -------
 
 	server.AddResource(&mcp.Resource{
