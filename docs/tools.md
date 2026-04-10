@@ -2401,7 +2401,7 @@ lines to confirm when the server is ready.
 
 ---
 
-## New tools (LSP Skills wave)
+## Symbol lookup tools
 
 ### `go_to_symbol`
 

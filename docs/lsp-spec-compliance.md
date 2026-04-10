@@ -1,8 +1,8 @@
 # LSP 3.17 Spec Compliance Audit
 
-**Audit date:** 2026-04-06
+**Audit date:** 2026-04-06 (updated 2026-04-10: Findings 1–6 all resolved)
 **Inspector version:** 0.2.0
-**Repo root:** `/Users/dayna.blackwell/code/LSP-MCP-GO`
+**Repo root:** `/Users/dayna.blackwell/code/agent-lsp`
 **Checks applied:** `cross_field_consistency`, `coverage_gap`, `silent_failure`, `doc_drift`
 **Scope:** Spec compliance gaps against LSP 3.17 — divergences from what LSP 3.17 requires or specifies.
 **Previously fixed issues excluded per audit brief.**
@@ -12,9 +12,10 @@
 ## Summary
 
 - **Audited:** `internal/lsp/client.go`, `internal/types/types.go`, `internal/tools/*.go`, `docs/lsp-conformance.md`
-- **Layer map:** `cmd → internal/tools → internal/lsp → internal/types`. `internal/lsp` imports only `internal/types`. Extensions import `internal/tools`.
-- **Highest severity:** error
-- **Signal:** Six spec compliance gaps found across four categories; the most critical is a declared server capability (`workspace.applyEdit: true`) with no server-initiated handler, meaning any server that sends `workspace/applyEdit` requests receives a null response that reports the edit as failed.
+- **Layer map:** `cmd → internal/tools → internal/lsp → internal/types/uri`. `internal/lsp` imports `internal/types`, `internal/logging`, `internal/uri`. Extensions import `internal/tools`.
+- **Status (updated 2026-04-10):** All six original findings have been resolved. See resolution notes on each finding below.
+- **Original highest severity:** error
+- **Original signal:** Six spec compliance gaps found across four categories.
 
 ---
 
@@ -32,13 +33,13 @@ Architectural docs found: `docs/architecture.md`, `docs/lsp-conformance.md`. No 
 
 **coverage_gap** · error · confidence: high (Grep confirmed, LSP tool unavailable — fallback)
 
-`internal/lsp/client.go:468` and `internal/lsp/client.go:237–274`
+**Status: RESOLVED** — `case "workspace/applyEdit":` handler added to dispatch in `internal/lsp/client.go`. The handler applies the edit and responds with `ApplyWorkspaceEditResult{applied: true}`.
 
-**What:** The client declares `workspace.applyEdit: true` in `Initialize` params (line 468), which per LSP 3.17 §workspace_applyEdit signals to the server that it may send `workspace/applyEdit` requests to the client side. The dispatch switch (lines 237–274) has no `case "workspace/applyEdit":` handler. The unrecognised request falls to the `default:` branch (line 270) which sends a null response. However, the spec defines the response as `ApplyWorkspaceEditResult { applied: boolean; failureReason?: string; failedChange?: uinteger }` — null is not a conformant response. Servers like gopls that send `workspace/applyEdit` for code actions requiring file creation or renaming will silently receive a null and interpret the edit as failed.
+`internal/lsp/client.go` (dispatch switch)
+
+**What:** The client declares `workspace.applyEdit: true` in `Initialize` params, which per LSP 3.17 §workspace_applyEdit signals to the server that it may send `workspace/applyEdit` requests to the client side. The dispatch switch had no `case "workspace/applyEdit":` handler. The unrecognised request fell to the `default:` branch which sends a null response — not a conformant `ApplyWorkspaceEditResult`. Servers like gopls that send `workspace/applyEdit` for code actions requiring file creation or renaming would silently receive a null and interpret the edit as failed.
 
 **Spec reference:** LSP 3.17 §workspace_applyEdit — "The workspace/applyEdit request is sent from the server to the client to modify resource on the client side."
-
-**Fix:** Either add a `case "workspace/applyEdit":` handler in `dispatch` that applies the edit and responds with `ApplyWorkspaceEditResult{applied: true}`, or remove `applyEdit: true` from the declared capabilities to stop servers from sending this request.
 
 ---
 
@@ -46,13 +47,13 @@ Architectural docs found: `docs/architecture.md`, `docs/lsp-conformance.md`. No 
 
 **coverage_gap** · error · confidence: high (Grep confirmed)
 
-`internal/lsp/client.go:1244–1259`
+**Status: RESOLVED** — `applyDocumentChanges` in `internal/lsp/client.go` now dispatches on a `kind` discriminant field. `CreateFile`, `RenameFile`, and `DeleteFile` entries are handled with corresponding OS-level operations before text edits are applied.
 
-**What:** The spec defines `WorkspaceEdit.documentChanges` as `TextDocumentEdit[] | (TextDocumentEdit | CreateFile | RenameFile | DeleteFile)[]`. The implementation decodes `documentChanges` only into the `TextDocumentEdit` shape (struct with `textDocument.URI` and `edits`). When `documentChanges` contains `CreateFile`, `RenameFile`, or `DeleteFile` entries (which have a `kind` discriminant field and no `edits` array), the struct unmarshal either silently ignores those entries (because the anonymous struct has no `kind` field) or fails the entire unmarshal depending on field ordering. If unmarshal fails, the code falls through to the legacy `changes` map — which also won't contain the file operations. The net result: rename operations that produce file-level resource changes (e.g. renaming a file itself, not just symbol occurrences) are silently dropped.
+`internal/lsp/client.go` (applyDocumentChanges)
+
+**What:** The spec defines `WorkspaceEdit.documentChanges` as `TextDocumentEdit[] | (TextDocumentEdit | CreateFile | RenameFile | DeleteFile)[]`. The implementation decoded `documentChanges` only into the `TextDocumentEdit` shape. When `documentChanges` contained `CreateFile`, `RenameFile`, or `DeleteFile` entries (which have a `kind` discriminant field and no `edits` array), the struct unmarshal silently ignored those entries. The net result: rename operations that produce file-level resource changes (e.g. renaming a file itself) were silently dropped.
 
 **Spec reference:** LSP 3.17 §workspaceEdit — "documentChanges?: (TextDocumentEdit[] | (TextDocumentEdit | CreateFile | RenameFile | DeleteFile)[])"
-
-**Fix:** Add a `Kind` field discriminant to the documentChanges decode struct. Dispatch on `kind == "create"` / `"rename"` / `"delete"` to perform the corresponding OS-level file operation before applying text edits.
 
 ---
 
@@ -60,13 +61,11 @@ Architectural docs found: `docs/architecture.md`, `docs/lsp-conformance.md`. No 
 
 **doc_drift** · warning · confidence: high (Grep confirmed)
 
-`docs/lsp-conformance.md:176` vs `internal/lsp/client.go:459`
+**Status: RESOLVED** — `rootPath` removed from `Initialize` params in `internal/lsp/client.go`. A comment at the relevant line now reads: "rootPath is deprecated in favour of rootUri; omitted per LSP 3.17." The conformance doc claim is now accurate.
 
-**What:** `docs/lsp-conformance.md` line 176 lists under "Previously Non-Conformant (Fixed)": `rootPath sent in initialize params | §3.15.1 | Removed (deprecated, superseded by rootUri)`. The `Initialize` method at `client.go:459` still sends `"rootPath": rootDir` in the params. The spec marks `rootPath` as `@deprecated in favour of rootUri`. The documentation claims this was fixed and removed; the code did not receive the corresponding change. Callers consulting the conformance doc would believe rootPath is no longer sent.
+`internal/lsp/client.go` (Initialize params)
 
-**Note:** Sending `rootPath` alongside `rootUri` is not spec-incorrect since the spec says "if both are set, rootUri wins." The harm is the false documentation claim, not a runtime failure. The spec also deprecates `rootUri` itself in favour of `workspaceFolders`, which the code correctly sends; the conformance doc does not mention that `rootUri` is deprecated.
-
-**Fix:** Either remove `"rootPath": rootDir` from the initialize params (making the doc accurate) or update `lsp-conformance.md` to reflect that rootPath is intentionally retained for server compatibility.
+**What:** `docs/lsp-conformance.md` listed under "Previously Non-Conformant (Fixed)": `rootPath sent in initialize params | §3.15.1 | Removed`. The `Initialize` method still sent `"rootPath": rootDir`. The doc claim was correct in intent but the code had not received the change yet. Now both are in sync.
 
 ---
 
@@ -74,13 +73,11 @@ Architectural docs found: `docs/architecture.md`, `docs/lsp-conformance.md`. No 
 
 **doc_drift** · warning · confidence: high (Grep confirmed)
 
-`docs/lsp-conformance.md:82` vs `internal/lsp/client.go:325–330`
+**Status: RESOLVED** — `case "report":` added to `handleProgress` in `internal/lsp/client.go` with a `logging.Log(LevelDebug, ...)` call. The conformance doc claim is now accurate.
 
-**What:** `lsp-conformance.md` line 80–83 states: "$/progress begin/report/end — all three WorkDoneProgress kinds are handled: begin: token added to active set, title logged; report: intermediate progress logged; end: token removed." The `handleProgress` function has a switch with only two cases: `"begin"` and `"end"`. There is no `case "report":`. A `report` notification falls through the switch silently — no logging occurs and no state is modified. The doc claim that `report` is "handled" and "intermediate progress logged" is inaccurate.
+`internal/lsp/client.go` (handleProgress switch)
 
-**Spec reference:** LSP 3.17 §progress — `WorkDoneProgressReport` kind `"report"` carries `message` and `percentage` fields that describe intermediate task state.
-
-**Fix:** Either add `case "report":` with a log call, or update the conformance doc to remove the claim that report notifications are logged.
+**What:** `lsp-conformance.md` stated that all three `WorkDoneProgress` kinds (begin/report/end) are handled. The `handleProgress` switch had only `"begin"` and `"end"` cases — no `"report"` case. A report notification fell through silently. The code and doc were out of sync.
 
 ---
 
@@ -88,13 +85,11 @@ Architectural docs found: `docs/architecture.md`, `docs/lsp-conformance.md`. No 
 
 **coverage_gap** · warning · confidence: high (code read confirmed)
 
-`internal/lsp/client.go:1167–1177`
+**Status: RESOLVED** — `case bool:` added to the `renameProvider` type switch in `PrepareRename`. When `renameProvider` is `true` (not an options object, so no `prepareProvider` declared), the method now logs at debug level and returns nil without sending the request.
 
-**What:** The `PrepareRename` method checks the `renameProvider` capability with a type switch. The switch handles `map[string]interface{}` (checks `prepareProvider` flag) and `nil` (returns early). If `renameProvider` is a plain `bool` (`true`), neither case matches and execution falls through to send the `textDocument/prepareRename` request. Per LSP 3.17 §textDocument_prepareRename, the server only supports `prepareRename` if `RenameOptions.prepareProvider == true`. When `renameProvider` is `true` (not an options object), `prepareProvider` is not declared, and sending the request will result in an error response from the server.
+`internal/lsp/client.go` (PrepareRename)
 
-**Spec reference:** LSP 3.17 §textDocument_prepareRename — "Server capability: property path (optional): renameProvider property type: boolean | RenameOptions"
-
-**Fix:** Add `case bool:` to the switch. When `renameProvider` is `true` (not an options object), log that `prepareRename` is not supported and return nil without sending the request.
+**What:** The `PrepareRename` method's type switch over `renameProvider` had no `case bool:`. A plain `true` value fell through to send `textDocument/prepareRename` even when `prepareProvider` was not declared, causing a server error response. Per LSP 3.17 §textDocument_prepareRename, `prepareRename` is only valid when `RenameOptions.prepareProvider == true`.
 
 ---
 
@@ -102,26 +97,28 @@ Architectural docs found: `docs/architecture.md`, `docs/lsp-conformance.md`. No 
 
 **cross_field_consistency** · warning · confidence: high (code read + Python verification)
 
-`internal/lsp/client.go:1472–1478` vs `internal/tools/helpers.go:49–58`
+**Status: RESOLVED** — A new `internal/uri` package provides `URIToPath(uri string) string` using `url.Parse(uri).Path` for correct RFC 3986 percent-decoding. Both `internal/lsp` and `internal/session` now use `uri.URIToPath` exclusively. The old string-slicing `uriToPath` in `internal/lsp/client.go` is gone. Layer rules are maintained: `internal/uri` imports only `internal/types`, so `internal/lsp` can import it without creating an upward dependency.
 
-**What:** Two URI-to-path conversion functions exist with different semantics. `tools.URIToFilePath` uses `url.Parse(uri).Path` which correctly decodes percent-encoded characters (e.g. `%20` → space). `lsp.uriToPath` uses simple string slicing (`uri[len("file://"):]`), which leaves percent-encoding intact (e.g. `file:///Users/foo%20bar` → `/Users/foo%20bar` as a literal string, not `/Users/foo bar`). The `uriToPath` function is called in `applyEditsToFile` (line 1285), `OpenDocument` metadata storage (line 629), and `ReopenDocument` (line 742). The LSP spec requires URIs to be valid RFC 3986 URIs, which permit percent-encoding. A workspace containing files with spaces or special characters in their paths will produce incorrect file reads and writes when `uriToPath` is used.
+`internal/uri/uri.go` (URIToPath)
+
+**What:** Two URI-to-path conversion functions existed with different semantics. `tools.URIToFilePath` used `url.Parse(uri).Path` (correct). `lsp.uriToPath` used simple string slicing, leaving percent-encoding intact. The slicing variant was called in `applyEditsToFile`, `OpenDocument` metadata storage, and `ReopenDocument`, causing incorrect file reads/writes on paths with spaces or special characters.
 
 **Spec reference:** LSP 3.17 §uri — "URI: a string that follows RFC 3986."
 
-**Fix:** Replace `lsp.uriToPath` with a call to `url.Parse(uri).Path` (matching the behaviour of `tools.URIToFilePath`), or export `tools.URIToFilePath` and import it in the `lsp` package. Note: the `lsp` package must not import `internal/tools` per the layer rules; the fix should move the correct implementation into `internal/types` or add it directly in `lsp`.
-
 ---
 
-## All Findings
+## All Findings (updated 2026-04-10)
 
-| Severity | Confidence | Check Type | Finding | Location |
-|----------|------------|------------|---------|----------|
-| error | high | coverage_gap | `workspace/applyEdit` server-initiated request unhandled; null response returned despite `applyEdit: true` declared | `internal/lsp/client.go:468,270` |
-| error | high | coverage_gap | `documentChanges` resource operations (CreateFile/RenameFile/DeleteFile) silently discarded | `internal/lsp/client.go:1244` |
-| warning | high | doc_drift | `rootPath` still sent in initialize; conformance doc incorrectly states it was removed | `internal/lsp/client.go:459` / `docs/lsp-conformance.md:176` |
-| warning | high | doc_drift | `$/progress report` kind not logged or handled; conformance doc claims it is handled | `internal/lsp/client.go:325` / `docs/lsp-conformance.md:82` |
-| warning | high | coverage_gap | `PrepareRename` sent when `renameProvider == true` (bool); no `prepareProvider` declared | `internal/lsp/client.go:1167` |
-| warning | high | cross_field_consistency | Two URI-to-path functions with different percent-encoding semantics; `uriToPath` in lsp package is incorrect for paths with spaces | `internal/lsp/client.go:1472` vs `internal/tools/helpers.go:49` |
+All six original findings have been resolved.
+
+| Severity | Confidence | Check Type | Finding | Status |
+|----------|------------|------------|---------|--------|
+| error | high | coverage_gap | `workspace/applyEdit` server-initiated request unhandled; null response returned | **RESOLVED** — `case "workspace/applyEdit":` handler added |
+| error | high | coverage_gap | `documentChanges` resource operations (CreateFile/RenameFile/DeleteFile) silently discarded | **RESOLVED** — `applyDocumentChanges` dispatches on `kind` discriminant |
+| warning | high | doc_drift | `rootPath` still sent in initialize; conformance doc incorrectly states it was removed | **RESOLVED** — `rootPath` removed from `Initialize` params |
+| warning | high | doc_drift | `$/progress report` kind not logged; conformance doc claims it is handled | **RESOLVED** — `case "report":` with debug log added to `handleProgress` |
+| warning | high | coverage_gap | `PrepareRename` sent when `renameProvider == true` (bool); no `prepareProvider` declared | **RESOLVED** — `case bool:` returns nil without sending request |
+| warning | high | cross_field_consistency | Two URI-to-path functions with different percent-encoding semantics | **RESOLVED** — canonical `internal/uri.URIToPath` uses `url.Parse`; string-slicing variant removed |
 
 ---
 

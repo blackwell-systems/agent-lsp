@@ -8,8 +8,28 @@ agent-lsp is a [Model Context Protocol](https://modelcontextprotocol.io/) server
 
 ```
 cmd/agent-lsp/
-  main.go          ← CLI entrypoint; argument parsing, signal handling, panic recovery
-  server.go        ← MCP server construction; tool/resource registration; mcpSessionSender
+  main.go               ← CLI entrypoint; argument parsing, signal handling, panic recovery
+  server.go             ← MCP server construction; tool/resource registration; mcpSessionSender
+                           (tool registration was extracted from server.go in a decomposition wave;
+                           server.go now delegates to the four tool files below)
+  tools_navigation.go   ← 10 navigation tools: go_to_definition, go_to_type_definition,
+                           go_to_implementation, go_to_declaration, go_to_symbol,
+                           rename_symbol, prepare_rename, get_document_highlights,
+                           call_hierarchy, type_hierarchy
+  tools_analysis.go     ← 13 analysis tools: get_info_on_location, get_completions,
+                           get_signature_help, get_code_actions, get_document_symbols,
+                           get_workspace_symbols, get_references, get_inlay_hints,
+                           get_semantic_tokens, get_symbol_source, get_symbol_documentation,
+                           get_change_impact, get_cross_repo_references
+  tools_workspace.go    ← 19 workspace/lifecycle tools: start_lsp, restart_lsp_server,
+                           add_workspace_folder, remove_workspace_folder, list_workspace_folders,
+                           open_document, close_document, get_diagnostics, get_server_capabilities,
+                           detect_lsp_servers, run_build, run_tests, get_tests_for_file,
+                           set_log_level, apply_edit, execute_command, did_change_watched_files,
+                           format_document, format_range
+  tools_session.go      ← 8 simulation/session tools: create_simulation_session, simulate_edit,
+                           evaluate_session, simulate_chain, commit_session, discard_session,
+                           destroy_session, simulate_edit_atomic
 
 internal/config/
   config.go        ← ServerEntry + Config types for multi-server JSON config
@@ -71,8 +91,14 @@ internal/types/
                      TypeHierarchyItem, InlayHint, DocumentHighlight, SemanticToken,
                      ToolResult, Extension interface
 
+internal/uri/
+  uri.go           ← URIToPath: RFC 3986-correct file:// URI → path conversion (url.Parse-based);
+                     ApplyRangeEdit: canonical in-memory range edit shared by lsp and session packages
+
 internal/logging/
-  logging.go       ← Log, SetServer, SetLevel, MarkServerInitialized; MCP notification bridge
+  logging.go       ← Log, SetServer, SetLevel, SetLevelFromEnv, MarkServerInitialized;
+                     MCP notification bridge; SetLevelFromEnv called explicitly from main()
+                     (init() is a no-op; no init-time side effects)
 
 internal/extensions/
   registry.go      ← ExtensionRegistry; Activate, RegisterFactory, GetToolHandlers, etc.
@@ -97,10 +123,11 @@ skills/            ← Agent Skills (SKILL.md directories)
 
 ### Layer rules
 
-- `cmd/agent-lsp/` owns the MCP server lifecycle and routes requests to handlers
+- `cmd/agent-lsp/` owns the MCP server lifecycle and routes requests to handlers via the four tool files
 - `internal/tools/` and `internal/resources/` import from `internal/lsp/`, `internal/session/`, and `internal/types/` — they do not import from each other
-- `internal/lsp/` imports only from `internal/types/` and `internal/logging/` — no upward dependencies
-- `internal/session/` imports from `internal/lsp/`, `internal/types/`, and `internal/logging/`
+- `internal/lsp/` imports from `internal/types/`, `internal/logging/`, and `internal/uri/` — no upward dependencies
+- `internal/session/` imports from `internal/lsp/`, `internal/types/`, `internal/logging/`, and `internal/uri/`
+- `internal/uri/` imports only from `internal/types/` — the canonical URI/path conversion layer
 - `internal/extensions/` imports from `internal/types/` only
 - `extensions/<language>/` imports from `internal/tools/` for re-exported utilities
 
@@ -414,7 +441,17 @@ The installer scans for `SKILL.md` files up to two levels deep, creates `~/.clau
 
 ## URI Handling
 
-LSP uses `file://` URIs throughout. Two utilities handle the conversion:
+LSP uses `file://` URIs throughout. URI conversion is handled by two layers:
+
+**`internal/uri` package (canonical, shared by `internal/lsp` and `internal/session`):**
+
+```go
+// URI → path — RFC 3986-correct, url.Parse-based, percent-decoded
+uri.URIToPath("file:///path/to/file.go")  // → "/path/to/file.go"
+uri.URIToPath("file:///path/to/foo%20bar") // → "/path/to/foo bar"
+```
+
+**`internal/tools/helpers.go` (used by tool handlers):**
 
 ```go
 // path → URI (for sending to the LSP server)
@@ -424,7 +461,7 @@ CreateFileURI("/path/to/file.go")  // → "file:///path/to/file.go"
 URIToFilePath("file:///path/to/file.go")  // → "/path/to/file.go"
 ```
 
-Both use `url.URL` / `url.Parse` rather than string slicing. This correctly handles percent-encoded characters (e.g. spaces in paths → `%20`) and is robust to non-standard URI forms.
+All conversions use `url.URL` / `url.Parse` rather than string slicing. This correctly handles percent-encoded characters (e.g. spaces in paths → `%20`) and is robust to non-standard URI forms.
 
 `ValidateFilePath` additionally rejects path traversal: if `rootDir` is non-empty, the resolved absolute path must be equal to `rootDir` or have `rootDir/` as a prefix.
 

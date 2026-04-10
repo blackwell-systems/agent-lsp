@@ -98,7 +98,7 @@ Session state persists across operations. A session accumulates speculative edit
 |-------|-----------|----------|
 | `created` | `create_simulation_session` | `mutated`, `evaluating` |
 | `mutated` | `simulate_edit` | `mutated`, `evaluating` |
-| `evaluating` | `evaluate_session` | `evaluated`, `timed_out` |
+| `evaluating` | `evaluate_session` | `evaluated` (timeout sets `confidence: "partial"`, not a separate state) |
 | `evaluated` | evaluation completes | `mutated`, `committed`, `discarded` |
 | `committed` | `commit_session` | `destroyed` |
 | `discarded` | `discard_session` | `destroyed` |
@@ -117,7 +117,7 @@ A session holds:
 - **document versions** — per-document version counter, monotonically increasing
 - **accumulated speculative edits** — ordered list of edits applied within the session
 - **diagnostics snapshot** — latest diagnostic state after most recent evaluation
-- **session status** — one of: `created`, `mutated`, `evaluated`, `committed`, `discarded`, `dirty`
+- **session status** — one of: `created`, `mutated`, `evaluating`, `evaluated`, `committed`, `discarded`, `dirty`, `destroyed`
 - **session_id** — UUID assigned at creation, used for tracing
 
 The baseline is the code state at the moment `create_simulation_session` is called. It is immutable from the session's perspective — the session can only mutate its own overlay.
@@ -282,7 +282,7 @@ This matters for:
 | `evaluate_session` connection failure | After mutation | Attempt internal revert; mark session `dirty` if revert fails |
 | `commit_session` | Write failure | Return error; session state preserved; retry allowed |
 | `discard_session` | Revert failure | Mark session `dirty`; error returned; call `destroy_session` to force cleanup |
-| Concurrent mutation detected | Another `didChange` arrived during evaluation | Mark result `confidence: "stale"`; session remains usable; do not retry automatically |
+| Concurrent mutation detected | Another `didChange` arrived during evaluation | Mark result `confidence: "partial"`; session remains usable; do not retry automatically |
 
 ### Session dirty state
 
@@ -425,8 +425,6 @@ Position matching uses post-edit coordinates. Baseline diagnostics reflect pre-e
   ],
   "errors_resolved": [],
   "net_delta": 1,
-  "affected_symbols": ["HandleRequest"],
-  "edit_risk_score": 0.73,
   "scope": "file",
   "confidence": "high",
   "timeout": false,
@@ -434,17 +432,12 @@ Position matching uses post-edit coordinates. Baseline diagnostics reflect pre-e
 }
 ```
 
-`confidence` values:
+`confidence` values (defined in `internal/session/types.go`):
 - `"high"` — single-file, diagnostics settled within timeout
 - `"partial"` — timed out, returned snapshot may be incomplete
-- `"stale"` — concurrent mutation detected during evaluation window
 - `"eventual"` — workspace scope, cross-file propagation may be incomplete
 
-`edit_risk_score` heuristics:
-- Errors introduced in exported symbols → higher risk
-- Errors in test files only → lower risk
-- Net delta 0 (no diagnostic change) → 0.0
-- Multiple errors in call sites → higher risk
+Note: `affected_symbols` and `edit_risk_score` were planned fields that were not implemented. The shipped `EvaluationResult` type contains only the fields shown above.
 
 ---
 
@@ -604,12 +597,18 @@ type SessionManager struct {
 }
 
 type SimulationSession struct {
-    ID        string
-    client    *lsp.LSPClient
-    status    SessionStatus
-    edits     []AppliedEdit
-    baselines map[string]DiagnosticsSnapshot // per-file, populated lazily on first simulate_edit
-    mu        sync.Mutex
+    ID               string
+    Status           SessionStatus
+    Client           *lsp.LSPClient
+    Edits            []AppliedEdit
+    Baselines        map[string]DiagnosticsSnapshot // per-file, populated lazily on first simulate_edit
+    Versions         map[string]int                 // per-file document version counter
+    Contents         map[string]string              // per-file current in-memory content
+    OriginalContents map[string]string              // per-file content at baseline (for Discard)
+    Workspace        string
+    Language         string
+    DirtyErr         error
+    mu               sync.Mutex
 }
 ```
 
