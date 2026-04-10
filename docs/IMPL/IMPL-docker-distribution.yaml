@@ -27,7 +27,7 @@ suitability_assessment: |
     Sequential baseline: ~35 min (6 agents x ~6 min avg sequential)
     Time savings: ~15 min (38% faster). Recommendation: Clear speedup from Wave 1 parallelism.
 test_command: GOWORK=off go build ./...
-lint_command: go vet ./...
+lint_command: GOWORK=off go vet ./...
 file_ownership:
     - file: Dockerfile
       agent: A
@@ -1109,6 +1109,7 @@ waves:
             - docker-compose.yml
             - .env.example
             - .dockerignore
+      base_commit: 3668e482709142b0b4cc39870f19109ff6223bb8
     - number: 2
       agents:
         - id: F
@@ -1277,6 +1278,65 @@ quality_gates:
           command: docker build --no-cache -t agent-lsp:test-base . 2>&1 | tail -5
           required: false
           repo: agent-lsp
+completion_reports:
+    A:
+        status: complete
+        branch: saw/docker-distribution/wave1-agent-A
+        commit: e894303
+        files_changed:
+            - Dockerfile
+        files_created:
+            - Dockerfile
+        verification: PASS
+        notes: Multi-stage Dockerfile created. Builder uses golang:1.25-bookworm with CGO_ENABLED=0 and -trimpath -ldflags='-s -w'. Final stage is debian:bookworm-slim with ca-certificates, curl, git. Entrypoint delegates to docker/entrypoint.sh (Agent C scope). LSP server cache dir at /var/cache/lsp-servers. All 5 grep gates pass, GOWORK=off go build ./... clean.
+    B:
+        status: complete
+        branch: saw/docker-distribution/wave1-agent-B
+        commit: 788d060
+        files_changed:
+            - Dockerfile.lang
+            - Dockerfile.full
+        files_created:
+            - Dockerfile.lang
+            - Dockerfile.full
+        verification: PASS
+        notes: Dockerfile.lang uses ARG LANG/LSP_PACKAGE/PACKAGE_MGR/LSP_BINARY with case dispatch for npm/go/apt/gem/pip/dotnet; manual case fails loudly with guidance to use LSP_SERVERS. ENV PATH set for go-installed binaries. Dockerfile.full installs all package-manager-installable servers; complex/platform-specific ones documented in comments. Go build clean.
+    C:
+        status: complete
+        branch: saw/docker-distribution/wave1-agent-C
+        commit: 1916a4e
+        files_changed:
+            - docker/entrypoint.sh
+            - docker/lsp-servers.yaml
+        files_created:
+            - docker/entrypoint.sh
+            - docker/lsp-servers.yaml
+        verification: PASS
+        notes: 'POSIX sh entrypoint with LSP_SERVERS parsing, comma-split via tr, cache marker at /var/cache/lsp-servers/<name>/.installed. Registry has all 18 servers. Agent A must add: COPY docker/lsp-servers.yaml /etc/agent-lsp/lsp-servers.yaml to the base Dockerfile.'
+    D:
+        status: complete
+        branch: saw/docker-distribution/wave1-agent-D
+        commit: "7376562"
+        files_changed:
+            - .github/workflows/docker.yml
+        files_created:
+            - .github/workflows/docker.yml
+        verification: PASS
+        notes: 'Workflow has 4 jobs: base, per-language (8 languages with non-manual pkg mgr), combos (web/backend/fullstack via inline heredoc Dockerfile), full. All 8 verification gates pass. Go build clean. Manual-pkg-mgr languages excluded from matrix per spec.'
+    E:
+        status: complete
+        branch: saw/docker-distribution/wave1-agent-E
+        commit: f4bdc12
+        files_changed:
+            - docker-compose.yml
+            - .env.example
+            - .dockerignore
+        files_created:
+            - docker-compose.yml
+            - .env.example
+            - .dockerignore
+        verification: PASS
+        notes: All three files created. 9/9 verification checks pass. Go build clean. Resource limits (4g RAM, 2 CPU), WORKSPACE_DIR mount, lsp-server-cache volume, and .dockerignore exclusions all in place.
 pre_mortem:
     overall_risk: low
     rows:
@@ -1379,6 +1439,6 @@ critic_report:
     summary: 'All 6 agents verified against the agent-lsp codebase. Wave 1 agents (A–E) all create action:new files; confirmed none of the 9 target files exist yet. Wave 2 agent F modifies DOCKER.md and README.md; both exist, README.md has ## Installation at line 62 and is ~379 lines as stated. The go.mod module path (github.com/blackwell-systems/agent-lsp), Go version (1.25.0), binary entrypoint (cmd/agent-lsp/main.go), and existing workflow references (ci.yml, release.yml with actions/checkout@v4) all match brief claims exactly. Interface contracts are naming/config conventions with no Go type signatures — all syntactically valid. One advisory warning on Agent D: the brief''s example YAML uses docker/build-push-action@v6 which the pre-mortem already flags as potentially non-existent; the agent is instructed to use latest stable, so this is self-correcting. No errors found.'
     reviewed_at: "2026-04-10T19:32:00Z"
     issue_count: 1
-state: "REVIEWED"
+state: REVIEWED
 original_branch: main
 injection_method: hook
