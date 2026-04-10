@@ -211,16 +211,16 @@ Tier 2 results per language from the latest CI run:
 | Rust | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | — |
 | Java | pass | — | — | — | — | — | — | — | pass | pass | pass | — | — |
 | C | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
-| PHP | pass | pass | pass | pass | pass | pass | — | — | — | pass | — | — | — |
+| PHP | pass | pass | pass | pass | pass | pass | — | — | — | pass | pass | pass | pass |
 | C++ | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
 | JavaScript | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
-| Ruby | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
+| Ruby | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
 | YAML | pass | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
 | JSON | pass | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
 | Dockerfile | pass | — | — | — | pass | pass | — | — | — | pass | — | — | — |
-| C# | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
-| Kotlin | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
-| Lua | pass | pass | — | — | pass | pass | — | — | — | pass | — | — | — |
+| C# | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
+| Kotlin | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
+| Lua | pass | pass | — | — | pass | pass | pass | — | — | pass | pass | pass | pass |
 | Swift | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
 | Zig | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
 | CSS | pass | pass | — | — | pass | pass | pass | — | — | pass | — | — | — |
@@ -247,7 +247,7 @@ All tools require `start_lsp` to be called first.
 - **Tier 1** (4 tools, all 30 languages): `start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`
 - **Tier 2** (34 tools): `get_document_symbols`, `go_to_definition`, `get_references`, `get_completions`, `get_workspace_symbols`, `format_document`, `go_to_declaration`, `type_hierarchy`, `get_info_on_location`, `call_hierarchy`, `get_semantic_tokens`, `get_signature_help`, `get_document_highlights`, `get_inlay_hints`, `get_code_actions`, `prepare_rename`, `rename_symbol`, `get_server_capabilities`, `add_workspace_folder`, `go_to_type_definition`, `go_to_implementation`, `format_range`, `apply_edit`, `detect_lsp_servers`, `close_document`, `did_change_watched_files`, `run_build`, `run_tests`, `get_tests_for_file`, `get_symbol_source`, `go_to_symbol`, `restart_lsp_server`, `set_log_level`, `execute_command`
 
-Speculative session tools (`create_simulation_session`, `simulate_edit`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session`, `commit_session`, `discard_session`, `destroy_session`) are covered by `TestSpeculativeSessions` in `test/speculative_test.go`. 47 of 50 tools are covered across the three test suites; `get_change_impact` and `get_cross_repo_references` will be added in a future CI run.
+Speculative session tools (`create_simulation_session`, `simulate_edit`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session`, `commit_session`, `discard_session`, `destroy_session`) are covered by `TestSpeculativeSessions` in `test/speculative_test.go`. 49 of 50 tools are covered across the three test suites. `get_change_impact` and `get_cross_repo_references` are covered by `TestGetChangeImpact` and `TestGetCrossRepoReferences` in `test/multi_lang_test.go`.
 
 ### Session
 | Tool | Description |
