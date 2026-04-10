@@ -89,7 +89,18 @@ func WaitForDiagnostics(ctx context.Context, client *LSPClient, uris []string, t
 				return nil
 			}
 		case <-notify:
-			// Notification received; let ticker check quiet window.
+			// Notification received. Check the quiet window immediately to
+			// avoid waiting up to 50ms for the next tick (M5 fix).
+			if time.Now().After(deadline) {
+				return nil
+			}
+			mu.Lock()
+			gotAll := allReceived()
+			quiet := time.Since(lastEvent) >= quietWindow
+			mu.Unlock()
+			if gotAll && quiet {
+				return nil
+			}
 		}
 	}
 }
