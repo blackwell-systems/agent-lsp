@@ -467,7 +467,10 @@ func (c *LSPClient) writeRaw(body []byte) error {
 		return fmt.Errorf("LSP client not started")
 	}
 	_, err := c.stdin.Write(EncodeMessage(body))
-	return err
+	if err != nil {
+		return fmt.Errorf("writeRaw: %w", err)
+	}
+	return nil
 }
 
 // sendRequest sends a JSON-RPC request and waits for the response.
@@ -530,7 +533,7 @@ func (c *LSPClient) sendRequest(ctx context.Context, method string, params inter
 func (c *LSPClient) sendNotification(method string, params interface{}) error {
 	p, err := json.Marshal(params)
 	if err != nil {
-		return err
+		return fmt.Errorf("sendNotification %s: marshal params: %w", method, err)
 	}
 	msg := jsonrpcMsg{
 		JSONRPC: "2.0",
@@ -539,7 +542,7 @@ func (c *LSPClient) sendNotification(method string, params interface{}) error {
 	}
 	body, err := json.Marshal(msg)
 	if err != nil {
-		return err
+		return fmt.Errorf("sendNotification %s: marshal message: %w", method, err)
 	}
 	return c.writeRaw(body)
 }
