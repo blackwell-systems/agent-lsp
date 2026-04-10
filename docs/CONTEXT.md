@@ -55,3 +55,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-docker-distribution.yaml
 - **public-pkg-api**: completed 2026-04-10, 1 waves, 4 agents
   - IMPL doc: docs/IMPL/complete/IMPL-public-pkg-api.yaml
+- **ci-coverage-expansion**: completed 2026-04-10, 2 waves, 4 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-ci-coverage-expansion.yaml

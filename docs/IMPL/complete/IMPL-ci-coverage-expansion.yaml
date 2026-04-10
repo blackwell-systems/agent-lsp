@@ -1,3 +1,4 @@
+completion_date: "2026-04-10"
 title: 'CI Coverage Expansion: Clojure, Nix, Dart, MongoDB Tier 1 Verification'
 feature_slug: ci-coverage-expansion
 verdict: SUITABLE
@@ -530,6 +531,7 @@ waves:
             - Do not change any other table rows (TypeScript, Python, Go, etc.).
           files:
             - README.md
+      base_commit: 410d873e3cfe26fb753abf49bbf53d3cd0d2db31
 quality_gates:
     level: standard
     gates:
@@ -555,6 +557,14 @@ completion_reports:
             - test/fixtures/dart/bin/main.dart
         verification: PASS
         notes: 'Clojure deps.edn now has :paths ["src"]. Dart pubspec has publish_to: none. Dart bin/main.dart created with relative import. All build/vet/test gates pass.'
+    B:
+        status: complete
+        branch: saw/ci-coverage-expansion/wave2-agent-B
+        commit: 1ea7bc1
+        files_changed:
+            - .github/workflows/ci.yml
+        verification: PASS
+        notes: 'Added continue-on-error: true and ''Add nil to PATH'' step to multi-lang-nix job. Both postconditions verified. Build, vet, and internal tests all pass.'
     C:
         status: complete
         branch: saw/ci-coverage-expansion/wave1-agent-C
@@ -566,6 +576,14 @@ completion_reports:
             - test/fixtures/mongodb/mongodb-language-server
         verification: PASS
         notes: 'Replaced no-op MongoDB install step with VSIX download/extraction. Updated multi-lang-mongodb job comment block. Created executable wrapper fixture at test/fixtures/mongodb/mongodb-language-server. All quality gates pass: build, vet, unit tests.'
+    D:
+        status: complete
+        branch: saw/ci-coverage-expansion/wave2-agent-D
+        commit: 906dce9
+        files_changed:
+            - README.md
+        verification: PASS
+        notes: Updated four all-dashes table rows (Clojure, Nix, Dart, MongoDB) to show pass/dash per known server capabilities. Updated footnote sentence to reference ci-coverage-expansion IMPL and document Nix/MongoDB CI notes. All postconditions pass (0/4/1). Build, vet, and tests clean.
 pre_mortem:
     overall_risk: medium
     rows:
@@ -644,6 +662,5 @@ critic_report:
     summary: 'All four agents verified against the codebase. File existence checks pass for all ownership entries: deps.edn and pubspec.yaml exist for modification, and the new files (dart/bin/main.dart, mongodb/mongodb-language-server) do not yet exist. Pattern accuracy checks pass: the deps.edn content is exactly {}, pubspec.yaml content matches the brief exactly, ci.yml contains the exact install step text and comment block described for Agent C, the multi-lang-nix job structure matches what Agent B is told to expect, the four all-dashes README rows and the footnote sentence match what Agent D is told to find and replace. The ci.yml multi-lang-mongodb job already has continue-on-error: true as Agent C''s brief states. No i1 ownership conflicts: ci.yml appears in wave 1 (Agent C) and wave 2 (Agent B) in sequential non-overlapping waves. Complexity and caller exhaustiveness checks are clean.'
     reviewed_at: "2026-04-10T22:10:37Z"
     issue_count: 0
-state: REVIEWED
-original_branch: main
+state: COMPLETE
 injection_method: hook
