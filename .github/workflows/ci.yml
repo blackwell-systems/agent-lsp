@@ -439,7 +439,7 @@ jobs:
         run: GOWORK=off go build ./...
 
       - name: Install nil (Nix language server)
-        run: cargo install nil
+        run: cargo install --git https://github.com/oxalica/nil nil
 
       - name: Run Nix tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Nix$" ./test/ -timeout 10m
