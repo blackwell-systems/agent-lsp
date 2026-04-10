@@ -1,0 +1,1119 @@
+title: Audit-6 Bug Fixes (C1, C2, H1, H2, H3, M1, M2, M3, L1, L2, L3, L4)
+feature_slug: audit-6-fixes
+verdict: SUITABLE
+suitability_assessment: |
+    12 findings across 5 files. All are clearly understood bugs with known fixes —
+    no investigation-first work required. File decomposition:
+
+    - Agent A: internal/lsp/client.go (C1, C2, L2, L3 — v048_exempt, 2231 lines)
+    - Agent B: internal/lsp/normalize.go (H1, L1)
+    - Agent C: internal/session/executor.go (H2)
+    - Agent D: internal/tools/position_pattern.go + workspace.go (H3, M3)
+    - Agent E: internal/session/differ.go (M2)
+    - Agent F: cmd/agent-lsp/server.go (M1)
+    - Agent G: internal/tools/workspace_folders.go (L4 only)
+
+    Wave 1 (7 parallel agents): A through G, all independent.
+    Wave 2 (1 agent): G2 updates workspace_folders.go call-sites for L3 context
+    propagation after Agent A lands the updated AddWorkspaceFolder/RemoveWorkspaceFolder
+    signatures.
+
+    client.go is marked v048_exempt because all 4 of its fixes (C1, C2, L2, L3)
+    are tightly coupled: L3 adds context params that L2 (waitForWorkspaceReady)
+    and C1 (addWatcherRoot) both depend on structurally, and C2 is a 3-line fix
+    in the same file. Splitting them across agents would create I1 violations.
+
+    Parallelization value: HIGH. Wave 1 has 7 fully independent agents with
+    non-trivial logic changes (UTF-16 conversion, watcher restructuring,
+    per-session locking, fingerprint map).
+
+    Estimated times:
+    - Scout phase: ~10 min
+    - Wave 1: ~7 agents x ~10 min avg = ~70 min sequential, ~12 min parallel
+    - Wave 2: ~1 agent x ~5 min
+    - Merge and verification: ~5 min
+    Total SAW time: ~32 min
+    Sequential baseline: ~75 min
+    Time savings: ~43 min (~57% faster)
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: internal/lsp/client.go
+      agent: A
+      wave: 1
+      action: modify
+      v048_exempt: true
+    - file: internal/lsp/normalize.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/session/executor.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: internal/tools/position_pattern.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/tools/workspace.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: internal/session/differ.go
+      agent: E
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/server.go
+      agent: F
+      wave: 1
+      action: modify
+    - file: internal/tools/workspace_folders.go
+      agent: G
+      wave: 1
+      action: modify
+    - file: internal/tools/workspace_folders.go
+      agent: G2
+      wave: 2
+      action: modify
+      depends_on:
+        - A
+        - G
+interface_contracts:
+    - name: addWatcherRoot
+      description: |
+        New internal helper on LSPClient. Adds a directory tree to the existing
+        running fsnotify.Watcher without restarting it. Called by AddWorkspaceFolder
+        to extend coverage to new workspace roots.
+      definition: |
+        func (c *LSPClient) addWatcherRoot(path string)
+      location: internal/lsp/client.go
+    - name: AddWorkspaceFolder (updated signature)
+      description: L3 adds ctx context.Context as first parameter for API consistency.
+      definition: |
+        func (c *LSPClient) AddWorkspaceFolder(ctx context.Context, path string) error
+      location: internal/lsp/client.go
+    - name: RemoveWorkspaceFolder (updated signature)
+      description: L3 adds ctx context.Context as first parameter for API consistency.
+      definition: |
+        func (c *LSPClient) RemoveWorkspaceFolder(ctx context.Context, path string) error
+      location: internal/lsp/client.go
+    - name: utf16Offset
+      description: |
+        Package-internal helper in the tools package. Converts a byte-offset
+        column within a UTF-8 string to a UTF-16 code-unit count per LSP §3.4.
+      definition: |
+        func utf16Offset(line string, byteOffset int) int
+      location: internal/tools/position_pattern.go
+    - name: diagnosticFingerprint
+      description: |
+        Package-internal helper in the session package. Returns a stable string
+        key for a diagnostic using Range, Message, and Severity (Source excluded
+        to match DiagnosticsEqual semantics).
+      definition: |
+        func diagnosticFingerprint(d types.LSPDiagnostic) string
+      location: internal/session/differ.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            Fix four bugs in internal/lsp/client.go: C1 (multi-root watcher regression),
+            C2 (exit-monitor does not clear initialized flag), L2 (100ms busy-poll
+            replaced with condition variable), L3 (add context.Context params to
+            AddWorkspaceFolder/RemoveWorkspaceFolder).
+
+            Note: client.go has 2231 lines and is marked v048_exempt because all four
+            fixes are tightly coupled to the same file and cannot be assigned to
+            separate agents without I1 violations.
+
+            ## C2 — Set initialized = false in exit-monitor goroutine
+
+            In the start() function, locate the exit-monitor goroutine body. The
+            current body reads:
+            ```
+            		err := cmd.Wait()
+            		exitErr := fmt.Errorf("lsp process exited: %w", err)
+            		c.rejectPending(exitErr)
+            		if err != nil {
+            			c.stderrMu.Lock()
+            			buf := string(c.stderrBuf)
+            			c.stderrMu.Unlock()
+            			logging.Log(logging.LevelError, fmt.Sprintf("LSP server exited with error. Last stderr:\n%s", buf))
+            		}
+            ```
+
+            Insert three lines after c.rejectPending(exitErr) and before the if block:
+            ```go
+            		c.mu.Lock()
+            		c.initialized = false
+            		c.mu.Unlock()
+            ```
+
+            ## C1 — Multi-root watcher (CRITICAL regression)
+
+            AddWorkspaceFolder calls c.startWatcher(path) which stops the previous watcher
+            goroutine and starts a new one watching only the new path. The original
+            workspace root goes dark.
+
+            Fix: store *fsnotify.Watcher on the struct so AddWorkspaceFolder can add
+            directories to the running watcher without restarting it.
+
+            ### Step 1: Add watcher field to LSPClient struct
+
+            In the struct, after this exact text:
+            ```
+            	watcherMu   sync.Mutex // guards watcherStop (C2: prevents data race)
+            	watcherStop chan struct{}
+            ```
+
+            Insert:
+            ```go
+            	watcher     *fsnotify.Watcher  // C1: held so addWatcherRoot can Add() new dirs
+            ```
+
+            ### Step 2: Update startWatcher to store c.watcher
+
+            In startWatcher, the goroutine starts with:
+            ```
+            		watcher, err := fsnotify.NewWatcher()
+            		if err != nil {
+            			logging.Log(logging.LevelDebug, "auto-watcher: failed to create watcher: "+err.Error())
+            			return
+            		}
+            		defer watcher.Close()
+            ```
+
+            Replace with:
+            ```go
+            		watcher, err := fsnotify.NewWatcher()
+            		if err != nil {
+            			logging.Log(logging.LevelDebug, "auto-watcher: failed to create watcher: "+err.Error())
+            			return
+            		}
+            		// Register Close first so nil-assignment defer (registered after) runs first (LIFO).
+            		defer watcher.Close()
+            		c.watcherMu.Lock()
+            		c.watcher = watcher
+            		c.watcherMu.Unlock()
+            		defer func() {
+            			c.watcherMu.Lock()
+            			c.watcher = nil
+            			c.watcherMu.Unlock()
+            		}()
+            ```
+
+            LIFO execution order: nil-assignment defer (registered last) runs first,
+            then watcher.Close(). This ensures c.watcher is nil before the watcher is
+            closed, preventing addWatcherRoot from calling Add on a closed watcher.
+
+            ### Step 3: Implement addWatcherRoot
+
+            Add a new method after stopWatcherLocked:
+            ```go
+            // addWatcherRoot adds path and its subdirectories to the existing running
+            // watcher. It is a no-op if no watcher is running (c.watcher == nil).
+            // This allows AddWorkspaceFolder to extend coverage without restarting
+            // the watcher and losing the original workspace root.
+            func (c *LSPClient) addWatcherRoot(path string) {
+            	c.watcherMu.Lock()
+            	w := c.watcher
+            	c.watcherMu.Unlock()
+            	if w == nil {
+            		return
+            	}
+            	_ = filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {
+            		if err != nil || !d.IsDir() {
+            			return nil
+            		}
+            		if watcherSkipDirs[d.Name()] || (strings.HasPrefix(d.Name(), ".") && d.Name() != ".") {
+            			return filepath.SkipDir
+            		}
+            		_ = w.Add(p)
+            		return nil
+            	})
+            }
+            ```
+
+            ### Step 4: Update AddWorkspaceFolder
+
+            Replace the c.startWatcher(path) call. The current code around line 1846-1849:
+            ```
+            	// Extend the auto-watcher to cover the new folder.
+            	// H2: was incorrectly passing c.rootDir; pass path so the new folder is watched.
+            	c.startWatcher(path)
+            	return nil
+            ```
+
+            Change to:
+            ```go
+            	// Extend the auto-watcher to cover the new folder without restarting it.
+            	// C1: addWatcherRoot adds the new path to the existing watcher goroutine
+            	// so the original workspace root remains watched.
+            	c.addWatcherRoot(path)
+            	return nil
+            ```
+
+            ## L2 — Replace 100ms busy-poll with condition variable
+
+            waitForWorkspaceReady polls progressTokens every 100ms. Replace with a
+            sync.Cond so handleProgress signals waiters immediately when the last
+            token is removed.
+
+            ### Step 1: Add progressCond field
+
+            In the struct, after this exact text:
+            ```
+            	// workspace readiness ($/progress)
+            	progressMu     sync.Mutex
+            	progressTokens map[interface{}]struct{} // active begin tokens
+            ```
+
+            Insert:
+            ```go
+            	progressCond   *sync.Cond // signalled when progressTokens becomes empty
+            ```
+
+            ### Step 2: Initialize progressCond in NewLSPClient
+
+            In NewLSPClient, after the struct literal closes (after `return c` or
+            before it), initialize the cond:
+            ```go
+            c := &LSPClient{...}
+            c.progressCond = sync.NewCond(&c.progressMu)
+            return c
+            ```
+
+            ### Step 3: Signal in handleProgress
+
+            In handleProgress, update the "end" case:
+            ```go
+            case "end":
+            	delete(c.progressTokens, p.Token)
+            	if len(c.progressTokens) == 0 {
+            		c.progressCond.Broadcast()
+            	}
+            ```
+
+            ### Step 4: Rewrite waitForWorkspaceReady
+
+            Replace the entire waitForWorkspaceReady function:
+            ```go
+            // waitForWorkspaceReady blocks until activeProgressTokens is empty or 60s
+            // elapses. Uses a condition variable so handleProgress can signal immediately
+            // rather than relying on a 100ms polling interval.
+            func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
+            	deadline := time.Now().Add(60 * time.Second)
+            	c.progressMu.Lock()
+            	defer c.progressMu.Unlock()
+            	for len(c.progressTokens) > 0 {
+            		if time.Now().After(deadline) {
+            			return
+            		}
+            		select {
+            		case <-ctx.Done():
+            			return
+            		default:
+            		}
+            		c.progressCond.Wait()
+            	}
+            }
+            ```
+
+            ## L3 — Add context.Context to AddWorkspaceFolder/RemoveWorkspaceFolder
+
+            Update both method signatures:
+            ```go
+            func (c *LSPClient) AddWorkspaceFolder(ctx context.Context, path string) error
+            func (c *LSPClient) RemoveWorkspaceFolder(ctx context.Context, path string) error
+            ```
+
+            The methods call sendNotification (no ctx), so ctx is accepted for API
+            consistency. The parameter is used for future cancellation support.
+
+            Call-site updates in internal/tools/workspace_folders.go are handled by
+            Agent G2 in wave 2.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/lsp/...
+            GOWORK=off go vet ./internal/lsp/...
+            GOWORK=off go test ./internal/lsp/...
+            # Postconditions:
+            grep -c "c.initialized = false" internal/lsp/client.go
+            # expect >= 2 (Restart + exit-monitor)
+            grep -c "addWatcherRoot" internal/lsp/client.go
+            # expect >= 2 (definition + call in AddWorkspaceFolder)
+            grep -n "c.startWatcher(path)" internal/lsp/client.go
+            # expect 0 (replaced by addWatcherRoot)
+            grep -c "progressCond" internal/lsp/client.go
+            # expect >= 3 (field, init, broadcast, wait)
+            grep -n "time.After(100" internal/lsp/client.go
+            # expect 0 (busy-poll removed)
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside internal/lsp/client.go.
+            - Do NOT remove startWatcher — it is still called from Initialize() for
+              the initial root. Only AddWorkspaceFolder's call is replaced.
+            - The watcher nil-assignment defer MUST be registered AFTER defer watcher.Close()
+              so it runs FIRST (LIFO). Do not swap the order.
+            - Do NOT change IsInitialized() or CheckInitialized().
+            - The call-site updates in workspace_folders.go (passing ctx to Add/Remove)
+              are Agent G2's responsibility — do not touch that file.
+          files:
+            - internal/lsp/client.go
+        - id: B
+          task: |
+            Fix H1 and L1 in internal/lsp/normalize.go.
+
+            ## H1 — Compound nameMap key to prevent last-write-wins on duplicate names
+
+            NormalizeDocumentSymbols keys nameMap by bare info.Name. When multiple
+            symbols share the same name (multiple String() or Error() methods),
+            the last one overwrites earlier ones and children attach to the wrong parent.
+
+            Fix: use a compound key (Name + Kind) for nameMap. Maintain a separate
+            nameByBare map for ContainerName lookup (LSP ContainerName is a bare name).
+
+            Current code (Pass 1 loop, around line 50-62):
+            ```
+            	nameMap := make(map[string]*types.DocumentSymbol, len(infos))
+            	symPtrs := make([]*types.DocumentSymbol, len(infos))
+            	for i, info := range infos {
+            		ds := &types.DocumentSymbol{
+            			Name:           info.Name,
+            			Kind:           info.Kind,
+            			Tags:           info.Tags,
+            			Range:          info.Location.Range,
+            			SelectionRange: info.Location.Range,
+            		}
+            		symPtrs[i] = ds
+            		nameMap[info.Name] = ds // last write wins on duplicates
+            	}
+            ```
+
+            Replace with:
+            ```go
+            // nameKey builds a compound lookup key to prevent collisions on duplicate
+            // symbol names (e.g. multiple String() or Error() methods on different types).
+            nameKey := func(name string, kind types.SymbolKind) string {
+            	return fmt.Sprintf("%s\x00%d", name, kind)
+            }
+
+            nameMap := make(map[string]*types.DocumentSymbol, len(infos))    // compound key
+            nameByBare := make(map[string]*types.DocumentSymbol, len(infos))  // bare name for container lookup
+            symPtrs := make([]*types.DocumentSymbol, len(infos))
+            for i, info := range infos {
+            	ds := &types.DocumentSymbol{
+            		Name:           info.Name,
+            		Kind:           info.Kind,
+            		Tags:           info.Tags,
+            		Range:          info.Location.Range,
+            		SelectionRange: info.Location.Range,
+            	}
+            	symPtrs[i] = ds
+            	nameMap[nameKey(info.Name, info.Kind)] = ds
+            	nameByBare[info.Name] = ds // last-write ok: containers are unambiguously named
+            }
+            ```
+
+            Then in Pass 2 (parent lookup), change nameMap to nameByBare. The current
+            code:
+            ```
+            		if info.ContainerName != nil && *info.ContainerName != "" {
+            			if parent, ok := nameMap[*info.ContainerName]; ok {
+            ```
+
+            Change to:
+            ```go
+            		if info.ContainerName != nil && *info.ContainerName != "" {
+            			if parent, ok := nameByBare[*info.ContainerName]; ok {
+            ```
+
+            Check whether fmt is already imported in normalize.go. If not, add it.
+
+            ## L1 — Correct misleading Pass 3 comment
+
+            Current Pass 3 comment:
+            ```
+            	// Pass 3: collect roots by dereferencing pointers after all children are wired.
+            	// Value-copying roots before Pass 2 completes would miss children added later.
+            ```
+
+            Replace with:
+            ```go
+            // Pass 3: collect root symbols (those with no parent) by dereferencing
+            // symPtrs after Pass 2 has finished wiring all children. Deferred
+            // dereferencing ensures children added in Pass 2 are visible in each
+            // root's Children slice. Note: SymbolInformation is always 1-level deep
+            // per the LSP spec; this function handles that single-depth case only.
+            ```
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/lsp/...
+            GOWORK=off go vet ./internal/lsp/...
+            GOWORK=off go test ./internal/lsp/...
+            # Postconditions:
+            grep -c "nameKey" internal/lsp/normalize.go       # expect >= 2 (def + use)
+            grep -c "nameByBare" internal/lsp/normalize.go    # expect >= 3 (decl, assign, use)
+            grep -n 'nameMap\[info\.Name\]' internal/lsp/normalize.go  # expect 0 (removed)
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside internal/lsp/normalize.go.
+            - Do NOT change the function signature of NormalizeDocumentSymbols.
+            - Use \x00 as the key separator — it cannot appear in symbol names.
+            - The nameByBare map uses last-write-wins for containers; this is intentional
+              and documented. Do not add complexity to disambiguate container names.
+          files:
+            - internal/lsp/normalize.go
+        - id: C
+          task: |
+            Fix H2 in internal/session/executor.go: SerializedExecutor uses a single
+            global semaphore shared across all sessions. Independent sessions block
+            each other. Fix with per-session mutex map inside the executor.
+
+            ## H2 — Per-session locking
+
+            IMPORTANT: Do not reuse SimulationSession.mu from types.go for executor
+            locking — that mutex is used by MarkDirty, IsDirty, IsTerminal, SetStatus
+            and would deadlock if held by the executor. You cannot modify types.go
+            (not in your ownership). Use a separate per-session mutex stored in the
+            executor itself.
+
+            Replace the entire contents of executor.go:
+
+            ```go
+            package session
+
+            import (
+            	"context"
+            	"sync"
+            )
+
+            // SerializedExecutor serializes operations per-session using a per-session
+            // mutex map. Independent sessions do not block each other, unlike the
+            // previous global semaphore approach.
+            type SerializedExecutor struct {
+            	mu           sync.Mutex
+            	sessionLocks map[string]*sync.Mutex
+            }
+
+            // NewSerializedExecutor creates a new SerializedExecutor.
+            func NewSerializedExecutor() *SerializedExecutor {
+            	return &SerializedExecutor{
+            		sessionLocks: make(map[string]*sync.Mutex),
+            	}
+            }
+
+            // lockFor returns the per-session mutex for s, creating it if needed.
+            func (e *SerializedExecutor) lockFor(s *SimulationSession) *sync.Mutex {
+            	e.mu.Lock()
+            	defer e.mu.Unlock()
+            	if m, ok := e.sessionLocks[s.ID]; ok {
+            		return m
+            	}
+            	m := &sync.Mutex{}
+            	e.sessionLocks[s.ID] = m
+            	return m
+            }
+
+            // Acquire locks the per-session mutex for exclusive session access.
+            // Returns ctx.Err() if the context is cancelled before the lock is acquired.
+            func (e *SerializedExecutor) Acquire(ctx context.Context, s *SimulationSession) error {
+            	m := e.lockFor(s)
+            	acquired := make(chan struct{}, 1)
+            	go func() {
+            		m.Lock()
+            		acquired <- struct{}{}
+            	}()
+            	select {
+            	case <-acquired:
+            		return nil
+            	case <-ctx.Done():
+            		// Drain the goroutine and immediately unlock to avoid a leaked lock.
+            		<-acquired
+            		m.Unlock()
+            		return ctx.Err()
+            	}
+            }
+
+            // Release unlocks the per-session mutex after the operation completes.
+            func (e *SerializedExecutor) Release(s *SimulationSession) {
+            	e.mu.Lock()
+            	m := e.sessionLocks[s.ID]
+            	e.mu.Unlock()
+            	if m != nil {
+            		m.Unlock()
+            	}
+            }
+            ```
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/session/...
+            GOWORK=off go vet ./internal/session/...
+            GOWORK=off go test ./internal/session/...
+            # Postconditions:
+            grep -n "sem chan struct{}" internal/session/executor.go  # expect 0 (removed)
+            grep -c "sessionLocks" internal/session/executor.go       # expect >= 3
+            grep -c "lockFor" internal/session/executor.go            # expect >= 2
+            ```
+
+            ## Constraints
+            - Do NOT modify internal/session/types.go or internal/session/manager.go.
+            - The Acquire/Release interface signatures must match types.go exactly.
+            - Do NOT use s.mu directly for executor locking (deadlock risk).
+          files:
+            - internal/session/executor.go
+        - id: D
+          task: |
+            Fix H3 in internal/tools/position_pattern.go and internal/tools/workspace.go:
+            column offsets use byte offsets instead of UTF-16 code-unit offsets (LSP §3.4).
+            Also fix M3 in workspace.go: file URI built by string concatenation.
+
+            ## H3 — UTF-16 column offsets
+
+            LSP positions use UTF-16 code-unit offsets, not byte offsets:
+            - ASCII (U+0000..U+007F): 1 byte = 1 UTF-16 unit
+            - U+0080..U+FFFF: 2-4 UTF-8 bytes = 1 UTF-16 unit
+            - U+10000+: 4 UTF-8 bytes = 2 UTF-16 units (surrogate pair)
+
+            ### Step 1: Add utf16Offset to position_pattern.go
+
+            Add "unicode/utf8" to the imports. Then add this function (can be placed
+            after the existing imports, before ResolvePositionPattern):
+
+            ```go
+            // utf16Offset returns the number of UTF-16 code units that precede
+            // byteOffset in the UTF-8 string line, per LSP spec §3.4.
+            // byteOffset must fall on a rune boundary within line.
+            func utf16Offset(line string, byteOffset int) int {
+            	units := 0
+            	i := 0
+            	for i < byteOffset {
+            		r, size := utf8.DecodeRuneInString(line[i:])
+            		if r >= 0x10000 {
+            			units += 2 // surrogate pair in UTF-16
+            		} else {
+            			units++
+            		}
+            		i += size
+            	}
+            	return units
+            }
+            ```
+
+            ### Step 2: Update ResolvePositionPattern column calculation
+
+            Current code (around line 43-49):
+            ```
+            	// col is 1-indexed: distance from the last newline before offset
+            	lastNL := strings.LastIndex(fileContent[:offset], "\n")
+            	if lastNL < 0 {
+            		// no newline before offset means we're on the first line
+            		col = offset + 1
+            	} else {
+            		col = offset - lastNL
+            	}
+            ```
+
+            Replace with:
+            ```go
+            // col is 1-indexed UTF-16 code-unit offset from the start of the line.
+            var lineStart int
+            lastNL := strings.LastIndex(fileContent[:offset], "\n")
+            if lastNL < 0 {
+            	lineStart = 0
+            } else {
+            	lineStart = lastNL + 1
+            }
+            lineContent := fileContent[lineStart:offset]
+            col = utf16Offset(lineContent, len(lineContent)) + 1
+            ```
+
+            ### Step 3: Update textMatchApply in workspace.go
+
+            Locate the block computing startChar and endChar (around line 318-336):
+            ```
+            	before := src[:startByte]
+            	startLine := strings.Count(before, "\n")
+            	lastNL := strings.LastIndex(before, "\n")
+            	var startChar int
+            	if lastNL < 0 {
+            		startChar = startByte
+            	} else {
+            		startChar = startByte - lastNL - 1
+            	}
+
+            	segment := src[startByte:endByte]
+            	endLine := startLine + strings.Count(segment, "\n")
+            	lastNLInSeg := strings.LastIndex(segment, "\n")
+            	var endChar int
+            	if lastNLInSeg < 0 {
+            		endChar = startChar + len(segment)
+            	} else {
+            		endChar = len(segment) - lastNLInSeg - 1
+            	}
+            ```
+
+            Replace with:
+            ```go
+            before := src[:startByte]
+            startLine := strings.Count(before, "\n")
+            var startLineBegin int
+            if lastNL := strings.LastIndex(before, "\n"); lastNL < 0 {
+            	startLineBegin = 0
+            } else {
+            	startLineBegin = lastNL + 1
+            }
+            startChar := utf16Offset(src[startLineBegin:startByte], startByte-startLineBegin)
+
+            segment := src[startByte:endByte]
+            endLine := startLine + strings.Count(segment, "\n")
+            var endChar int
+            if lastNLInSeg := strings.LastIndex(segment, "\n"); lastNLInSeg < 0 {
+            	endChar = startChar + utf16Offset(segment, len(segment))
+            } else {
+            	endLineContent := segment[lastNLInSeg+1:]
+            	endChar = utf16Offset(endLineContent, len(endLineContent))
+            }
+            ```
+
+            utf16Offset is defined in position_pattern.go in the same package (tools);
+            no import needed in workspace.go.
+
+            ## M3 — Use CreateFileURI in textMatchApply
+
+            Immediately after the endChar block, the file URI is:
+            ```
+            	fileURI := "file://" + filePath
+            ```
+
+            Replace with:
+            ```go
+            fileURI := CreateFileURI(filePath)
+            ```
+
+            CreateFileURI is in internal/tools/helpers.go (same package). No import needed.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/tools/...
+            GOWORK=off go vet ./internal/tools/...
+            GOWORK=off go test ./internal/tools/...
+            # Postconditions:
+            grep -c "utf16Offset" internal/tools/position_pattern.go  # expect >= 2 (def + use)
+            grep -c "utf16Offset" internal/tools/workspace.go         # expect >= 2
+            grep -n '"file://" +' internal/tools/workspace.go         # expect 0 (replaced)
+            grep -c "unicode/utf8" internal/tools/position_pattern.go # expect 1
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside position_pattern.go and workspace.go.
+            - utf16Offset MUST be defined in position_pattern.go (not workspace.go) —
+              one definition used by both files in the same package.
+            - Do NOT change the signatures of ResolvePositionPattern or ExtractPositionWithPattern.
+            - Only the character/col offset calculations change; line counting is unchanged.
+          files:
+            - internal/tools/position_pattern.go
+            - internal/tools/workspace.go
+        - id: E
+          task: |
+            Fix M2 in internal/session/differ.go: DiffDiagnostics is O(n*m).
+            Replace with fingerprint-keyed counter map for O(n+m).
+
+            ## M2 — O(n+m) DiffDiagnostics
+
+            Keep DiagnosticsEqual and SeverityString unchanged.
+            Add fmt to imports if not already present.
+
+            Insert before DiffDiagnostics:
+            ```go
+            // diagnosticFingerprint returns a stable string key for d using Range,
+            // Message, and Severity. Source is excluded to match DiagnosticsEqual
+            // semantics (Source ignored when either diagnostic's Source is empty).
+            func diagnosticFingerprint(d types.LSPDiagnostic) string {
+            	return fmt.Sprintf("%d\x00%d\x00%d\x00%d\x00%s\x00%d",
+            		d.Range.Start.Line,
+            		d.Range.Start.Character,
+            		d.Range.End.Line,
+            		d.Range.End.Character,
+            		d.Message,
+            		d.Severity,
+            	)
+            }
+            ```
+
+            Replace the DiffDiagnostics function body (signature unchanged):
+            ```go
+            func DiffDiagnostics(baseline, current []types.LSPDiagnostic) (introduced, resolved []DiagnosticEntry) {
+            	// Build a count map from baseline for O(1) membership tests.
+            	baseCount := make(map[string]int, len(baseline))
+            	for _, d := range baseline {
+            		baseCount[diagnosticFingerprint(d)]++
+            	}
+
+            	// Find introduced: present in current but count exhausted in baseline.
+            	remaining := make(map[string]int, len(baseCount))
+            	for k, v := range baseCount {
+            		remaining[k] = v
+            	}
+            	for _, d := range current {
+            		fp := diagnosticFingerprint(d)
+            		if remaining[fp] > 0 {
+            			remaining[fp]--
+            		} else {
+            			introduced = append(introduced, DiagnosticEntry{
+            				Line:     d.Range.Start.Line + 1,
+            				Col:      d.Range.Start.Character + 1,
+            				Message:  d.Message,
+            				Severity: SeverityString(d.Severity),
+            				Source:   d.Source,
+            			})
+            		}
+            	}
+
+            	// Find resolved: present in baseline but count exhausted in current.
+            	baseRemaining := make(map[string]int, len(baseCount))
+            	for k, v := range baseCount {
+            		baseRemaining[k] = v
+            	}
+            	for _, d := range current {
+            		fp := diagnosticFingerprint(d)
+            		if baseRemaining[fp] > 0 {
+            			baseRemaining[fp]--
+            		}
+            	}
+            	for _, d := range baseline {
+            		fp := diagnosticFingerprint(d)
+            		if baseRemaining[fp] > 0 {
+            			baseRemaining[fp]--
+            			resolved = append(resolved, DiagnosticEntry{
+            				Line:     d.Range.Start.Line + 1,
+            				Col:      d.Range.Start.Character + 1,
+            				Message:  d.Message,
+            				Severity: SeverityString(d.Severity),
+            				Source:   d.Source,
+            			})
+            		}
+            	}
+
+            	return introduced, resolved
+            }
+            ```
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/session/...
+            GOWORK=off go vet ./internal/session/...
+            GOWORK=off go test ./internal/session/...
+            # Postconditions:
+            grep -c "diagnosticFingerprint" internal/session/differ.go  # expect >= 3
+            grep -n "for _, base := range baseline" internal/session/differ.go  # expect 0
+            grep -c "baseCount" internal/session/differ.go  # expect >= 3
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside internal/session/differ.go.
+            - Do NOT change signatures of DiffDiagnostics, DiagnosticsEqual, SeverityString.
+            - Handle duplicate diagnostics correctly via counters (not simple set membership).
+          files:
+            - internal/session/differ.go
+        - id: F
+          task: |
+            Fix M1 in cmd/agent-lsp/server.go: remove the redundant
+            logging.MarkServerInitialized() call that fires before the MCP session exists.
+
+            ## M1 — Remove premature MarkServerInitialized
+
+            The canonical call is inside InitializedHandler (around line 237):
+            ```
+            			InitializedHandler: func(_ context.Context, req *mcp.InitializedRequest) {
+            				logging.SetServer(&mcpSessionSender{ss: req.Session})
+            				logging.MarkServerInitialized()
+            			},
+            ```
+
+            There is a second, incorrect call around line 1015-1017:
+            ```
+            	// Mark server as initialized and start on stdio transport.
+            	logging.MarkServerInitialized()
+            	logging.Log(logging.LevelInfo, "agent-lsp server starting")
+            ```
+
+            Remove the logging.MarkServerInitialized() line and update the comment:
+            ```go
+            	// Start the MCP server on stdio transport. MarkServerInitialized is
+            	// called from InitializedHandler above once the MCP session is established.
+            	logging.Log(logging.LevelInfo, "agent-lsp server starting")
+            ```
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./cmd/agent-lsp/...
+            GOWORK=off go vet ./cmd/agent-lsp/...
+            # Postconditions:
+            grep -c "MarkServerInitialized" cmd/agent-lsp/server.go  # expect exactly 1
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside cmd/agent-lsp/server.go.
+            - Do NOT remove the InitializedHandler call — that is the correct location.
+          files:
+            - cmd/agent-lsp/server.go
+        - id: G
+          task: |
+            Fix L4 in internal/tools/workspace_folders.go: json.Marshal errors are
+            silently discarded with _ in all three handler functions.
+
+            NOTE: Do NOT update AddWorkspaceFolder/RemoveWorkspaceFolder call sites
+            to pass ctx — that is Agent G2's job in wave 2 after Agent A lands
+            the updated signatures. Focus only on L4 here.
+
+            ## L4 — Handle json.Marshal errors
+
+            In HandleAddWorkspaceFolder, replace:
+            ```
+            	data, _ := json.Marshal(map[string]interface{}{
+            		"added":            path,
+            		"workspace_folders": folders,
+            	})
+            	return types.TextResult(string(data)), nil
+            ```
+            with:
+            ```go
+            data, err := json.Marshal(map[string]interface{}{
+            	"added":             path,
+            	"workspace_folders": folders,
+            })
+            if err != nil {
+            	return types.ErrorResult(fmt.Sprintf("marshal response: %s", err)), nil
+            }
+            return types.TextResult(string(data)), nil
+            ```
+
+            In HandleRemoveWorkspaceFolder, replace:
+            ```
+            	data, _ := json.Marshal(map[string]interface{}{
+            		"removed":          path,
+            		"workspace_folders": folders,
+            	})
+            	return types.TextResult(string(data)), nil
+            ```
+            with:
+            ```go
+            data, err := json.Marshal(map[string]interface{}{
+            	"removed":           path,
+            	"workspace_folders": folders,
+            })
+            if err != nil {
+            	return types.ErrorResult(fmt.Sprintf("marshal response: %s", err)), nil
+            }
+            return types.TextResult(string(data)), nil
+            ```
+
+            In HandleListWorkspaceFolders, replace:
+            ```
+            	data, _ := json.Marshal(map[string]interface{}{
+            		"workspace_folders": folders,
+            	})
+            	return types.TextResult(string(data)), nil
+            ```
+            with:
+            ```go
+            data, err := json.Marshal(map[string]interface{}{
+            	"workspace_folders": folders,
+            })
+            if err != nil {
+            	return types.ErrorResult(fmt.Sprintf("marshal response: %s", err)), nil
+            }
+            return types.TextResult(string(data)), nil
+            ```
+
+            Verify fmt is in the imports (the existing file already uses fmt.Sprintf
+            in error paths; confirm before adding a duplicate import).
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/tools/...
+            GOWORK=off go vet ./internal/tools/...
+            GOWORK=off go test ./internal/tools/...
+            # Postconditions:
+            grep -n "data, _" internal/tools/workspace_folders.go      # expect 0
+            grep -c "marshal response" internal/tools/workspace_folders.go  # expect 3
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside internal/tools/workspace_folders.go.
+            - Do NOT update Add/Remove call sites to pass ctx — that is Agent G2's task.
+            - Do NOT change the handler function signatures.
+          files:
+            - internal/tools/workspace_folders.go
+    - number: 2
+      agents:
+        - id: G2
+          task: |
+            Update call sites in internal/tools/workspace_folders.go to pass ctx to
+            the updated AddWorkspaceFolder and RemoveWorkspaceFolder client methods (L3).
+
+            This wave runs after both Agent A (client.go signature changes) and Agent G
+            (L4 json.Marshal fixes) have merged. The file at this point has proper error
+            handling. Your change is only the ctx propagation.
+
+            ## L3 call-site update
+
+            In HandleAddWorkspaceFolder, change the call:
+            ```go
+            if err := client.AddWorkspaceFolder(path); err != nil {
+            ```
+            to:
+            ```go
+            if err := client.AddWorkspaceFolder(ctx, path); err != nil {
+            ```
+
+            In HandleRemoveWorkspaceFolder, the function signature currently uses
+            `_ context.Context`. Change it to bind the parameter name so ctx can be
+            passed:
+            ```go
+            func HandleRemoveWorkspaceFolder(_ context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+            ```
+            becomes:
+            ```go
+            func HandleRemoveWorkspaceFolder(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+            ```
+
+            Then change the call:
+            ```go
+            if err := client.RemoveWorkspaceFolder(path); err != nil {
+            ```
+            to:
+            ```go
+            if err := client.RemoveWorkspaceFolder(ctx, path); err != nil {
+            ```
+
+            HandleListWorkspaceFolders does not call Add or Remove — no change needed.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/tools/...
+            GOWORK=off go vet ./internal/tools/...
+            GOWORK=off go test ./internal/tools/...
+            # Postconditions:
+            grep -c "ctx, path" internal/tools/workspace_folders.go  # expect 2
+            grep -n "AddWorkspaceFolder(path)" internal/tools/workspace_folders.go   # expect 0
+            grep -n "RemoveWorkspaceFolder(path)" internal/tools/workspace_folders.go # expect 0
+            ```
+
+            ## Constraints
+            - Do NOT modify files outside internal/tools/workspace_folders.go.
+            - Do NOT redo the json.Marshal error handling — Agent G already applied it.
+            - Do NOT change HandleListWorkspaceFolders' function signature.
+            - This agent has a build dependency on Agent A's client.go changes. The
+              build gate requires Agent A's wave to be merged before this build can pass.
+          files:
+            - internal/tools/workspace_folders.go
+          dependencies:
+            - A
+            - G
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+pre_mortem:
+    overall_risk: medium
+    rows:
+        - scenario: |
+            Agent A registers the c.watcher = nil defer AFTER watcher.Close(), meaning
+            Close runs first (LIFO). A subsequent addWatcherRoot call gets c.watcher
+            pointing to a closed watcher and watcher.Add returns an error silently.
+          likelihood: medium
+          impact: high
+          mitigation: |
+            IMPL brief specifies exact defer order with LIFO explanation. The nil-assignment
+            defer must be registered AFTER watcher.Close() so it runs FIRST. Postcondition
+            grep cannot catch this; a test calling AddWorkspaceFolder twice would catch it.
+        - scenario: |
+            Agent B updates nameMap to compound key but forgets to update Pass 2 to use
+            nameByBare for ContainerName lookup. Children never attach to parents.
+          likelihood: medium
+          impact: high
+          mitigation: |
+            IMPL brief explicitly specifies the Pass 2 change. Postcondition checks
+            nameByBare count >= 3. An existing test exercising parent-child symbol wiring
+            would catch this — Agent B should verify such a test exists or add one.
+        - scenario: |
+            Agent C's per-session mutex map grows unbounded as sessions are destroyed
+            without cleanup, leaking memory over many sessions.
+          likelihood: low
+          impact: low
+          mitigation: |
+            Typical sessions <10 concurrent. Note in completion report as known limitation
+            for a follow-up cleanup pass.
+        - scenario: |
+            Agent D defines utf16Offset in workspace.go instead of position_pattern.go,
+            causing a duplicate function declaration when both files are compiled together.
+          likelihood: low
+          impact: medium
+          mitigation: |
+            IMPL brief explicitly specifies position_pattern.go as the definition location.
+            The Go build will catch a duplicate declaration immediately.
+        - scenario: |
+            Agent G2's build fails because Agent A's wave-1 client.go changes are not
+            yet merged when wave-2 quality gates run in isolation.
+          likelihood: high
+          impact: medium
+          mitigation: |
+            Expected ordering. Wave 2 runs after wave 1 merges. Post-wave-2 quality gate
+            covers full build. Agent G2 notes this in their completion report.
+        - scenario: |
+            Agent A's L2 fix does not promptly return on ctx cancellation because
+            sync.Cond.Wait does not select on ctx.Done(). The non-blocking select inside
+            the loop only fires on each Broadcast wake, not immediately on cancellation.
+          likelihood: low
+          impact: low
+          mitigation: |
+            The 60s hard deadline still applies. True ctx-aware waking requires a separate
+            goroutine signalling the Cond on ctx.Done(). Acceptable as a follow-up; document
+            in completion report.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+        E:
+            agent_id: E
+            verdict: PASS
+        F:
+            agent_id: F
+            verdict: PASS
+        G:
+            agent_id: G
+            verdict: PASS
+        G2:
+            agent_id: G2
+            verdict: PASS
+    summary: All seven agent briefs verified against the codebase. File locations, struct field names, exact code snippets, line numbers, function signatures, and referenced symbols are accurate. The exit-monitor goroutine body (C2), struct fields (watcherMu/watcherStop), pass-1 loop in normalize.go (H1), executor semaphore pattern (H2), column-offset code in position_pattern.go and workspace.go (H3/M3), differ.go O(n*m) loop (M2), MarkServerInitialized dual-call (M1), and workspace_folders.go json.Marshal suppressions (L4/G2) all match what is present in the actual source. No errors found. Warnings are advisory only.
+    reviewed_at: "2026-04-10T04:21:33Z"
+    issue_count: 0
+state: SCOUT_PENDING
+original_branch: main
