@@ -256,12 +256,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Use versioned coursier release — raw launcher hits Maven Central app catalog (403 in CI)
+          # Use versioned coursier release with GitHub-hosted app channel (avoids Maven Central 403 on app catalog)
           CS_VERSION=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/coursier/coursier/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
           curl -fL "https://github.com/coursier/coursier/releases/download/v${CS_VERSION}/cs-x86_64-pc-linux.gz" | gzip -d > /tmp/cs
           chmod +x /tmp/cs
           sudo mv /tmp/cs /usr/local/bin/cs
-          cs install metals sbt --repositories central
+          cs install metals sbt --channel https://github.com/coursier/apps/raw/master/apps
           echo "$HOME/.local/share/coursier/bin" >> $GITHUB_PATH
 
       - name: Run Scala tests
