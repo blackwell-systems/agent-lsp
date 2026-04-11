@@ -1,7 +1,6 @@
 # agent-lsp
 
 [![Blackwell Systems](https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg)](https://github.com/blackwell-systems)
-[![CI](https://github.com/blackwell-systems/agent-lsp/actions/workflows/ci.yml/badge.svg)](https://github.com/blackwell-systems/agent-lsp/actions)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 [![Languages](https://img.shields.io/badge/languages-30_CI--verified-brightgreen.svg)](#multi-language-support)
 [![CI Coverage](https://img.shields.io/badge/CI--verified_tools-50%2F50-brightgreen.svg)](#tools)
