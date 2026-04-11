@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.blackwell-systems/agent-lsp",
+  "description": "A stateful LSP runtime for AI agents — 50+ tools across 30+ languages via MCP (go-to-definition, find-references, diagnostics, rename, and more).",
+  "repository": {
+    "url": "https://github.com/blackwell-systems/agent-lsp",
+    "source": "github"
+  },
+  "version": "0.1.2",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@blackwell-systems/agent-lsp",
+      "version": "0.1.2",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

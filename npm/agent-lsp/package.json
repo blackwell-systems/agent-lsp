@@ -1,6 +1,7 @@
 {
   "name": "@blackwell-systems/agent-lsp",
   "version": "0.1.1",
+  "mcpName": "io.github.blackwell-systems/agent-lsp",
   "description": "MCP server exposing 50+ language server protocol tools to AI agents",
   "bin": {
     "agent-lsp": "bin/agent-lsp"
