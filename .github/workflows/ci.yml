@@ -252,17 +252,20 @@ jobs:
       - name: Build
         run: GOWORK=off go build ./...
 
-      - name: Install Coursier + metals + sbt
+      - name: Install Coursier + metals
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Use versioned coursier release with GitHub-hosted app channel (avoids Maven Central 403 on app catalog)
+          # Use cs bootstrap with explicit Maven coordinates — bypasses the app catalog entirely
+          # (cs install hits io.get-coursier:apps from Maven Central which 403s in CI)
           CS_VERSION=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/coursier/coursier/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
           curl -fL "https://github.com/coursier/coursier/releases/download/v${CS_VERSION}/cs-x86_64-pc-linux.gz" | gzip -d > /tmp/cs
           chmod +x /tmp/cs
           sudo mv /tmp/cs /usr/local/bin/cs
-          cs install metals sbt --channel https://github.com/coursier/apps/raw/master/apps
-          echo "$HOME/.local/share/coursier/bin" >> $GITHUB_PATH
+          METALS_VERSION=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/scalameta/metals/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
+          cs bootstrap "org.scalameta:metals_2.13:${METALS_VERSION}" -o /tmp/metals
+          sudo mv /tmp/metals /usr/local/bin/metals
+          sudo chmod +x /usr/local/bin/metals
 
       - name: Run Scala tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Scala$" ./test/ -timeout 30m
