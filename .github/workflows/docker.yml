@@ -10,8 +10,8 @@ permissions:
   packages: write
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE: ghcr.io/blackwell-systems/agent-lsp
+  GHCR_IMAGE: ghcr.io/blackwell-systems/agent-lsp
+  HUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/agent-lsp
 
 jobs:
   # Build and push the base image
@@ -30,11 +30,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE }}
+          images: |
+            ${{ env.GHCR_IMAGE }}
+            ${{ env.HUB_IMAGE }}
           tags: |
             type=raw,value=base
             type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
@@ -104,13 +111,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Build and push ${{ matrix.lang }}
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.lang
           push: true
-          tags: ${{ env.IMAGE }}:${{ matrix.lang }}
+          tags: |
+            ${{ env.GHCR_IMAGE }}:${{ matrix.lang }}
+            ${{ env.HUB_IMAGE }}:${{ matrix.lang }}
           platforms: linux/amd64
           build-args: |
             BASE_TAG=base
@@ -155,6 +169,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Build and push ${{ matrix.tag }} (${{ matrix.description }})
         run: |
           # Write an inline Dockerfile for this combo image
@@ -181,7 +200,8 @@ jobs:
           docker buildx build \
             --platform linux/amd64 \
             --push \
-            --tag ${{ env.IMAGE }}:${{ matrix.tag }} \
+            --tag ${{ env.GHCR_IMAGE }}:${{ matrix.tag }} \
+            --tag ${{ env.HUB_IMAGE }}:${{ matrix.tag }} \
             --build-arg BASE_TAG=base \
             --build-arg NPM_PACKAGES="${{ matrix.npm_packages }}" \
             --build-arg GO_PACKAGES="${{ matrix.go_packages }}" \
@@ -205,13 +225,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Build and push full
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.full
           push: true
-          tags: ${{ env.IMAGE }}:full
+          tags: |
+            ${{ env.GHCR_IMAGE }}:full
+            ${{ env.HUB_IMAGE }}:full
           platforms: linux/amd64
           build-args: BASE_TAG=base
           cache-from: type=gha
