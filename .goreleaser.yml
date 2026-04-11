@@ -61,6 +61,27 @@ brews:
     license: "MIT"
     install: |
       bin.install "agent-lsp"
+    caveats: |
+      Run the setup wizard to auto-detect language servers and configure your AI tool:
+
+        agent-lsp init
+
+      Or manually install language servers and add to .mcp.json:
+
+        go install golang.org/x/tools/gopls@latest
+        npm install -g typescript-language-server typescript
+
+        {
+          "mcpServers": {
+            "lsp": {
+              "type": "stdio",
+              "command": "agent-lsp",
+              "args": ["go:gopls", "typescript:typescript-language-server,--stdio"]
+            }
+          }
+        }
+
+      Documentation: https://github.com/blackwell-systems/agent-lsp
     test: |
       system "#{bin}/agent-lsp", "--version"
 
