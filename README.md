@@ -105,6 +105,31 @@ If `agent-lsp` isn't found after install, add Go's bin directory to your PATH:
 export PATH="$PATH:$(go env GOPATH)/bin"   # add to ~/.zshrc or ~/.bashrc to persist
 ```
 
+### Quick setup with `agent-lsp init`
+
+After installing, run the setup wizard to auto-detect installed language servers
+and write the correct MCP config for your AI tool:
+
+```bash
+agent-lsp init
+```
+
+The wizard:
+1. Detects language servers installed on your PATH
+2. Asks which servers to include
+3. Asks which AI tool to configure (Claude Code, Claude Desktop, Cursor,
+   Cline/VS Code, Windsurf, Gemini CLI, or custom path)
+4. Writes the MCP server config to the correct location and shows you what was written
+
+For CI or scripted use (no prompts):
+
+```bash
+agent-lsp init --non-interactive
+```
+
+Detects all available servers and writes `.mcp.json` in the current directory
+targeting Claude Code. Edit the file afterward if needed.
+
 ## Setup
 
 ### Step 1: Install language servers for your stack
