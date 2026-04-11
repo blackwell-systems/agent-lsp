@@ -66,8 +66,13 @@ for GOKEY in "${!PLATFORMS[@]}"; do
     fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
   "
 
-  echo "  [${NPM_SUFFIX}] Publishing @blackwell-systems/agent-lsp-${NPM_SUFFIX}@${VERSION}..."
-  npm publish "${PKG_DIR}" --access public
+  PKG_NAME="@blackwell-systems/agent-lsp-${NPM_SUFFIX}"
+  if npm view "${PKG_NAME}@${VERSION}" version &>/dev/null 2>&1; then
+    echo "  [${NPM_SUFFIX}] Already published at ${VERSION}, skipping."
+  else
+    echo "  [${NPM_SUFFIX}] Publishing ${PKG_NAME}@${VERSION}..."
+    npm publish "${PKG_DIR}" --access public
+  fi
 done
 
 # Update root package version + optionalDependencies
@@ -82,8 +87,13 @@ node -e "
   fs.writeFileSync('${ROOT_PKG}', JSON.stringify(pkg, null, 2) + '\n');
 "
 
-echo "  [root] Publishing @blackwell-systems/agent-lsp@${VERSION}..."
-npm publish "${NPM_DIR}/agent-lsp" --access public
+ROOT_PKG_NAME="@blackwell-systems/agent-lsp"
+if npm view "${ROOT_PKG_NAME}@${VERSION}" version &>/dev/null 2>&1; then
+  echo "  [root] Already published at ${VERSION}, skipping."
+else
+  echo "  [root] Publishing ${ROOT_PKG_NAME}@${VERSION}..."
+  npm publish "${NPM_DIR}/agent-lsp" --access public
+fi
 
 echo ""
 echo "Done. Install with: npm install -g @blackwell-systems/agent-lsp"
