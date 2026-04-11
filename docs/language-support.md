@@ -1,5 +1,81 @@
 # Language Support
 
+## Install reference
+
+| Language | Server | Install |
+|----------|--------|---------|
+| TypeScript / JavaScript | `typescript-language-server` | `npm i -g typescript-language-server typescript` |
+| Python | `pyright-langserver` | `npm i -g pyright` |
+| Go | `gopls` | `go install golang.org/x/tools/gopls@latest` |
+| Rust | `rust-analyzer` | `rustup component add rust-analyzer` |
+| C / C++ | `clangd` | `apt install clangd` / `brew install llvm` |
+| Ruby | `solargraph` | `gem install solargraph` |
+| PHP | `intelephense` | `npm i -g intelephense` |
+| Java | `jdtls` | [eclipse.jdt.ls snapshots](https://download.eclipse.org/jdtls/snapshots/) |
+| YAML | `yaml-language-server` | `npm i -g yaml-language-server` |
+| JSON | `vscode-json-language-server` | `npm i -g vscode-langservers-extracted` |
+| Dockerfile | `docker-langserver` | `npm i -g dockerfile-language-server-nodejs` |
+| C# | `csharp-ls` | `dotnet tool install -g csharp-ls` |
+| Kotlin | `kotlin-language-server` | [GitHub releases](https://github.com/fwcd/kotlin-language-server/releases) |
+| Lua | `lua-language-server` | [GitHub releases](https://github.com/LuaLS/lua-language-server/releases) |
+| Swift | `sourcekit-lsp` | Ships with Xcode / Swift toolchain |
+| Zig | `zls` | [GitHub releases](https://github.com/zigtools/zls/releases) (match Zig version) |
+| CSS | `vscode-css-language-server` | `npm i -g vscode-langservers-extracted` |
+| HTML | `vscode-html-language-server` | `npm i -g vscode-langservers-extracted` |
+| Terraform | `terraform-ls` | [releases.hashicorp.com](https://releases.hashicorp.com/terraform-ls/) |
+| Scala | `metals` | `cs install metals` ([Coursier](https://get-coursier.io)) |
+| Gleam | `gleam` (built-in) | [GitHub releases](https://github.com/gleam-lang/gleam/releases) |
+| Elixir | `elixir-ls` | [GitHub releases](https://github.com/elixir-lsp/elixir-ls/releases) |
+| Prisma | `prisma-language-server` | `npm i -g @prisma/language-server` |
+| SQL | `sqls` | `go install github.com/sqls-server/sqls@latest` |
+| Clojure | `clojure-lsp` | [GitHub releases](https://github.com/clojure-lsp/clojure-lsp/releases) |
+| Nix | `nil` | [GitHub releases](https://github.com/oxalica/nil/releases) |
+| Dart | `dart language-server` | Ships with Dart SDK (`brew install dart`) |
+| MongoDB | `mongodb-language-server` | `npm i -g @mongodb-js/mongodb-language-server` |
+
+---
+
+## CI tool coverage matrix
+
+Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`) verified for all 30 languages. Tier 2: 34 additional tools.
+
+| Language | Tier 1 | symbols | definition | references | completions | workspace | format | declaration | type_hierarchy | hover | call_hier | sem_tok | sig_help |
+|----------|--------|---------|------------|------------|-------------|-----------|--------|-------------|----------------|-------|-----------|---------|----------|
+| TypeScript | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | pass |
+| Python | pass | pass | pass | pass | pass | pass | — | — | — | pass | pass | pass | — |
+| Go | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
+| Rust | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | — |
+| Java | pass | — | — | — | — | — | — | — | pass | pass | pass | — | — |
+| C | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
+| PHP | pass | pass | pass | pass | pass | pass | — | — | — | pass | pass | pass | pass |
+| C++ | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
+| JavaScript | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
+| Ruby | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
+| YAML | pass | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
+| JSON | pass | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
+| Dockerfile | pass | — | — | — | pass | pass | — | — | — | pass | — | — | — |
+| C# | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
+| Kotlin | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
+| Lua | pass | pass | — | — | pass | pass | pass | — | — | pass | pass | pass | pass |
+| Swift | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
+| Zig | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
+| CSS | pass | pass | — | — | pass | pass | pass | — | — | pass | — | — | — |
+| HTML | pass | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
+| Terraform | pass | pass | pass | — | pass | pass | pass | — | — | pass | — | — | — |
+| Scala | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
+| Gleam | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
+| Elixir | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
+| Prisma | pass | pass | pass | pass | — | — | pass | — | — | pass | — | — | — |
+| SQL | pass | pass | pass | pass | pass | pass | — | — | — | pass | — | — | — |
+| Clojure | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
+| Nix | pass | pass | — | — | pass | pass | — | — | — | pass | — | — | — |
+| Dart | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
+| MongoDB | pass | — | — | — | pass | pass | — | — | — | pass | — | — | — |
+
+See [ci-notes.md](./ci-notes.md) for per-language CI quirks.
+
+---
+
 ## Current (30 languages, CI-tested)
 
 | Language | Language Server | Status |
