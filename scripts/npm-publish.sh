@@ -53,6 +53,9 @@ for GOKEY in "${!PLATFORMS[@]}"; do
   cp "${TMP_DIR}/${BINARY_NAME}" "${BIN_DIR}/${BINARY_NAME}"
   chmod +x "${BIN_DIR}/${BINARY_NAME}"
   rm -f "${TMP_DIR}/${BINARY_NAME}"
+  # Remove .gitignore so npm packs the binary (files field overrides gitignore
+  # at the package root, but not nested .gitignore files within subdirs)
+  rm -f "${BIN_DIR}/.gitignore"
 
   # Update version
   node -e "
