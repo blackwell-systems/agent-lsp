@@ -1,0 +1,611 @@
+title: 'agent-lsp init: Interactive Setup Wizard'
+feature_slug: init-command
+verdict: SUITABLE
+suitability_assessment: |-
+    File decomposition: 3 files change (plus 1 new test file). Agent A owns
+    cmd/agent-lsp/init.go (new) and cmd/agent-lsp/init_test.go (new). Agent B
+    owns cmd/agent-lsp/main.go (routing addition) and README.md (docs update).
+    Ownership is fully disjoint.
+
+    Investigation-first items: None. Behavior is well-specified and all referenced
+    symbols (AutodetectServers, ServerEntry, Config) are confirmed in the codebase.
+    AutodetectServers() in internal/config/autodetect.go scans PATH and returns
+    *Config with []ServerEntry — verified by reading the file directly.
+
+    Interface discoverability: The cross-agent interface is a single function:
+    runInit(args []string). Both files are in package main, so no import path needed.
+    The contract is fully specifiable now.
+
+    Pre-implementation status check: Feature is wholly new. No existing subcommand
+    routing in main.go (confirmed by reading main.go). AutodetectServers() is the
+    correct reuse point — HandleDetectLspServers requires a live LSP client and
+    workspace_dir, which are not available in the init subcommand context.
+
+    Platform scope update: 8 target platforms included (Claude Code project, Claude
+    Code global, Claude Desktop, Cursor, Cline/VS Code, Windsurf, Gemini CLI, custom).
+    All use the same mcpServers JSON shape — only the output file path differs.
+    OpenAI/ChatGPT excluded: their MCP integration is remote SSE-based (not local stdio).
+
+    Parallelization value: Agent A implements ~200 lines of interactive wizard logic
+    (stdin/stdout prompts, JSON config merge, 8-platform path resolution, non-interactive
+    flag). Agent B makes a surgical 5-line edit to main.go plus README update. Build/test
+    cycle is moderate (GOWORK=off go build + go test ./cmd/...). Clear speedup.
+
+    Estimated times:
+    - Scout phase: ~10 min
+    - Agent execution: ~2 agents x ~10 min avg = ~10 min (parallel)
+    - Merge and verification: ~3 min
+    Total SAW time: ~23 min
+
+    Sequential baseline: ~25 min
+    Time savings: ~12 min (~35% faster). Recommendation: proceed as SUITABLE.
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: cmd/agent-lsp/init.go
+      agent: A
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/init_test.go
+      agent: A
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/main.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: README.md
+      agent: B
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: runInit
+      description: |-
+        Entry point for the init subcommand. Called from main.go when os.Args[1] == "init".
+        Runs the interactive wizard (or non-interactive mode with --non-interactive flag).
+        Exits the process via os.Exit on fatal errors — does NOT return an error.
+        This matches the pattern used for --version in main.go (os.Exit(0)).
+        Agent B calls this as: runInit(os.Args[2:]) with no return value capture.
+      definition: |
+        // runInit is the entry point for `agent-lsp init`.
+        // args is os.Args[2:] (all args after "init").
+        // Does not return — uses os.Exit for fatal conditions.
+        func runInit(args []string)
+      location: cmd/agent-lsp/init.go
+    - name: AutodetectServers
+      description: |-
+        Existing function in internal/config/autodetect.go. Scans PATH for known
+        language server binaries. Returns *Config{Servers: []ServerEntry} for each
+        found binary. Returns error only if NO servers are found at all.
+        This is the correct detection function for init.go. Do NOT use
+        HandleDetectLspServers (in internal/tools/detect.go) — it requires a live
+        lsp.LSPClient and a workspace_dir string argument.
+      definition: |
+        // In package config (github.com/blackwell-systems/agent-lsp/internal/config)
+        func AutodetectServers() (*Config, error)
+
+        // Config holds discovered servers:
+        type Config struct {
+            Servers []ServerEntry `json:"servers"`
+        }
+
+        // ServerEntry per discovered server:
+        type ServerEntry struct {
+            Extensions []string `json:"extensions"`
+            Command    []string `json:"command"`     // [binary, arg1, arg2, ...]
+            LanguageID string   `json:"language_id,omitempty"`
+        }
+      location: internal/config/autodetect.go
+    - name: MCPConfigShape
+      description: |-
+        The JSON structure written to the target MCP config file. All 8 supported
+        platforms use this same shape — only the file path differs. The "lsp" key
+        is the agent-lsp entry; existing keys in the file are preserved on merge.
+      definition: |
+        // Unexported types defined in cmd/agent-lsp/init.go.
+
+        type mcpConfig struct {
+            MCPServers map[string]mcpServerEntry `json:"mcpServers"`
+        }
+
+        type mcpServerEntry struct {
+            Type    string   `json:"type"`    // always "stdio"
+            Command string   `json:"command"` // always "agent-lsp"
+            Args    []string `json:"args"`    // e.g. ["go:gopls", "typescript:typescript-language-server,--stdio"]
+        }
+
+        // Args entries are built from ServerEntry:
+        //   entry.LanguageID + ":" + entry.Command[0]
+        //   + (if len(Command) > 1) "," + strings.Join(Command[1:], ",")
+        // Example: LanguageID="typescript", Command=["typescript-language-server","--stdio"]
+        //          -> "typescript:typescript-language-server,--stdio"
+      location: cmd/agent-lsp/init.go
+    - name: resolveTargetPath
+      description: |-
+        Helper function extracted from runInit. Maps a user choice integer (1-8)
+        and optional custom path string to an absolute file path. Exported for
+        testability within the same package. Used by TestResolveTargetPath tests.
+      definition: |
+        // resolveTargetPath returns the absolute path for the given target choice.
+        // choice values:
+        //   1 = Claude Code project (.mcp.json in cwd)
+        //   2 = Claude Code global (~/.claude/claude_desktop_config.json)
+        //   3 = Claude Desktop (platform-specific path)
+        //   4 = Cursor (.cursor/mcp.json in cwd)
+        //   5 = Cline/VS Code (.vscode/cline_mcp_settings.json in cwd)
+        //   6 = Windsurf (~/.codeium/windsurf/mcp_config.json)
+        //   7 = Gemini CLI (.gemini/settings.json in cwd)
+        //   8 = Custom (customPath, with ~ expansion)
+        func resolveTargetPath(choice int, customPath string) (string, error)
+      location: cmd/agent-lsp/init.go
+    - name: buildLspArgs
+      description: |-
+        Helper function extracted from runInit. Converts a slice of config.ServerEntry
+        into the args string slice suitable for the mcpServers entry. Exported for
+        testability within the same package.
+      definition: |
+        func buildLspArgs(entries []config.ServerEntry) []string
+        // Example input:  [{LanguageID:"go", Command:["gopls"]}]
+        // Example output: ["go:gopls"]
+        // Example input:  [{LanguageID:"typescript", Command:["typescript-language-server","--stdio"]}]
+        // Example output: ["typescript:typescript-language-server,--stdio"]
+      location: cmd/agent-lsp/init.go
+    - name: writeOrMergeConfig
+      description: |-
+        Helper function extracted from runInit. Reads existing config at path (if any),
+        sets/overwrites the "lsp" key in mcpServers with the new entry built from lspArgs,
+        and writes the result back. Creates parent directories if needed.
+      definition: |
+        func writeOrMergeConfig(path string, lspArgs []string) error
+      location: cmd/agent-lsp/init.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |-
+            ## Context
+
+            You are implementing `agent-lsp init` — an interactive CLI wizard that
+            detects installed LSP servers and writes the correct MCP config JSON
+            for the user's chosen AI tool.
+
+            All your work goes into TWO new files in `cmd/agent-lsp/`:
+            - `cmd/agent-lsp/init.go` — the implementation
+            - `cmd/agent-lsp/init_test.go` — tests
+
+            Both files use `package main` (same package as main.go, server.go, etc.)
+            Do NOT modify any existing file.
+
+            ## Step 1: Parse flags
+
+            `runInit(args []string)` receives os.Args[2:].
+
+            Supported flags:
+            - `--non-interactive`: skip all prompts; use all detected servers; default
+              to choice 1 (Claude Code project `.mcp.json`).
+
+            ## Step 2: Detect installed language servers
+
+            Call `config.AutodetectServers()` from `internal/config/autodetect.go`.
+            Import: `"github.com/blackwell-systems/agent-lsp/internal/config"`
+
+            This scans PATH and returns `*config.Config{Servers: []config.ServerEntry}`.
+            Each ServerEntry has LanguageID string and Command []string (e.g. ["gopls"]).
+
+            Do NOT call HandleDetectLspServers — it is in internal/tools and requires
+            a live LSP client and workspace directory. Wrong function.
+
+            If AutodetectServers() returns error (no servers found):
+            ```
+            No language servers found in PATH.
+            Install at least one (e.g. `go install golang.org/x/tools/gopls@latest`)
+            then run `agent-lsp init` again.
+            ```
+            os.Exit(1).
+
+            ## Step 3: Present servers and ask which to include (interactive only)
+
+            Print:
+            ```
+            Detected language servers:
+              1. go         gopls
+              2. typescript typescript-language-server
+            ```
+            Ask: `Include all detected servers? [Y/n]: `
+            - Enter or Y/y: use all.
+            - N/n: for each server ask `Include go (gopls)? [y/N]: `.
+              Include only those answered y/Y.
+            - If result is empty: print "No servers selected. Exiting." and os.Exit(1).
+
+            In non-interactive mode: use all detected servers (skip step 3 entirely).
+
+            ## Step 4: Choose AI tool target (interactive only)
+
+            Print:
+            ```
+            Which AI tool to configure?
+              1. Claude Code  (project .mcp.json in current directory)
+              2. Claude Code  (global ~/.claude/claude_desktop_config.json)
+              3. Claude Desktop
+              4. Cursor       (.cursor/mcp.json in current directory)
+              5. Cline/VS Code (.vscode/cline_mcp_settings.json in current directory)
+              6. Windsurf     (~/.codeium/windsurf/mcp_config.json)
+              7. Gemini CLI   (project .gemini/settings.json in current directory)
+              8. Custom path
+            ```
+            Read user choice (1-8). For choice 8, prompt: `Config file path: ` and read.
+            In non-interactive mode: use choice 1.
+
+            ## Step 5: Resolve target file path
+
+            Implement helper: `func resolveTargetPath(choice int, customPath string) (string, error)`
+
+            ```
+            choice 1 -> filepath.Join(cwd, ".mcp.json")
+            choice 2 -> filepath.Join(homeDir, ".claude", "claude_desktop_config.json")
+            choice 3 -> (darwin)  filepath.Join(homeDir, "Library", "Application Support", "Claude", "claude_desktop_config.json")
+                        (windows) filepath.Join(os.Getenv("APPDATA"), "Claude", "claude_desktop_config.json")
+                        (linux)   filepath.Join(homeDir, ".config", "Claude", "claude_desktop_config.json")
+            choice 4 -> filepath.Join(cwd, ".cursor", "mcp.json")
+            choice 5 -> filepath.Join(cwd, ".vscode", "cline_mcp_settings.json")
+            choice 6 -> filepath.Join(homeDir, ".codeium", "windsurf", "mcp_config.json")
+            choice 7 -> filepath.Join(cwd, ".gemini", "settings.json")
+            choice 8 -> customPath (expand leading ~ to homeDir)
+            ```
+
+            Get cwd with os.Getwd(). Get homeDir with os.UserHomeDir().
+            For ~ expansion: if strings.HasPrefix(customPath, "~/"), replace with homeDir+"/"+rest.
+
+            ## Step 6: Build lsp args
+
+            Implement helper: `func buildLspArgs(entries []config.ServerEntry) []string`
+
+            For each entry:
+            - base: `entry.LanguageID + ":" + entry.Command[0]`
+            - if len(entry.Command) > 1: append `"," + strings.Join(entry.Command[1:], ",")`
+
+            Example outputs: `"go:gopls"`, `"typescript:typescript-language-server,--stdio"`
+
+            ## Step 7: Merge or create the config file
+
+            Implement helper: `func writeOrMergeConfig(path string, lspArgs []string) error`
+
+            Define unexported types in init.go:
+            ```go
+            type mcpConfig struct {
+                MCPServers map[string]mcpServerEntry `json:"mcpServers"`
+            }
+            type mcpServerEntry struct {
+                Type    string   `json:"type"`
+                Command string   `json:"command"`
+                Args    []string `json:"args"`
+            }
+            ```
+
+            Logic:
+            - If path exists: read file, json.Unmarshal into mcpConfig. If MCPServers nil, init it.
+            - If path does not exist: create mcpConfig with empty MCPServers map; call os.MkdirAll
+              on filepath.Dir(path).
+            - Set MCPServers["lsp"] = mcpServerEntry{Type: "stdio", Command: "agent-lsp", Args: lspArgs}
+            - Write with json.MarshalIndent(cfg, "", "  ") + trailing newline.
+
+            ## Step 8: Print result and next step
+
+            After writing:
+            ```
+            Wrote MCP config to: /absolute/path/to/.mcp.json
+
+            Config written:
+            {
+              "mcpServers": {
+                "lsp": {
+                  "type": "stdio",
+                  "command": "agent-lsp",
+                  "args": [
+                    "go:gopls"
+                  ]
+                }
+              }
+            }
+
+            Next: restart your AI tool to pick up the new MCP server.
+            ```
+            (Print the full file contents as written, not just the lsp entry.)
+
+            ## Imports for init.go
+
+            ```go
+            import (
+                "bufio"
+                "encoding/json"
+                "fmt"
+                "os"
+                "path/filepath"
+                "runtime"
+                "strings"
+
+                "github.com/blackwell-systems/agent-lsp/internal/config"
+            )
+            ```
+            No other imports. No new go.mod dependencies.
+
+            ## Tests: cmd/agent-lsp/init_test.go
+
+            `package main` — tests can call unexported helpers directly.
+
+            Write tests:
+
+            **TestBuildLspArgs** — table-driven unit test:
+            - `{LanguageID:"go", Command:["gopls"]}` -> `["go:gopls"]`
+            - `{LanguageID:"typescript", Command:["typescript-language-server","--stdio"]}` -> `["typescript:typescript-language-server,--stdio"]`
+            - `{LanguageID:"ruby", Command:["solargraph","stdio"]}` -> `["ruby:solargraph,stdio"]`
+
+            **TestWriteOrMergeConfig_NewFile** — create temp dir, call writeOrMergeConfig
+            with a path that does not exist. Assert file is created, json.Unmarshal succeeds,
+            MCPServers["lsp"].Type == "stdio", MCPServers["lsp"].Command == "agent-lsp".
+
+            **TestWriteOrMergeConfig_ExistingFile** — create a temp file containing:
+            ```json
+            {"mcpServers":{"other-tool":{"type":"stdio","command":"other","args":[]}}}
+            ```
+            Call writeOrMergeConfig. Assert "other-tool" key is still present AND
+            "lsp" key is newly present.
+
+            **TestResolveTargetPath_ProjectFiles** — call resolveTargetPath for choices
+            1, 4, 5, 7. Assert result ends with the correct relative suffix
+            (.mcp.json, .cursor/mcp.json, .vscode/cline_mcp_settings.json,
+            .gemini/settings.json).
+
+            **TestResolveTargetPath_Custom** — call resolveTargetPath(8, "~/foo/bar.json").
+            Assert result does NOT start with ~ (tilde was expanded).
+
+            Do NOT test runInit end-to-end (requires interactive stdin).
+
+            ## Verification gate
+
+            ```bash
+            GOWORK=off go build ./cmd/agent-lsp/
+            GOWORK=off go vet ./cmd/agent-lsp/
+            GOWORK=off go test ./cmd/agent-lsp/ -run TestBuildLspArgs
+            GOWORK=off go test ./cmd/agent-lsp/ -run TestWriteOrMergeConfig
+            GOWORK=off go test ./cmd/agent-lsp/ -run TestResolveTargetPath
+            ```
+
+            Postconditions:
+            ```bash
+            # runInit is defined
+            grep -c "^func runInit" /Users/dayna.blackwell/workspace/code/agent-lsp/cmd/agent-lsp/init.go
+            # expected: 1
+
+            # buildLspArgs helper is defined
+            grep -c "^func buildLspArgs" /Users/dayna.blackwell/workspace/code/agent-lsp/cmd/agent-lsp/init.go
+            # expected: 1
+
+            # writeOrMergeConfig helper is defined
+            grep -c "^func writeOrMergeConfig" /Users/dayna.blackwell/workspace/code/agent-lsp/cmd/agent-lsp/init.go
+            # expected: 1
+
+            # resolveTargetPath helper is defined
+            grep -c "^func resolveTargetPath" /Users/dayna.blackwell/workspace/code/agent-lsp/cmd/agent-lsp/init.go
+            # expected: 1
+
+            # All 8 platforms are present in the menu string
+            grep -c "Gemini CLI\|Windsurf\|Cline" /Users/dayna.blackwell/workspace/code/agent-lsp/cmd/agent-lsp/init.go
+            # expected: >= 3
+            ```
+
+            ## Constraints
+            - Do NOT add any go.mod dependencies. Stdlib + internal/config only.
+            - Do NOT modify any existing file (main.go, server.go, autodetect.go, etc.).
+              Your agent.B counterpart owns main.go.
+            - Do NOT define types that duplicate config.ServerEntry or config.Config.
+            - Do NOT call HandleDetectLspServers — call config.AutodetectServers() only.
+            - Use bufio.NewReader(os.Stdin).ReadString('\n') for all stdin reads;
+              strings.TrimSpace the result before comparing.
+            - The mcpConfig and mcpServerEntry types are unexported — they live in init.go
+              and are not shared with any other file.
+          files:
+            - cmd/agent-lsp/init.go
+            - cmd/agent-lsp/init_test.go
+        - id: B
+          task: |-
+            ## Context
+
+            You are making two small, precise edits:
+            1. A 5-line routing block added to `cmd/agent-lsp/main.go`.
+            2. A new subsection added to `README.md` under ## Installation.
+
+            Do NOT modify init.go, init_test.go, or any other file.
+
+            ## Edit 1: cmd/agent-lsp/main.go
+
+            Add init subcommand routing immediately after the --version check block.
+
+            The exact text to locate in main.go (use this as your insertion anchor):
+            ```go
+            if len(os.Args) == 2 && (os.Args[1] == "--version" || os.Args[1] == "-version") {
+            	fmt.Println(Version)
+            	os.Exit(0)
+            }
+            ```
+
+            Insert the following block immediately after the closing `}` of that block:
+            ```go
+
+            	// Subcommand routing: agent-lsp init
+            	if len(os.Args) >= 2 && os.Args[1] == "init" {
+            		runInit(os.Args[2:])
+            		return
+            	}
+            ```
+
+            The init entrypoint function is defined in cmd/agent-lsp/init.go (same package main).
+            No import change needed. No other change to main.go.
+
+            ## Edit 2: README.md
+
+            Find this exact closing code fence in the Installation section:
+            ```
+            export PATH="$PATH:$(go env GOPATH)/bin"   # add to ~/.zshrc or ~/.bashrc to persist
+            ```
+
+            The line immediately after that closing fence is:
+            ```
+            ## Setup
+            ```
+
+            Insert the following block between those two lines (after the closing fence,
+            before `## Setup`):
+
+            ```markdown
+
+            ### Quick setup with `agent-lsp init`
+
+            After installing, run the setup wizard to auto-detect installed language servers
+            and write the correct MCP config for your AI tool:
+
+            ```bash
+            agent-lsp init
+            ```
+
+            The wizard:
+            1. Detects language servers installed on your PATH
+            2. Asks which servers to include
+            3. Asks which AI tool to configure (Claude Code, Claude Desktop, Cursor,
+               Cline/VS Code, Windsurf, Gemini CLI, or custom path)
+            4. Writes the MCP server config to the correct location and shows you what was written
+
+            For CI or scripted use (no prompts):
+
+            ```bash
+            agent-lsp init --non-interactive
+            ```
+
+            Detects all available servers and writes `.mcp.json` in the current directory
+            targeting Claude Code. Edit the file afterward if needed.
+            ```
+
+            Insert that block between the PATH export closing fence and `## Setup`.
+            Do NOT change any other content in README.md.
+
+            ## Verification gate
+
+            ```bash
+            GOWORK=off go build ./cmd/agent-lsp/
+            GOWORK=off go vet ./cmd/agent-lsp/
+            GOWORK=off go test ./cmd/agent-lsp/ -run TestBinary
+            ```
+
+            Postconditions:
+            ```bash
+            # init routing is present in main.go
+            grep -c 'os.Args\[1\] == "init"' /Users/dayna.blackwell/workspace/code/agent-lsp/cmd/agent-lsp/main.go
+            # expected: 1
+
+            # init subcommand call is present
+            grep -c "runInit(" /Users/dayna.blackwell/workspace/code/agent-lsp/cmd/agent-lsp/main.go
+            # expected: 1
+
+            # README has the init section with all major platforms mentioned
+            grep -c "agent-lsp init" /Users/dayna.blackwell/workspace/code/agent-lsp/README.md
+            # expected: >= 3
+            grep -c "Windsurf\|Gemini CLI\|Cline" /Users/dayna.blackwell/workspace/code/agent-lsp/README.md
+            # expected: >= 2
+            ```
+
+            ## Constraints
+            - Do NOT modify init.go, init_test.go, server.go, or any file other than
+              main.go and README.md.
+            - Do NOT add any import to main.go. The init entrypoint is in the same package main,
+              no import needed.
+            - Do NOT change the usage error messages, signal handling, or MCP server
+              startup logic in main.go. The routing block is the ONLY change.
+            - Use verbatim text context as insertion anchors, not line numbers.
+          files:
+            - cmd/agent-lsp/main.go
+            - README.md
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+          repo: agent-lsp
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+          repo: agent-lsp
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+          repo: agent-lsp
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |-
+            Agent A calls HandleDetectLspServers (in internal/tools) instead of
+            AutodetectServers (in internal/config). HandleDetectLspServers requires
+            a live *lsp.LSPClient and workspace_dir string; passing nil client and no dir
+            returns an error result struct (not a Go error), causing silent detection failure.
+          likelihood: medium
+          impact: high
+          mitigation: |-
+            Interface contract and task constraints call out both function names explicitly:
+            "Use config.AutodetectServers(), NOT HandleDetectLspServers." The import list
+            includes only internal/config, not internal/tools. Build would still succeed
+            if wrong function is used, so the explicit naming is the primary guard.
+        - scenario: |-
+            Agent A defines runInit as `func runInit(args []string) error` while Agent B
+            writes the call site expecting no return value. Both are in the same wave and
+            cannot see each other's code. Compilation failure on merge.
+          likelihood: low
+          impact: medium
+          mitigation: |-
+            Interface contract specifies exact signature: `func runInit(args []string)` with
+            no return value. Agent A task says "Does not return — uses os.Exit for fatal
+            conditions." Agent B task shows the call site as `runInit(os.Args[2:])` with
+            no return capture.
+        - scenario: |-
+            The Windsurf or Gemini CLI path is wrong. Windsurf uses
+            ~/.codeium/windsurf/mcp_config.json; Gemini CLI uses
+            .gemini/settings.json (project-local). If either is inverted
+            (e.g., Gemini written to home dir), the config lands in the wrong place.
+          likelihood: low
+          impact: medium
+          mitigation: |-
+            resolveTargetPath choices 6 and 7 are specified precisely in the task:
+            choice 6 (Windsurf) = homeDir path, choice 7 (Gemini) = cwd path.
+            TestResolveTargetPath_ProjectFiles verifies choices 1, 4, 5, 7 produce
+            cwd-relative paths. TestResolveTargetPath covers choice 8 custom path.
+        - scenario: |-
+            Agent B inserts the routing block before the --version check, causing
+            `agent-lsp --version` to fall through to init routing and print usage errors.
+          likelihood: low
+          impact: low
+          mitigation: |-
+            Agent B task provides the exact verbatim text of the version-check block as
+            anchor and specifies "insert AFTER the closing brace". Postcondition checks
+            verify the routing line exists; manual smoke test of --version catches regression.
+        - scenario: |-
+            writeOrMergeConfig uses json.Unmarshal into map[string]interface{} instead
+            of the typed mcpConfig struct. Non-string values in the existing config
+            (e.g., nested objects for other tools) would be preserved but typed incorrectly,
+            causing data corruption on re-marshal.
+          likelihood: low
+          impact: medium
+          mitigation: |-
+            Interface contract defines mcpConfig struct explicitly. TestWriteOrMergeConfig_ExistingFile
+            verifies that an existing key ("other-tool") survives the merge intact.
+        - scenario: |-
+            Agent A imports `runtime` for GOOS detection in resolveTargetPath but
+            the build system flags it as unused if the conditional is written with
+            a build tag instead of a runtime check, causing `go vet` to fail.
+          likelihood: low
+          impact: low
+          mitigation: |-
+            The task explicitly specifies runtime.GOOS (runtime check, not build tag).
+            The import list includes "runtime". go build and go vet gates will catch
+            unused imports immediately.
+state: SCOUT_PENDING
+original_branch: main
+injection_method: hook
