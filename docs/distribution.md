@@ -25,7 +25,7 @@ curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/in
 ```
 Detects OS and architecture, downloads the matching binary from GitHub Releases, installs to `/usr/local/bin`.
 
-### npm (automated on next release)
+### npm
 ```bash
 npm install -g @blackwell-systems/agent-lsp
 ```
@@ -44,7 +44,13 @@ Published automatically by the `npm-publish` CI job after GoReleaser completes.
 
 ### Docker (GHCR + Docker Hub)
 ```bash
-# Base image
+# GHCR
+docker pull ghcr.io/blackwell-systems/agent-lsp:latest
+
+# Docker Hub
+docker pull blackwellsystems/agent-lsp:latest
+
+# Base image (same content, two registries)
 docker pull ghcr.io/blackwell-systems/agent-lsp:latest
 
 # Language-specific images
