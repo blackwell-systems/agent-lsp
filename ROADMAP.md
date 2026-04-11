@@ -139,6 +139,34 @@ The gap between what clangd provides and what the broader toolchain offers is la
 | **Config file format** | Planned | `~/.agent-lsp.json` or `agent-lsp.json` project file for complex setups with per-server options — currently arg-based only |
 | **Continue.dev config support** | Planned | `agent-lsp init` currently skips Continue.dev; it uses a different config format than `mcpServers` and is a popular AI coding extension |
 
+## Skills
+
+Skills encode correct tool sequences so workflows actually happen. The current 14 skills cover navigation, safety checking, and analysis. Three gaps remain.
+
+### Code action skills (gap: `get_code_actions` + `execute_command` are underserved)
+
+| Skill | Description |
+|-------|-------------|
+| `/lsp-extract-function` | Extract a selected code block into a named function using LSP code actions |
+| `/lsp-fix-all` | Get diagnostics → apply available code action fixes for each error → verify |
+| `/lsp-generate` | Trigger server-side code generation (implement interface, generate test stubs, add missing methods) |
+
+### Full edit lifecycle skill
+
+| Skill | Description |
+|-------|-------------|
+| `/lsp-refactor` | Meta-skill: impact check → speculative preview → apply → verify → run affected tests. Takes an intent and sequences the full workflow end-to-end |
+
+### Understanding skill
+
+| Skill | Description |
+|-------|-------------|
+| `/lsp-explore` | "Tell me about this symbol": hover + implementations + call hierarchy + references in one pass — for navigating unfamiliar code |
+
+### Skill composition
+
+Skills calling other skills — `/lsp-refactor` composed from `/lsp-impact` + `/lsp-safe-edit` + `/lsp-verify` + `/lsp-test-correlation`. Requires runtime support for skill invocation from within a skill.
+
 ## Bigger Bets
 
 | Feature | Status | Description |
