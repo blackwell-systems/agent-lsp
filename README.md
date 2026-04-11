@@ -417,9 +417,20 @@ See [docs/architecture.md](./docs/architecture.md) for the Go package structure,
 
 ## Extensions
 
-Language-specific extensions add tools, prompts, and resource handlers, registered automatically by language ID at startup.
+The 50 core tools cover everything LSP exposes. Extensions add a **second layer** — language-specific tools that go beyond what the protocol provides.
 
-To add an extension, create `extensions/<language-id>/` implementing any subset of the extension interface and register it via `extensions.RegisterFactory` in an `init()` function. All features are namespaced by language ID.
+Where the core tools stop at what the language server can answer, an extension can run arbitrary logic for that language. Examples of what extensions enable that core tools cannot:
+
+| Language | Example extension tools |
+|----------|------------------------|
+| Go | `go.mod` dependency graph, `go test -cover` annotations, `go generate` runner |
+| TypeScript | `tsconfig.json` diagnostics, type coverage report |
+| Python | virtual env detection, `requirements.txt` cross-reference |
+| Rust | `cargo check` integration, crate dependency tree |
+
+Extensions are registered at compile time — an extension for `go` only activates when `go:gopls` is in the server config. All extension tools are namespaced by language ID (e.g. `go.mod_graph`) so they never conflict with core tools.
+
+**No extensions ship with agent-lsp today.** The infrastructure exists and is ready to use. To build one, create `extensions/<language-id>/` implementing any subset of the extension interface and call `extensions.RegisterFactory` in an `init()` function. See [docs/architecture.md](./docs/architecture.md) for the interface definition.
 
 ## Roadmap
 
