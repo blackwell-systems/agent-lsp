@@ -432,16 +432,6 @@ Extensions are registered at compile time — an extension for `go` only activat
 
 **No extensions ship with agent-lsp today.** The infrastructure exists and is ready to use. To build one, create `extensions/<language-id>/` implementing any subset of the extension interface and call `extensions.RegisterFactory` in an `init()` function. See [docs/architecture.md](./docs/architecture.md) for the interface definition.
 
-## Roadmap
-
-| Feature | Status | Description |
-|---------|--------|-------------|
-| **Prebuilt binaries** | Planned | GoReleaser publishing `.tar.gz`/`.zip` binaries for Linux, macOS, and Windows to GitHub Releases on every tag — eliminates the `go install` requirement for non-Go developers |
-| **Homebrew tap** | Planned | `brew install blackwell-systems/tap/agent-lsp` — one-command install for Mac users, backed by GoReleaser artifacts |
-| **`curl \| sh` installer** | Planned | `curl -fsSL .../install.sh \| sh` — detects OS/arch, downloads the correct binary from GitHub Releases, places it on PATH; standard entry point for Linux and CI environments |
-| **`agent-lsp init`** | Planned | Interactive setup command: runs `detect_lsp_servers`, asks which AI tool you use (Claude Code, Cursor, etc.), and writes the correct MCP config block — turns manual setup into one command |
-| **Docker Hub distribution** | Planned | Mirror published images to Docker Hub (`docker pull agentlsp/agent-lsp:go`) for discoverability, pull count visibility, and access to users who default to Hub over ghcr.io |
-
 ## Development
 
 ```bash
