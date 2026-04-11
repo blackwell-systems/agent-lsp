@@ -20,7 +20,7 @@ archives:
   - id: agent-lsp
     builds: [agent-lsp]
     format: tar.gz
-    name_template: "agent-lsp_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "agent-lsp_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"

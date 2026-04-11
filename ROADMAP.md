@@ -7,7 +7,7 @@
 | **Prebuilt binaries** | Done (v0.1.0) | GoReleaser publishing `.tar.gz`/`.zip` binaries for Linux, macOS, and Windows to GitHub Releases — eliminates the `go install` requirement for non-Go developers |
 | **`agent-lsp init`** | Done (v0.1.0) | Interactive setup wizard: detects installed language servers, asks which AI tool you use, writes the correct MCP config — turns manual setup into one command |
 | **Homebrew tap** | In progress | `brew install blackwell-systems/tap/agent-lsp` — formula exists, sha256s need updating after each release |
-| **`curl \| sh` installer** | Planned | `curl -fsSL .../install.sh \| sh` — detects OS/arch, downloads the correct binary from GitHub Releases, places it on PATH |
+| **`curl \| sh` installer** | Done (v0.1.1) | `curl -fsSL .../install.sh \| sh` — detects OS/arch, finds the right asset from GitHub Releases API, installs to `/usr/local/bin` |
 | **Docker Hub mirroring** | Planned | Mirror published images to Docker Hub for discoverability and pull count visibility |
 
 ## Extensions

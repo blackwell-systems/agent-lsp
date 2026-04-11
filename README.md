@@ -89,8 +89,17 @@ docker-compose setup, and volume caching.
 
 ## Installation
 
-**Requires Go 1.21+.** [Install Go](https://go.dev/dl/) if needed.
+**Linux / macOS — no Go required:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh
+```
 
+**Homebrew:**
+```bash
+brew install blackwell-systems/tap/agent-lsp
+```
+
+**Go install:**
 ```bash
 go install github.com/blackwell-systems/agent-lsp@latest
 ```
