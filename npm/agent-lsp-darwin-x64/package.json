@@ -4,6 +4,7 @@
   "description": "agent-lsp binary for macOS x64 (Intel)",
   "os": ["darwin"],
   "cpu": ["x64"],
+  "files": ["bin/"],
   "license": "MIT",
   "repository": {
     "type": "git",

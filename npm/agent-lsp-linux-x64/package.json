@@ -4,6 +4,7 @@
   "description": "agent-lsp binary for Linux x64",
   "os": ["linux"],
   "cpu": ["x64"],
+  "files": ["bin/"],
   "license": "MIT",
   "repository": {
     "type": "git",

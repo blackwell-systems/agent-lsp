@@ -4,6 +4,7 @@
   "description": "agent-lsp binary for macOS ARM64 (Apple Silicon)",
   "os": ["darwin"],
   "cpu": ["arm64"],
+  "files": ["bin/"],
   "license": "MIT",
   "repository": {
     "type": "git",
