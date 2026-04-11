@@ -23,6 +23,12 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Subcommand routing: agent-lsp init
+	if len(os.Args) >= 2 && os.Args[1] == "init" {
+		runInit(os.Args[2:])
+		return
+	}
+
 	logging.SetLevelFromEnv()
 	parsed, err := config.ParseArgs(os.Args[1:])
 	if err != nil {
