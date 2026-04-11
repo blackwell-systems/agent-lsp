@@ -22,6 +22,22 @@ docker run --rm -i \
 
 Replace `:go` with any per-language tag and adjust the trailing argument to match (see [Per-Language Tags](#per-language-tags)).
 
+## Which tag should I use?
+
+| I want to... | Tag |
+|---|---|
+| Try it quickly / install language servers at runtime | `:latest` |
+| Use with Go only | `:go` |
+| Use with TypeScript or JavaScript only | `:typescript` |
+| Use with Python only | `:python` |
+| Use with TypeScript + Python (web frontend stack) | `:web` |
+| Use with Go + Python (backend stack) | `:backend` |
+| Use with Go + TypeScript + Python | `:fullstack` |
+| Use with Ruby, C/C++, or PHP | `:ruby` / `:cpp` / `:php` |
+| Need all servers ready with no install delay | `:full` (1–2 GB) |
+
+If your language isn't listed above, use `:latest` with the `LSP_SERVERS` env var — see [Runtime Install](#runtime-install-lsp_servers).
+
 ## Image Tiers
 
 | Tag | Contents | Approx. Size |
