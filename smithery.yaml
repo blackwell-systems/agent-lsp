@@ -1,0 +1,19 @@
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      servers:
+        type: string
+        description: >
+          Space-separated list of language servers in the format
+          language:binary. For example:
+          "go:gopls typescript:typescript-language-server,--stdio"
+        default: ""
+    required: []
+  commandFunction: |-
+    (config) => ({
+      command: "agent-lsp",
+      args: config.servers ? config.servers.split(" ") : [],
+      env: {}
+    })
