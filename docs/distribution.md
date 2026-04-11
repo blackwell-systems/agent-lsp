@@ -87,7 +87,7 @@ npm-publish      → downloads binaries from GitHub Release, publishes 7 npm pac
 mcp-registry-publish → publishes metadata to official MCP Registry (GitHub OIDC)
 ```
 
-Docker images are built and pushed (GHCR + Docker Hub) in a separate `docker.yml` workflow triggered by the same tag.
+Docker images are built and pushed (GHCR + Docker Hub) in a separate `docker.yml` workflow. It triggers on both `main` branch pushes (publishes the `:edge` tag) and `v*` version tags (publishes `:latest`, semver tags, and per-language tags).
 
 ## Planned
 

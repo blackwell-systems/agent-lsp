@@ -1,6 +1,6 @@
 # LSP 3.17 Conformance
 
-lsp-mcp was built directly against the [LSP 3.17 specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/). Each protocol area was implemented by reading the relevant spec section and verified through integration testing against real language servers (gopls, rust-analyzer, typescript-language-server, pyright, jdtls, clangd, intelephense).
+agent-lsp was built directly against the [LSP 3.17 specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/). Each protocol area was implemented by reading the relevant spec section and verified through integration testing against real language servers (gopls, rust-analyzer, typescript-language-server, pyright, jdtls, clangd, intelephense).
 
 The spec section links below are anchored directly into the specification.
 

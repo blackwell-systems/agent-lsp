@@ -118,9 +118,8 @@ pkg/
     session_test.go ← smoke tests verifying alias targets are non-nil
     doc.go         ← package-level doc comment
   types/
-    types.go       ← (empty; types provided via alias from lsp and session packages)
+    doc.go         ← package-level doc comment + all 29 type aliases, 5 constants, 2 constructor vars
     types_test.go  ← smoke tests verifying alias targets are non-nil
-    doc.go         ← package-level doc comment
 
 All 8 non-config internal packages (`lsp`, `session`, `tools`, `resources`, `types`, `uri`,
 `logging`, `extensions`) have a `doc.go` with a package-level doc comment. `internal/config`

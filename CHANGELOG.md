@@ -5,6 +5,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-04-10
+
 ### Added (2026-04-10) — Public pkg/ API
 
 Exposed a stable importable Go API so other programs can use agent-lsp's LSP client and speculative execution engine without running the MCP server:

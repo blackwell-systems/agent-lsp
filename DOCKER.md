@@ -1,13 +1,22 @@
 # Docker Distribution
 
-agent-lsp ships pre-built images on [GitHub Container Registry](https://github.com/blackwell-systems/agent-lsp/pkgs/container/agent-lsp) (`ghcr.io/blackwell-systems/agent-lsp`). Images are organized into four tiers: a base image with only the binary, per-language images with one server baked in, combination images for common polyglot stacks, and a full image with every supported server installed. Pick the smallest image that covers your stack.
+agent-lsp ships pre-built images on [GitHub Container Registry](https://github.com/blackwell-systems/agent-lsp/pkgs/container/agent-lsp) (`ghcr.io/blackwell-systems/agent-lsp`) and [Docker Hub](https://hub.docker.com/r/blackwellsystems/agent-lsp) (`blackwellsystems/agent-lsp`). Images are organized into four tiers: a base image with only the binary, per-language images with one server baked in, combination images for common polyglot stacks, and a full image with every supported server installed. Pick the smallest image that covers your stack.
+
+Both registries carry the same images and tags. GHCR is the primary registry; Docker Hub is a mirror updated automatically on every release.
 
 ## Quick Start
 
 ```bash
+# GitHub Container Registry (primary)
 docker run --rm -i \
   -v /your/project:/workspace \
   ghcr.io/blackwell-systems/agent-lsp:go \
+  go:gopls
+
+# Docker Hub (mirror — same image, same tags)
+docker run --rm -i \
+  -v /your/project:/workspace \
+  blackwellsystems/agent-lsp:go \
   go:gopls
 ```
 

@@ -1696,6 +1696,73 @@ and optional `location`.
 
 ---
 
+### `get_semantic_tokens`
+
+Return semantic token classifications for a range within a document via
+`textDocument/semanticTokens/range` (falls back to full-file if range is not
+supported). Semantic tokens classify each token as a function, parameter,
+variable, type, keyword, etc., using the type and modifier legend declared by
+the server during initialization.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | Absolute path to the file |
+| `language_id` | string | no | Language identifier |
+| `start_line` | number | yes | Start line of the range (1-based) |
+| `start_column` | number | yes | Start column (1-based) |
+| `end_line` | number | yes | End line of the range (1-based) |
+| `end_column` | number | yes | End column (1-based) |
+
+**Example call**
+
+```json
+{
+  "file_path": "/path/to/project/main.go",
+  "language_id": "go",
+  "start_line": 1,
+  "start_column": 1,
+  "end_line": 30,
+  "end_column": 1
+}
+```
+
+**Expected output**
+
+```json
+[
+  {
+    "line": 5,
+    "character": 5,
+    "length": 11,
+    "token_type": "function",
+    "token_modifiers": ["definition", "exported"]
+  },
+  {
+    "line": 5,
+    "character": 17,
+    "length": 1,
+    "token_type": "parameter",
+    "token_modifiers": []
+  }
+]
+```
+
+Output positions are 1-based. The `token_type` and `token_modifiers` fields are
+decoded from the server's legend into human-readable strings.
+
+**Notes**
+
+- Returns `[]` when the server does not declare `semanticTokensProvider`.
+- The LSP wire format uses delta-encoded 5-integer tuples; this tool decodes
+  them into absolute positions with named type/modifier strings from the
+  server's legend captured during `initialize`.
+- TypeScript, Go, Python, Rust, C, C++, C#, Kotlin, Ruby, and PHP all
+  support semantic tokens.
+
+---
+
 ### `get_document_highlights`
 
 Return all occurrences of the symbol at a position within the same file via
