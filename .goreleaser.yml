@@ -49,6 +49,21 @@ changelog:
       - Merge pull request
       - Merge branch
 
+brews:
+  - name: agent-lsp
+    repository:
+      owner: blackwell-systems
+      name: homebrew-tap
+      token: "{{ .Env.GORELEASER_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/blackwell-systems/agent-lsp"
+    description: "MCP server exposing 50+ language server protocol tools to AI agents"
+    license: "MIT"
+    install: |
+      bin.install "agent-lsp"
+    test: |
+      system "#{bin}/agent-lsp", "--version"
+
 release:
   github:
     owner: blackwell-systems

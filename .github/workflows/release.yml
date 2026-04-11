@@ -33,6 +33,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_TAP_TOKEN: ${{ secrets.GORELEASER_TAP_TOKEN }}
 
   npm-publish:
     needs: release
