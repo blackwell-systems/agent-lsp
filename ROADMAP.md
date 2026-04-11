@@ -12,11 +12,55 @@
 
 ## Extensions
 
-| Feature | Status | Description |
-|---------|--------|-------------|
-| **Go extension** | Planned | `go.test_run`, `go.test_coverage`, `go.mod_graph`, `go.mod_why`, `go.vulncheck`, `go.lint`, `go.escape_analysis`, `go.generate` — language-specific tools beyond what gopls exposes |
-| **TypeScript extension** | Planned | `tsconfig.json` diagnostics, type coverage report |
-| **Rust extension** | Planned | `cargo check` integration, crate dependency tree |
+Extensions add language-specific tools beyond what LSP exposes. The core 50 tools cover everything the language server protocol provides; extensions run arbitrary toolchain logic for a specific language.
+
+### Go extension (Wave 1 — test + module intelligence)
+
+| Tool | Description |
+|------|-------------|
+| `go.test_run` | Run a specific test by name, return full output + pass/fail |
+| `go.test_coverage` | Coverage % and uncovered lines for a file or package |
+| `go.benchmark_run` | Run a benchmark, return ns/op and allocs/op |
+| `go.test_race` | Run with `-race`, return any data races found |
+| `go.mod_graph` | Full dependency tree as structured data |
+| `go.mod_why` | Why is this package in go.mod? (`go mod why`) |
+| `go.mod_outdated` | List deps with available upgrades |
+| `go.vulncheck` | `govulncheck` scan — CVEs with affected symbols |
+
+### Go extension (Wave 2 — build + quality)
+
+| Tool | Description |
+|------|-------------|
+| `go.escape_analysis` | `gcflags="-m"` output for a function — what allocates and why |
+| `go.cross_compile` | Try cross-compiling for a target OS/arch, return errors |
+| `go.lint` | `staticcheck` or `golangci-lint` output for a file |
+| `go.deadcode` | Find exported symbols with no callers (`go tool deadcode`) |
+| `go.vet_all` | `go vet ./...` with structured output |
+
+### Go extension (Wave 3 — generation + docs)
+
+| Tool | Description |
+|------|-------------|
+| `go.generate` | Run `go generate` on a file, return output |
+| `go.generate_status` | Which `//go:generate` directives are stale |
+| `go.doc` | `go doc` output for any symbol — richer than hover |
+| `go.examples` | Find `Example*` test functions for a symbol |
+
+### TypeScript extension
+
+| Tool | Description |
+|------|-------------|
+| `typescript.tsconfig_diagnostics` | Errors in `tsconfig.json` beyond what the language server reports |
+| `typescript.type_coverage` | Type coverage % for a file (`any` usage, implicit types) |
+
+### Rust extension
+
+| Tool | Description |
+|------|-------------|
+| `rust.cargo_check` | `cargo check` with structured error output |
+| `rust.dep_tree` | Crate dependency tree (`cargo tree`) |
+| `rust.clippy` | `cargo clippy` lint output for a file |
+| `rust.audit` | `cargo audit` CVE scan on `Cargo.lock` |
 
 ## Transport
 
