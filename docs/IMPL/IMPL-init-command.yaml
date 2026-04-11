@@ -606,6 +606,6 @@ pre_mortem:
             The task explicitly specifies runtime.GOOS (runtime check, not build tag).
             The import list includes "runtime". go build and go vet gates will catch
             unused imports immediately.
-state: SCOUT_PENDING
+state: "REVIEWED"
 original_branch: main
 injection_method: hook
