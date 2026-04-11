@@ -1,0 +1,23 @@
+{
+  "name": "@blackwell-systems/agent-lsp",
+  "version": "0.1.1",
+  "description": "MCP server exposing 50+ language server protocol tools to AI agents",
+  "bin": {
+    "agent-lsp": "bin/agent-lsp"
+  },
+  "optionalDependencies": {
+    "@blackwell-systems/agent-lsp-darwin-arm64": "0.1.1",
+    "@blackwell-systems/agent-lsp-darwin-x64": "0.1.1",
+    "@blackwell-systems/agent-lsp-linux-arm64": "0.1.1",
+    "@blackwell-systems/agent-lsp-linux-x64": "0.1.1",
+    "@blackwell-systems/agent-lsp-win32-x64": "0.1.1",
+    "@blackwell-systems/agent-lsp-win32-arm64": "0.1.1"
+  },
+  "keywords": ["mcp", "lsp", "language-server", "ai", "agent"],
+  "homepage": "https://github.com/blackwell-systems/agent-lsp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blackwell-systems/agent-lsp.git"
+  },
+  "license": "MIT"
+}

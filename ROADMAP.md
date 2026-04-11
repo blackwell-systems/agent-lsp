@@ -7,7 +7,12 @@
 | **Prebuilt binaries** | Done (v0.1.0) | GoReleaser publishing `.tar.gz`/`.zip` binaries for Linux, macOS, and Windows to GitHub Releases — eliminates the `go install` requirement for non-Go developers |
 | **`agent-lsp init`** | Done (v0.1.0) | Interactive setup wizard: detects installed language servers, asks which AI tool you use, writes the correct MCP config — turns manual setup into one command |
 | **Homebrew tap** | In progress | `brew install blackwell-systems/tap/agent-lsp` — formula exists, sha256s need updating after each release |
+| **Auto-update Homebrew formula** | Planned | Automate sha256 updates via GoReleaser `brews:` config section — eliminates manual post-release step |
 | **`curl \| sh` installer** | Done (v0.1.1) | `curl -fsSL .../install.sh \| sh` — detects OS/arch, finds the right asset from GitHub Releases API, installs to `/usr/local/bin` |
+| **Windows install script** | Planned | PowerShell install script + Scoop/Chocolatey package — GoReleaser ships Windows binaries but there's no Windows install story |
+| **npm wrapper** | Planned | `npm install -g agent-lsp` — downloads the right binary for the platform; large reach since most LSP users are in the JS/TS ecosystem |
+| **Nix flake** | Planned | `nix run github:blackwell-systems/agent-lsp` — Nix users expect it; large overlap with the developer audience |
+| **MCP registry listings** | Planned | List on smithery.ai and similar MCP catalogues — where agents discover tools, drives organic inbound traffic |
 | **Docker Hub mirroring** | Planned | Mirror published images to Docker Hub for discoverability and pull count visibility |
 
 ## Extensions
@@ -124,3 +129,20 @@ The gap between what clangd provides and what the broader toolchain offers is la
 | Feature | Status | Description |
 |---------|--------|-------------|
 | **HTTP/SSE transport** | Planned (v0.2) | Run agent-lsp as a persistent HTTP server; enables remote deployments, Docker without `-i`, and multi-client sessions sharing one warm index |
+| **Language server health endpoint** | Planned | HTTP `/health` endpoint returning language server status — required for container orchestration and Docker-based production deployments |
+
+## Product
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **`agent-lsp doctor`** | Planned | Diagnostic command: checks each configured language server starts correctly, reports version, lists supported capabilities — reduces "why isn't this working" setup friction |
+| **`agent-lsp update`** | Planned | Self-update to the latest release — standard for CLI tools; fetches from GitHub Releases and replaces the binary in-place |
+| **Config file format** | Planned | `~/.agent-lsp.json` or `agent-lsp.json` project file for complex setups with per-server options — currently arg-based only |
+| **Continue.dev config support** | Planned | `agent-lsp init` currently skips Continue.dev; it uses a different config format than `mcpServers` and is a popular AI coding extension |
+
+## Bigger Bets
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **VS Code extension** | Planned | Largest surface area for developer tools — makes agent-lsp available to Copilot, Continue, and Cline users with zero CLI setup |
+| **Observability** | Planned | Metrics (requests/sec, latency per tool, error rate) for production deployments — valuable for teams running agent-lsp as shared infrastructure |

@@ -1,0 +1,43 @@
+#!/usr/bin/env node
+"use strict";
+
+const { execFileSync } = require("child_process");
+const os = require("os");
+
+const PLATFORMS = {
+  "darwin-arm64":  "@blackwell-systems/agent-lsp-darwin-arm64",
+  "darwin-x64":    "@blackwell-systems/agent-lsp-darwin-x64",
+  "linux-arm64":   "@blackwell-systems/agent-lsp-linux-arm64",
+  "linux-x64":     "@blackwell-systems/agent-lsp-linux-x64",
+  "win32-x64":     "@blackwell-systems/agent-lsp-win32-x64",
+  "win32-arm64":   "@blackwell-systems/agent-lsp-win32-arm64",
+};
+
+const platform = os.platform();
+const arch = os.arch();
+const key = `${platform}-${arch}`;
+const pkg = PLATFORMS[key];
+
+if (!pkg) {
+  process.stderr.write(`agent-lsp: unsupported platform ${key}\n`);
+  process.stderr.write(`Supported: ${Object.keys(PLATFORMS).join(", ")}\n`);
+  process.stderr.write(`Install from https://github.com/blackwell-systems/agent-lsp/releases\n`);
+  process.exit(1);
+}
+
+const ext = platform === "win32" ? ".exe" : "";
+
+let binPath;
+try {
+  binPath = require.resolve(`${pkg}/bin/agent-lsp${ext}`);
+} catch {
+  process.stderr.write(`agent-lsp: platform package ${pkg} is not installed\n`);
+  process.stderr.write(`Try: npm install -g @blackwell-systems/agent-lsp\n`);
+  process.exit(1);
+}
+
+try {
+  execFileSync(binPath, process.argv.slice(2), { stdio: "inherit" });
+} catch (err) {
+  process.exit(err.status ?? 1);
+}
