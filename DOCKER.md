@@ -42,7 +42,7 @@ If your language isn't listed above, use `:latest` with the `LSP_SERVERS` env va
 
 | Tag | Contents | Approx. Size |
 |-----|----------|--------------|
-| `latest` / `base` | agent-lsp binary only | ~50 MB |
+| `latest` | agent-lsp binary only | ~50 MB |
 | `go`, `typescript`, `python`, `ruby`, `cpp`, `php` | One language server baked in | ~150–500 MB |
 | `web` | TypeScript + Python | ~400 MB |
 | `backend` | Go + Python | ~500 MB |
@@ -66,7 +66,7 @@ These tags are published to ghcr.io and have a language server baked in.
 | C / C++ | `cpp` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:cpp cpp:clangd` |
 | PHP | `php` | `docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:php php:intelephense` |
 
-The following languages require platform-specific toolchains that can't be reliably baked into a generic Debian image. Use [`LSP_SERVERS`](#runtime-install-lsp_servers) to install them at runtime, or build your own image on top of `base`:
+The following languages require platform-specific toolchains that can't be reliably baked into a generic Debian image. Use [`LSP_SERVERS`](#runtime-install-lsp_servers) to install them at runtime, or build your own image on top of `:latest`:
 
 | Language | `LSP_SERVERS` value | Notes |
 |----------|--------------------|----|
@@ -85,7 +85,7 @@ The following languages require platform-specific toolchains that can't be relia
 
 ## Runtime Install (LSP_SERVERS)
 
-Use the `base` / `latest` image and install language servers at container start via the `LSP_SERVERS` environment variable. The entrypoint script reads `LSP_SERVERS`, looks up each name in the built-in registry (`docker/lsp-servers.yaml`), installs any server not already on PATH, and caches the install to `/var/cache/lsp-servers/` so subsequent starts are instant.
+Use the `:latest` image and install language servers at container start via the `LSP_SERVERS` environment variable. The entrypoint script reads `LSP_SERVERS`, looks up each name in the built-in registry (`docker/lsp-servers.yaml`), installs any server not already on PATH, and caches the install to `/var/cache/lsp-servers/` so subsequent starts are instant.
 
 ```bash
 docker run --rm -i \
