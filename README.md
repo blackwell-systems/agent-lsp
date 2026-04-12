@@ -24,6 +24,11 @@ agent-lsp fixes both. The **persistent session** indexes your workspace once and
 
 **50 tools. 49 CI-verified end-to-end. 30 languages.** Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
+```bash
+curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh
+agent-lsp init
+```
+
 **Work across all your projects in one session.** Point your AI at `~/code/`. One agent-lsp process routes `.go` to gopls, `.ts` to typescript-language-server, `.py` to pyright — no reconfiguration when you switch projects.
 
 ## Skills
