@@ -5,6 +5,13 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Docker builds now trigger on release tags only; removed `:edge` tag
+- Moved `Dockerfile`, `Dockerfile.full`, `Dockerfile.lang`, and `docker-compose.yml` into `docker/` directory
+- Removed `:base` as a user-facing tag (still used internally between CI jobs)
+- Surfaced quick install snippet at top of README after value proposition
+
 ## [0.1.2] - 2026-04-10
 
 ### Added (2026-04-10) — Public pkg/ API
