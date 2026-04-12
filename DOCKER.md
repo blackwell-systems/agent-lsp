@@ -149,7 +149,7 @@ Without the volume, `LSP_SERVERS` installs run on every container start.
       "command": "docker",
       "args": [
         "compose",
-        "-f", "/path/to/agent-lsp/docker-compose.yml",
+        "-f", "/path/to/agent-lsp/docker/docker-compose.yml",
         "run", "--rm", "agent-lsp"
       ],
       "env": {
@@ -166,21 +166,21 @@ Without the volume, `LSP_SERVERS` installs run on every container start.
 1. Copy the example env file and set your project path:
 
    ```bash
-   cp .env.example .env
+   cp .env.example .env   # stays at repo root
    # Edit .env: set WORKSPACE_DIR to the absolute path of your project
    ```
 
 2. Start the container:
 
    ```bash
-   docker compose up
+   docker compose -f docker/docker-compose.yml up
    ```
 
-The `docker-compose.yml` uses the `web` combo image by default (TypeScript + Python). Edit the `image:` field to use a different tag.
+The `docker/docker-compose.yml` uses the `web` combo image by default (TypeScript + Python). Edit the `image:` field to use a different tag.
 
 ## Resource Limits
 
-Default resource limits (adjust in `docker-compose.yml` for larger projects):
+Default resource limits (adjust in `docker/docker-compose.yml` for larger projects):
 
 | Limit | Default |
 |-------|---------|

@@ -10,8 +10,8 @@
 services:
   agent-lsp:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     image: ghcr.io/blackwell-systems/agent-lsp:base
     stdin_open: true
     tty: false
@@ -32,7 +32,7 @@ services:
           memory: 1g
           cpus: '0.5'
     env_file:
-      - .env
+      - ../.env
 
 volumes:
   lsp-server-cache:
