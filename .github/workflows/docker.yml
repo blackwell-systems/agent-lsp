@@ -2,7 +2,6 @@ name: Docker
 
 on:
   push:
-    branches: [main]
     tags: ['v*']
 
 permissions:
@@ -45,7 +44,6 @@ jobs:
           tags: |
             type=raw,value=base
             type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
-            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
