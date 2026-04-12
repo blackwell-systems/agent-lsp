@@ -70,6 +70,11 @@ Images are mirrored to Docker Hub automatically on every release. Tags: `latest`
 Published automatically via `mcp-publisher` in CI using GitHub OIDC (no secrets required). PulseMCP ingests from the official registry weekly.
 
 **Server name:** `io.github.blackwell-systems/agent-lsp`
+**Status:** Live as of v0.1.2 — verified at `registry.modelcontextprotocol.io`
+
+```bash
+curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.blackwell-systems/agent-lsp"
+```
 
 ### Smithery / Glama
 A `smithery.yaml` in the repo root enables indexing on Smithery and Glama. These platforms auto-discover servers from GitHub and npm.
