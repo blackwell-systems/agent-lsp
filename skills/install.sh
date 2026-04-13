@@ -116,3 +116,63 @@ else
     echo "Done. Installed: $installed, Skipped: $skipped, Errors: $errors"
     if [[ $errors -gt 0 ]]; then exit 1; fi
 fi
+
+# Update CLAUDE.md with managed skills table
+# Finds ~/.claude/CLAUDE.md and replaces content between sentinel comments.
+# If sentinels don't exist, appends the block at the end of the file.
+CLAUDE_MD="${HOME}/.claude/CLAUDE.md"
+
+if [[ ! -f "$CLAUDE_MD" ]]; then
+    if [[ "$DRY_RUN" == false ]]; then
+        echo ""
+        echo "No ~/.claude/CLAUDE.md found — skipping skills table update."
+    fi
+else
+    # Build the skills table rows from SKILL.md frontmatter
+    table_rows=""
+    while IFS= read -r skillmd; do
+        skill_dir="${skillmd%/SKILL.md}"
+        skill_name="$(basename "$skill_dir")"
+        # Extract description from frontmatter (first line starting with 'description:')
+        desc="$(grep '^description:' "$skillmd" | head -1 | sed 's/^description: *//' | tr -d '"')"
+        if [[ -n "$desc" ]]; then
+            table_rows+="| \`/${skill_name}\` | ${desc} |"$'\n'
+        fi
+    done < <(find "$SCRIPT_DIR" -maxdepth 2 -name "SKILL.md" | sort)
+
+    # Build the full managed block
+    managed_block="<!-- agent-lsp:skills:start -->"$'\n'
+    managed_block+="| Skill | When to use |"$'\n'
+    managed_block+="|-------|-------------|"$'\n'
+    managed_block+="${table_rows}"
+    managed_block+="<!-- agent-lsp:skills:end -->"
+
+    START_SENTINEL="<!-- agent-lsp:skills:start -->"
+    END_SENTINEL="<!-- agent-lsp:skills:end -->"
+
+    if grep -qF "$START_SENTINEL" "$CLAUDE_MD"; then
+        # Replace between sentinels (inclusive)
+        if [[ "$DRY_RUN" == true ]]; then
+            echo "[dry-run] Would update agent-lsp skills block in $CLAUDE_MD"
+        else
+            # Use awk to replace the managed block in-place
+            awk -v block="$managed_block" \
+                -v start="$START_SENTINEL" \
+                -v end="$END_SENTINEL" \
+                'BEGIN{skip=0}
+                 $0==start{print block; skip=1; next}
+                 $0==end{skip=0; next}
+                 !skip{print}' \
+                "$CLAUDE_MD" > "${CLAUDE_MD}.tmp" && mv "${CLAUDE_MD}.tmp" "$CLAUDE_MD"
+            echo "  updated  ~/.claude/CLAUDE.md skills table"
+        fi
+    else
+        # Append managed block at end of file
+        if [[ "$DRY_RUN" == true ]]; then
+            echo "[dry-run] Would append agent-lsp skills block to $CLAUDE_MD"
+        else
+            printf '\n## LSP Skills\n\n%s\n' "$managed_block" >> "$CLAUDE_MD"
+            echo "  appended  agent-lsp skills block to ~/.claude/CLAUDE.md"
+        fi
+    fi
+fi
