@@ -821,6 +821,7 @@ waves:
             - Only edit docs/tools.md.
           files:
             - docs/tools.md
+      base_commit: e0eac8ce47c974ebacf409b16b6bf77e3d65e93c
 quality_gates:
     level: standard
     gates:
@@ -896,5 +897,4 @@ critic_report:
     summary: 'All three agent briefs verified against the codebase. Check 1 (file_existence): the two new files for Agent A do not exist yet (correct), and all modify-action files (README.md, ROADMAP.md, CHANGELOG.md, internal/tools/workspace.go, cmd/agent-lsp/tools_navigation.go, internal/tools/workspace_test.go, docs/tools.md) exist. Check 2 (symbol_accuracy): Agent B references URIToFilePath (exists in internal/tools/helpers.go), isEmptyWorkspaceEdit (exists in workspace.go), HandleRenameSymbol (exists), and the dryRun extraction anchor text matches exactly at line 59. Check 3 (pattern_accuracy): Agent B''s anchor texts match exactly — the isEmptyWorkspaceEdit comment and dryRun extraction line are both confirmed. Agent C''s anchor text for the dry_run table row and the Notes last bullet match exactly. Agent A''s anchor texts for README.md /lsp-docs row and ROADMAP.md skills paragraph match exactly. Check 4 (interface_consistency): the two new helper function signatures are syntactically valid Go; path/filepath is a stdlib package; all referenced types are standard. Check 5 (import_chains): no new files for Agent B — only modifications; stdlib path/filepath requires no go.mod entry. Checks 6, 7, 9: no registration required for unexported helpers; no agent owns more than 5 files; no file appears under multiple agents in wave 1.'
     reviewed_at: "2026-04-13T21:21:23Z"
     issue_count: 0
-state: "REVIEWED"
-original_branch: main
+state: REVIEWED
