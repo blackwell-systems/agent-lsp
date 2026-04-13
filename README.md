@@ -47,6 +47,7 @@ Raw tools get ignored. Skills get used. Each skill encodes the correct tool sequ
 | `/lsp-dead-code` | Detect zero-reference exports before cleanup |
 | `/lsp-implement` | Find all concrete implementations of an interface |
 | `/lsp-docs` | Three-tier documentation: hover → offline toolchain → source |
+| `/lsp-explore` | "Tell me about this symbol": hover + implementations + call hierarchy + references in one pass — for navigating unfamiliar code |
 | `/lsp-cross-repo` | Find all usages of a library symbol across consumer repos |
 | `/lsp-local-symbols` | File-scoped symbol list, usage search, and type info |
 | `/lsp-test-correlation` | Find and run only tests that cover an edited file |
