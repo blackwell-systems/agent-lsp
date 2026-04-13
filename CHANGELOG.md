@@ -7,6 +7,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **`/lsp-explore` skill** — new agent skill that composes hover, go_to_implementation, call_hierarchy, and get_references into a single "tell me about this symbol" workflow for navigating unfamiliar code. Installed via `cd skills && ./install.sh`.
+
 - **rename_symbol glob exclusions** — new optional exclude_globs parameter
   (array of glob strings). Files matching any pattern are excluded from the
   returned WorkspaceEdit. Useful for generated code (**/*_gen.go),
