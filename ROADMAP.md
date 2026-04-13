@@ -123,6 +123,13 @@ The gap between what clangd provides and what the broader toolchain offers is la
 | `ruby.security` | Brakeman security scan (Rails) |
 | `ruby.audit` | `bundle-audit` CVE scan on `Gemfile.lock` |
 
+## Tools
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Rename with glob exclusions** | Planned | `rename_symbol` accepts glob patterns to exclude files from the rename — useful for generated code, vendored files, and test fixtures that should not be updated |
+| **LineScope for position_pattern** | Planned | Restrict a `position_pattern` match to a specific line range — eliminates false matches when the same token appears multiple times in a file |
+
 ## Transport
 
 | Feature | Status | Description |
@@ -166,6 +173,21 @@ Skills encode correct tool sequences so workflows actually happen. The current 1
 ### Skill composition
 
 Skills calling other skills — `/lsp-refactor` composed from `/lsp-impact` + `/lsp-safe-edit` + `/lsp-verify` + `/lsp-test-correlation`. Requires runtime support for skill invocation from within a skill.
+
+## Skill Schema Specification
+
+Skills are currently prose — markdown prompts the agent follows. The inputs and outputs are implicit and unvalidatable. A schema layer would make contracts explicit — what goes in, what comes out — enabling validation and eventual skill composition with typed interfaces.
+
+The case for machine-readable skill contracts:
+- Tooling can validate that an agent invoked a skill correctly
+- Clearer interface between the agent and the skill — what goes in, what comes out
+- Enables skill composition with type safety (skill A's output feeds skill B's input)
+- Documentation that can be auto-generated and kept in sync
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Skill input/output schema** | Planned | JSON Schema definitions for each skill's expected inputs and guaranteed outputs — machine-readable contracts alongside the prose skill files |
+| **Schema validation tooling** | Planned | Validate agent skill invocations against the schema at runtime or in CI — surfaces misuse before it causes silent failures |
 
 ## Bigger Bets
 
