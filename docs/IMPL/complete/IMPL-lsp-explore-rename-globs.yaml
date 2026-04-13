@@ -1,3 +1,4 @@
+completion_date: "2026-04-12"
 title: lsp-explore skill + rename_symbol glob exclusions
 feature_slug: lsp-explore-rename-globs
 repository: /Users/dayna.blackwell/workspace/code/agent-lsp
@@ -834,6 +835,49 @@ quality_gates:
         - type: test
           command: GOWORK=off go test ./internal/... ./cmd/...
           required: true
+completion_reports:
+    A:
+        status: complete
+        branch: saw/lsp-explore-rename-globs/wave1-agent-A
+        commit: 377416f
+        files_changed:
+            - skills/lsp-explore/SKILL.md
+            - skills/lsp-explore/references/patterns.md
+            - README.md
+            - ROADMAP.md
+            - CHANGELOG.md
+        files_created:
+            - skills/lsp-explore/SKILL.md
+            - skills/lsp-explore/references/patterns.md
+        verification: PASS
+        notes: All 6 verification checks pass. build/vet/test all clean. lsp-explore skill created with correct frontmatter. patterns.md copied verbatim. README table updated. ROADMAP updated to 15 skills + Done status for rename-globs. CHANGELOG entry added.
+    B:
+        status: complete
+        branch: saw/lsp-explore-rename-globs/wave1-agent-B
+        commit: d700d64
+        files_changed:
+            - internal/tools/workspace.go
+            - internal/tools/workspace_test.go
+            - cmd/agent-lsp/tools_navigation.go
+        files_created:
+            - internal/tools/workspace_test.go
+        tests_added:
+            - TestFilterWorkspaceEditByGlobs_Nil
+            - TestFilterWorkspaceEditByGlobs_EmptyGlobs
+            - TestFilterWorkspaceEditByGlobs_RetainsNonMatchingChanges
+            - TestExtractStringSlice_Typed
+            - TestExtractStringSlice_Interface
+            - TestExtractStringSlice_Missing
+        verification: PASS
+        notes: ExcludeGlobs field added to RenameSymbolArgs. filterWorkspaceEditByGlobs and extractStringSlice helpers added and wired into HandleRenameSymbol. 6 new tests pass. Fixed map comparison vet error in EmptyGlobs test (used len comparison instead of != on map).
+    C:
+        status: complete
+        branch: saw/lsp-explore-rename-globs/wave1-agent-C
+        commit: 9a16c79
+        files_changed:
+            - docs/tools.md
+        verification: PASS
+        notes: 'Added exclude_globs parameter row to rename_symbol table, added note to Notes section, and added Glob exclusions appendix subsection. Verification: 5 occurrences of exclude_globs, 1 Glob exclusions subsection. Documentation-only change, no Go build needed.'
 pre_mortem:
     overall_risk: low
     rows:
@@ -897,4 +941,4 @@ critic_report:
     summary: 'All three agent briefs verified against the codebase. Check 1 (file_existence): the two new files for Agent A do not exist yet (correct), and all modify-action files (README.md, ROADMAP.md, CHANGELOG.md, internal/tools/workspace.go, cmd/agent-lsp/tools_navigation.go, internal/tools/workspace_test.go, docs/tools.md) exist. Check 2 (symbol_accuracy): Agent B references URIToFilePath (exists in internal/tools/helpers.go), isEmptyWorkspaceEdit (exists in workspace.go), HandleRenameSymbol (exists), and the dryRun extraction anchor text matches exactly at line 59. Check 3 (pattern_accuracy): Agent B''s anchor texts match exactly — the isEmptyWorkspaceEdit comment and dryRun extraction line are both confirmed. Agent C''s anchor text for the dry_run table row and the Notes last bullet match exactly. Agent A''s anchor texts for README.md /lsp-docs row and ROADMAP.md skills paragraph match exactly. Check 4 (interface_consistency): the two new helper function signatures are syntactically valid Go; path/filepath is a stdlib package; all referenced types are standard. Check 5 (import_chains): no new files for Agent B — only modifications; stdlib path/filepath requires no go.mod entry. Checks 6, 7, 9: no registration required for unexported helpers; no agent owns more than 5 files; no file appears under multiple agents in wave 1.'
     reviewed_at: "2026-04-13T21:21:23Z"
     issue_count: 0
-state: REVIEWED
+state: COMPLETE

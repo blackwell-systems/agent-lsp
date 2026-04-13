@@ -63,3 +63,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-test-coverage-gaps.yaml
 - **init-command**: completed 2026-04-10, 1 waves, 2 agents
   - IMPL doc: docs/IMPL/complete/IMPL-init-command.yaml
+- **lsp-explore-rename-globs**: completed 2026-04-13, 1 waves, 3 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-lsp-explore-rename-globs.yaml
