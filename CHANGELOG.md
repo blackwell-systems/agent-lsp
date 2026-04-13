@@ -5,6 +5,14 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **rename_symbol glob exclusions** — new optional exclude_globs parameter
+  (array of glob strings). Files matching any pattern are excluded from the
+  returned WorkspaceEdit. Useful for generated code (**/*_gen.go),
+  vendored files (vendor/**), and test fixtures (testdata/**). Uses
+  filepath.Match syntax, matched against both full path and basename.
+
 ### Changed
 
 - Docker builds now trigger on release tags only; removed `:edge` tag

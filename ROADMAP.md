@@ -127,7 +127,7 @@ The gap between what clangd provides and what the broader toolchain offers is la
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Rename with glob exclusions** | Planned | `rename_symbol` accepts glob patterns to exclude files from the rename — useful for generated code, vendored files, and test fixtures that should not be updated |
+| **Rename with glob exclusions** | Done | `rename_symbol` accepts glob patterns to exclude files from the rename — useful for generated code, vendored files, and test fixtures that should not be updated |
 | **LineScope for position_pattern** | Planned | Restrict a `position_pattern` match to a specific line range — eliminates false matches when the same token appears multiple times in a file |
 
 ## Transport
@@ -148,7 +148,7 @@ The gap between what clangd provides and what the broader toolchain offers is la
 
 ## Skills
 
-Skills encode correct tool sequences so workflows actually happen. The current 14 skills cover navigation, safety checking, and analysis. Three gaps remain.
+Skills encode correct tool sequences so workflows actually happen. The current 15 skills cover navigation, safety checking, and analysis. Two gaps remain.
 
 ### Code action skills (gap: `get_code_actions` + `execute_command` are underserved)
 
