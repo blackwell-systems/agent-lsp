@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
@@ -54,6 +55,11 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 	})
 	if wErr != nil {
 		return types.ErrorResult(fmt.Sprintf("rename_symbol: %s", wErr)), nil
+	}
+
+	// Apply glob exclusions if provided.
+	if globs := extractStringSlice(args, "exclude_globs"); len(globs) > 0 {
+		result = filterWorkspaceEditByGlobs(result, globs)
 	}
 
 	dryRun, _ := args["dry_run"].(bool)
@@ -114,6 +120,96 @@ func renameWithFuzzyFallback(ctx context.Context, client *lsp.LSPClient, fileURI
 			logging.Log(logging.LevelDebug, "rename fuzzyFallback: found result via workspace symbol candidate")
 			return res
 		}
+	}
+	return nil
+}
+
+// filterWorkspaceEditByGlobs removes workspace edit entries whose file URI
+// matches any of the provided glob patterns. Patterns use filepath.Match syntax
+// (e.g. "vendor/**", "**/*_gen.go"). If excludeGlobs is empty, the result is
+// returned unchanged. Handles both "changes" (map[string][]TextEdit) and
+// "documentChanges" ([]TextDocumentEdit) WorkspaceEdit formats.
+func filterWorkspaceEditByGlobs(result interface{}, excludeGlobs []string) interface{} {
+	if len(excludeGlobs) == 0 || result == nil {
+		return result
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		return result
+	}
+
+	var edit map[string]interface{}
+	if err := json.Unmarshal(data, &edit); err != nil {
+		return result
+	}
+
+	matchesAny := func(fileURI string) bool {
+		fp, convErr := URIToFilePath(fileURI)
+		if convErr != nil {
+			fp = strings.TrimPrefix(fileURI, "file://")
+		}
+		for _, pattern := range excludeGlobs {
+			if matched, _ := filepath.Match(pattern, fp); matched {
+				return true
+			}
+			if matched, _ := filepath.Match(pattern, filepath.Base(fp)); matched {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Handle "changes" format: map[uri][]TextEdit
+	if changes, ok := edit["changes"].(map[string]interface{}); ok {
+		filtered := make(map[string]interface{}, len(changes))
+		for uri, edits := range changes {
+			if !matchesAny(uri) {
+				filtered[uri] = edits
+			}
+		}
+		edit["changes"] = filtered
+	}
+
+	// Handle "documentChanges" format: []TextDocumentEdit
+	if docChanges, ok := edit["documentChanges"].([]interface{}); ok {
+		filtered := make([]interface{}, 0, len(docChanges))
+		for _, dc := range docChanges {
+			dcMap, ok := dc.(map[string]interface{})
+			if !ok {
+				filtered = append(filtered, dc)
+				continue
+			}
+			td, _ := dcMap["textDocument"].(map[string]interface{})
+			uri, _ := td["uri"].(string)
+			if uri == "" || !matchesAny(uri) {
+				filtered = append(filtered, dc)
+			}
+		}
+		edit["documentChanges"] = filtered
+	}
+
+	return edit
+}
+
+// extractStringSlice extracts a []string from args[key]. Handles both
+// []string (typed) and []interface{} (JSON-decoded) input shapes.
+func extractStringSlice(args map[string]interface{}, key string) []string {
+	v, ok := args[key]
+	if !ok || v == nil {
+		return nil
+	}
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []interface{}:
+		out := make([]string, 0, len(t))
+		for _, item := range t {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
 	}
 	return nil
 }

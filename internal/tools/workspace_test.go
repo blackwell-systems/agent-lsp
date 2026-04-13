@@ -426,3 +426,87 @@ func TestHandleExecuteCommand_MissingCommand(t *testing.T) {
 		t.Errorf("expected error mentioning 'command', got %v", r.Content)
 	}
 }
+
+// --- filterWorkspaceEditByGlobs ---
+
+// TestFilterWorkspaceEditByGlobs_Nil verifies that a nil result passes through unchanged.
+func TestFilterWorkspaceEditByGlobs_Nil(t *testing.T) {
+	result := filterWorkspaceEditByGlobs(nil, []string{"vendor/**"})
+	if result != nil {
+		t.Error("expected nil to pass through unchanged")
+	}
+}
+
+// TestFilterWorkspaceEditByGlobs_EmptyGlobs verifies that empty globs return the input unchanged.
+func TestFilterWorkspaceEditByGlobs_EmptyGlobs(t *testing.T) {
+	edit := map[string]interface{}{
+		"changes": map[string]interface{}{
+			"file:///project/main.go": []interface{}{"edit1"},
+		},
+	}
+	result := filterWorkspaceEditByGlobs(edit, nil)
+	// result should be the same interface value (same underlying pointer) as edit.
+	resultMap, ok := result.(map[string]interface{})
+	if !ok {
+		t.Fatal("expected map[string]interface{} result")
+	}
+	if len(resultMap) != len(edit) {
+		t.Error("expected nil globs to return input unchanged")
+	}
+}
+
+// TestFilterWorkspaceEditByGlobs_RetainsNonMatchingChanges verifies non-matching
+// URIs are retained in the "changes" map format.
+func TestFilterWorkspaceEditByGlobs_RetainsNonMatchingChanges(t *testing.T) {
+	edit := map[string]interface{}{
+		"changes": map[string]interface{}{
+			"file:///project/main.go":     []interface{}{"edit1"},
+			"file:///project/main_gen.go": []interface{}{"edit2"},
+		},
+	}
+	result := filterWorkspaceEditByGlobs(edit, []string{"*_gen.go"})
+	m, ok := result.(map[string]interface{})
+	if !ok {
+		t.Fatal("expected map result")
+	}
+	changes, _ := m["changes"].(map[string]interface{})
+	if _, found := changes["file:///project/main.go"]; !found {
+		t.Error("expected main.go to be retained")
+	}
+	if _, found := changes["file:///project/main_gen.go"]; found {
+		t.Error("expected main_gen.go to be excluded by *_gen.go pattern")
+	}
+}
+
+// --- extractStringSlice ---
+
+// TestExtractStringSlice_Typed verifies []string input is returned as-is.
+func TestExtractStringSlice_Typed(t *testing.T) {
+	args := map[string]interface{}{
+		"exclude_globs": []string{"vendor/**", "*_gen.go"},
+	}
+	got := extractStringSlice(args, "exclude_globs")
+	if len(got) != 2 || got[0] != "vendor/**" {
+		t.Errorf("unexpected result: %v", got)
+	}
+}
+
+// TestExtractStringSlice_Interface verifies []interface{} (JSON-decoded shape) works.
+func TestExtractStringSlice_Interface(t *testing.T) {
+	args := map[string]interface{}{
+		"exclude_globs": []interface{}{"vendor/**", "*_gen.go"},
+	}
+	got := extractStringSlice(args, "exclude_globs")
+	if len(got) != 2 || got[1] != "*_gen.go" {
+		t.Errorf("unexpected result: %v", got)
+	}
+}
+
+// TestExtractStringSlice_Missing verifies a missing key returns nil.
+func TestExtractStringSlice_Missing(t *testing.T) {
+	args := map[string]interface{}{}
+	got := extractStringSlice(args, "exclude_globs")
+	if got != nil {
+		t.Errorf("expected nil for missing key, got %v", got)
+	}
+}

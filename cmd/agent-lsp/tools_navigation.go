@@ -39,13 +39,14 @@ type GoToDeclarationArgs struct {
 }
 
 type RenameSymbolArgs struct {
-	FilePath        string `json:"file_path"`
-	LanguageID      string `json:"language_id,omitempty"`
-	Line            int    `json:"line,omitempty"`
-	Column          int    `json:"column,omitempty"`
-	NewName         string `json:"new_name"`
-	PositionPattern string `json:"position_pattern,omitempty"`
-	DryRun          bool   `json:"dry_run,omitempty"`
+	FilePath        string   `json:"file_path"`
+	LanguageID      string   `json:"language_id,omitempty"`
+	Line            int      `json:"line,omitempty"`
+	Column          int      `json:"column,omitempty"`
+	NewName         string   `json:"new_name"`
+	PositionPattern string   `json:"position_pattern,omitempty"`
+	DryRun          bool     `json:"dry_run,omitempty"`
+	ExcludeGlobs    []string `json:"exclude_globs,omitempty"`
 }
 
 type PrepareRenameArgs struct {
@@ -127,7 +128,7 @@ func registerNavigationTools(d toolDeps) {
 
 	mcp.AddTool(d.server, &mcp.Tool{
 		Name:        "rename_symbol",
-		Description: "Get a WorkspaceEdit for renaming a symbol across the entire workspace via LSP. Returns the edit object — NOT applied automatically. Use dry_run=true to preview what would change (returns workspace_edit + note). Use position_pattern with @@ marker for reliable position targeting instead of line/column. Inspect the returned WorkspaceEdit then call apply_edit to commit.",
+		Description: "Get a WorkspaceEdit for renaming a symbol across the entire workspace via LSP. Returns the edit object — NOT applied automatically. Use dry_run=true to preview what would change (returns workspace_edit + note). Use position_pattern with @@ marker for reliable position targeting instead of line/column. Inspect the returned WorkspaceEdit then call apply_edit to commit. Optional exclude_globs (array of glob patterns, e.g. [\"vendor/**\", \"**/*_gen.go\"]) skips matching files from the rename — useful for generated code, vendored files, and test fixtures.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args RenameSymbolArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleRenameSymbol(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
