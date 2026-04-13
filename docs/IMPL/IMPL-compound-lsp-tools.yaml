@@ -636,4 +636,4 @@ pre_mortem:
           impact: low
           mitigation: Both agent tasks list required imports explicitly (context, encoding/json, fmt, internal/lsp, internal/types). Copy-paste from task prompt.
 state: REVIEWED
-injection_method: hook
+injection_method: manual-fallback
