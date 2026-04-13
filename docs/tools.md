@@ -1074,6 +1074,7 @@ is **not applied automatically**. Pass it to `apply_edit` to commit the changes.
 | `line` | number | yes | Line of the symbol (1-based) |
 | `column` | number | yes | Column (1-based) |
 | `new_name` | string | yes | The replacement name |
+| `exclude_globs` | array of strings | no | Glob patterns for files to skip (e.g. ["vendor/**", "**/*_gen.go"]). Matching files are excluded from the returned WorkspaceEdit. Uses filepath.Match syntax; also matched against the file's basename. |
 
 **Example call** — rename `add` to `sum`
 
@@ -1131,6 +1132,9 @@ native).
 - Returns `null` if the server does not declare `renameProvider`.
 - Use `prepare_rename` first to validate the rename before calling this.
 - Pass the returned object directly to `apply_edit` to write the changes to disk.
+- `exclude_globs` patterns match against both the full file path and the
+  basename. Common patterns: "vendor/**" (Go vendor tree),
+  "**/*_generated.go" (codegen), "testdata/**" (test fixtures).
 
 ---
 
@@ -2678,6 +2682,28 @@ passing the line/column manually, but robust to line number drift.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `dry_run` | boolean | no | If true, return the workspace edit preview without writing to disk (default: false) |
+
+### Glob exclusions for `rename_symbol`
+
+`rename_symbol` accepts an optional `exclude_globs` array. Files matching
+any pattern are excluded from the returned WorkspaceEdit — the rename
+still executes on all other files.
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `exclude_globs` | array | no | Array of glob patterns (filepath.Match syntax). Matched against full path and basename. |
+
+**Example** — exclude generated files and vendor tree:
+
+```json
+{
+  "file_path": "/project/pkg/types.go",
+  "line": 12,
+  "column": 6,
+  "new_name": "SessionToken",
+  "exclude_globs": ["vendor/**", "**/*_gen.go", "**/*_generated.go"]
+}
+```
 
 **Dry-run output**
 
