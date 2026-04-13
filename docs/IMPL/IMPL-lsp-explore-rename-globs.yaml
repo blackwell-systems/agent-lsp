@@ -1,0 +1,899 @@
+title: lsp-explore skill + rename_symbol glob exclusions
+feature_slug: lsp-explore-rename-globs
+repository: /Users/dayna.blackwell/workspace/code/agent-lsp
+verdict: SUITABLE
+suitability_assessment: |
+    Two independent features. Agent A handles the lsp-explore skill (pure markdown)
+    plus README.md and ROADMAP.md. Agent B handles the Go implementation for rename
+    glob exclusions (Go source only). Agent C handles docs/tools.md documentation
+    update (split from B to stay within LOC budget — docs/tools.md is 2720 lines).
+
+    All three agents are fully independent and run in a single wave with disjoint
+    file ownership.
+
+    **Feature 1 (lsp-explore):** Pure skill file — new directory under skills/
+    containing SKILL.md and a references/patterns.md symlink copy. No Go source
+    changes. Documentation updates in README.md (skills table row) and ROADMAP.md
+    (skills count sentence + Tools table status row). Agent A owns all of this,
+    including the ROADMAP.md Tools section update for rename-globs.
+
+    **Feature 2 (rename glob exclusions):** Go changes — RenameSymbolArgs struct
+    (cmd/agent-lsp/tools_navigation.go), HandleRenameSymbol handler + new helper
+    function (internal/tools/workspace.go), and unit tests
+    (internal/tools/workspace_test.go). CHANGELOG.md entry. Agent B owns these.
+
+    **docs/tools.md:** Agent C adds the exclude_globs parameter row and the new
+    glob exclusions appendix section to docs/tools.md. This is separated from
+    Agent B purely for LOC budget reasons (the file is 2720 lines).
+
+    **ROADMAP.md:** Assigned entirely to Agent A to avoid I1 conflicts. Agent A
+    makes both edits: (1) update the Skills section paragraph count (14->15 skills,
+    three->two gaps), and (2) update the Tools table rename-globs row from
+    "Planned" to "Done".
+
+    **Interface discoverability:** All interfaces are fully defined before launch.
+    The glob filtering logic is self-contained in HandleRenameSymbol; no new
+    exported types needed across agent boundaries.
+
+    **Parallelization value:** Build/test cycle is ~5-8s (GOWORK=off go build
+    then go test ./internal/... ./cmd/...). Agent A and C have no build step.
+    Agent B has logic, tests, and parameter wiring. Single wave, all parallel.
+
+    Estimated times:
+    - Scout phase: ~12 min
+    - Agent execution: ~8 min (3 agents, parallel; B is the critical path)
+    - Merge & verification: ~3 min
+    Total SAW time: ~23 min
+
+    Sequential baseline: ~22 min (3 agents x ~7 min avg)
+    Time savings: Marginal (~4 min, 18% faster)
+
+    Recommendation: Clear coordination value. The IMPL doc captures exact verbatim
+    text anchors for safe multi-file edits and exact Go signatures.
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: skills/lsp-explore/SKILL.md
+      agent: A
+      wave: 1
+      action: new
+    - file: skills/lsp-explore/references/patterns.md
+      agent: A
+      wave: 1
+      action: new
+    - file: README.md
+      agent: A
+      wave: 1
+      action: modify
+    - file: ROADMAP.md
+      agent: A
+      wave: 1
+      action: modify
+    - file: internal/tools/workspace.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/tools_navigation.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/tools/workspace_test.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: CHANGELOG.md
+      agent: A
+      wave: 1
+      action: modify
+    - file: docs/tools.md
+      agent: C
+      wave: 1
+      action: modify
+      v048_exempt: true
+interface_contracts:
+    - name: RenameSymbolArgs.ExcludeGlobs
+      description: |-
+        New optional field added to the existing RenameSymbolArgs struct in
+        cmd/agent-lsp/tools_navigation.go. Callers pass an array of glob
+        patterns; any WorkspaceEdit entry whose file URI matches a pattern is
+        dropped from the result before returning.
+      definition: |
+        // In cmd/agent-lsp/tools_navigation.go — extend existing struct:
+        type RenameSymbolArgs struct {
+            FilePath        string   `json:"file_path"`
+            LanguageID      string   `json:"language_id,omitempty"`
+            Line            int      `json:"line,omitempty"`
+            Column          int      `json:"column,omitempty"`
+            NewName         string   `json:"new_name"`
+            PositionPattern string   `json:"position_pattern,omitempty"`
+            DryRun          bool     `json:"dry_run,omitempty"`
+            ExcludeGlobs    []string `json:"exclude_globs,omitempty"`
+        }
+      location: cmd/agent-lsp/tools_navigation.go
+    - name: filterWorkspaceEditByGlobs
+      description: |-
+        New unexported helper in internal/tools/workspace.go. Accepts the raw
+        WorkspaceEdit interface{} returned by client.RenameSymbol and a slice of
+        glob patterns. Returns a new WorkspaceEdit with all entries whose file URI
+        matches any pattern removed. If excludeGlobs is nil or empty, returns the
+        input unchanged. Handles both "changes" and "documentChanges" WorkspaceEdit
+        formats. Uses filepath.Match after converting URIs to local paths.
+      definition: |
+        // internal/tools/workspace.go
+        func filterWorkspaceEditByGlobs(result interface{}, excludeGlobs []string) interface{}
+      location: internal/tools/workspace.go
+    - name: extractStringSlice
+      description: |-
+        New unexported helper in internal/tools/workspace.go. Extracts []string
+        from args[key], handling both typed []string and JSON-decoded []interface{}
+        input shapes.
+      definition: |
+        // internal/tools/workspace.go
+        func extractStringSlice(args map[string]interface{}, key string) []string
+      location: internal/tools/workspace.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Context
+            Repository: /Users/dayna.blackwell/workspace/code/agent-lsp
+            Wave: 1 of 1 (independent — no dependencies on B or C)
+
+            ## What to implement
+
+            Create the /lsp-explore skill and update documentation.
+
+            ### Step 1 — Create skills/lsp-explore/SKILL.md
+
+            Create the directory skills/lsp-explore/ and the file
+            skills/lsp-explore/SKILL.md.
+
+            The skill frontmatter MUST follow the exact format used by existing skills.
+            Reference skills/lsp-impact/SKILL.md and skills/lsp-rename/SKILL.md
+            for the correct frontmatter format. Required frontmatter fields:
+
+            ```
+            ---
+            name: lsp-explore
+            description: "Tell me about this symbol": hover + implementations + call hierarchy + references in one pass — for navigating unfamiliar code.
+            argument-hint: "[symbol-name]"
+            allowed-tools: mcp__lsp__start_lsp mcp__lsp__go_to_symbol mcp__lsp__get_info_on_location mcp__lsp__go_to_implementation mcp__lsp__call_hierarchy mcp__lsp__get_references mcp__lsp__open_document mcp__lsp__get_server_capabilities
+            ---
+            ```
+
+            The skill body implements a "tell me about this symbol" workflow in four
+            phases run in a single pass. Model it on the structure of lsp-impact/SKILL.md
+            and lsp-implement/SKILL.md for style reference.
+
+            **Phase 1 — Locate the symbol**
+
+            Call mcp__lsp__go_to_symbol with symbol_path set to the user-provided
+            name (dot notation: "codec.Encode", "Buffer.Reset"). Record file,
+            the line and column numbers. Open the file with mcp__lsp__open_document.
+
+            If go_to_symbol returns nothing, report "Symbol not found" and stop.
+
+            **Phase 2 — Hover (always available)**
+
+            Call mcp__lsp__get_info_on_location with file_path, line, column
+            from Phase 1. Captures type info, doc comments, and signature. Store as
+            hover_text. If it fails, record empty string; do not stop.
+
+            **Phase 3 — Implementations (capability-gated)**
+
+            Call mcp__lsp__get_server_capabilities. If go_to_implementation
+            appears in supported_tools, call it with file_path, line, column.
+            Record locations as implementations. If not in supported_tools, note
+            "not supported by this server" — do not stop.
+
+            **Phase 4 — Call hierarchy and references (run in parallel)**
+
+            Issue both calls in the same message (independent):
+
+            a. mcp__lsp__call_hierarchy with direction: "incoming" — callers.
+               If call_hierarchy not in supported_tools, skip and note.
+
+            b. mcp__lsp__get_references with include_declaration: false — all
+               reference sites across the workspace.
+
+            **Output format — Explore Report:**
+
+            ```
+            ## Explore Report: <SymbolName>
+
+            ### Definition
+            - File: <file>:<line>
+            - Hover: <hover_text or "unavailable">
+
+            ### Implementations (<N> found, or "not supported")
+            [list of file:line entries, or "none found", or "not supported by this server"]
+
+            ### Callers (incoming call hierarchy)
+            [list of caller function names with file:line, or "none", or "not supported"]
+
+            ### References (<N> total across <M> files)
+            [list of file:line entries grouped by file, or "none found"]
+
+            ### Summary
+            - Symbol kind:      <inferred from hover or "unknown">
+            - Reference count:  <N>
+            - Files with refs:  <M distinct files>
+            - Callers:          <K>
+            - Implementations:  <P or "not supported">
+            ```
+
+            The goal is "understand this symbol in one pass" — keep the report concise.
+
+            ### Step 2 — Create skills/lsp-explore/references/patterns.md
+
+            Create the directory skills/lsp-explore/references/ and copy the exact
+            content of skills/lsp-rename/references/patterns.md into
+            skills/lsp-explore/references/patterns.md. Do NOT modify the content;
+            copy it verbatim.
+
+            Read skills/lsp-rename/references/patterns.md first, then write it to
+            skills/lsp-explore/references/patterns.md.
+
+            ### Step 3 — Update README.md skills table
+
+            Read README.md first to confirm the current table. The skills table
+            currently ends with:
+
+            ```
+            | /lsp-format-code | Format a file or selection via the language server formatter |
+            ```
+
+            Find the row for /lsp-docs:
+            ```
+            | /lsp-docs | Three-tier documentation: hover → offline toolchain → source |
+            ```
+
+            Insert a new row immediately after the /lsp-docs row:
+            ```
+            | /lsp-explore | "Tell me about this symbol": hover + implementations + call hierarchy + references in one pass — for navigating unfamiliar code |
+            ```
+
+            ### Step 4 — Update ROADMAP.md (two edits)
+
+            Read ROADMAP.md first before making any edits.
+
+            **Edit 4a — Skills section paragraph (count update):**
+
+            Find this exact sentence:
+            ```
+            Skills encode correct tool sequences so workflows actually happen. The current 14 skills cover navigation, safety checking, and analysis. Three gaps remain.
+            ```
+
+            Replace with:
+            ```
+            Skills encode correct tool sequences so workflows actually happen. The current 15 skills cover navigation, safety checking, and analysis. Two gaps remain.
+            ```
+
+            **Edit 4b — Tools section table (rename-globs status):**
+
+            Find this exact row in the Tools table:
+            ```
+            | **Rename with glob exclusions** | Planned | rename_symbol accepts glob patterns to exclude files from the rename — useful for generated code, vendored files, and test fixtures that should not be updated |
+            ```
+
+            Replace the word Planned with Done:
+            ```
+            | **Rename with glob exclusions** | Done | rename_symbol accepts glob patterns to exclude files from the rename — useful for generated code, vendored files, and test fixtures that should not be updated |
+            ```
+
+            Make both edits. Confirm after editing that the file contains "15 skills"
+            and "Done" in the rename-globs row.
+
+            ### Step 5 — Add CHANGELOG entry
+
+            File: CHANGELOG.md
+
+            Read the file first. Find this exact text at the top of the file:
+            ```
+            ## [Unreleased]
+            ```
+
+            Insert an ### Added subsection after that line, before the existing
+            ### Changed block:
+            ```
+
+            ### Added
+
+            - **rename_symbol glob exclusions** — new optional exclude_globs parameter
+              (array of glob strings). Files matching any pattern are excluded from the
+              returned WorkspaceEdit. Useful for generated code (**/*_gen.go),
+              vendored files (vendor/**), and test fixtures (testdata/**). Uses
+              filepath.Match syntax, matched against both full path and basename.
+
+            ```
+
+            ## Verification gate
+
+            1. SKILL.md exists with correct frontmatter:
+               ```bash
+               head -8 /Users/dayna.blackwell/workspace/code/agent-lsp/skills/lsp-explore/SKILL.md
+               ```
+               Expected: frontmatter with name: lsp-explore present.
+
+            2. references/patterns.md was created:
+               ```bash
+               ls /Users/dayna.blackwell/workspace/code/agent-lsp/skills/lsp-explore/references/
+               ```
+               Expected: patterns.md
+
+            3. README.md contains the new row:
+               ```bash
+               grep -c "lsp-explore" /Users/dayna.blackwell/workspace/code/agent-lsp/README.md
+               ```
+               Expected: 1
+
+            4. ROADMAP.md skills count updated:
+               ```bash
+               grep "15 skills" /Users/dayna.blackwell/workspace/code/agent-lsp/ROADMAP.md
+               ```
+               Expected: 1 match
+
+            5. ROADMAP.md rename-globs row shows Done:
+               ```bash
+               grep "Rename with glob exclusions" /Users/dayna.blackwell/workspace/code/agent-lsp/ROADMAP.md
+               ```
+               Expected: line contains "Done" not "Planned"
+
+            6. CHANGELOG has the new entry:
+               ```bash
+               grep -c "exclude_globs" /Users/dayna.blackwell/workspace/code/agent-lsp/CHANGELOG.md
+               ```
+               Expected: 1
+
+            ## Constraints
+            - Do NOT modify internal/tools/, cmd/, or docs/tools.md — those are owned by B and C.
+            - Do NOT modify any Go source files.
+            - Do NOT add a Status column to skill description tables in ROADMAP.md.
+          files:
+            - skills/lsp-explore/SKILL.md
+            - skills/lsp-explore/references/patterns.md
+            - README.md
+            - ROADMAP.md
+            - CHANGELOG.md
+        - id: B
+          task: |
+            ## Context
+            Repository: /Users/dayna.blackwell/workspace/code/agent-lsp
+            Wave: 1 of 1 (independent — no dependencies on A or C)
+
+            ## What to implement
+
+            Add exclude_globs parameter to rename_symbol: extend the arg struct,
+            add the filtering helper, wire it into the handler, add unit tests,
+            and add a CHANGELOG entry.
+
+            ### Step 1 — Extend RenameSymbolArgs struct
+
+            File: cmd/agent-lsp/tools_navigation.go
+
+            Read the file first. The struct currently reads (confirm exact text):
+            ```go
+            type RenameSymbolArgs struct {
+            	FilePath        string `json:"file_path"`
+            	LanguageID      string `json:"language_id,omitempty"`
+            	Line            int    `json:"line,omitempty"`
+            	Column          int    `json:"column,omitempty"`
+            	NewName         string `json:"new_name"`
+            	PositionPattern string `json:"position_pattern,omitempty"`
+            	DryRun          bool   `json:"dry_run,omitempty"`
+            }
+            ```
+
+            Add ExcludeGlobs []string as the last field. After editing:
+            ```go
+            type RenameSymbolArgs struct {
+            	FilePath        string   `json:"file_path"`
+            	LanguageID      string   `json:"language_id,omitempty"`
+            	Line            int      `json:"line,omitempty"`
+            	Column          int      `json:"column,omitempty"`
+            	NewName         string   `json:"new_name"`
+            	PositionPattern string   `json:"position_pattern,omitempty"`
+            	DryRun          bool     `json:"dry_run,omitempty"`
+            	ExcludeGlobs    []string `json:"exclude_globs,omitempty"`
+            }
+            ```
+
+            Also update the mcp.AddTool description for rename_symbol. Find this
+            exact text in the description string for the rename_symbol tool registration:
+            ```
+            Inspect the returned WorkspaceEdit then call apply_edit to commit.
+            ```
+
+            Append to it (making it one longer sentence with a period before the
+            addition):
+            ```
+            Inspect the returned WorkspaceEdit then call apply_edit to commit. Optional exclude_globs (array of glob patterns, e.g. ["vendor/**", "**/*_gen.go"]) skips matching files from the rename — useful for generated code, vendored files, and test fixtures.
+            ```
+
+            ### Step 2 — Add imports to workspace.go
+
+            File: internal/tools/workspace.go
+
+            Read the file first. The current import block is:
+            ```go
+            import (
+            	"context"
+            	"encoding/json"
+            	"fmt"
+            	"os"
+            	"strings"
+
+            	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+            	"github.com/blackwell-systems/agent-lsp/internal/logging"
+            	"github.com/blackwell-systems/agent-lsp/internal/types"
+            )
+            ```
+
+            Add "path/filepath" between "os" and "strings". Updated block:
+            ```go
+            import (
+            	"context"
+            	"encoding/json"
+            	"fmt"
+            	"os"
+            	"path/filepath"
+            	"strings"
+
+            	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+            	"github.com/blackwell-systems/agent-lsp/internal/logging"
+            	"github.com/blackwell-systems/agent-lsp/internal/types"
+            )
+            ```
+
+            ### Step 3 — Add filterWorkspaceEditByGlobs and extractStringSlice helpers
+
+            File: internal/tools/workspace.go
+
+            Locate this exact text in workspace.go:
+            ```go
+            // isEmptyWorkspaceEdit reports whether a RenameSymbol result contains no edits.
+            ```
+
+            Insert the following two helper functions immediately before that line:
+
+            ```go
+            // filterWorkspaceEditByGlobs removes workspace edit entries whose file URI
+            // matches any of the provided glob patterns. Patterns use filepath.Match syntax
+            // (e.g. "vendor/**", "**/*_gen.go"). If excludeGlobs is empty, the result is
+            // returned unchanged. Handles both "changes" (map[string][]TextEdit) and
+            // "documentChanges" ([]TextDocumentEdit) WorkspaceEdit formats.
+            func filterWorkspaceEditByGlobs(result interface{}, excludeGlobs []string) interface{} {
+            	if len(excludeGlobs) == 0 || result == nil {
+            		return result
+            	}
+
+            	data, err := json.Marshal(result)
+            	if err != nil {
+            		return result
+            	}
+
+            	var edit map[string]interface{}
+            	if err := json.Unmarshal(data, &edit); err != nil {
+            		return result
+            	}
+
+            	matchesAny := func(fileURI string) bool {
+            		fp, convErr := URIToFilePath(fileURI)
+            		if convErr != nil {
+            			fp = strings.TrimPrefix(fileURI, "file://")
+            		}
+            		for _, pattern := range excludeGlobs {
+            			if matched, _ := filepath.Match(pattern, fp); matched {
+            				return true
+            			}
+            			if matched, _ := filepath.Match(pattern, filepath.Base(fp)); matched {
+            				return true
+            			}
+            		}
+            		return false
+            	}
+
+            	// Handle "changes" format: map[uri][]TextEdit
+            	if changes, ok := edit["changes"].(map[string]interface{}); ok {
+            		filtered := make(map[string]interface{}, len(changes))
+            		for uri, edits := range changes {
+            			if !matchesAny(uri) {
+            				filtered[uri] = edits
+            			}
+            		}
+            		edit["changes"] = filtered
+            	}
+
+            	// Handle "documentChanges" format: []TextDocumentEdit
+            	if docChanges, ok := edit["documentChanges"].([]interface{}); ok {
+            		filtered := make([]interface{}, 0, len(docChanges))
+            		for _, dc := range docChanges {
+            			dcMap, ok := dc.(map[string]interface{})
+            			if !ok {
+            				filtered = append(filtered, dc)
+            				continue
+            			}
+            			td, _ := dcMap["textDocument"].(map[string]interface{})
+            			uri, _ := td["uri"].(string)
+            			if uri == "" || !matchesAny(uri) {
+            				filtered = append(filtered, dc)
+            			}
+            		}
+            		edit["documentChanges"] = filtered
+            	}
+
+            	return edit
+            }
+
+            // extractStringSlice extracts a []string from args[key]. Handles both
+            // []string (typed) and []interface{} (JSON-decoded) input shapes.
+            func extractStringSlice(args map[string]interface{}, key string) []string {
+            	v, ok := args[key]
+            	if !ok || v == nil {
+            		return nil
+            	}
+            	switch t := v.(type) {
+            	case []string:
+            		return t
+            	case []interface{}:
+            		out := make([]string, 0, len(t))
+            		for _, item := range t {
+            			if s, ok := item.(string); ok {
+            				out = append(out, s)
+            			}
+            		}
+            		return out
+            	}
+            	return nil
+            }
+
+            ```
+
+            ### Step 4 — Wire exclude_globs into HandleRenameSymbol
+
+            File: internal/tools/workspace.go
+
+            In HandleRenameSymbol, locate this exact text (it appears after the
+            WithDocument call and before the dry_run check):
+            ```go
+            	dryRun, _ := args["dry_run"].(bool)
+            ```
+
+            Insert the following lines immediately before that line:
+            ```go
+            	// Apply glob exclusions if provided.
+            	if globs := extractStringSlice(args, "exclude_globs"); len(globs) > 0 {
+            		result = filterWorkspaceEditByGlobs(result, globs)
+            	}
+
+            ```
+
+            ### Step 5 — Add unit tests
+
+            File: internal/tools/workspace_test.go
+
+            Read the file first to confirm where it ends. Append the following tests
+            after the last existing test function in the file:
+
+            ```go
+            // --- filterWorkspaceEditByGlobs ---
+
+            // TestFilterWorkspaceEditByGlobs_Nil verifies that a nil result passes through unchanged.
+            func TestFilterWorkspaceEditByGlobs_Nil(t *testing.T) {
+            	result := filterWorkspaceEditByGlobs(nil, []string{"vendor/**"})
+            	if result != nil {
+            		t.Error("expected nil to pass through unchanged")
+            	}
+            }
+
+            // TestFilterWorkspaceEditByGlobs_EmptyGlobs verifies that empty globs return the input unchanged.
+            func TestFilterWorkspaceEditByGlobs_EmptyGlobs(t *testing.T) {
+            	edit := map[string]interface{}{
+            		"changes": map[string]interface{}{
+            			"file:///project/main.go": []interface{}{"edit1"},
+            		},
+            	}
+            	result := filterWorkspaceEditByGlobs(edit, nil)
+            	if result != edit {
+            		t.Error("expected nil globs to return input unchanged (same pointer)")
+            	}
+            }
+
+            // TestFilterWorkspaceEditByGlobs_RetainsNonMatchingChanges verifies non-matching
+            // URIs are retained in the "changes" map format.
+            func TestFilterWorkspaceEditByGlobs_RetainsNonMatchingChanges(t *testing.T) {
+            	edit := map[string]interface{}{
+            		"changes": map[string]interface{}{
+            			"file:///project/main.go":       []interface{}{"edit1"},
+            			"file:///project/main_gen.go":   []interface{}{"edit2"},
+            		},
+            	}
+            	result := filterWorkspaceEditByGlobs(edit, []string{"*_gen.go"})
+            	m, ok := result.(map[string]interface{})
+            	if !ok {
+            		t.Fatal("expected map result")
+            	}
+            	changes, _ := m["changes"].(map[string]interface{})
+            	if _, found := changes["file:///project/main.go"]; !found {
+            		t.Error("expected main.go to be retained")
+            	}
+            	if _, found := changes["file:///project/main_gen.go"]; found {
+            		t.Error("expected main_gen.go to be excluded by *_gen.go pattern")
+            	}
+            }
+
+            // --- extractStringSlice ---
+
+            // TestExtractStringSlice_Typed verifies []string input is returned as-is.
+            func TestExtractStringSlice_Typed(t *testing.T) {
+            	args := map[string]interface{}{
+            		"exclude_globs": []string{"vendor/**", "*_gen.go"},
+            	}
+            	got := extractStringSlice(args, "exclude_globs")
+            	if len(got) != 2 || got[0] != "vendor/**" {
+            		t.Errorf("unexpected result: %v", got)
+            	}
+            }
+
+            // TestExtractStringSlice_Interface verifies []interface{} (JSON-decoded shape) works.
+            func TestExtractStringSlice_Interface(t *testing.T) {
+            	args := map[string]interface{}{
+            		"exclude_globs": []interface{}{"vendor/**", "*_gen.go"},
+            	}
+            	got := extractStringSlice(args, "exclude_globs")
+            	if len(got) != 2 || got[1] != "*_gen.go" {
+            		t.Errorf("unexpected result: %v", got)
+            	}
+            }
+
+            // TestExtractStringSlice_Missing verifies a missing key returns nil.
+            func TestExtractStringSlice_Missing(t *testing.T) {
+            	args := map[string]interface{}{}
+            	got := extractStringSlice(args, "exclude_globs")
+            	if got != nil {
+            		t.Errorf("expected nil for missing key, got %v", got)
+            	}
+            }
+            ```
+
+            ## Verification gate
+
+            1. Build passes:
+               ```bash
+               cd /Users/dayna.blackwell/workspace/code/agent-lsp && GOWORK=off go build ./...
+               ```
+               Expected: no output.
+
+            2. Vet passes:
+               ```bash
+               cd /Users/dayna.blackwell/workspace/code/agent-lsp && GOWORK=off go vet ./internal/tools/... ./cmd/...
+               ```
+               Expected: no output.
+
+            3. New filter tests pass:
+               ```bash
+               cd /Users/dayna.blackwell/workspace/code/agent-lsp && GOWORK=off go test ./internal/tools/ -run "TestFilter|TestExtractString" -v
+               ```
+               Expected: 6 tests PASS.
+
+            4. Full test suite passes:
+               ```bash
+               cd /Users/dayna.blackwell/workspace/code/agent-lsp && GOWORK=off go test ./internal/... ./cmd/...
+               ```
+               Expected: all pass.
+
+            5. ExcludeGlobs field exists in struct:
+               ```bash
+               grep -c "ExcludeGlobs" /Users/dayna.blackwell/workspace/code/agent-lsp/cmd/agent-lsp/tools_navigation.go
+               ```
+               Expected: 1
+
+            6. filterWorkspaceEditByGlobs function exists:
+               ```bash
+               grep -c "func filterWorkspaceEditByGlobs" /Users/dayna.blackwell/workspace/code/agent-lsp/internal/tools/workspace.go
+               ```
+               Expected: 1
+
+            ## Constraints
+            - Do NOT modify skills/, README.md, ROADMAP.md, CHANGELOG.md, or docs/tools.md — those are owned by A and C.
+            - Do NOT rename or remove any existing fields from RenameSymbolArgs.
+            - Do NOT change the signature of HandleRenameSymbol.
+            - Use filepath.Base(fp) not os.Base(fp) — os.Base does not exist.
+            - filterWorkspaceEditByGlobs and extractStringSlice must remain unexported.
+          files:
+            - internal/tools/workspace.go
+            - cmd/agent-lsp/tools_navigation.go
+            - internal/tools/workspace_test.go
+        - id: C
+          task: |
+            ## Context
+            Repository: /Users/dayna.blackwell/workspace/code/agent-lsp
+            Wave: 1 of 1 (independent — no dependencies on A or B)
+
+            ## What to implement
+
+            Update docs/tools.md to document the new exclude_globs parameter for
+            rename_symbol. Two additions to the file:
+
+            1. Add a parameter row to the rename_symbol parameters table.
+            2. Add a new appendix subsection documenting glob exclusions.
+
+            ### Step 1 — Read the file
+
+            Read docs/tools.md to find the rename_symbol section and confirm
+            exact current text before editing. The section starts with ### \rename_symbol\``.
+
+            ### Step 2 — Add exclude_globs parameter row
+
+            The rename_symbol parameters table currently ends with this row:
+
+            ```
+            | new_name | string | yes | The replacement name |
+            ```
+
+            Find that exact line and insert a new row immediately after it:
+
+            ```
+            | exclude_globs | array of strings | no | Glob patterns for files to skip (e.g. ["vendor/**", "**/*_gen.go"]). Matching files are excluded from the returned WorkspaceEdit. Uses filepath.Match syntax; also matched against the file's basename. |
+            ```
+
+            ### Step 3 — Add note to rename_symbol Notes section
+
+            Still in the rename_symbol section, find the Notes block. The current
+            last note is:
+
+            ```
+            - Pass the returned object directly to apply_edit to write the changes to disk.
+            ```
+
+            Add a new bullet after it:
+
+            ```
+            - exclude_globs patterns match against both the full file path and the
+              basename. Common patterns: "vendor/**" (Go vendor tree),
+              "**/*_generated.go" (codegen), "testdata/**" (test fixtures).
+            ```
+
+            ### Step 4 — Add glob exclusions appendix subsection
+
+            Near the bottom of the file there is a "Dry-run preview for rename_symbol"
+            subsection. Read the file to find the exact text of this subsection and
+            locate where it ends (after the dry_run parameter table).
+
+            The dry_run parameter table contains:
+
+            ```
+            | dry_run | boolean | no | If true, return the workspace edit preview without writing to disk (default: false) |
+            ```
+
+            After the line containing default: false) (the last row of the dry_run
+            table), add a new subsection:
+
+            ```
+
+            ### Glob exclusions for rename_symbol
+
+            rename_symbol accepts an optional exclude_globs array. Files matching
+            any pattern are excluded from the returned WorkspaceEdit — the rename
+            still executes on all other files.
+
+            | Name | Type | Required | Description |
+            |------|------|----------|-------------|
+            | exclude_globs | array | no | Array of glob patterns (filepath.Match syntax). Matched against full path and basename. |
+
+            **Example** — exclude generated files and vendor tree:
+
+            ```json
+            {
+              "file_path": "/project/pkg/types.go",
+              "line": 12,
+              "column": 6,
+              "new_name": "SessionToken",
+              "exclude_globs": ["vendor/**", "**/*_gen.go", "**/*_generated.go"]
+            }
+            ```
+            ```
+
+            Note: the outer code fence is part of the markdown. When writing the
+            subsection, the json example goes inside a fenced block.
+
+            ## Verification gate
+
+            1. rename_symbol section now has exclude_globs parameter row:
+               ```bash
+               grep -c "exclude_globs" /Users/dayna.blackwell/workspace/code/agent-lsp/docs/tools.md
+               ```
+               Expected: at least 3 (parameter row + note + appendix).
+
+            2. The new appendix subsection exists:
+               ```bash
+               grep -c "Glob exclusions for" /Users/dayna.blackwell/workspace/code/agent-lsp/docs/tools.md
+               ```
+               Expected: 1
+
+            3. No Go build step needed for Agent C (documentation only).
+
+            ## Constraints
+            - Do NOT modify any Go source files.
+            - Do NOT modify README.md, ROADMAP.md, CHANGELOG.md, or skills/ — those are owned by A and B.
+            - Only edit docs/tools.md.
+            - Only edit docs/tools.md.
+          files:
+            - docs/tools.md
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: |-
+            Agent A edits the Tools section of ROADMAP.md incorrectly — changes the
+            wrong row or introduces a Status column to the Skills description tables.
+          likelihood: low
+          impact: low
+          mitigation: |-
+            Agent A's task provides verbatim anchor text for both ROADMAP.md edits.
+            The verification gate greps for the exact expected output. The constraint
+            block explicitly says "do not add a Status column."
+        - scenario: |-
+            Agent B uses os.Base instead of filepath.Base in filterWorkspaceEditByGlobs,
+            causing a compile error.
+          likelihood: medium
+          impact: high
+          mitigation: |-
+            Agent B's constraints explicitly state "use filepath.Base(fp) not os.Base(fp)."
+            The import block update to add path/filepath is included in the task.
+            The build gate catches this immediately.
+        - scenario: |-
+            filterWorkspaceEditByGlobs only handles the "changes" map format but the
+            language server returns "documentChanges" format, causing globs to be silently
+            ignored for that rename.
+          likelihood: medium
+          impact: medium
+          mitigation: |-
+            filterWorkspaceEditByGlobs handles both "changes" and "documentChanges"
+            formats explicitly. The implementation round-trips through JSON to normalize
+            the shape before filtering.
+        - scenario: |-
+            Agent C's Step 4 produces malformed markdown because the json example block
+            is nested inside a fenced code block that conflicts with the outer code fence.
+          likelihood: medium
+          impact: low
+          mitigation: |-
+            Agent C's task includes a note about the outer code fence being part of
+            the markdown. Agent should use triple-backtick json fencing for the example
+            inside the subsection. Post-merge visual review of docs/tools.md is advised.
+        - scenario: |-
+            README.md row insertion lands before /lsp-docs instead of after, breaking
+            the alphabetical or intended ordering of the skills table.
+          likelihood: low
+          impact: low
+          mitigation: |-
+            Agent A's task specifies the exact anchor text line to insert after.
+            The verification gate checks grep count; human can verify position visually.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+    summary: 'All three agent briefs verified against the codebase. Check 1 (file_existence): the two new files for Agent A do not exist yet (correct), and all modify-action files (README.md, ROADMAP.md, CHANGELOG.md, internal/tools/workspace.go, cmd/agent-lsp/tools_navigation.go, internal/tools/workspace_test.go, docs/tools.md) exist. Check 2 (symbol_accuracy): Agent B references URIToFilePath (exists in internal/tools/helpers.go), isEmptyWorkspaceEdit (exists in workspace.go), HandleRenameSymbol (exists), and the dryRun extraction anchor text matches exactly at line 59. Check 3 (pattern_accuracy): Agent B''s anchor texts match exactly — the isEmptyWorkspaceEdit comment and dryRun extraction line are both confirmed. Agent C''s anchor text for the dry_run table row and the Notes last bullet match exactly. Agent A''s anchor texts for README.md /lsp-docs row and ROADMAP.md skills paragraph match exactly. Check 4 (interface_consistency): the two new helper function signatures are syntactically valid Go; path/filepath is a stdlib package; all referenced types are standard. Check 5 (import_chains): no new files for Agent B — only modifications; stdlib path/filepath requires no go.mod entry. Checks 6, 7, 9: no registration required for unexported helpers; no agent owns more than 5 files; no file appears under multiple agents in wave 1.'
+    reviewed_at: "2026-04-13T21:21:23Z"
+    issue_count: 0
+state: SCOUT_PENDING
