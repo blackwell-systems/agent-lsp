@@ -4,13 +4,6 @@
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Prebuilt binaries** | Done (v0.1.0) | GoReleaser publishing `.tar.gz`/`.zip` binaries for Linux, macOS, and Windows to GitHub Releases — eliminates the `go install` requirement for non-Go developers |
-| **`agent-lsp init`** | Done (v0.1.0) | Interactive setup wizard: detects installed language servers, asks which AI tool you use, writes the correct MCP config — turns manual setup into one command |
-| **Homebrew tap** | Done (v0.1.2) | `brew install blackwell-systems/tap/agent-lsp` — formula auto-updated by GoReleaser on every release via `brews:` config |
-| **`curl \| sh` installer** | Done (v0.1.1) | `curl -fsSL .../install.sh \| sh` — detects OS/arch, finds the right asset from GitHub Releases API, installs to `/usr/local/bin` |
-| **npm wrapper** | Done (v0.1.2) | `npm install -g @blackwell-systems/agent-lsp` — optionalDependencies pattern; platform binary auto-selected at install time |
-| **MCP registry listings** | Done (v0.1.2) | Published to official MCP Registry (`io.github.blackwell-systems/agent-lsp`); auto-published via GitHub OIDC in CI; smithery.yaml for Glama/Smithery indexing; mcpservers.org listed |
-| **Docker Hub mirroring** | Done (v0.1.2) | All images mirrored to Docker Hub automatically on every release alongside GHCR |
 | **Windows install script** | Planned | PowerShell install script + Scoop/Chocolatey package — GoReleaser ships Windows binaries but there's no Windows install story |
 | **Nix flake** | Planned | `nix run github:blackwell-systems/agent-lsp` — Nix users expect it; large overlap with the developer audience |
 
@@ -127,7 +120,6 @@ The gap between what clangd provides and what the broader toolchain offers is la
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Rename with glob exclusions** | Done | `rename_symbol` accepts glob patterns to exclude files from the rename — useful for generated code, vendored files, and test fixtures that should not be updated |
 | **LineScope for position_pattern** | Planned | Restrict a `position_pattern` match to a specific line range — eliminates false matches when the same token appears multiple times in a file |
 
 ## Transport
