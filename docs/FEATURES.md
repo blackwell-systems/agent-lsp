@@ -12,7 +12,7 @@ Machine-readable feature inventory for AI analysis. No prose. Dense structured l
 |------|-------------|------------|
 | `start_lsp` | Initialize LSP server with workspace root | `root_dir` (string, req), `language_id` (string, opt) |
 | `restart_lsp_server` | Restart current LSP server process | `root_dir` (string, opt) |
-| `open_document` | Register file with language server | `file_path` (string, req), `language_id` (string, opt) |
+| `open_document` | Register file with language server | `file_path` (string, req), `language_id` (string, opt), `text` (string, opt) |
 | `close_document` | Unregister file from language server | `file_path` (string, req) |
 | `add_workspace_folder` | Add directory to multi-root workspace | `path` (string, req) |
 | `remove_workspace_folder` | Remove directory from workspace | `path` (string, req) |
@@ -82,7 +82,7 @@ Machine-readable feature inventory for AI analysis. No prose. Dense structured l
 | `get_symbol_source` | Extract source text for symbol | `file_path` (string, req), `line` (int, req), `character` (int, opt), `position_pattern` (string, opt) |
 | `get_symbol_documentation` | Toolchain docs (go doc, pydoc, cargo doc) | `symbol` (string, req), `language_id` (string, req), `format` (string, opt) |
 | `get_change_impact` | Blast-radius analysis | `changed_files` (array, req), `include_transitive` (bool, opt) |
-| `get_cross_repo_references` | Find usages across consumer repos | `symbol_file` (string, req), `line` (int, req), `column` (int, req), `language_id` (string, req), `consumer_roots` (array, req) |
+| `get_cross_repo_references` | Find usages across consumer repos | `symbol_file` (string, req), `line` (int, req), `column` (int, req), `consumer_roots` (array, req), `language_id` (string, opt) |
 
 **`get_code_actions` notes:**
 - `CodeActionContext.diagnostics` auto-populated with overlapping diagnostics from current diagnostic state — enables diagnostic-specific quick fixes; empty array would suppress fixes tied to visible errors
@@ -129,7 +129,7 @@ Machine-readable feature inventory for AI analysis. No prose. Dense structured l
 |------|-------------|------------|
 | `get_diagnostics` | Errors/warnings for files | `file_path` (string, opt) |
 | `format_document` | Format entire file | `file_path` (string, req), `language_id` (string, opt), `insert_spaces` (bool, opt), `tab_size` (int, opt) |
-| `format_range` | Format selection | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req), `language_id` (string, opt) |
+| `format_range` | Format selection | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req), `language_id` (string, opt), `tab_size` (int, opt), `insert_spaces` (bool, opt) |
 | `apply_edit` | Apply workspace edit | `file_path` (string, req), `old_text` (string, req), `new_text` (string, req) OR `workspace_edit` (object, req) |
 | `execute_command` | Run LSP workspace command | `command` (string, req), `arguments` (array, opt) |
 | `did_change_watched_files` | Notify of file changes | `changes` (array, req) |
@@ -179,7 +179,7 @@ Machine-readable feature inventory for AI analysis. No prose. Dense structured l
 | `commit_session` | Materialize edits to disk | `session_id` (string, req), `target` (string, opt), `apply` (bool, opt) |
 | `discard_session` | Revert all session edits | `session_id` (string, req) |
 | `destroy_session` | Cleanup session state | `session_id` (string, req) |
-| `simulate_edit_atomic` | One-shot speculative edit | `workspace_root` (string, req), `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req), `new_text` (string, req), `language` (string, opt), `scope` (string, opt), `timeout_ms` (int, opt) |
+| `simulate_edit_atomic` | One-shot speculative edit | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req), `new_text` (string, req), `workspace_root` (string, opt), `language` (string, opt), `session_id` (string, opt), `scope` (string, opt), `timeout_ms` (int, opt) |
 
 **`simulate_edit` response shape:**
 ```json
@@ -199,13 +199,13 @@ Machine-readable feature inventory for AI analysis. No prose. Dense structured l
 ```
 
 **`commit_session` semantics:**
-- Default (no `apply`): functional — returns `WorkspaceEdit` patch only, no disk write
-- `apply: true`: imperative — writes to disk + returns patch
+- Default (`apply: false`): returns `CommitResult{session_id, files_written: 0, patch}` — no disk write; `patch` is `map[string]string` (file URI → full file content)
+- `apply: true`: writes changed files to disk, notifies LSP via `didChange`, returns same `CommitResult` shape with `files_written > 0`
 - `target: "/path"`: writes to target path + returns patch
-- Prohibited on `dirty` or `created` sessions
+- Prohibited on `dirty` or `created` sessions; valid from `mutated` or `evaluated` state
 
 **`simulate_edit_atomic` notes:**
-- Self-contained: requires `workspace_root` + `language`, NOT `session_id`
+- Self-contained: requires `file_path` + (optionally) `workspace_root` + `language`; `session_id` is an optional bypass — if provided, uses an existing session instead of creating/destroying one
 - Internally: create → apply → evaluate → discard → destroy
 - Returns `EvaluationResult` directly
 
@@ -240,6 +240,7 @@ Machine-readable feature inventory for AI analysis. No prose. Dense structured l
 **Installation:** `cd skills && ./install.sh`
 - `--copy` flag: copies instead of symlinks
 - `--force` flag: overwrites existing
+- `--dry-run` flag: previews what would happen without making changes
 - Scans for `SKILL.md` files up to two levels deep
 - Creates `~/.claude/skills/` if needed
 
@@ -650,7 +651,8 @@ npm-publish → downloads binaries from GitHub Release, publishes 7 npm packages
 mcp-registry-publish → publishes metadata to official MCP Registry (GitHub OIDC; no secrets)
 
 GoReleaser (inside release job):
-    v* tag → all 11 Docker images: :latest, :base, semver tags, per-language tags (GHCR + Docker Hub)
+    v* tag → 11 image stanzas pushed to both GHCR + Docker Hub:
+    base/latest/semver, go, typescript, python, ruby, cpp, php, web, backend, fullstack, full
 ```
 
 ---
@@ -659,7 +661,7 @@ GoReleaser (inside release job):
 
 | Tag | Contents | Approx. Size |
 |-----|----------|--------------|
-| `latest` | Binary only | ~50 MB |
+| `latest` / `base` | Binary only (same image, two aliases) | ~50 MB |
 | `go` | Go + gopls | ~200 MB |
 | `typescript` | Node.js + typescript-language-server | ~300 MB |
 | `python` | Node.js + pyright-langserver | ~300 MB |
@@ -672,9 +674,9 @@ GoReleaser (inside release job):
 | `full` | Go, TypeScript, Python, Ruby, C/C++, PHP | ~1–2 GB |
 
 **Registries:** `ghcr.io/blackwell-systems/agent-lsp` (primary), `blackwellsystems/agent-lsp` (mirror)
-**Tags also include:** `base`, semver (`0.1.2`, `0.1`)
+**Tags:** `latest` and `base` are the same image; semver tags (`0.1.2`, `0.1`) also pushed for the base image
 **Trigger:** Release tags (`v*`) only
-**Build:** Two-stage — Go builder stage + `debian:bookworm-slim` base; static binary; no Go runtime in final image
+**Build:** `docker/Dockerfile` (base/latest), `docker/Dockerfile.lang` (per-language), `docker/Dockerfile.combo` (web/backend/fullstack), `docker/Dockerfile.full` (full); all use two-stage build — Go builder + `debian:bookworm-slim`; static binary; no Go runtime in final image
 **Memory limit (docker-compose default):** 4 GB; CPU limit: 2 cores
 **Workspace mount:** read-write (code actions may modify files)
 
@@ -847,8 +849,8 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 - `executor.go` — `SerializedExecutor`: per-session `chan struct{}` in `map[string]chan struct{}`; `SessionExecutor` interface
 - `differ.go` — `DiffDiagnostics`: O(n+m) fingerprint-keyed counter map
 
-**internal/tools (15 files):**
-`helpers.go`, `analysis.go`, `navigation.go`, `callhierarchy.go`, `typehierarchy.go`, `inlayhints.go`, `highlights.go`, `semantic_tokens.go`, `capabilities.go`, `detect.go`, `documentation.go`, `symbol_source.go`, `symbol_path.go`, `simulation.go`, `build.go`, `change_impact.go`, `cross_repo.go`, `workspace_folders.go`, `utilities.go`, `fuzzy.go`, `position_pattern.go`, `runner.go`, `workspace.go`, `session.go`
+**internal/tools (25 files):**
+`helpers.go`, `analysis.go`, `navigation.go`, `callhierarchy.go`, `typehierarchy.go`, `inlayhints.go`, `highlights.go`, `semantic_tokens.go`, `capabilities.go`, `detect.go`, `documentation.go`, `symbol_source.go`, `symbol_path.go`, `simulation.go`, `build.go`, `change_impact.go`, `cross_repo.go`, `workspace_folders.go`, `utilities.go`, `fuzzy.go`, `position_pattern.go`, `runner.go`, `workspace.go` (rename_symbol, prepare_rename, format_document, format_range, apply_edit, execute_command), `session.go`, `doc.go`
 
 **internal/resources:**
 - `resources.go` — `HandleDiagnosticsResource`, `HandleHoverResource`, `HandleCompletionsResource`; three resource templates
