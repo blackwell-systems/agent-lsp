@@ -62,7 +62,7 @@ docker pull ghcr.io/blackwell-systems/agent-lsp:python
 docker pull ghcr.io/blackwell-systems/agent-lsp:fullstack
 ```
 
-Images are mirrored to Docker Hub automatically on every release. Tags: `latest`, `edge`, semver (`0.1.2`, `0.1`), and per-language (`go`, `typescript`, `python`, `ruby`, `cpp`, `php`, `web`, `backend`, `fullstack`, `full`).
+Images are built and pushed to both registries automatically by GoReleaser on every `v*` tag. Tags: `latest`, `base`, semver (`0.1.2`, `0.1`), and per-language (`go`, `typescript`, `python`, `ruby`, `cpp`, `php`, `web`, `backend`, `fullstack`, `full`).
 
 ## MCP registries
 
@@ -87,12 +87,13 @@ Manually submitted. Free listing.
 Every `git tag v*` push triggers three sequential CI jobs:
 
 ```
-release          → GoReleaser: binaries, GitHub Release, Homebrew formula
-npm-publish      → downloads binaries from GitHub Release, publishes 7 npm packages
+release              → GoReleaser: binaries, GitHub Release, Homebrew formula,
+                       all 11 Docker images (GHCR + Docker Hub)
+npm-publish          → downloads binaries from GitHub Release, publishes 7 npm packages
 mcp-registry-publish → publishes metadata to official MCP Registry (GitHub OIDC)
 ```
 
-Docker images are built and pushed (GHCR + Docker Hub) in a separate `docker.yml` workflow. It triggers on both `main` branch pushes (publishes the `:edge` tag) and `v*` version tags (publishes `:latest`, semver tags, and per-language tags).
+Docker images are built inside the `release` job by GoReleaser (`dockers:` section). All 11 images (base, 6 per-language, 3 combos, full) are built sequentially — base first so downstream images can pull it as their `FROM` layer.
 
 ## Planned
 
