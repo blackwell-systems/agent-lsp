@@ -1,0 +1,28 @@
+# agent-lsp combo image — multiple language servers
+# Build with: docker build -f Dockerfile.combo \
+#   --build-arg BASE_TAG=base \
+#   --build-arg NPM_PACKAGES="typescript-language-server typescript pyright" \
+#   --build-arg GO_PACKAGES="golang.org/x/tools/gopls@latest" \
+#   -t ghcr.io/blackwell-systems/agent-lsp:fullstack .
+
+ARG BASE_TAG=base
+FROM ghcr.io/blackwell-systems/agent-lsp:${BASE_TAG}
+
+ARG NPM_PACKAGES=""
+ARG GO_PACKAGES=""
+
+RUN if [ -n "${NPM_PACKAGES}" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends nodejs npm && \
+      npm install -g ${NPM_PACKAGES} && \
+      rm -rf /var/lib/apt/lists/*; \
+    fi
+
+RUN if [ -n "${GO_PACKAGES}" ]; then \
+      LATEST_GO=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -1) && \
+      curl -fsSL "https://dl.google.com/go/${LATEST_GO}.linux-amd64.tar.gz" -o /tmp/go.tar.gz && \
+      tar -C /usr/local -xzf /tmp/go.tar.gz && \
+      rm /tmp/go.tar.gz && \
+      GOPATH=/usr/local /usr/local/go/bin/go install ${GO_PACKAGES}; \
+    fi
+
+ENV PATH=$PATH:/usr/local/go/bin
