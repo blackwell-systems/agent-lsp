@@ -649,9 +649,8 @@ npm-publish → downloads binaries from GitHub Release, publishes 7 npm packages
     ↓
 mcp-registry-publish → publishes metadata to official MCP Registry (GitHub OIDC; no secrets)
 
-docker.yml (separate workflow):
-    main push → :edge tag
-    v* tag → :latest, semver tags, per-language tags (GHCR + Docker Hub)
+GoReleaser (inside release job):
+    v* tag → all 11 Docker images: :latest, :base, semver tags, per-language tags (GHCR + Docker Hub)
 ```
 
 ---
@@ -673,8 +672,8 @@ docker.yml (separate workflow):
 | `full` | Go, TypeScript, Python, Ruby, C/C++, PHP | ~1–2 GB |
 
 **Registries:** `ghcr.io/blackwell-systems/agent-lsp` (primary), `blackwellsystems/agent-lsp` (mirror)
-**Tags also include:** semver (`0.1.2`, `0.1`), `:edge` (main branch)
-**Trigger:** Release tags (`v*`) for versioned tags; main push for `:edge`
+**Tags also include:** `base`, semver (`0.1.2`, `0.1`)
+**Trigger:** Release tags (`v*`) only
 **Build:** Two-stage — Go builder stage + `debian:bookworm-slim` base; static binary; no Go runtime in final image
 **Memory limit (docker-compose default):** 4 GB; CPU limit: 2 cores
 **Workspace mount:** read-write (code actions may modify files)
