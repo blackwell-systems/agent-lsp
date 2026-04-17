@@ -37,6 +37,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage (multi-server):   agent-lsp go:gopls typescript:tsserver,--stdio")
 		fmt.Fprintln(os.Stderr, "usage (config file):    agent-lsp --config /path/to/lsp-mcp.json")
 		fmt.Fprintln(os.Stderr, "usage (auto-detect):    agent-lsp")
+		fmt.Fprintln(os.Stderr, "usage (http mode):      agent-lsp --http [--port 8080] [--token <secret>] [lsp-args...]")
 		os.Exit(1)
 	}
 
@@ -100,14 +101,14 @@ func main() {
 	}()
 
 	// Run the MCP server with panic recovery.
-	if err := runWithRecovery(ctx, resolver, registry, serverPath, serverArgs); err != nil {
+	if err := runWithRecovery(ctx, resolver, registry, serverPath, serverArgs, parsed.HTTPMode, parsed.HTTPPort, parsed.HTTPToken); err != nil {
 		logging.Log(logging.LevelError, fmt.Sprintf("server error: %v", err))
 		os.Exit(1)
 	}
 }
 
 // runWithRecovery wraps server.Run with a deferred recover to catch panics.
-func runWithRecovery(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string) (runErr error) {
+func runWithRecovery(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string, httpMode bool, httpPort int, httpToken string) (runErr error) {
 	defer func() {
 		if r := recover(); r != nil {
 			logging.Log(logging.LevelError, fmt.Sprintf("panic recovered: %v", r))
@@ -121,5 +122,5 @@ func runWithRecovery(ctx context.Context, resolver lsp.ClientResolver, registry 
 			_ = resolver.Shutdown(shutdownCtx)
 		}
 	}()
-	return Run(ctx, resolver, registry, serverPath, serverArgs)
+	return Run(ctx, resolver, registry, serverPath, serverArgs, httpMode, httpPort, httpToken)
 }

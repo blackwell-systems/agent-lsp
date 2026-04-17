@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -17,6 +18,11 @@ type ParseResult struct {
 
 	// Multi-server field
 	Config *Config
+
+	// HTTP transport fields
+	HTTPMode  bool
+	HTTPPort  int
+	HTTPToken string
 }
 
 // extensionMap maps language IDs to their file extensions.
@@ -53,12 +59,51 @@ var extensionMap = map[string][]string{
 //
 // Mode 3 — config file: agent-lsp --config /path/to/lsp-mcp.json
 func ParseArgs(args []string) (ParseResult, error) {
+	// Pre-process HTTP flags: --http, --port <N>, --token <S>.
+	// These are consumed before the existing positional argument parsing.
+	var httpMode bool
+	httpPort := 8080
+	var httpToken string
+	remainder := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--http":
+			httpMode = true
+		case "--port":
+			if i+1 >= len(args) {
+				return ParseResult{}, fmt.Errorf("--port requires a value")
+			}
+			i++
+			p, err := strconv.Atoi(args[i])
+			if err != nil {
+				return ParseResult{}, fmt.Errorf("--port value %q is not a valid integer", args[i])
+			}
+			httpPort = p
+		case "--token":
+			if i+1 >= len(args) {
+				return ParseResult{}, fmt.Errorf("--token requires a value")
+			}
+			i++
+			httpToken = args[i]
+		default:
+			remainder = append(remainder, args[i])
+		}
+	}
+	args = remainder
+
+	httpResult := func(r ParseResult) ParseResult {
+		r.HTTPMode = httpMode
+		r.HTTPPort = httpPort
+		r.HTTPToken = httpToken
+		return r
+	}
+
 	if len(args) == 0 || (len(args) == 1 && args[0] == "--auto") {
 		cfg, err := AutodetectServers()
 		if err != nil {
 			return ParseResult{}, fmt.Errorf("auto-detect: %w", err)
 		}
-		return ParseResult{Config: cfg}, nil
+		return httpResult(ParseResult{Config: cfg}), nil
 	}
 
 	// Mode 3: config file
@@ -74,7 +119,7 @@ func ParseArgs(args []string) (ParseResult, error) {
 		if err != nil {
 			return ParseResult{}, fmt.Errorf("load config %s: %w", args[1], err)
 		}
-		return ParseResult{Config: cfg}, nil
+		return httpResult(ParseResult{Config: cfg}), nil
 	}
 
 	// Mode 1: legacy (len>=2 AND args[0] contains no ":")
@@ -83,12 +128,12 @@ func ParseArgs(args []string) (ParseResult, error) {
 		if _, err := os.Stat(args[1]); err != nil {
 			return ParseResult{}, fmt.Errorf("server binary %q not found: %w", args[1], err)
 		}
-		return ParseResult{
+		return httpResult(ParseResult{
 			IsSingleServer: true,
 			LanguageID:     args[0],
 			ServerPath:     args[1],
 			ServerArgs:     args[2:],
-		}, nil
+		}), nil
 	}
 
 	// Mode 2: multi-arg — each arg is "language-id:binary,arg1,arg2..."
@@ -120,7 +165,7 @@ func ParseArgs(args []string) (ParseResult, error) {
 		entries = append(entries, entry)
 	}
 
-	return ParseResult{Config: &Config{Servers: entries}}, nil
+	return httpResult(ParseResult{Config: &Config{Servers: entries}}), nil
 }
 
 // LoadConfig reads and parses a JSON config file.
