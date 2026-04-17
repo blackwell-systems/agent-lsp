@@ -208,7 +208,6 @@ waves:
             ```
             Also add:
             ```go
-            "fmt"
             "net"
             "net/http"
             ```
@@ -847,20 +846,16 @@ pre_mortem:
             already treats empty token as no-op passthrough. Explicitly stated in
             Agent A's task.
 critic_report:
-    verdict: ISSUES
+    verdict: PASS
     agent_reviews:
         A:
             agent_id: A
-            verdict: ISSUES
+            verdict: PASS
             issues:
-                - check: symbol_accuracy
-                  severity: error
-                  description: 'The brief instructs Agent A to add "fmt" to server.go imports ("Also add: fmt, net, net/http"), but "fmt" is already present in server.go at line 6. If Agent A follows the brief literally and adds a second "fmt" import, the Go compiler will reject it as a duplicate import, failing the build gate.'
-                  file: cmd/agent-lsp/server.go
-                  symbol: fmt
                 - check: complexity_balance
                   severity: warning
                   description: Agent A owns 4 of 9 total files (44%) — just over the 40% advisory threshold. Consider moving http_test.go to a dedicated integration agent if the wave is ever split.
+                  file: cmd/agent-lsp/http_test.go
         B:
             agent_id: B
             verdict: PASS
@@ -873,8 +868,8 @@ critic_report:
         E:
             agent_id: E
             verdict: PASS
-    summary: 'Agent A''s brief contains one error: it instructs adding "fmt" to server.go imports, but "fmt" is already imported in server.go (line 6). A Go agent that follows the brief literally and adds the import again will produce a compile error (duplicate import). The remaining agents (B, C, D, E) have accurate briefs — file existence checks pass, all SDK symbols are verified (mcp.NewStreamableHTTPHandler signature matches go-sdk v1.4.1 exactly), anchor text patterns match the actual files, and no i1 disjoint ownership conflicts exist. One advisory warning is raised for Agent A''s file ownership share (4 of 9 total files, 44%), which is just over the 40% advisory threshold.'
-    reviewed_at: "2026-04-17T23:21:13Z"
-    issue_count: 2
+    summary: 'Re-verification of Agent A after brief fix: the duplicate ''fmt'' import instruction has been removed. Agent A''s brief now only instructs adding ''github.com/blackwell-systems/agent-lsp/internal/httpauth'', ''net'', and ''net/http'' to server.go — none of which are present in the current import block (lines 3-18), so all three additions are legitimate. No symbol_accuracy errors remain for Agent A. The complexity_balance advisory warning (Agent A owns 4 of 9 files, 44%) is carried forward unchanged as it is a warning, not an error. Agents B, C, D, E carry forward their PASS verdicts from the prior run. All agents are PASS; wave execution may proceed.'
+    reviewed_at: "2026-04-17T23:22:14Z"
+    issue_count: 1
 state: SCOUT_PENDING
 injection_method: hook
