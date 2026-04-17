@@ -7,6 +7,26 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **HTTP+SSE transport** — agent-lsp can now serve MCP over HTTP using `--http [--port N]`. Enables persistent remote service deployment: Docker containers on remote hosts, shared CI servers, and multi-client setups without cold-start cost. Auth via `AGENT_LSP_TOKEN` environment variable enforces Bearer token authentication using `crypto/subtle.ConstantTimeCompare`.
+
+- **`internal/httpauth` package** — `BearerTokenMiddleware(token, next http.Handler)` wraps any HTTP handler with constant-time Bearer token validation. Returns RFC 7235-compliant 401 with `WWW-Authenticate: Bearer` header and `{"error":"unauthorized"}` JSON body. No-op passthrough when token is empty.
+
+- **Docker security hardening** — images now run as uid/gid 65532 (`nonroot`); `EXPOSE 8080` added; `HOME` set to `/tmp` (writable by nonroot); `docker-compose.yml` adds `agent-lsp-http` service for HTTP mode with `AGENT_LSP_TOKEN` wiring.
+
+- **`docker-compose.yml` HTTP service** — `agent-lsp-http` service exposes port `${AGENT_LSP_HTTP_PORT:-8080}:8080` with token read from `AGENT_LSP_TOKEN` env var (not CLI arg).
+
+### Changed
+
+- **Auth token reads from env var** — `AGENT_LSP_TOKEN` environment variable takes precedence over `--token` CLI flag, keeping credentials out of the process list (`ps aux`, `/proc/<pid>/cmdline`). `--token` still accepted for local dev but env var always wins.
+
+- **HTTP server timeouts** — `ReadHeaderTimeout: 10s` and `ReadTimeout: 30s` added to prevent Slowloris-style resource exhaustion.
+
+- **`entrypoint.sh` security** — replaced `eval "${install_cmd}"` with a POSIX `case` whitelist covering all 8 package managers; `awk` server name lookup now uses `-v name=` variable binding (no regex injection via `LSP_SERVERS`); `apt-get` arm extracts and validates package name instead of passing full command to `sh -c`; all `${rest}` expansions quoted.
+
+- **Port range validation** — `--port` now rejects values outside 1–65535 with a clear error message; port 0 and values > 65535 are no longer silently accepted.
+
+- **Accurate HTTP bind log** — startup log now reports the actual bound address from `ln.Addr().String()` rather than the configured address string.
+
 - **`/lsp-explore` skill** — new agent skill that composes hover, go_to_implementation, call_hierarchy, and get_references into a single "tell me about this symbol" workflow for navigating unfamiliar code. Installed via `cd skills && ./install.sh`.
 
 - **rename_symbol glob exclusions** — new optional exclude_globs parameter

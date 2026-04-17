@@ -59,6 +59,8 @@ cd skills && ./install.sh
 
 ## Docker
 
+**Stdio mode** (MCP client spawns the container directly):
+
 ```bash
 # Go
 docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:go go:gopls
@@ -70,7 +72,18 @@ docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-l
 docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:python python:pyright-langserver,--stdio
 ```
 
-Images are also mirrored to Docker Hub (`blackwellsystems/agent-lsp`). See [DOCKER.md](./DOCKER.md) for full tag list and docker-compose setup.
+**HTTP mode** (persistent service, remote clients connect over HTTP+SSE):
+
+```bash
+docker run --rm \
+  -p 8080:8080 \
+  -v /your/project:/workspace \
+  -e AGENT_LSP_TOKEN=your-secret-token \
+  ghcr.io/blackwell-systems/agent-lsp:go \
+  --http --port 8080 go:gopls
+```
+
+Images run as a non-root user (uid 65532) by default. Set `AGENT_LSP_TOKEN` via environment variable — never `--token` on the command line. Images are also mirrored to Docker Hub (`blackwellsystems/agent-lsp`). See [DOCKER.md](./DOCKER.md) for the full tag list, HTTP mode setup, and security hardening options.
 
 ## Installation
 
@@ -158,6 +171,7 @@ Then use any of the 50 tools. The session stays warm; no restart needed when swi
 | Fuzzy position fallback | **✓** | ✗ or partial |
 | Auto-watch (index stays fresh) | **✓** (always-on, debounced) | ✗ (manual notify required) |
 | Multi-root / cross-repo | **✓** (`add_workspace_folder`) | ✗ or single-workspace only |
+| HTTP+SSE transport | **✓** (bearer token auth, timeouts, non-root Docker) | ✗ or experimental |
 | Distribution | **single Go binary** | Node.js or Bun runtime required |
 
 ## Use Cases

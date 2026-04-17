@@ -677,8 +677,17 @@ GoReleaser (inside release job):
 **Tags:** `latest` and `base` are the same image; semver tags (`0.1.2`, `0.1`) also pushed for the base image
 **Trigger:** Release tags (`v*`) only
 **Build:** `docker/Dockerfile` (base/latest), `docker/Dockerfile.lang` (per-language), `docker/Dockerfile.combo` (web/backend/fullstack), `docker/Dockerfile.full` (full); all use two-stage build — Go builder + `debian:bookworm-slim`; static binary; no Go runtime in final image
+**Security:** Runs as uid/gid 65532 (`nonroot`); no root shell; auth token read from `AGENT_LSP_TOKEN` env var (never CLI arg); HTTP server enforces `ReadHeaderTimeout`/`ReadTimeout`; entrypoint uses package-manager whitelist (no eval)
 **Memory limit (docker-compose default):** 4 GB; CPU limit: 2 cores
-**Workspace mount:** read-write (code actions may modify files)
+**Workspace mount:** read-write (code actions may modify files); mount `:ro` for read-only analysis
+
+**HTTP mode (docker run):**
+```bash
+docker run --rm -p 8080:8080 -v /your/project:/workspace \
+  -e AGENT_LSP_TOKEN=secret \
+  ghcr.io/blackwell-systems/agent-lsp:go \
+  --http --port 8080 go:gopls
+```
 
 **Languages not in pre-built tags (use `LSP_SERVERS` or custom image):**
 Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
@@ -989,15 +998,26 @@ type Extension interface {
 
 | Command | Purpose |
 |---------|---------|
-| `agent-lsp <lang:server[,args]...>` | Start MCP server (multi-server mode) |
-| `agent-lsp <lang> <server>` | Start MCP server (legacy single-server mode) |
+| `agent-lsp <lang:server[,args]...>` | Start MCP server (multi-server mode, stdio) |
+| `agent-lsp <lang> <server>` | Start MCP server (legacy single-server mode, stdio) |
 | `agent-lsp --config /path/to/lsp-mcp.json` | Start MCP server from JSON config |
 | `agent-lsp` | Start MCP server with auto-detected language servers |
+| `agent-lsp --http [--port N] <lang:server...>` | Start MCP server over HTTP+SSE |
 | `agent-lsp init` | Interactive setup wizard |
 | `agent-lsp init --non-interactive` | CI/scripted setup |
 | `agent-lsp --version` | Print version and exit |
 
 **Argument format:** `language:server-binary[,--arg1][,--arg2]`
+
+**HTTP flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--http` | off | Enable HTTP+SSE transport instead of stdio |
+| `--port N` | `8080` | TCP port to listen on (1–65535) |
+| `AGENT_LSP_TOKEN` (env) | — | Bearer token for auth; empty = unauthenticated (warns on start) |
+
+Auth token must be set via environment variable — not `--token` flag — to avoid credential exposure in the process list.
 
 **Example:** `agent-lsp go:gopls typescript:typescript-language-server,--stdio python:pyright-langserver,--stdio`
 

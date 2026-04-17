@@ -194,6 +194,83 @@ Without the volume, `LSP_SERVERS` installs run on every container start.
 }
 ```
 
+## HTTP Mode
+
+By default agent-lsp communicates over stdio — the MCP client spawns the process directly. HTTP mode lets agent-lsp run as a persistent service that remote clients connect to over HTTP+SSE. This is the right choice when:
+
+- The container runs on a remote host or VM and the MCP client is elsewhere
+- You want a shared server for multiple agents connecting concurrently
+- CI pipelines need a long-lived LSP index without cold-start cost on every run
+
+### Starting in HTTP mode
+
+```bash
+# docker run — bind port 8080, auth via env var
+docker run --rm \
+  -p 8080:8080 \
+  -v /your/project:/workspace \
+  -e AGENT_LSP_TOKEN=your-secret-token \
+  ghcr.io/blackwell-systems/agent-lsp:go \
+  --http --port 8080 go:gopls
+```
+
+> **Auth token:** Always set `AGENT_LSP_TOKEN`. When unset, the server starts unauthenticated and logs a warning. Pass the token as an environment variable — never via `--token` on the command line, which would expose it in `ps` output.
+
+### Hardened run (recommended for production)
+
+```bash
+docker run --rm \
+  -p 8080:8080 \
+  -v /your/project:/workspace:ro \
+  -e AGENT_LSP_TOKEN=your-secret-token \
+  --cap-drop=ALL \
+  --read-only \
+  --tmpfs /tmp \
+  ghcr.io/blackwell-systems/agent-lsp:go \
+  --http --port 8080 go:gopls
+```
+
+The image already runs as uid/gid 65532 (`nonroot`) — `--cap-drop=ALL` drops all remaining Linux capabilities. Mount the workspace `:ro` if you only need read-only analysis.
+
+### MCP client configuration for HTTP mode
+
+```json
+{
+  "mcpServers": {
+    "lsp": {
+      "type": "http",
+      "url": "http://localhost:8080",
+      "headers": {
+        "Authorization": "Bearer your-secret-token"
+      }
+    }
+  }
+}
+```
+
+### docker-compose HTTP service
+
+The included `docker/docker-compose.yml` has a ready-made `agent-lsp-http` service:
+
+```bash
+# Set token in .env
+echo "AGENT_LSP_TOKEN=your-secret-token" >> .env
+echo "WORKSPACE_DIR=/your/project" >> .env
+
+# Start HTTP service
+docker compose -f docker/docker-compose.yml up agent-lsp-http
+```
+
+The service binds `${AGENT_LSP_HTTP_PORT:-8080}:8080` and reads the token from `AGENT_LSP_TOKEN` in the environment — it does not pass the token as a CLI argument.
+
+### Port configuration
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--http` | — | Enable HTTP+SSE transport (off by default) |
+| `--port N` | `8080` | TCP port to listen on (1–65535) |
+| `AGENT_LSP_TOKEN` | — | Bearer token for auth (empty = no auth, not recommended) |
+
 ## docker-compose Setup
 
 1. Copy the example env file and set your project path:
@@ -224,9 +301,27 @@ Default resource limits (adjust in `docker/docker-compose.yml` for larger projec
 
 No heap size configuration is needed — the Go binary has no managed heap tuning equivalent to Node's `--max-old-space-size`.
 
+## Security
+
+The agent-lsp image is hardened by default:
+
+- **Non-root:** Runs as uid/gid 65532 (`nonroot`). No `sudo`, no root shell.
+- **No credential in process list:** Auth token is read from the `AGENT_LSP_TOKEN` environment variable, not from `--token` CLI arg (which would be visible in `ps aux` and `/proc/<pid>/cmdline`).
+- **HTTP timeouts:** The HTTP server enforces `ReadHeaderTimeout: 10s` and `ReadTimeout: 30s` to prevent Slowloris-style resource exhaustion.
+- **Entrypoint whitelist:** `LSP_SERVERS` installs are dispatched through a strict package-manager whitelist — no `eval` of arbitrary shell strings.
+
+Additional hardening you can apply at runtime:
+
+```bash
+--cap-drop=ALL          # drop all Linux capabilities
+-v /project:/workspace:ro  # read-only workspace if no write-back needed
+--read-only --tmpfs /tmp   # read-only root filesystem
+```
+
 ## Notes
 
-- The workspace is mounted read-write so code actions (quick fixes, auto-imports) can modify files
+- The workspace is mounted read-write so code actions (quick fixes, auto-imports) can modify files; mount `:ro` if only read-only analysis is needed
 - The `agent-lsp` binary is statically linked — the container image needs only the language server binaries, not a Go runtime
 - File change detection behavior depends on the language server; no container-specific watcher configuration is needed for the MCP server itself
 - Per-language images use a two-stage build: the binary is compiled in a Go builder stage and copied into a `debian:bookworm-slim` base; only the language server tools and the static binary end up in the final image
+- `HOME` is set to `/tmp` (writable by the `nonroot` user); language servers that cache to `$HOME` will use `/tmp`
