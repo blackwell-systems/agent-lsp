@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/http"
 	"strings"
 	"sync"
 
 	"github.com/blackwell-systems/agent-lsp/internal/config"
 	"github.com/blackwell-systems/agent-lsp/internal/extensions"
+	"github.com/blackwell-systems/agent-lsp/internal/httpauth"
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
 	"github.com/blackwell-systems/agent-lsp/internal/resources"
@@ -225,7 +228,7 @@ type toolDeps struct {
 }
 
 // Run creates and starts the MCP server.
-func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string) error {
+func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string, httpMode bool, httpPort int, httpToken string) error {
 	cs := &clientState{client: resolver.DefaultClient()}
 	var initMu sync.Mutex
 	// clientForFileWithAutoInit extends clientForFile with auto-init behavior.
@@ -370,10 +373,40 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		}
 	}
 
-	// Start the MCP server on stdio transport. The server-initialized marker
-	// is set from InitializedHandler above once the MCP session is established.
 	logging.Log(logging.LevelInfo, "agent-lsp server starting")
 
+	if httpMode {
+		addr := fmt.Sprintf(":%d", httpPort)
+		return RunHTTP(ctx, server, addr, httpToken)
+	}
 	transport := &mcp.StdioTransport{}
 	return server.Run(ctx, transport)
+}
+
+// RunHTTP starts the MCP server over HTTP using the go-sdk's StreamableHTTPHandler.
+// addr is "host:port". token is the Bearer token required by clients (empty = no auth).
+func RunHTTP(ctx context.Context, server *mcp.Server, addr string, token string) error {
+	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		return server
+	}, nil)
+	wrapped := httpauth.BearerTokenMiddleware(token, handler)
+	httpServer := &http.Server{
+		Addr:    addr,
+		Handler: wrapped,
+	}
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("http listen %s: %w", addr, err)
+	}
+	logging.Log(logging.LevelInfo, fmt.Sprintf("agent-lsp HTTP server listening on %s", addr))
+	errCh := make(chan error, 1)
+	go func() { errCh <- httpServer.Serve(ln) }()
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), gracefulShutdownTimeout)
+		defer cancel()
+		return httpServer.Shutdown(shutdownCtx)
+	case err := <-errCh:
+		return err
+	}
 }
