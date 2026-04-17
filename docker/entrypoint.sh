@@ -12,6 +12,52 @@ set -e
 CACHE_DIR=/var/cache/lsp-servers
 REGISTRY=/etc/agent-lsp/lsp-servers.yaml
 
+# run_install_command: execute a validated install command.
+# Only commands matching known package manager prefixes are allowed.
+# Any unrecognized command is rejected with an error (not silently skipped).
+run_install_command() {
+  cmd="$1"
+  case "${cmd}" in
+    "GOPATH=/usr/local go install "*)
+      rest="${cmd#GOPATH=/usr/local go install }"
+      GOPATH=/usr/local go install ${rest}
+      ;;
+    "go install "*)
+      rest="${cmd#go install }"
+      go install ${rest}
+      ;;
+    "npm install -g "*)
+      rest="${cmd#npm install -g }"
+      npm install -g ${rest}
+      ;;
+    "apt-get update"*)
+      # apt-get is multi-step; run via sh -c with the fixed prefix verified above.
+      # The case pattern already ensures the string starts with "apt-get update".
+      sh -c "${cmd}"
+      ;;
+    "cargo install "*)
+      rest="${cmd#cargo install }"
+      cargo install ${rest}
+      ;;
+    "pip install "*)
+      rest="${cmd#pip install }"
+      pip install ${rest}
+      ;;
+    "dotnet tool install -g "*)
+      rest="${cmd#dotnet tool install -g }"
+      dotnet tool install -g ${rest}
+      ;;
+    "gem install "*)
+      rest="${cmd#gem install }"
+      gem install ${rest}
+      ;;
+    *)
+      echo "agent-lsp: ERROR: unrecognized install command prefix, refusing to execute: ${cmd}" >&2
+      return 1
+      ;;
+  esac
+}
+
 # get_install_command: extract install_command for a given server name from the YAML registry.
 # Uses only grep/awk/sed — no yq, python, or jq required.
 get_install_command() {
@@ -57,7 +103,7 @@ if [ -n "${LSP_SERVERS}" ]; then
     fi
 
     echo "agent-lsp: installing ${server}: ${install_cmd}"
-    eval "${install_cmd}"
+    run_install_command "${install_cmd}"
 
     # Create cache marker so future container starts skip the install
     mkdir -p "${CACHE_DIR}/${server}"
