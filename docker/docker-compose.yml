@@ -8,6 +8,7 @@
 #   LSP_SERVERS=gopls docker compose run --rm agent-lsp  # runtime install
 
 services:
+  # Stdio mode (default): connect via subprocess (MCP stdio transport).
   agent-lsp:
     build:
       context: ..
@@ -23,6 +24,45 @@ services:
       - LSP_SERVERS=${LSP_SERVERS:-}
       - HOME=/root
     command: []  # Override with language args: go:gopls typescript:typescript-language-server,--stdio
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+          cpus: '2'
+        reservations:
+          memory: 1g
+          cpus: '0.5'
+    env_file:
+      - ../.env
+
+  # HTTP mode service: exposes MCP over HTTP+SSE on port 8080.
+  # Requires AGENT_LSP_TOKEN to be set in .env for bearer token auth.
+  # Usage:
+  #   AGENT_LSP_TOKEN=mysecret docker compose up agent-lsp-http
+  #   Then configure MCP client: http://localhost:8080
+  # Security: run with --cap-drop=ALL for additional hardening:
+  #   docker compose run --rm --cap-drop=ALL agent-lsp-http
+  agent-lsp-http:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: ghcr.io/blackwell-systems/agent-lsp:base
+    ports:
+      - "${AGENT_LSP_HTTP_PORT:-8080}:8080"
+    volumes:
+      - ${WORKSPACE_DIR:?Set WORKSPACE_DIR in .env}:/workspace:rw
+      - lsp-server-cache:/var/cache/lsp-servers
+    working_dir: /workspace
+    environment:
+      - LSP_SERVERS=${LSP_SERVERS:-}
+      - HOME=/tmp
+      - AGENT_LSP_TOKEN=${AGENT_LSP_TOKEN:-}
+    command:
+      - "--http"
+      - "--port"
+      - "8080"
+      - "--token"
+      - "${AGENT_LSP_TOKEN:-}"
     deploy:
       resources:
         limits:
