@@ -1,0 +1,880 @@
+title: HTTP Transport Layer and Secure Docker Integration
+feature_slug: http-transport-docker-security
+verdict: SUITABLE
+suitability_assessment: |-
+    File decomposition: 5 distinct change areas with disjoint ownership.
+    - Agent A: CLI flag parsing + transport routing in cmd/agent-lsp (main.go, server.go)
+    - Agent B: internal/httpauth package (new file: bearer token middleware)
+    - Agent C: Dockerfile hardening (non-root user, EXPOSE)
+    - Agent D: entrypoint.sh whitelist replacement (no eval)
+    - Agent E: docker-compose.yml update
+    All agents work on disjoint files. Wave 1 runs A, B, C, D, E in parallel
+    since the Docker/entrypoint/compose changes are independent of Go code, and
+    B (httpauth middleware) has no dependency on A's server wiring (A will import
+    from B). A integration wave wires A's imports of B into the final binary.
+
+    SDK verification: go-sdk v1.4.1 exports mcp.NewStreamableHTTPHandler (the
+    preferred 2025-spec transport) and mcp.NewSSEHandler (legacy 2024 spec).
+    StreamableHTTPHandler takes func(*http.Request)*mcp.Server and
+    *mcp.StreamableHTTPOptions. Token auth is implemented as an http.Handler
+    middleware wrapping the StreamableHTTPHandler — the SDK has no built-in
+    Bearer token validation, so Agent B creates a thin net/http middleware.
+
+    Investigation-first items: None. Root transport type and auth approach are
+    fully determined from SDK source.
+
+    Parallelization value: High. Go build+test cycle ~3-5s, agents touch
+    3-6 files each, and the Go work (CLI flags + transport routing) is independent
+    of the Docker work.
+
+    Estimated times:
+    - Scout phase: ~10 min
+    - Agent execution: ~5 agents x 8 min avg, runs as single wave = ~8 min wall-clock
+    - Integration wave: ~5 min
+    - Merge and verification: ~5 min
+    Total SAW time: ~28 min
+    Sequential baseline: ~5 x 12 min = ~60 min
+    Time savings: ~32 min (~53% faster)
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: cmd/agent-lsp/main.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/server.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: internal/config/parse.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/http_test.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/httpauth/auth.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/httpauth/auth_test.go
+      agent: B
+      wave: 1
+      action: new
+    - file: docker/Dockerfile
+      agent: C
+      wave: 1
+      action: modify
+    - file: docker/entrypoint.sh
+      agent: D
+      wave: 1
+      action: modify
+    - file: docker/docker-compose.yml
+      agent: E
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: BearerTokenMiddleware
+      description: |-
+        net/http middleware that validates the Authorization: Bearer <token> header.
+        If token is empty string, the middleware is a no-op passthrough.
+        Returns 401 with JSON body {"error":"unauthorized"} on mismatch.
+      definition: |-
+        // Package httpauth provides HTTP authentication middleware for agent-lsp.
+        package httpauth
+
+        import (
+            "encoding/json"
+            "net/http"
+            "strings"
+        )
+
+        // BearerTokenMiddleware returns an http.Handler that enforces Bearer token
+        // authentication when token is non-empty. Requests without a matching
+        // Authorization header receive HTTP 401. When token is empty, all requests
+        // pass through without validation (useful for local/stdio mode).
+        func BearerTokenMiddleware(token string, next http.Handler) http.Handler
+      location: internal/httpauth/auth.go
+    - name: RunHTTP
+      description: |-
+        Runs the MCP server over HTTP/SSE (StreamableHTTPHandler) on the given
+        address, wrapping the handler in token middleware when token is non-empty.
+        Called by Run when --http flag is present.
+      definition: |-
+        // RunHTTP starts an HTTP server exposing the MCP server via the go-sdk's
+        // StreamableHTTPHandler. addr is "host:port" (e.g. ":8080").
+        // token is the Bearer token required by clients; empty means no auth.
+        // ctx cancellation triggers graceful shutdown.
+        func RunHTTP(ctx context.Context, server *mcp.Server, addr string, token string) error
+      location: cmd/agent-lsp/server.go
+    - name: ParseArgs (extended)
+      description: |-
+        ParseArgs is unchanged in signature but its output ParseResult gains three
+        new fields: HTTPMode bool, HTTPPort int, HTTPToken string.
+        Flags parsed: --http (bool), --port <int> (default 8080), --token <string>.
+        These flags are consumed before the existing positional argument parsing.
+      definition: |-
+        // ParseResult extended fields (added to existing struct in config/parse.go):
+        //   HTTPMode  bool   // true when --http flag present
+        //   HTTPPort  int    // port number from --port flag (default 8080)
+        //   HTTPToken string // bearer token from --token flag (empty = no auth)
+        //
+        // ParseArgs signature is unchanged:
+        // func ParseArgs(args []string) (ParseResult, error)
+      location: internal/config/parse.go
+    - name: AllowedCommands whitelist
+      description: |-
+        Replaces the eval "${install_cmd}" call in entrypoint.sh with a
+        whitelist-based dispatcher. The whitelist covers all package managers
+        that appear in lsp-servers.yaml: go install, npm install -g, apt-get,
+        gem install, pip install, dotnet tool install, cargo install.
+        Unknown commands print a warning and are skipped (not executed).
+      definition: |-
+        # Whitelist approach (POSIX sh):
+        # run_install_command() {
+        #   cmd="$1"
+        #   case "${cmd}" in
+        #     "go install "*)      go install ... ;;
+        #     "GOPATH=/usr/local go install "*)  GOPATH=/usr/local go install ... ;;
+        #     "npm install -g "*)  npm install -g ... ;;
+        #     "apt-get update"*)   sh -c "${cmd}" ;;  # apt is multi-step; use sh -c for apt only
+        #     "cargo install "*)   cargo install ... ;;
+        #     "pip install "*)     pip install ... ;;
+        #     "dotnet tool install -g "*)  dotnet tool install -g ... ;;
+        #     "gem install "*)     gem install ... ;;
+        #     *)
+        #       echo "agent-lsp: ERROR: unknown install command, refusing to execute: ${cmd}" >&2
+        #       return 1
+        #       ;;
+        #   esac
+        # }
+      location: docker/entrypoint.sh
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |-
+            ## Role
+            Go CLI transport routing — extend main.go and server.go to support
+            HTTP transport alongside existing stdio mode.
+
+            ## What to implement
+
+            ### 1. Extend internal/config/parse.go — add HTTP flags to ParseResult
+            Add three fields to the ParseResult struct:
+
+            ```go
+            type ParseResult struct {
+                // ... existing fields unchanged ...
+                HTTPMode  bool
+                HTTPPort  int
+                HTTPToken string
+            }
+            ```
+
+            Extend ParseArgs to consume --http, --port, and --token flags BEFORE
+            the existing positional argument parsing. Strip them from args before
+            handing the remainder to the existing logic. Exact matching context:
+
+            Insert after this exact text in parse.go:
+            ```go
+            func ParseArgs(args []string) (ParseResult, error) {
+            	if len(args) == 0 || (len(args) == 1 && args[0] == "--auto") {
+            ```
+
+            Add a pre-processing loop at the top of ParseArgs that walks args,
+            consumes --http (sets httpMode=true), --port <N> (sets httpPort=N),
+            --token <S> (sets httpToken=S), and rebuilds a remainder slice.
+
+            Defaults: HTTPPort defaults to 8080.
+
+            ### 2. Update cmd/agent-lsp/main.go — usage message and HTTP dispatch
+            Add HTTP flags to the usage message printed on error. Insert after
+            the existing fmt.Fprintln lines:
+
+            ```go
+            fmt.Fprintln(os.Stderr, "usage (http mode):      agent-lsp --http [--port 8080] [--token <secret>] [lsp-args...]")
+            ```
+
+            In the runWithRecovery call site, pass parsed.HTTPMode,
+            parsed.HTTPPort, parsed.HTTPToken to Run so it can route to HTTP or stdio.
+
+            ### 3. Update cmd/agent-lsp/server.go — RunHTTP and transport selection
+
+            Add import for the new httpauth package:
+            ```go
+            "github.com/blackwell-systems/agent-lsp/internal/httpauth"
+            ```
+            Also add:
+            ```go
+            "fmt"
+            "net"
+            "net/http"
+            ```
+
+            Add a RunHTTP function (new, appended to server.go after the Run function):
+
+            ```go
+            // RunHTTP starts the MCP server over HTTP using the go-sdk's StreamableHTTPHandler.
+            // addr is "host:port". token is the Bearer token required by clients (empty = no auth).
+            func RunHTTP(ctx context.Context, server *mcp.Server, addr string, token string) error {
+                handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+                    return server
+                }, nil)
+                wrapped := httpauth.BearerTokenMiddleware(token, handler)
+                httpServer := &http.Server{
+                    Addr:    addr,
+                    Handler: wrapped,
+                }
+                ln, err := net.Listen("tcp", addr)
+                if err != nil {
+                    return fmt.Errorf("http listen %s: %w", addr, err)
+                }
+                logging.Log(logging.LevelInfo, fmt.Sprintf("agent-lsp HTTP server listening on %s", addr))
+                errCh := make(chan error, 1)
+                go func() { errCh <- httpServer.Serve(ln) }()
+                select {
+                case <-ctx.Done():
+                    shutdownCtx, cancel := context.WithTimeout(context.Background(), gracefulShutdownTimeout)
+                    defer cancel()
+                    return httpServer.Shutdown(shutdownCtx)
+                case err := <-errCh:
+                    return err
+                }
+            }
+            ```
+
+            Modify the existing Run function to accept httpMode bool, httpPort int,
+            httpToken string parameters. When httpMode is true, Run should call
+            RunHTTP instead of server.Run(ctx, &mcp.StdioTransport{}).
+
+            Change the existing Run signature from:
+            ```go
+            func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string) error {
+            ```
+            to:
+            ```go
+            func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string, httpMode bool, httpPort int, httpToken string) error {
+            ```
+
+            At the bottom of Run, replace the existing transport block:
+            ```go
+            	// Start the MCP server on stdio transport. The server-initialized marker
+            	// is set from InitializedHandler above once the MCP session is established.
+            	logging.Log(logging.LevelInfo, "agent-lsp server starting")
+
+            	transport := &mcp.StdioTransport{}
+            	return server.Run(ctx, transport)
+            ```
+            with:
+            ```go
+            	logging.Log(logging.LevelInfo, "agent-lsp server starting")
+
+            	if httpMode {
+            		addr := fmt.Sprintf(":%d", httpPort)
+            		return RunHTTP(ctx, server, addr, httpToken)
+            	}
+            	transport := &mcp.StdioTransport{}
+            	return server.Run(ctx, transport)
+            ```
+
+            Update the runWithRecovery wrapper in main.go to match the new Run signature:
+            ```go
+            func runWithRecovery(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string, httpMode bool, httpPort int, httpToken string) (runErr error) {
+            ```
+            And the call sites accordingly.
+
+            ## Interface contracts
+            - BearerTokenMiddleware is defined in internal/httpauth/auth.go (Agent B).
+              Import path: github.com/blackwell-systems/agent-lsp/internal/httpauth
+              Do NOT define this function yourself — it is Agent B's responsibility.
+            - mcp.NewStreamableHTTPHandler signature:
+              func NewStreamableHTTPHandler(getServer func(*http.Request) *mcp.Server, opts *mcp.StreamableHTTPOptions) *mcp.StreamableHTTPHandler
+              *mcp.StreamableHTTPHandler implements http.Handler.
+
+            ## Tests
+            Add a test in cmd/agent-lsp/ (new file: cmd/agent-lsp/http_test.go) that:
+            1. Calls ParseArgs([]string{"--http", "--port", "9999", "--token", "secret", "go:gopls"})
+               and asserts HTTPMode=true, HTTPPort=9999, HTTPToken="secret".
+            2. Calls ParseArgs([]string{"--http"}) and asserts HTTPMode=true, HTTPPort=8080.
+            3. Calls ParseArgs([]string{"go:gopls"}) and asserts HTTPMode=false.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./...
+            GOWORK=off go vet ./cmd/...
+            GOWORK=off go test ./cmd/... -run TestParseArgs
+            # Postcondition: RunHTTP symbol exists in server.go
+            grep -n "func RunHTTP" /Users/dayna.blackwell/code/agent-lsp/cmd/agent-lsp/server.go
+            # Expected: one line with "func RunHTTP"
+            # Postcondition: --http flag parsed
+            grep -n '"\-\-http"' /Users/dayna.blackwell/code/agent-lsp/internal/config/parse.go
+            # Expected: at least one match
+            ```
+
+            ## Constraints
+            - Do NOT define BearerTokenMiddleware — that is Agent B's file.
+            - Do NOT modify files outside your ownership list (main.go, server.go,
+              internal/config/parse.go, and the new cmd/agent-lsp/http_test.go).
+            - Do NOT add --http flags to the existing usage lines for stdio modes;
+              add a separate line.
+          files:
+            - cmd/agent-lsp/main.go
+            - cmd/agent-lsp/server.go
+            - internal/config/parse.go
+            - cmd/agent-lsp/http_test.go
+        - id: B
+          task: |-
+            ## Role
+            Bearer token HTTP middleware — create internal/httpauth package with
+            a thin middleware that validates Authorization: Bearer headers.
+
+            ## What to implement
+
+            ### internal/httpauth/auth.go (new file)
+
+            ```go
+            // Package httpauth provides HTTP authentication middleware for agent-lsp.
+            package httpauth
+
+            import (
+                "encoding/json"
+                "net/http"
+                "strings"
+            )
+
+            // BearerTokenMiddleware returns an http.Handler that enforces Bearer token
+            // authentication when token is non-empty.
+            //
+            // When token is empty, all requests pass through without authentication,
+            // preserving the current stdio-only behavior for local usage.
+            //
+            // When token is non-empty, requests must supply:
+            //   Authorization: Bearer <token>
+            //
+            // On mismatch: HTTP 401, Content-Type: application/json,
+            // body: {"error":"unauthorized"}
+            //
+            // The comparison is done with subtle.ConstantTimeCompare to avoid
+            // timing side-channels.
+            func BearerTokenMiddleware(token string, next http.Handler) http.Handler {
+                if token == "" {
+                    return next
+                }
+                expected := "Bearer " + token
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                    if !strings.EqualFold("", "") { // placeholder — implement properly below
+                    }
+                })
+            }
+            ```
+
+            Implement properly using crypto/subtle:
+            ```go
+            import (
+                "crypto/subtle"
+                "encoding/json"
+                "net/http"
+                "strings"
+            )
+
+            func BearerTokenMiddleware(token string, next http.Handler) http.Handler {
+                if token == "" {
+                    return next
+                }
+                expected := []byte("Bearer " + token)
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                    got := []byte(r.Header.Get("Authorization"))
+                    if subtle.ConstantTimeCompare(expected, got) != 1 {
+                        w.Header().Set("Content-Type", "application/json")
+                        w.WriteHeader(http.StatusUnauthorized)
+                        _ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+                        return
+                    }
+                    next.ServeHTTP(w, r)
+                })
+            }
+            ```
+
+            ### internal/httpauth/auth_test.go (new file)
+            Write tests covering:
+            1. Empty token: all requests pass through (GET, POST, no Authorization header).
+            2. Correct token: request with Authorization: Bearer <token> passes through.
+            3. Wrong token: receives HTTP 401 with {"error":"unauthorized"} body.
+            4. Missing header entirely: receives HTTP 401.
+            5. Correct token prefix but longer value: receives HTTP 401 (timing-safe).
+            6. Case sensitivity: "bearer token" (lowercase) must fail when expected is "Bearer token".
+
+            Use httptest.NewRecorder and a stub next handler that writes 200 OK.
+
+            ## Verification gate
+            ```
+            GOWORK=off go build ./internal/httpauth/...
+            GOWORK=off go vet ./internal/httpauth/...
+            GOWORK=off go test ./internal/httpauth/... -v -run TestBearer
+            # Postcondition: ConstantTimeCompare used (not ==)
+            grep -n "ConstantTimeCompare" /Users/dayna.blackwell/code/agent-lsp/internal/httpauth/auth.go
+            # Expected: exactly 1 match
+            # Postcondition: no eval or shell exec in auth.go
+            grep -n "exec\|eval\|os.Command" /Users/dayna.blackwell/code/agent-lsp/internal/httpauth/auth.go || echo "clean"
+            # Expected: "clean"
+            ```
+
+            ## Constraints
+            - Do NOT import anything from cmd/ or other internal packages — this package
+              must have zero internal dependencies to remain importable from cmd/agent-lsp.
+            - Do NOT define any types beyond what is needed for the middleware function.
+            - Do NOT modify files outside your ownership list.
+          files:
+            - internal/httpauth/auth.go
+            - internal/httpauth/auth_test.go
+        - id: C
+          task: |-
+            ## Role
+            Dockerfile hardening — add non-root user, EXPOSE directive, and remove
+            root-user assumptions.
+
+            ## What to implement
+
+            ### docker/Dockerfile
+
+            Make these changes in order:
+
+            **1. Add a dedicated system user before the COPY lines in the final stage.**
+            Insert after this exact text (the cache dir mkdir):
+            ```dockerfile
+            # Create the LSP server cache directory used by the entrypoint for
+            # already-installed server binaries
+            RUN mkdir -p /var/cache/lsp-servers
+            ```
+            Add:
+            ```dockerfile
+            # Create a non-root user and group for running agent-lsp.
+            # UID/GID 65532 is conventionally used for "nonroot" in distroless-style images.
+            RUN groupadd --gid 65532 nonroot \
+                && useradd --uid 65532 --gid 65532 --no-create-home --shell /usr/sbin/nologin nonroot \
+                && chown -R nonroot:nonroot /var/cache/lsp-servers
+
+            # Expose the default HTTP port. Override with --port flag at runtime.
+            EXPOSE 8080
+            ```
+
+            **2. Change HOME env to point to a user home that exists, or use /tmp.**
+            Replace:
+            ```dockerfile
+            # Some language servers require HOME to be set
+            ENV HOME=/root
+            ```
+            with:
+            ```dockerfile
+            # Some language servers require HOME to be set.
+            # /tmp is writable by all users including nonroot.
+            ENV HOME=/tmp
+            ```
+
+            **3. Set the USER directive before ENTRYPOINT.**
+            Insert before this exact text:
+            ```dockerfile
+            ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+            ```
+            Add:
+            ```dockerfile
+            USER nonroot
+            ```
+
+            **4. Fix the /workspace directory ownership.**
+            The WORKDIR /workspace creates /workspace as root. Ensure nonroot can write to it.
+            Replace:
+            ```dockerfile
+            WORKDIR /workspace
+            ```
+            with:
+            ```dockerfile
+            RUN mkdir -p /workspace && chown nonroot:nonroot /workspace
+            WORKDIR /workspace
+            ```
+
+            ## Security rationale
+            Running as root in a container means any container escape gives the attacker
+            root on the host. The nonroot user (uid 65532) limits blast radius.
+            The EXPOSE 8080 directive is informational for container runtimes and docker-compose.
+
+            ## Verification gate
+            ```
+            # Postcondition: USER nonroot appears in Dockerfile
+            grep -n "USER nonroot" /Users/dayna.blackwell/code/agent-lsp/docker/Dockerfile
+            # Expected: 1 match
+
+            # Postcondition: EXPOSE 8080 appears
+            grep -n "EXPOSE 8080" /Users/dayna.blackwell/code/agent-lsp/docker/Dockerfile
+            # Expected: 1 match
+
+            # Postcondition: ENV HOME=/root removed (replaced by /tmp)
+            grep -n "HOME=/root" /Users/dayna.blackwell/code/agent-lsp/docker/Dockerfile || echo "clean"
+            # Expected: "clean"
+            ```
+
+            ## Constraints
+            - Do NOT modify entrypoint.sh — that is Agent D's file.
+            - Do NOT modify docker-compose.yml — that is Agent E's file.
+            - Do NOT add apt packages that are not already in the Dockerfile.
+            - The nonroot user must NOT have a home directory created (--no-create-home)
+              since we use ENV HOME=/tmp.
+          files:
+            - docker/Dockerfile
+        - id: D
+          task: |-
+            ## Role
+            Entrypoint hardening — replace the unsafe eval call with a whitelist
+            dispatcher that only executes known, valid install command prefixes.
+
+            ## What to implement
+
+            ### docker/entrypoint.sh
+
+            Replace the unsafe eval line and surrounding context. The current code:
+            ```sh
+                echo "agent-lsp: installing ${server}: ${install_cmd}"
+                eval "${install_cmd}"
+
+                # Create cache marker so future container starts skip the install
+            ```
+
+            Replace with a run_install_command function defined at the top of the
+            script (after the CACHE_DIR and REGISTRY variable definitions) plus a
+            call to that function:
+
+            **Step 1: Add the whitelist function after REGISTRY=/etc/agent-lsp/lsp-servers.yaml**
+
+            Insert after this exact text:
+            ```sh
+            CACHE_DIR=/var/cache/lsp-servers
+            REGISTRY=/etc/agent-lsp/lsp-servers.yaml
+            ```
+
+            Add:
+            ```sh
+            # run_install_command: execute a validated install command.
+            # Only commands matching known package manager prefixes are allowed.
+            # Any unrecognized command is rejected with an error (not silently skipped).
+            run_install_command() {
+              cmd="$1"
+              case "${cmd}" in
+                "GOPATH=/usr/local go install "*)
+                  rest="${cmd#GOPATH=/usr/local go install }"
+                  GOPATH=/usr/local go install ${rest}
+                  ;;
+                "go install "*)
+                  rest="${cmd#go install }"
+                  go install ${rest}
+                  ;;
+                "npm install -g "*)
+                  rest="${cmd#npm install -g }"
+                  npm install -g ${rest}
+                  ;;
+                "apt-get update"*)
+                  # apt-get is multi-step; run via sh -c with the fixed prefix verified above.
+                  # The case pattern already ensures the string starts with "apt-get update".
+                  sh -c "${cmd}"
+                  ;;
+                "cargo install "*)
+                  rest="${cmd#cargo install }"
+                  cargo install ${rest}
+                  ;;
+                "pip install "*)
+                  rest="${cmd#pip install }"
+                  pip install ${rest}
+                  ;;
+                "dotnet tool install -g "*)
+                  rest="${cmd#dotnet tool install -g }"
+                  dotnet tool install -g ${rest}
+                  ;;
+                "gem install "*)
+                  rest="${cmd#gem install }"
+                  gem install ${rest}
+                  ;;
+                *)
+                  echo "agent-lsp: ERROR: unrecognized install command prefix, refusing to execute: ${cmd}" >&2
+                  return 1
+                  ;;
+              esac
+            }
+            ```
+
+            **Step 2: Replace eval with run_install_command call**
+
+            Replace this exact text:
+            ```sh
+                echo "agent-lsp: installing ${server}: ${install_cmd}"
+                eval "${install_cmd}"
+            ```
+            with:
+            ```sh
+                echo "agent-lsp: installing ${server}: ${install_cmd}"
+                run_install_command "${install_cmd}"
+            ```
+
+            ## Verification gate
+            ```sh
+            # Postcondition: no bare eval call remains
+            grep -n "^[[:space:]]*eval " /Users/dayna.blackwell/code/agent-lsp/docker/entrypoint.sh || echo "clean"
+            # Expected: "clean"
+
+            # Postcondition: run_install_command function defined
+            grep -n "run_install_command()" /Users/dayna.blackwell/code/agent-lsp/docker/entrypoint.sh
+            # Expected: 1 match
+
+            # Postcondition: case statement covers npm
+            grep -n '"npm install -g "' /Users/dayna.blackwell/code/agent-lsp/docker/entrypoint.sh
+            # Expected: 1 match
+
+            # Postcondition: script is valid sh syntax
+            sh -n /Users/dayna.blackwell/code/agent-lsp/docker/entrypoint.sh && echo "syntax ok"
+            # Expected: "syntax ok"
+            ```
+
+            ## Constraints
+            - Do NOT use eval anywhere in the resulting file — not even for the apt case.
+            - The apt-get pattern "apt-get update"* must match the full multi-step command
+              from lsp-servers.yaml: "apt-get update && apt-get install -y ...".
+              Using sh -c "${cmd}" for this pattern is acceptable because the case match
+              already verified the string begins with "apt-get update" (a fixed prefix).
+              This is the documented exception; document it with a comment.
+            - Do NOT modify docker/Dockerfile or docker-compose.yml.
+            - Preserve the existing get_install_command() function and all other logic
+              unchanged.
+          files:
+            - docker/entrypoint.sh
+        - id: E
+          task: |-
+            ## Role
+            docker-compose.yml update — add HTTP mode service profile and document
+            token-based auth.
+
+            ## What to implement
+
+            ### docker/docker-compose.yml
+
+            Add an HTTP mode service variant alongside the existing stdio service.
+            The existing service definition stays unchanged; add a new service
+            `agent-lsp-http` below it.
+
+            Replace the existing content after the existing `agent-lsp:` service
+            block (after the `env_file:` lines and before `volumes:`) with a new
+            service entry. Specifically, insert after this exact text:
+
+            ```yaml
+                env_file:
+                  - ../.env
+
+            volumes:
+            ```
+
+            Insert:
+            ```yaml
+
+              # HTTP mode service: exposes MCP over HTTP+SSE on port 8080.
+              # Requires AGENT_LSP_TOKEN to be set in .env for bearer token auth.
+              # Usage:
+              #   AGENT_LSP_TOKEN=mysecret docker compose up agent-lsp-http
+              #   Then configure MCP client: http://localhost:8080
+              # Security: run with --cap-drop=ALL for additional hardening:
+              #   docker compose run --rm --cap-drop=ALL agent-lsp-http
+              agent-lsp-http:
+                build:
+                  context: ..
+                  dockerfile: docker/Dockerfile
+                image: ghcr.io/blackwell-systems/agent-lsp:base
+                ports:
+                  - "${AGENT_LSP_HTTP_PORT:-8080}:8080"
+                volumes:
+                  - ${WORKSPACE_DIR:?Set WORKSPACE_DIR in .env}:/workspace:rw
+                  - lsp-server-cache:/var/cache/lsp-servers
+                working_dir: /workspace
+                environment:
+                  - LSP_SERVERS=${LSP_SERVERS:-}
+                  - HOME=/tmp
+                  - AGENT_LSP_TOKEN=${AGENT_LSP_TOKEN:-}
+                command:
+                  - --http
+                  - --port
+                  - "8080"
+                  - --token
+                  - "${AGENT_LSP_TOKEN:-}"
+                deploy:
+                  resources:
+                    limits:
+                      memory: 4g
+                      cpus: '2'
+                    reservations:
+                      memory: 1g
+                      cpus: '0.5'
+                env_file:
+                  - ../.env
+
+            ```
+
+            Also add a comment to the top of the existing `agent-lsp:` service
+            block to clarify it runs in stdio mode. Replace the existing first line
+            of the service:
+            ```yaml
+              agent-lsp:
+            ```
+            with:
+            ```yaml
+              # Stdio mode (default): connect via subprocess (MCP stdio transport).
+              agent-lsp:
+            ```
+
+            ## Verification gate
+            ```sh
+            # Postcondition: agent-lsp-http service defined
+            grep -n "agent-lsp-http:" /Users/dayna.blackwell/code/agent-lsp/docker/docker-compose.yml
+            # Expected: 1 match
+
+            # Postcondition: --http flag in http service command
+            grep -n '"\-\-http"' /Users/dayna.blackwell/code/agent-lsp/docker/docker-compose.yml
+            # Expected: 1 match
+
+            # Postcondition: AGENT_LSP_TOKEN referenced
+            grep -n "AGENT_LSP_TOKEN" /Users/dayna.blackwell/code/agent-lsp/docker/docker-compose.yml
+            # Expected: at least 2 matches (env var + command)
+
+            # Postcondition: valid YAML (docker compose config parses without error)
+            # Note: requires docker compose to be installed; skip if unavailable
+            docker compose -f /Users/dayna.blackwell/code/agent-lsp/docker/docker-compose.yml config --quiet 2>&1 | head -5 || echo "docker compose not available, skipping"
+            ```
+
+            ## Constraints
+            - Do NOT modify the existing `agent-lsp:` service beyond adding the comment.
+            - Do NOT change the volumes section structure.
+            - The --token command entry must use "${AGENT_LSP_TOKEN:-}" so it works
+              even when the variable is unset (passes empty string = no auth).
+            - Do NOT modify Dockerfile or entrypoint.sh.
+          files:
+            - docker/docker-compose.yml
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+scaffolds:
+    - file_path: internal/httpauth/auth.go
+      contents: |-
+        package httpauth
+
+        import "net/http"
+
+        // BearerTokenMiddleware wraps an http.Handler with Bearer token validation.
+        // If token is empty, all requests pass through without auth.
+        func BearerTokenMiddleware(token string, next http.Handler) http.Handler
+      import_path: github.com/blackwell-systems/agent-lsp/internal/httpauth
+      status: pending
+pre_mortem:
+    overall_risk: medium
+    rows:
+        - scenario: |-
+            Agent A imports internal/httpauth before Agent B has merged. In isolated
+            worktrees, the package does not exist on Agent A's branch, causing
+            compilation failure. Agent A may stub the function itself, creating a
+            duplicate declaration at merge time.
+          likelihood: high
+          impact: high
+          mitigation: |-
+            The scaffold (internal/httpauth/auth.go with the stub signature) is
+            created before Wave 1 launches. Agent A compiles against the scaffold.
+            Agent B's branch replaces the scaffold with the real implementation.
+            Both branches see the symbol; merge produces one definition.
+        - scenario: |-
+            Agent A changes Run's signature (adds 3 new parameters) but the call
+            site in runWithRecovery in main.go is not updated to match, causing
+            a compile error on merge.
+          likelihood: medium
+          impact: high
+          mitigation: |-
+            Agent A owns both main.go and server.go. Both call sites and the
+            function definition are in A's ownership. The task explicitly instructs
+            A to update runWithRecovery and its call in main.go.
+        - scenario: |-
+            Docker USER nonroot breaks the entrypoint because the entrypoint writes
+            to /var/cache/lsp-servers as root, which nonroot cannot access.
+          likelihood: medium
+          impact: medium
+          mitigation: |-
+            Agent C's task explicitly adds "chown -R nonroot:nonroot /var/cache/lsp-servers"
+            to the RUN directive creating that directory, and sets /workspace ownership.
+            Verified by grep postconditions.
+        - scenario: |-
+            entrypoint.sh whitelist misses the GOPATH-prefixed go install command
+            used by gopls in lsp-servers.yaml: "GOPATH=/usr/local go install ...".
+            The default "go install *" pattern would not match.
+          likelihood: high
+          impact: medium
+          mitigation: |-
+            Agent D's task lists "GOPATH=/usr/local go install "* as an explicit
+            case before the plain "go install "* case, mirroring what appears in
+            docker/lsp-servers.yaml line 9.
+        - scenario: |-
+            mcp.StreamableHTTPHandler DNS rebinding protection rejects all
+            non-localhost requests when the server is exposed on 0.0.0.0 with
+            a non-localhost Host header (SDK default: reject if Host != loopback
+            but bound to loopback).
+          likelihood: low
+          impact: medium
+          mitigation: |-
+            The SDK's DisableLocalhostProtection only kicks in when the local
+            listener address IS loopback (127.0.0.1 or [::1]). If agent-lsp binds
+            to 0.0.0.0 (addr "":8080"), the protection does not trigger.
+            Agent A uses addr fmt.Sprintf(":%d", httpPort) which binds to 0.0.0.0,
+            so the protection is inactive. Document in RunHTTP comment.
+        - scenario: |-
+            docker-compose.yml command list uses ${AGENT_LSP_TOKEN:-} as a bare
+            value and Docker passes it as an empty string argument to agent-lsp,
+            but ParseArgs doesn't expect a --token flag with an empty value.
+          likelihood: medium
+          impact: low
+          mitigation: |-
+            Agent A's ParseArgs implementation must treat --token "" (empty token)
+            as equivalent to no --token flag (HTTPToken = ""). BearerTokenMiddleware
+            already treats empty token as no-op passthrough. Explicitly stated in
+            Agent A's task.
+critic_report:
+    verdict: ISSUES
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: ISSUES
+            issues:
+                - check: symbol_accuracy
+                  severity: error
+                  description: 'The brief instructs Agent A to add "fmt" to server.go imports ("Also add: fmt, net, net/http"), but "fmt" is already present in server.go at line 6. If Agent A follows the brief literally and adds a second "fmt" import, the Go compiler will reject it as a duplicate import, failing the build gate.'
+                  file: cmd/agent-lsp/server.go
+                  symbol: fmt
+                - check: complexity_balance
+                  severity: warning
+                  description: Agent A owns 4 of 9 total files (44%) — just over the 40% advisory threshold. Consider moving http_test.go to a dedicated integration agent if the wave is ever split.
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+        E:
+            agent_id: E
+            verdict: PASS
+    summary: 'Agent A''s brief contains one error: it instructs adding "fmt" to server.go imports, but "fmt" is already imported in server.go (line 6). A Go agent that follows the brief literally and adds the import again will produce a compile error (duplicate import). The remaining agents (B, C, D, E) have accurate briefs — file existence checks pass, all SDK symbols are verified (mcp.NewStreamableHTTPHandler signature matches go-sdk v1.4.1 exactly), anchor text patterns match the actual files, and no i1 disjoint ownership conflicts exist. One advisory warning is raised for Agent A''s file ownership share (4 of 9 total files, 44%), which is just over the 40% advisory threshold.'
+    reviewed_at: "2026-04-17T23:21:13Z"
+    issue_count: 2
+state: SCOUT_PENDING
+injection_method: hook
