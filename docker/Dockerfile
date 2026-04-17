@@ -40,10 +40,23 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 # already-installed server binaries
 RUN mkdir -p /var/cache/lsp-servers
 
-# Some language servers require HOME to be set
-ENV HOME=/root
+# Create a non-root user and group for running agent-lsp.
+# UID/GID 65532 is conventionally used for "nonroot" in distroless-style images.
+RUN groupadd --gid 65532 nonroot \
+    && useradd --uid 65532 --gid 65532 --no-create-home --shell /usr/sbin/nologin nonroot \
+    && chown -R nonroot:nonroot /var/cache/lsp-servers
 
+# Expose the default HTTP port. Override with --port flag at runtime.
+EXPOSE 8080
+
+# Some language servers require HOME to be set.
+# /tmp is writable by all users including nonroot.
+ENV HOME=/tmp
+
+RUN mkdir -p /workspace && chown nonroot:nonroot /workspace
 WORKDIR /workspace
+
+USER nonroot
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD []
