@@ -776,7 +776,7 @@ scaffolds:
         // If token is empty, all requests pass through without auth.
         func BearerTokenMiddleware(token string, next http.Handler) http.Handler
       import_path: github.com/blackwell-systems/agent-lsp/internal/httpauth
-      status: pending
+      status: committed (05d1f73)
 pre_mortem:
     overall_risk: medium
     rows:
