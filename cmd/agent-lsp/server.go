@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/blackwell-systems/agent-lsp/internal/config"
 	"github.com/blackwell-systems/agent-lsp/internal/extensions"
@@ -375,6 +376,10 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	logging.Log(logging.LevelInfo, "agent-lsp server starting")
 
+	if httpMode && httpToken == "" {
+		logging.Log(logging.LevelWarning, "HTTP mode active with no auth token — all requests accepted without authentication; set AGENT_LSP_TOKEN for production use")
+	}
+
 	if httpMode {
 		addr := fmt.Sprintf(":%d", httpPort)
 		return RunHTTP(ctx, server, addr, httpToken)
@@ -391,14 +396,16 @@ func RunHTTP(ctx context.Context, server *mcp.Server, addr string, token string)
 	}, nil)
 	wrapped := httpauth.BearerTokenMiddleware(token, handler)
 	httpServer := &http.Server{
-		Addr:    addr,
-		Handler: wrapped,
+		Addr:              addr,
+		Handler:           wrapped,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
 	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("http listen %s: %w", addr, err)
 	}
-	logging.Log(logging.LevelInfo, fmt.Sprintf("agent-lsp HTTP server listening on %s", addr))
+	logging.Log(logging.LevelInfo, fmt.Sprintf("agent-lsp HTTP server listening on %s", ln.Addr().String()))
 	errCh := make(chan error, 1)
 	go func() { errCh <- httpServer.Serve(ln) }()
 	select {

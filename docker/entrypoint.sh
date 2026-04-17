@@ -20,36 +20,49 @@ run_install_command() {
   case "${cmd}" in
     "GOPATH=/usr/local go install "*)
       rest="${cmd#GOPATH=/usr/local go install }"
-      GOPATH=/usr/local go install ${rest}
+      GOPATH=/usr/local go install "${rest}"
       ;;
     "go install "*)
       rest="${cmd#go install }"
-      go install ${rest}
+      go install "${rest}"
       ;;
     "npm install -g "*)
       rest="${cmd#npm install -g }"
-      npm install -g ${rest}
+      npm install -g "${rest}"
       ;;
     "apt-get update"*)
-      # apt-get is multi-step; run via sh -c with the fixed prefix verified above.
-      # The case pattern already ensures the string starts with "apt-get update".
-      sh -c "${cmd}"
+      # Extract the package name from the fixed pattern:
+      #   apt-get update && apt-get install -y --no-install-recommends <pkg> && rm -rf ...
+      # Use sed to capture the token after --no-install-recommends up to the next space or end.
+      pkg=$(printf '%s' "${cmd}" | sed 's/.*--no-install-recommends \([^ ]*\).*/\1/')
+      # Validate: only alphanumeric, hyphens, dots, plus, underscores — no shell metacharacters.
+      case "${pkg}" in
+        '' | *[!a-zA-Z0-9._+\-]*)
+          echo "agent-lsp: ERROR: invalid apt package name '${pkg}'" >&2
+          return 1
+          ;;
+      esac
+      apt-get update && apt-get install -y --no-install-recommends "${pkg}" && rm -rf /var/lib/apt/lists/*
       ;;
     "cargo install "*)
       rest="${cmd#cargo install }"
-      cargo install ${rest}
+      cargo install "${rest}"
       ;;
     "pip install "*)
       rest="${cmd#pip install }"
-      pip install ${rest}
+      pip install "${rest}"
       ;;
     "dotnet tool install -g "*)
       rest="${cmd#dotnet tool install -g }"
-      dotnet tool install -g ${rest}
+      dotnet tool install -g "${rest}"
       ;;
     "gem install "*)
       rest="${cmd#gem install }"
-      gem install ${rest}
+      gem install "${rest}"
+      ;;
+    "echo "*)
+      # Manual install: no automated installation available — print the instruction.
+      printf 'agent-lsp: manual install required: %s\n' "${cmd#echo }" >&2
       ;;
     *)
       echo "agent-lsp: ERROR: unrecognized install command prefix, refusing to execute: ${cmd}" >&2
@@ -59,15 +72,14 @@ run_install_command() {
 }
 
 # get_install_command: extract install_command for a given server name from the YAML registry.
-# Uses only grep/awk/sed — no yq, python, or jq required.
+# Uses awk -v for variable binding to prevent server_name from being interpreted as a regex.
 get_install_command() {
   server_name="$1"
-  # Match the block starting at "  - name: <server_name>" and ending at the next "  - name:" entry.
-  # Extract the first install_command value found in that block.
-  awk "/^  - name: ${server_name}$/,/^  - name:/" "${REGISTRY}" \
-    | grep "install_command:" \
-    | head -1 \
-    | sed 's/.*install_command: *"\(.*\)"/\1/'
+  awk -v name="${server_name}" '
+    $0 == "  - name: " name { found=1; next }
+    found && /install_command:/ { sub(/.*install_command: *"/, ""); sub(/"$/, ""); print; exit }
+    found && /^  - name:/ { exit }
+  ' "${REGISTRY}"
 }
 
 if [ -n "${LSP_SERVERS}" ]; then

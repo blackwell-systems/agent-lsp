@@ -31,6 +31,7 @@ func BearerTokenMiddleware(token string, next http.Handler) http.Handler {
 		got := []byte(r.Header.Get("Authorization"))
 		if subtle.ConstantTimeCompare(expected, got) != 1 {
 			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("WWW-Authenticate", "Bearer")
 			w.WriteHeader(http.StatusUnauthorized)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
 			return

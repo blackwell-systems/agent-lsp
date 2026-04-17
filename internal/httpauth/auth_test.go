@@ -142,6 +142,11 @@ func assertUnauthorizedBody(t *testing.T, rr *httptest.ResponseRecorder) {
 		t.Errorf("want Content-Type application/json, got %q", ct)
 	}
 
+	wwwAuth := rr.Header().Get("WWW-Authenticate")
+	if wwwAuth != "Bearer" {
+		t.Errorf("want WWW-Authenticate: Bearer, got %q", wwwAuth)
+	}
+
 	var body map[string]string
 	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
 		t.Fatalf("failed to decode response body: %v", err)

@@ -22,7 +22,7 @@ services:
     working_dir: /workspace
     environment:
       - LSP_SERVERS=${LSP_SERVERS:-}
-      - HOME=/root
+      - HOME=/tmp
     command: []  # Override with language args: go:gopls typescript:typescript-language-server,--stdio
     deploy:
       resources:
@@ -61,8 +61,8 @@ services:
       - "--http"
       - "--port"
       - "8080"
-      - "--token"
-      - "${AGENT_LSP_TOKEN:-}"
+      # Token is read from AGENT_LSP_TOKEN env var (set above) — do NOT pass
+      # via --token flag to avoid credential exposure in ps / /proc/<pid>/cmdline.
     deploy:
       resources:
         limits:

@@ -78,6 +78,9 @@ func ParseArgs(args []string) (ParseResult, error) {
 			if err != nil {
 				return ParseResult{}, fmt.Errorf("--port value %q is not a valid integer", args[i])
 			}
+			if p < 1 || p > 65535 {
+				return ParseResult{}, fmt.Errorf("--port value %d is out of range (1–65535)", p)
+			}
 			httpPort = p
 		case "--token":
 			if i+1 >= len(args) {
@@ -90,6 +93,12 @@ func ParseArgs(args []string) (ParseResult, error) {
 		}
 	}
 	args = remainder
+
+	// Prefer AGENT_LSP_TOKEN env var over --token flag. The env var keeps the
+	// credential out of the process list (ps aux, /proc/<pid>/cmdline).
+	if ev := os.Getenv("AGENT_LSP_TOKEN"); ev != "" {
+		httpToken = ev
+	}
 
 	httpResult := func(r ParseResult) ParseResult {
 		r.HTTPMode = httpMode
