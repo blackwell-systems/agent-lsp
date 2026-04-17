@@ -1,3 +1,4 @@
+completion_date: "2026-04-17"
 title: HTTP Transport Layer and Secure Docker Integration
 feature_slug: http-transport-docker-security
 verdict: SUITABLE
@@ -778,6 +779,66 @@ scaffolds:
         func BearerTokenMiddleware(token string, next http.Handler) http.Handler
       import_path: github.com/blackwell-systems/agent-lsp/internal/httpauth
       status: committed (05d1f73)
+completion_reports:
+    A:
+        status: complete
+        branch: saw/http-transport-docker-security/wave1-agent-A
+        commit: ea66b5f
+        files_changed:
+            - internal/config/parse.go
+            - cmd/agent-lsp/server.go
+            - cmd/agent-lsp/main.go
+            - cmd/agent-lsp/http_test.go
+        files_created:
+            - cmd/agent-lsp/http_test.go
+        tests_added:
+            - TestParseArgs_HTTPFlags/http_with_port_and_token
+            - TestParseArgs_HTTPFlags/http_only_uses_default_port
+            - TestParseArgs_HTTPFlags/no_http_flag_leaves_HTTPMode_false
+        verification: PASS
+        notes: All HTTP transport routing complete. ParseResult extended with HTTPMode/HTTPPort/HTTPToken. RunHTTP added to server.go. Run and runWithRecovery updated with new params. All tests pass, pre-commit hooks clean.
+    B:
+        status: complete
+        branch: saw/http-transport-docker-security/wave1-agent-B
+        commit: d3c7f02
+        files_changed:
+            - internal/httpauth/auth.go
+            - internal/httpauth/auth_test.go
+        files_created:
+            - internal/httpauth/auth_test.go
+        tests_added:
+            - TestBearerTokenMiddleware_EmptyToken
+            - TestBearerTokenMiddleware_CorrectToken
+            - TestBearerTokenMiddleware_WrongToken
+            - TestBearerTokenMiddleware_MissingHeader
+            - TestBearerTokenMiddleware_CorrectPrefixLongerValue
+            - TestBearerTokenMiddleware_CaseSensitive
+        verification: PASS
+        notes: BearerTokenMiddleware implemented with crypto/subtle.ConstantTimeCompare. All 6 tests pass. No internal package imports. Zero exec/eval calls. Pre-commit hook ran full go vet and go build cleanly.
+    C:
+        status: complete
+        branch: saw/http-transport-docker-security/wave1-agent-C
+        commit: 4a3699f
+        files_changed:
+            - docker/Dockerfile
+        verification: PASS
+        notes: 'All four hardening changes applied: nonroot user (uid 65532) created, /var/cache/lsp-servers and /workspace chowned to nonroot, USER nonroot set before ENTRYPOINT, EXPOSE 8080 added, ENV HOME=/root replaced with ENV HOME=/tmp. Pre-commit hooks (go vet, go build) passed.'
+    D:
+        status: complete
+        branch: saw/http-transport-docker-security/wave1-agent-D
+        commit: 6e3b61b
+        files_changed:
+            - docker/entrypoint.sh
+        verification: PASS
+        notes: Replaced eval with run_install_command() whitelist dispatcher. Covers go install, GOPATH go install, npm, apt-get, cargo, pip, dotnet, gem. Unknown commands rejected with error. sh -n syntax check, all Go quality gates pass.
+    E:
+        status: complete
+        branch: saw/http-transport-docker-security/wave1-agent-E
+        commit: 2546ee6
+        files_changed:
+            - docker/docker-compose.yml
+        verification: PASS
+        notes: Added agent-lsp-http service with HTTP+SSE transport, Bearer token auth via AGENT_LSP_TOKEN, configurable port via AGENT_LSP_HTTP_PORT. Existing agent-lsp stdio service unchanged except clarifying comment. YAML validated with Python. All three verification grep checks pass.
 pre_mortem:
     overall_risk: medium
     rows:
@@ -872,5 +933,5 @@ critic_report:
     summary: 'Re-verification of Agent A after brief fix: the duplicate ''fmt'' import instruction has been removed. Agent A''s brief now only instructs adding ''github.com/blackwell-systems/agent-lsp/internal/httpauth'', ''net'', and ''net/http'' to server.go — none of which are present in the current import block (lines 3-18), so all three additions are legitimate. No symbol_accuracy errors remain for Agent A. The complexity_balance advisory warning (Agent A owns 4 of 9 files, 44%) is carried forward unchanged as it is a warning, not an error. Agents B, C, D, E carry forward their PASS verdicts from the prior run. All agents are PASS; wave execution may proceed.'
     reviewed_at: "2026-04-17T23:22:14Z"
     issue_count: 1
-state: REVIEWED
+state: COMPLETE
 injection_method: hook
