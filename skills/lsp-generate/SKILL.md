@@ -133,4 +133,3 @@ to the user and suggest a manual approach specific to the intent:
 
 - Do NOT batch `execute_command` calls — run one generator at a time
 - Do NOT skip user confirmation when multiple generator actions are available
-- Do NOT modify any file outside `skills/lsp-generate/`
