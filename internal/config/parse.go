@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -66,6 +67,7 @@ func ParseArgs(args []string) (ParseResult, error) {
 	var httpMode bool
 	httpPort := 8080
 	var httpToken string
+	var httpTokenFromFlag bool // tracks whether token came from --token flag
 	httpListenAddr := "127.0.0.1"
 	var httpNoAuth bool
 	remainder := make([]string, 0, len(args))
@@ -91,6 +93,9 @@ func ParseArgs(args []string) (ParseResult, error) {
 				return ParseResult{}, fmt.Errorf("--listen-addr requires a value")
 			}
 			i++
+			if net.ParseIP(args[i]) == nil {
+				return ParseResult{}, fmt.Errorf("--listen-addr value %q is not a valid IP address", args[i])
+			}
 			httpListenAddr = args[i]
 		case "--no-auth":
 			httpNoAuth = true
@@ -100,6 +105,7 @@ func ParseArgs(args []string) (ParseResult, error) {
 			}
 			i++
 			httpToken = args[i]
+			httpTokenFromFlag = true
 		default:
 			remainder = append(remainder, args[i])
 		}
@@ -110,6 +116,10 @@ func ParseArgs(args []string) (ParseResult, error) {
 	// credential out of the process list (ps aux, /proc/<pid>/cmdline).
 	if ev := os.Getenv("AGENT_LSP_TOKEN"); ev != "" {
 		httpToken = ev
+	} else if httpTokenFromFlag {
+		// Token came from CLI flag with no env var override — warn on stderr
+		// unconditionally since the logging subsystem may not be initialized yet.
+		fmt.Fprintln(os.Stderr, "WARNING: --token exposes the credential in the process list; prefer AGENT_LSP_TOKEN environment variable")
 	}
 
 	httpResult := func(r ParseResult) ParseResult {

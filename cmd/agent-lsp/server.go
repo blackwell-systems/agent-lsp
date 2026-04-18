@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -380,6 +381,13 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		return fmt.Errorf("HTTP mode requires an auth token; set AGENT_LSP_TOKEN environment variable\n(to intentionally run without auth, pass --no-auth)")
 	}
 	if httpMode && httpToken == "" && httpNoAuth {
+		// Reject --no-auth on non-loopback addresses — unauthenticated exposure
+		// to the network is not allowed even with explicit opt-in.
+		if ip := net.ParseIP(httpListenAddr); ip == nil || !ip.IsLoopback() {
+			return fmt.Errorf("--no-auth is only permitted with a loopback bind address (127.0.0.1); use --listen-addr 127.0.0.1 or set AGENT_LSP_TOKEN")
+		}
+		// Write directly to stderr — logging subsystem may not be initialized yet.
+		fmt.Fprintln(os.Stderr, "WARNING: agent-lsp HTTP mode running without authentication — all requests accepted")
 		logging.Log(logging.LevelWarning, "HTTP mode active with no auth token (--no-auth) — all requests accepted without authentication")
 	}
 
@@ -422,6 +430,7 @@ func RunHTTP(ctx context.Context, server *mcp.Server, addr string, token string)
 		Handler:           wrapped,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
 	ln, err := net.Listen("tcp", addr)

@@ -23,6 +23,7 @@ services:
     environment:
       - LSP_SERVERS=${LSP_SERVERS:-}
       - HOME=/tmp
+      - AGENT_LSP_TOKEN=  # explicitly blank — token is only for HTTP service
     command: []  # Override with language args: go:gopls typescript:typescript-language-server,--stdio
     deploy:
       resources:
