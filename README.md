@@ -52,6 +52,11 @@ Raw tools get ignored. Skills get used. Each skill encodes the correct tool sequ
 | `/lsp-local-symbols` | File-scoped symbol list, usage search, and type info |
 | `/lsp-test-correlation` | Find and run only tests that cover an edited file |
 | `/lsp-format-code` | Format a file or selection via the language server formatter |
+| `/lsp-fix-all` | Apply quick-fix code actions for all diagnostics in a file |
+| `/lsp-refactor` | End-to-end refactor: blast-radius → preview → apply → verify → test |
+| `/lsp-extract-function` | Extract a code block into a named function via code actions |
+| `/lsp-generate` | Trigger server-side code generation (interface stubs, test skeletons, mocks) |
+| `/lsp-understand` | Deep-dive Code Map for a symbol or file: type info, call hierarchy, references, source |
 
 ```bash
 cd skills && ./install.sh

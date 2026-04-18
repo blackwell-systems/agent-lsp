@@ -155,15 +155,22 @@ else
         if [[ "$DRY_RUN" == true ]]; then
             echo "[dry-run] Would update agent-lsp skills block in $CLAUDE_MD"
         else
-            # Use awk to replace the managed block in-place
-            awk -v block="$managed_block" \
-                -v start="$START_SENTINEL" \
+            # Write managed block to a temp file — avoids passing multi-line
+            # strings via awk -v, which BSD awk (macOS) does not support.
+            _block_file=$(mktemp)
+            printf '%s' "$managed_block" > "$_block_file"
+            awk -v start="$START_SENTINEL" \
                 -v end="$END_SENTINEL" \
+                -v block_file="$_block_file" \
                 'BEGIN{skip=0}
-                 $0==start{print block; skip=1; next}
+                 $0==start{
+                   while ((getline line < block_file) > 0) print line
+                   skip=1; next
+                 }
                  $0==end{skip=0; next}
                  !skip{print}' \
                 "$CLAUDE_MD" > "${CLAUDE_MD}.tmp" && mv "${CLAUDE_MD}.tmp" "$CLAUDE_MD"
+            rm -f "$_block_file"
             echo "  updated  ~/.claude/CLAUDE.md skills table"
         fi
     else
