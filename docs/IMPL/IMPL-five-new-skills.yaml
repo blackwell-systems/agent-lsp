@@ -1,1052 +1,1088 @@
-title: 'Five New LSP Agent Skills'
+title: Five New LSP Agent Skills
 feature_slug: five-new-skills
 verdict: SUITABLE
 suitability_assessment: |
-  All five questions resolve cleanly.
+    All five questions resolve cleanly.
 
-  1. File decomposition: Each skill lives in its own directory (skills/lsp-fix-all/,
-     skills/lsp-refactor/, skills/lsp-extract-function/, skills/lsp-generate/,
-     skills/lsp-understand/). All five skill-creation agents have fully disjoint
-     file ownership. The doc-update agent owns only documentation files.
-     No file is shared across Wave 1 agents.
+    1. File decomposition: Each skill lives in its own directory (skills/lsp-fix-all/,
+       skills/lsp-refactor/, skills/lsp-extract-function/, skills/lsp-generate/,
+       skills/lsp-understand/). All five skill-creation agents have fully disjoint
+       file ownership. The doc-update agent owns only documentation files.
+       No file is shared across Wave 1 agents.
 
-  2. No investigation-first items. Skills are new markdown prompt files — no
-     root cause analysis required.
+    2. No investigation-first items. Skills are new markdown prompt files — no
+       root cause analysis required.
 
-  3. Interface contracts: Each SKILL.md requires valid frontmatter (name,
-     description, argument-hint, allowed-tools) and a references/patterns.md
-     copy. These contracts are fully specifiable before any agent writes code.
+    3. Interface contracts: Each SKILL.md requires valid frontmatter (name,
+       description, argument-hint, allowed-tools) and a references/patterns.md
+       copy. These contracts are fully specifiable before any agent writes code.
 
-  4. Pre-implementation status: All five skills are confirmed absent from the
-     skills/ directory. ROADMAP.md lists lsp-fix-all, lsp-extract-function,
-     lsp-generate, and lsp-refactor as planned. lsp-understand is not listed
-     (new addition). All are TODO.
+    4. Pre-implementation status: All five skills are confirmed absent from the
+       skills/ directory. ROADMAP.md lists lsp-fix-all, lsp-extract-function,
+       lsp-generate, and lsp-refactor as planned. lsp-understand is not listed
+       (new addition). All are TODO.
 
-  5. Parallelization value: 5 independent skill agents in Wave 1 all run
-     simultaneously. Build/test cycle is fast (GOWORK=off go test ./...) but
-     each agent creates 2 files and writes substantial skill prose — meaningful
-     parallelization gain.
+    5. Parallelization value: 5 independent skill agents in Wave 1 all run
+       simultaneously. Build/test cycle is fast (GOWORK=off go test ./...) but
+       each agent creates 2 files and writes substantial skill prose — meaningful
+       parallelization gain.
 
-  Estimated times:
-  - Scout phase: ~10 min
-  - Agent execution: ~25 min (5 agents x ~5 min avg, fully parallel Wave 1; +5 min Wave 2)
-  - Merge & verification: ~5 min
-  Total SAW time: ~40 min
+    Estimated times:
+    - Scout phase: ~10 min
+    - Agent execution: ~25 min (5 agents x ~5 min avg, fully parallel Wave 1; +5 min Wave 2)
+    - Merge & verification: ~5 min
+    Total SAW time: ~40 min
 
-  Sequential baseline: ~60 min (6 agents x ~10 min sequential)
-  Time savings: ~20 min (33% faster)
+    Sequential baseline: ~60 min (6 agents x ~10 min sequential)
+    Time savings: ~20 min (33% faster)
 
-  Recommendation: Clear speedup for Wave 1. Proceed.
-
+    Recommendation: Clear speedup for Wave 1. Proceed.
 test_command: GOWORK=off go test ./internal/... ./cmd/...
 lint_command: GOWORK=off go vet ./...
-state: SCOUT_PENDING
-
-quality_gates:
-  level: standard
-  gates:
-    - type: build
-      command: GOWORK=off go build ./...
-      required: true
-    - type: lint
-      command: GOWORK=off go vet ./...
-      required: true
-    - type: test
-      command: GOWORK=off go test ./internal/... ./cmd/...
-      required: true
-
-scaffolds: []
-
 file_ownership:
-  - file: skills/lsp-fix-all/SKILL.md
-    agent: A
-    wave: 1
-    action: new
-    depends_on: []
-  - file: skills/lsp-fix-all/references/patterns.md
-    agent: A
-    wave: 1
-    action: new
-    depends_on: []
-  - file: skills/lsp-refactor/SKILL.md
-    agent: B
-    wave: 1
-    action: new
-    depends_on: []
-  - file: skills/lsp-refactor/references/patterns.md
-    agent: B
-    wave: 1
-    action: new
-    depends_on: []
-  - file: skills/lsp-extract-function/SKILL.md
-    agent: C
-    wave: 1
-    action: new
-    depends_on: []
-  - file: skills/lsp-extract-function/references/patterns.md
-    agent: C
-    wave: 1
-    action: new
-    depends_on: []
-  - file: skills/lsp-generate/SKILL.md
-    agent: D
-    wave: 1
-    action: new
-    depends_on: []
-  - file: skills/lsp-generate/references/patterns.md
-    agent: D
-    wave: 1
-    action: new
-    depends_on: []
-  - file: skills/lsp-understand/SKILL.md
-    agent: E
-    wave: 1
-    action: new
-    depends_on: []
-  - file: skills/lsp-understand/references/patterns.md
-    agent: E
-    wave: 1
-    action: new
-    depends_on: []
-  - file: ROADMAP.md
-    agent: F
-    wave: 2
-    action: modify
-    depends_on: [A, B, C, D, E]
-  - file: CHANGELOG.md
-    agent: F
-    wave: 2
-    action: modify
-    depends_on: [A, B, C, D, E]
-  - file: docs/FEATURES.md
-    agent: F
-    wave: 2
-    action: modify
-    depends_on: [A, B, C, D, E]
-
+    - file: skills/lsp-fix-all/SKILL.md
+      agent: A
+      wave: 1
+      action: new
+    - file: skills/lsp-fix-all/references/patterns.md
+      agent: A
+      wave: 1
+      action: new
+    - file: skills/lsp-refactor/SKILL.md
+      agent: B
+      wave: 1
+      action: new
+    - file: skills/lsp-refactor/references/patterns.md
+      agent: B
+      wave: 1
+      action: new
+    - file: skills/lsp-extract-function/SKILL.md
+      agent: C
+      wave: 1
+      action: new
+    - file: skills/lsp-extract-function/references/patterns.md
+      agent: C
+      wave: 1
+      action: new
+    - file: skills/lsp-generate/SKILL.md
+      agent: D
+      wave: 1
+      action: new
+    - file: skills/lsp-generate/references/patterns.md
+      agent: D
+      wave: 1
+      action: new
+    - file: skills/lsp-understand/SKILL.md
+      agent: E
+      wave: 1
+      action: new
+    - file: skills/lsp-understand/references/patterns.md
+      agent: E
+      wave: 1
+      action: new
+    - file: ROADMAP.md
+      agent: F
+      wave: 2
+      action: modify
+      depends_on:
+        - A
+        - B
+        - C
+        - D
+        - E
+    - file: CHANGELOG.md
+      agent: F
+      wave: 2
+      action: modify
+      depends_on:
+        - A
+        - B
+        - C
+        - D
+        - E
+    - file: docs/FEATURES.md
+      agent: F
+      wave: 2
+      action: modify
+      depends_on:
+        - A
+        - B
+        - C
+        - D
+        - E
 interface_contracts:
-  - name: SKILL.md frontmatter schema
-    description: |
-      Every SKILL.md must have valid YAML frontmatter with these fields.
-      install.sh auto-discovers skills from this frontmatter — the format
-      must be exact.
-    definition: |
-      ---
-      name: lsp-<skill-name>
-      description: "<one sentence, ≤250 chars>"
-      argument-hint: "[optional: hint shown in skill picker]"
-      allowed-tools: mcp__lsp__<tool1> mcp__lsp__<tool2> ...
-      ---
-    location: skills/*/SKILL.md
-  - name: references/patterns.md content
-    description: |
-      Copy of the canonical shared patterns file from lsp-rename. All five new
-      skills must include this file verbatim — it documents the @@ position
-      marker, LineScope, the start_lsp guard pattern, and diagnostic diff format.
-    definition: |
-      Full content from skills/lsp-rename/references/patterns.md — copy
-      without modification. Agents must not edit this file's content.
-    location: skills/lsp-rename/references/patterns.md
-  - name: mcp tool name prefix convention
-    description: |
-      All tool names in allowed-tools frontmatter use the mcp__lsp__ prefix.
-      Tool names without prefix appear in prose steps. Both forms are used
-      in existing skills — follow the same convention.
-    definition: |
-      Frontmatter: mcp__lsp__get_diagnostics mcp__lsp__apply_edit ...
-      Prose steps:  mcp__lsp__get_diagnostics({ ... })
-    location: skills/lsp-verify/SKILL.md
-
+    - name: SKILL.md frontmatter schema
+      description: |
+        Every SKILL.md must have valid YAML frontmatter with these fields.
+        install.sh auto-discovers skills from this frontmatter — the format
+        must be exact.
+      definition: |
+        ---
+        name: lsp-<skill-name>
+        description: "<one sentence, ≤250 chars>"
+        argument-hint: "[optional: hint shown in skill picker]"
+        allowed-tools: mcp__lsp__<tool1> mcp__lsp__<tool2> ...
+        ---
+      location: skills/*/SKILL.md
+    - name: references/patterns.md content
+      description: |
+        Copy of the canonical shared patterns file from lsp-rename. All five new
+        skills must include this file verbatim — it documents the @@ position
+        marker, LineScope, the start_lsp guard pattern, and diagnostic diff format.
+      definition: |
+        Full content from skills/lsp-rename/references/patterns.md — copy
+        without modification. Agents must not edit this file's content.
+      location: skills/lsp-rename/references/patterns.md
+    - name: mcp tool name prefix convention
+      description: |
+        All tool names in allowed-tools frontmatter use the mcp__lsp__ prefix.
+        Tool names without prefix appear in prose steps. Both forms are used
+        in existing skills — follow the same convention.
+      definition: |
+        Frontmatter: mcp__lsp__get_diagnostics mcp__lsp__apply_edit ...
+        Prose steps:  mcp__lsp__get_diagnostics({ ... })
+      location: skills/lsp-verify/SKILL.md
 waves:
-  - number: 1
-    agents:
-      - id: A
-        task: |
-          ## Agent A — lsp-fix-all skill
-
-          Create the `/lsp-fix-all` skill. This skill applies available quick-fix
-          code actions for all current diagnostics in a file, one at a time,
-          re-collecting diagnostics between each fix because line numbers shift
-          after each application.
-
-          ### Files to create
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Agent A — lsp-fix-all skill
+
+            Create the `/lsp-fix-all` skill. This skill applies available quick-fix
+            code actions for all current diagnostics in a file, one at a time,
+            re-collecting diagnostics between each fix because line numbers shift
+            after each application.
+
+            ### Files to create
 
-          1. `skills/lsp-fix-all/SKILL.md`
-          2. `skills/lsp-fix-all/references/patterns.md`
-
-          ### File 1: skills/lsp-fix-all/SKILL.md
-
-          Write a complete skill file with this exact frontmatter:
-
-          ```markdown
-          ---
-          name: lsp-fix-all
-          description: Apply available quick-fix code actions for all current diagnostics in a file, one at a time with re-collection between each fix. Use to bulk-resolve errors and warnings the language server can fix automatically.
-          argument-hint: "[file-path]"
-          allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__get_code_actions mcp__lsp__apply_edit mcp__lsp__open_document mcp__lsp__format_document
-          ---
-          ```
-
-          The skill body must cover:
-
-          **Differentiation from lsp-safe-edit:** Open with a clear statement that
-          this skill fixes PRE-EXISTING diagnostics in a file, not post-edit
-          errors. `/lsp-safe-edit` has a code-action step in its Step 7 for
-          fixing errors introduced by a specific edit — this skill is for
-          systematic bulk-fixing of existing issues before or independent of
-          any edit session.
-
-          **When to use vs. not use:**
-          - Use: file has accumulated errors/warnings you want to resolve automatically
-          - Do NOT use: you just made an edit and want to fix new errors (use `/lsp-safe-edit`)
-          - Do NOT use: you want to apply structural refactors (see code action filtering below)
-
-          **Input:** `file_path` (absolute path to the file to fix)
-
-          **Step 1 — Open and collect initial diagnostics**
-
-          Call `mcp__lsp__open_document` then `mcp__lsp__get_diagnostics`.
-          If zero diagnostics: report "No diagnostics found — file is clean." and stop.
-
-          **Step 2 — Classify and filter code actions**
-
-          For EACH diagnostic (process one at a time, not in batch):
-          - Call `mcp__lsp__get_code_actions` at the diagnostic's position/range
-          - Filter to quick-fix kind only: `kind == "quickfix"` or `kind` starts with `"quickfix."`
-          - SKIP actions with kind `"refactor"`, `"refactor.extract"`, `"refactor.inline"`,
-            `"source"`, or no kind field (unknown/structural actions)
-          - If no quick-fix actions available for a diagnostic: skip it, note in summary
-
-          **Decision gate table (embed in skill):**
-
-          | Action kind | Apply? |
-          |-------------|--------|
-          | `quickfix` | YES |
-          | `quickfix.*` | YES |
-          | `refactor` | NO — structural change |
-          | `refactor.extract` | NO — structural change |
-          | `source.organizeImports` | YES — safe formatting |
-          | `source.*` (others) | NO — skip unless organizeImports |
-          | (no kind / empty) | NO — unknown, skip |
-
-          **Step 3 — Apply one fix and re-collect (the core loop)**
-
-          This is the critical correctness constraint: NEVER apply all fixes
-          at once. After applying one `apply_edit`, line numbers in the file
-          shift. Always re-call `get_diagnostics` before processing the next
-          diagnostic.
-
-          Loop until no applicable quick-fixes remain:
-          1. Get current diagnostics
-          2. Find first diagnostic with an available quick-fix
-          3. Apply the fix via `mcp__lsp__apply_edit`
-          4. Return to step 1
-
-          Exit loop when: diagnostics list is empty, OR no remaining diagnostic
-          has an applicable quick-fix action.
-
-          **Step 4 — Verify and format**
-
-          After loop exits: call `mcp__lsp__get_diagnostics` for final state.
-          If errors remain that had no quick-fix: list them with explanation.
-          Call `mcp__lsp__format_document` to clean up any indentation drift
-          from applied edits.
-
-          **Output format:**
-
-          ```
-          ## lsp-fix-all Summary
-
-          File: /path/to/file.go
-          Initial diagnostics: N errors, M warnings
-          Fixes applied: K
-          Remaining (no auto-fix available): J
-
-          ### Fixed
-          - line X: <message> → applied: <action title>
-
-          ### Skipped (no quick-fix available)
-          - line Y: <message>
-          ```
-
-          **Safety rules (embed as bullet list):**
-          - Never apply more than one code action per loop iteration
-          - Always re-collect diagnostics after each `apply_edit` before the next fix
-          - Never apply refactor or structural code actions — quick-fix only
-          - If apply_edit returns an error, stop the loop and report the failure
-          - Maximum iterations: 50 (safety guard against infinite loops in
-            edge cases where a fix introduces a new fixable diagnostic)
-
-          ### File 2: skills/lsp-fix-all/references/patterns.md
-
-          Copy the EXACT contents of skills/lsp-safe-edit/references/patterns.md
-          verbatim into this file. Do not add, remove, or modify any content.
-
-          ### Constraints
-          - Do NOT modify any file outside skills/lsp-fix-all/
-          - Do NOT replicate the "post-edit code action" workflow from lsp-safe-edit
-          - Do NOT use `execute_command` in this skill — apply_edit is sufficient
-            for quick-fixes; execute_command is for generator workflows (lsp-generate)
-          - The allowed-tools frontmatter must use mcp__lsp__ prefixed names
-            (space-separated, no commas)
-
-        files:
-          - skills/lsp-fix-all/SKILL.md
-          - skills/lsp-fix-all/references/patterns.md
-        dependencies: []
-
-      - id: B
-        task: |
-          ## Agent B — lsp-refactor skill
-
-          Create the `/lsp-refactor` meta-skill. This skill sequences the full
-          edit lifecycle end-to-end: blast-radius analysis → speculative preview
-          → apply → verify build → run affected tests. Since skills cannot call
-          other skills at runtime, this skill inlines the key tool sequences from
-          lsp-impact, lsp-safe-edit, lsp-verify, and lsp-test-correlation into
-          a single coordinated workflow.
-
-          ### Files to create
-
-          1. `skills/lsp-refactor/SKILL.md`
-          2. `skills/lsp-refactor/references/patterns.md`
-
-          ### File 1: skills/lsp-refactor/SKILL.md
-
-          Write a complete skill file with this exact frontmatter:
-
-          ```markdown
-          ---
-          name: lsp-refactor
-          description: End-to-end safe refactor workflow — blast-radius analysis, speculative preview, apply to disk, verify build, run affected tests. Inlines lsp-impact + lsp-safe-edit + lsp-verify + lsp-test-correlation into one coordinated sequence.
-          argument-hint: "[symbol-or-file] [intent]"
-          allowed-tools: mcp__lsp__get_change_impact mcp__lsp__simulate_edit_atomic mcp__lsp__simulate_chain mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__apply_edit mcp__lsp__open_document mcp__lsp__format_document Edit Write
-          ---
-          ```
-
-          The skill body must cover:
-
-          **Differentiation from existing skills:** Open with a clear statement
-          that this skill does NOT replace lsp-safe-edit (which wraps a single
-          edit with diagnostic comparison) or lsp-impact (read-only analysis).
-          lsp-refactor sequences ALL four of those workflows in order for a
-          complete refactor operation. Use it when you know the target and
-          intent up front and want the full workflow without switching skills.
-
-          **Input:**
-          - `target`: symbol name (dot notation) OR file path
-          - `intent`: description of the change to make
-          - `workspace_root`: absolute path to workspace
-
-          **Phase 1 — Blast-radius analysis (inlined from lsp-impact)**
-
-          Call `mcp__lsp__get_change_impact` with `changed_files` set to the
-          file containing the target symbol:
-          ```
-          mcp__lsp__get_change_impact({
-            "changed_files": ["/abs/path/to/file"],
-            "include_transitive": false
-          })
-          ```
-          Display: affected symbol count, test callers (with test function names),
-          non-test callers, reference count. If reference count > 20, require
-          explicit user confirmation before proceeding ("High blast radius: N
-          callers. Proceed? y/n").
-
-          **Phase 2 — Speculative preview (inlined from lsp-safe-edit)**
-
-          Capture baseline diagnostics:
-          ```
-          mcp__lsp__open_document({ "file_path": "...", "language_id": "..." })
-          mcp__lsp__get_diagnostics({ "file_path": "..." })
-          ```
-
-          For a single-file change: use `simulate_edit_atomic`.
-          For multi-file changes: use `simulate_chain`.
-
-          Display the speculative result using the Diagnostic Diff Output Format
-          from references/patterns.md. If net_delta > 0 (errors introduced): stop
-          and report the errors. Do NOT apply to disk.
-
-          **Phase 3 — Apply to disk**
-
-          Only reached if Phase 2 net_delta <= 0.
-          Apply using Edit or Write tool, OR `mcp__lsp__apply_edit` if the edit
-          was computed by simulation. Format the file:
-          ```
-          mcp__lsp__format_document({ "file_path": "..." })
-          ```
-
-          **Phase 4 — Verify build (inlined from lsp-verify)**
-
-          Run in this order (same as lsp-verify Layer 1 and Layer 2):
-          ```
-          mcp__lsp__get_diagnostics({ "file_path": "..." })
-          mcp__lsp__run_build({ "workspace_root": "..." })
-          ```
-          If build fails: display errors and stop. Do not proceed to test phase.
-
-          **Phase 5 — Run affected tests (inlined from lsp-test-correlation)**
-
-          For each file changed in Phase 3:
-          ```
-          mcp__lsp__get_tests_for_file({ "file_path": "..." })
-          ```
-          Run only the correlated test files:
-          ```
-          mcp__lsp__run_tests({ "workspace_root": "...", "test_files": [...] })
-          ```
-          If no correlated test files found: note "No test correlation found —
-          run full suite manually to confirm."
-
-          **Output format:**
-
-          ```
-          ## lsp-refactor Complete
-
-          ### Phase 1 — Blast Radius
-          Affected symbols: N
-          Test callers: M  (list each with enclosing test function)
-          Non-test callers: K
-
-          ### Phase 2 — Speculative Preview
-          [Diagnostic Diff Output Format from patterns.md]
-          net_delta: 0 → safe to apply
-
-          ### Phase 3 — Applied
-          Files changed: [list]
-
-          ### Phase 4 — Build Verification
-          Diagnostics: N errors (0 new)
-          Build: PASS
-
-          ### Phase 5 — Test Results
-          Test files run: [list]
-          Result: PASS / FAIL
-          ```
-
-          **Abort conditions (embed as explicit list):**
-          - Phase 1: blast radius > 20 callers AND user does not confirm → abort
-          - Phase 2: net_delta > 0 (simulation introduced errors) → abort, show errors
-          - Phase 4: build fails → abort, show build output
-          - Any phase: LSP returns unexpected error → abort, report tool output
-
-          ### File 2: skills/lsp-refactor/references/patterns.md
-
-          Copy the EXACT contents of skills/lsp-safe-edit/references/patterns.md
-          verbatim into this file. Do not add, remove, or modify any content.
-
-          ### Constraints
-          - Do NOT call other skills from within this skill — inline all tool sequences
-          - Do NOT skip Phase 1 even for "small" refactors — blast radius check is mandatory
-          - Do NOT apply to disk if Phase 2 simulation shows net_delta > 0
-          - Do NOT modify any file outside skills/lsp-refactor/
-
-        files:
-          - skills/lsp-refactor/SKILL.md
-          - skills/lsp-refactor/references/patterns.md
-        dependencies: []
-
-      - id: C
-        task: |
-          ## Agent C — lsp-extract-function skill
-
-          Create the `/lsp-extract-function` skill. This skill extracts a selected
-          code block into a named function. The primary path uses the language
-          server's extract-function code action if available; the manual fallback
-          applies when no code action is offered.
-
-          ### Files to create
-
-          1. `skills/lsp-extract-function/SKILL.md`
-          2. `skills/lsp-extract-function/references/patterns.md`
-
-          ### File 1: skills/lsp-extract-function/SKILL.md
-
-          Write a complete skill file with this exact frontmatter:
-
-          ```markdown
-          ---
-          name: lsp-extract-function
-          description: Extract a selected code block into a named function. Primary path uses the language server's extract-function code action; falls back to manual extraction when no code action is available. Validates captured variables, scope shadowing, and compilation after extraction.
-          argument-hint: "[file-path] [start-line] [end-line] [new-function-name]"
-          allowed-tools: mcp__lsp__get_document_symbols mcp__lsp__get_code_actions mcp__lsp__execute_command mcp__lsp__apply_edit mcp__lsp__get_diagnostics mcp__lsp__open_document mcp__lsp__format_document mcp__lsp__get_server_capabilities
-          ---
-          ```
-
-          The skill body must cover:
-
-          **Differentiation from lsp-generate:** Open with a clear statement.
-          lsp-extract-function RESTRUCTURES existing code (takes code that already
-          exists and moves it into a new function). lsp-generate creates NEW code
-          that does not yet exist (stubs, mocks, interface implementations). Use
-          this skill when the code is already written; use lsp-generate when you
-          need to generate code from scratch.
-
-          **Input:**
-          - `file_path`: absolute path to the file
-          - `start_line`, `end_line`: line range of code to extract (1-indexed)
-          - `new_function_name`: desired name for the extracted function
-
-          **Step 1 — Get context (document symbols)**
-
-          Call `mcp__lsp__open_document` then `mcp__lsp__get_document_symbols`
-          to understand the containing function and scope. This establishes:
-          - Which function contains the selection
-          - Whether `new_function_name` already exists in the file (name collision check)
-
-          If `new_function_name` already exists as a symbol: report conflict and stop.
-
-          **Step 2 — Check server capabilities**
-
-          Call `mcp__lsp__get_server_capabilities`. Check for `codeActionProvider`.
-          Note whether `execute_command` is listed in `executeCommandProvider.commands`.
-
-          **Step 3 — Primary path: LSP code action**
-
-          Call `mcp__lsp__get_code_actions` with the selection range:
-          ```
-          mcp__lsp__get_code_actions({
-            "file_path": "...",
-            "start_line": N,
-            "start_column": 1,
-            "end_line": M,
-            "end_column": 999
-          })
-          ```
-
-          Filter for extract-function actions: kind contains `"refactor.extract"`
-          or title contains "Extract" and "function" (case-insensitive).
-
-          If extract-function action found:
-          - Display the action title and ask for confirmation if it proposes a
-            different name than `new_function_name`
-          - Execute via `mcp__lsp__execute_command` if the action has a `command`
-            field, OR apply directly via `mcp__lsp__apply_edit` if it has an edit
-          - Skip to Step 5
-
-          If no extract-function action found: fall through to Step 4.
-
-          **Step 4 — Manual fallback**
-
-          When no code action is available, guide the agent through manual extraction:
-
-          a) Read the selected lines to identify:
-             - Variables used inside the selection that are declared outside (→ parameters)
-             - Variables declared inside the selection that are used outside (→ return values)
-             - Return statements inside the selection (→ wrap in function)
-
-          b) Construct the extracted function signature based on captured variables.
-             Display the proposed signature to the user for confirmation before writing.
-
-          c) Apply the extraction:
-             - Insert new function definition after the containing function's closing brace
-             - Replace the selected lines with a call to the new function
-
-          d) Use `mcp__lsp__apply_edit` for the replacements. Apply the call-site
-             replacement first, then insert the new function — order matters to preserve
-             line numbers during editing.
-
-          **Step 5 — Validate**
-
-          After extraction (either path):
-          1. `mcp__lsp__get_diagnostics` — check for errors
-          2. If errors: show them; common causes listed below
-          3. `mcp__lsp__format_document` — clean up indentation
-
-          **Common post-extraction errors and their causes (embed as table):**
-
-          | Error type | Likely cause | Fix |
-          |------------|--------------|-----|
-          | Undefined variable | Captured var not passed as parameter | Add parameter |
-          | Type mismatch | Return type inferred incorrectly | Adjust return type in signature |
-          | Name shadows outer | New function name matches outer scope | Choose different name |
-          | Unused variable | Return value not captured at call site | Add variable at call site |
-
-          **Language-specific notes:**
-          - **Go:** gopls may offer "Extract function" in code actions for selection ranges
-          - **TypeScript/JavaScript:** tsserver may offer "Extract to function in global scope"
-          - **Python:** pylsp and pyright-langserver typically do NOT offer extract-function
-            code actions — manual fallback required
-
-          ### File 2: skills/lsp-extract-function/references/patterns.md
-
-          Copy the EXACT contents of skills/lsp-safe-edit/references/patterns.md
-          verbatim into this file. Do not add, remove, or modify any content.
-
-          ### Constraints
-          - Do NOT use this skill for generating new code from scratch (that is lsp-generate)
-          - Do NOT apply the name-collision check as optional — it is mandatory
-          - Do NOT batch the call-site replacement and function insertion into a single
-            apply_edit if the edits are in different line regions; apply sequentially
-          - Do NOT modify any file outside skills/lsp-extract-function/
-
-        files:
-          - skills/lsp-extract-function/SKILL.md
-          - skills/lsp-extract-function/references/patterns.md
-        dependencies: []
-
-      - id: D
-        task: |
-          ## Agent D — lsp-generate skill
-
-          Create the `/lsp-generate` skill. This skill triggers language server
-          code generation: interface stubs, test skeletons, missing method stubs,
-          mock types. It uses `get_code_actions` to surface generator options and
-          `execute_command` to run them.
-
-          ### Files to create
-
-          1. `skills/lsp-generate/SKILL.md`
-          2. `skills/lsp-generate/references/patterns.md`
-
-          ### File 1: skills/lsp-generate/SKILL.md
-
-          Write a complete skill file with this exact frontmatter:
-
-          ```markdown
-          ---
-          name: lsp-generate
-          description: Trigger language server code generation — implement interface stubs, generate test skeletons, add missing methods, generate mock types. Uses get_code_actions to surface generator options and execute_command to run them.
-          argument-hint: "[file-path:line:col] [generation-intent]"
-          allowed-tools: mcp__lsp__get_code_actions mcp__lsp__execute_command mcp__lsp__apply_edit mcp__lsp__format_document mcp__lsp__get_diagnostics mcp__lsp__open_document mcp__lsp__get_server_capabilities mcp__lsp__go_to_symbol
-          ---
-          ```
-
-          The skill body must cover:
-
-          **Differentiation from lsp-extract-function:** Open with a clear
-          statement. lsp-generate creates NEW code that does not yet exist in the
-          file — stubs, mocks, implementations of interfaces, test functions.
-          lsp-extract-function restructures code that already exists. Use
-          lsp-generate when you want the language server to write something new.
-
-          **Input:**
-          - `file_path`: absolute path to the target file
-          - `line`, `column` (or `position_pattern`): position in the file where
-            generation is triggered (e.g., the line with the unimplemented interface,
-            the missing method error, the type declaration)
-          - `intent`: description of what to generate (e.g., "implement io.Reader",
-            "generate test skeleton", "add missing methods", "generate mock for Handler")
-
-          **Step 1 — Open document and locate position**
-
-          Call `mcp__lsp__open_document`. If using `position_pattern`, use the
-          @@ marker convention from references/patterns.md.
-
-          **Step 2 — Get code actions at target position**
-
-          ```
-          mcp__lsp__get_code_actions({
-            "file_path": "...",
-            "start_line": N,
-            "start_column": C,
-            "end_line": N,
-            "end_column": C
-          })
-          ```
-
-          Filter for generator actions: kind `"quickfix"` with titles matching
-          the intent (e.g., "Implement interface", "Generate", "Add stub",
-          "Create test"), OR kind `"source"` for source-level generation.
-
-          If no matching action found: report "No generator action available at
-          this position for the given intent" and suggest manual approach.
-
-          **Step 3 — Select and confirm action**
-
-          Display available generator actions to the user. If multiple match
-          the intent, list all and ask which to apply. Confirm the selected
-          action before executing.
-
-          **Step 4 — Execute generator**
-
-          If action has `command` field: run via `mcp__lsp__execute_command`.
-          If action has `edit` field: apply via `mcp__lsp__apply_edit`.
-          Some actions produce both — apply edit first, then run command.
-
-          **Step 5 — Format and verify**
-
-          ```
-          mcp__lsp__format_document({ "file_path": "..." })
-          mcp__lsp__get_diagnostics({ "file_path": "..." })
-          ```
-
-          Report remaining diagnostics. Stub methods typically leave TODO
-          comments or `panic("not implemented")` bodies — this is expected.
-
-          **Per-language generator patterns (embed as table):**
-
-          | Language | Generator | Trigger location | Code action kind |
-          |----------|-----------|-----------------|-----------------|
-          | Go (gopls) | Implement interface | Line with `var _ MyInterface = (*MyType)(nil)` or type declaration | `quickfix` — "Implement interface" |
-          | Go (gopls) | Generate test file | Any .go file without _test.go counterpart | `source` — "Generate unit tests" |
-          | Go (gopls) | Add missing method | Line with `undefined: method` error | `quickfix` |
-          | TypeScript (tsserver) | Implement interface | Class declaration | `quickfix` — "Implement interface members" |
-          | TypeScript (tsserver) | Add missing method | Method call with no definition | `quickfix` — "Add missing function declaration" |
-          | Python (pyright) | Add import | Name not defined | `quickfix` — "Add import" |
-          | Rust (rust-analyzer) | Implement trait | `impl Trait for Type {}` | `quickfix` — "Add missing impl members" |
-
-          **Fallback when no code action available:**
-
-          If `get_code_actions` returns no generator actions: explain that the
-          language server at this workspace may not support server-side generation
-          for this intent. Suggest manual implementation with guidance specific
-          to the intent (e.g., for interface implementation: list the methods
-          the interface requires by looking up the interface definition first
-          using `go_to_symbol`).
-
-          ### File 2: skills/lsp-generate/references/patterns.md
-
-          Copy the EXACT contents of skills/lsp-safe-edit/references/patterns.md
-          verbatim into this file. Do not add, remove, or modify any content.
-
-          ### Constraints
-          - Do NOT batch execute_command calls — one generator at a time
-          - Do NOT skip user confirmation when multiple generator actions are available
-          - Do NOT modify any file outside skills/lsp-generate/
-          - The allowed-tools frontmatter must use mcp__lsp__ prefixed names
-
-        files:
-          - skills/lsp-generate/SKILL.md
-          - skills/lsp-generate/references/patterns.md
-        dependencies: []
-
-      - id: E
-        task: |
-          ## Agent E — lsp-understand skill
-
-          Create the `/lsp-understand` skill. This skill builds a complete picture
-          of unfamiliar code — given a symbol OR a file, it synthesizes hover info,
-          implementations, call hierarchy (bounded to 2 levels), all references,
-          and source — into a structured "Code Map" the user can navigate.
-
-          ### Files to create
-
-          1. `skills/lsp-understand/SKILL.md`
-          2. `skills/lsp-understand/references/patterns.md`
-
-          ### File 1: skills/lsp-understand/SKILL.md
-
-          Write a complete skill file with this exact frontmatter:
-
-          ```markdown
-          ---
-          name: lsp-understand
-          description: Deep-dive exploration of unfamiliar code — given a symbol or file, builds a complete Code Map showing type info, implementations, call hierarchy (2-level depth limit), all references, and source. Broader than lsp-explore: accepts files, synthesizes multi-symbol relationships, and produces a navigable dependency map.
-          argument-hint: "[symbol-name | file-path]"
-          allowed-tools: mcp__lsp__get_info_on_location mcp__lsp__go_to_implementation mcp__lsp__call_hierarchy mcp__lsp__get_references mcp__lsp__get_symbol_source mcp__lsp__get_document_symbols mcp__lsp__open_document mcp__lsp__go_to_symbol mcp__lsp__get_server_capabilities
-          ---
-          ```
-
-          The skill body must cover:
-
-          **Differentiation from lsp-explore:** Open with an explicit comparison.
-          `/lsp-explore` is a single-symbol pass — given one symbol name, it runs
-          hover + implementations + call hierarchy + references and produces a
-          per-symbol report. `/lsp-understand` is broader in three ways:
-          (1) accepts a FILE PATH as input and explores all exported symbols in
-          that file as a group, (2) synthesizes cross-symbol relationships to
-          produce a dependency map rather than isolated per-symbol reports, and
-          (3) enforces a 2-level call hierarchy depth limit to prevent infinite
-          recursion in deeply connected code. Use lsp-explore for quick "what is
-          this one thing" questions; use lsp-understand for "how does this module
-          work as a whole."
-
-          **Input — two modes:**
-
-          Mode A (symbol): User provides a symbol name in dot notation
-          (e.g., `"codec.Encode"`, `"Handler.ServeHTTP"`).
-
-          Mode B (file): User provides an absolute file path. All exported
-          symbols in the file become the entry points.
-
-          **Step 1 — Entry point resolution**
-
-          Mode A: Call `mcp__lsp__go_to_symbol` to locate the symbol definition.
-          Obtain `file_path`, `line`, `column`.
-
-          Mode B: Call `mcp__lsp__open_document` then `mcp__lsp__get_document_symbols`.
-          Filter to exported symbols (uppercase first letter in Go, `export` keyword
-          in TypeScript, `pub` in Rust, etc.). Collect all as entry points.
-          Cap at 10 exported symbols maximum — if more, focus on the top-level
-          functions and types (skip constants and variables).
-
-          **Step 2 — Per-symbol analysis (for each entry point)**
-
-          Run these tool calls. Where possible, parallelize calls within each step:
-
-          a) **Type info and docs:** `mcp__lsp__get_info_on_location`
-             Use `position_pattern` with @@ marker from references/patterns.md.
-
-          b) **Implementations (if interface/abstract type):**
-             `mcp__lsp__go_to_implementation` — list concrete types.
-             Skip if server reports `implementationProvider: false`.
-
-          c) **Call hierarchy — bounded to 2 levels:**
-             `mcp__lsp__call_hierarchy` with direction `"incoming"`.
-             Level 1: direct callers of this symbol.
-             For each Level 1 caller: call `mcp__lsp__call_hierarchy` once more
-             to get Level 2 (callers of the caller).
-             STOP at Level 2 — do not recurse further.
-
-          d) **Outgoing calls (what this symbol calls):**
-             `mcp__lsp__call_hierarchy` with direction `"outgoing"`.
-             Level 1 only — no recursion.
-
-          e) **All references:** `mcp__lsp__get_references`
-             Returns every usage site across the workspace.
-
-          f) **Source:** `mcp__lsp__get_symbol_source`
-             Read the implementation body.
-
-          **Step 3 — Synthesize relationships**
-
-          After analyzing all entry points: identify cross-symbol relationships:
-          - Which entry points call each other (from outgoing calls)?
-          - Which entry points are called by the same callers?
-          - Which entry points implement the same interface?
-
-          This synthesis step is what distinguishes lsp-understand from multiple
-          lsp-explore calls.
-
-          **Step 4 — Output: Code Map**
-
-          Produce a structured Code Map with these sections:
-
-          ```
-          ## Code Map: <target>
-
-          ### Summary
-          <2-3 sentence description of what this code does, synthesized from
-          hover docs and source reading>
-
-          ### Symbols (<N> analyzed)
-
-          #### <SymbolName>
-          - **Type:** <type signature from hover>
-          - **Source:** <file:line>
-          - **Incoming callers (L1):** <list; count only if > 5>
-          - **Incoming callers (L2):** <summarized; e.g., "called by 3 HTTP handlers">
-          - **Outgoing calls:** <what this symbol calls>
-          - **Implements:** <interface name, if applicable>
-          - **References:** N sites across M files
-
-          ### Dependency Relationships
-          <symbols that call each other, as a simple text diagram or list>
-          e.g.:
-            HandlerA → Parse → Validate
-            HandlerB → Parse
-
-          ### Entry Points to This Code
-          <top-level callers that are NOT in this file — where does outside code
-          call in?>
-
-          ### Depth-limit Note
-          Call hierarchy stopped at 2 levels. <N> additional callers exist beyond
-          Level 2 — use /lsp-explore on specific symbols to drill deeper.
-          ```
-
-          **Depth control rules (embed explicitly):**
-          - Call hierarchy recursion stops at Level 2 for INCOMING calls
-          - Outgoing calls: Level 1 only, no recursion
-          - If Level 2 callers > 10: summarize by count and file, do not list individually
-          - Do NOT follow call chains beyond these limits under any circumstances
-
-          **Capability checks:**
-          Before Step 2, call `mcp__lsp__get_server_capabilities`. Skip steps
-          requiring missing capabilities:
-          - `go_to_implementation`: skip 2b if `implementationProvider: false`
-          - `call_hierarchy`: skip 2c/2d if `callHierarchyProvider: false`; note in output
-
-          ### File 2: skills/lsp-understand/references/patterns.md
-
-          Copy the EXACT contents of skills/lsp-safe-edit/references/patterns.md
-          verbatim into this file. Do not add, remove, or modify any content.
-
-          ### Constraints
-          - Do NOT recurse call hierarchy beyond 2 levels — this is a hard limit
-          - Do NOT analyze more than 10 exported symbols per file in Mode B
-          - Do NOT replicate the lsp-explore single-symbol report format — the
-            output must be a Code Map showing cross-symbol relationships
-          - Do NOT modify any file outside skills/lsp-understand/
-
-        files:
-          - skills/lsp-understand/SKILL.md
-          - skills/lsp-understand/references/patterns.md
-        dependencies: []
-
-  - number: 2
-    agents:
-      - id: F
-        task: |
-          ## Agent F — Documentation update
-
-          Update three documentation files to reflect the five new skills added
-          in Wave 1. Also update the GitHub repository description.
-
-          ### File 1: ROADMAP.md
-
-          Mark the five new skills as "Shipped" in the Skills section. Read the
-          current content of ROADMAP.md first. The Skills section currently
-          has tables listing planned skills. Update it to reflect:
-
-          The current Skills section header reads:
-          ```
-          Skills encode correct tool sequences so workflows actually happen. The current 15 skills cover navigation, safety checking, and analysis. Two gaps remain.
-          ```
-
-          Change "15 skills" to "20 skills" and remove the phrase "Two gaps remain."
-          Update it to: "Skills encode correct tool sequences so workflows actually happen. The current 20 skills cover navigation, safety checking, analysis, refactoring, and code generation."
-
-          In the "Code action skills" table, change the Status column for all three
-          rows (`/lsp-extract-function`, `/lsp-fix-all`, `/lsp-generate`) from their
-          current state (no Status column — these are in a description-only table)
-          to a note marking them Shipped. The current table has columns
-          `| Skill | Description |`. Add a "Status" column with value "Shipped" for
-          these three skills, or append "(Shipped)" to each skill name.
-
-          In the "Full edit lifecycle skill" table: mark `/lsp-refactor` as Shipped.
-
-          In the "Understanding skill" table: mark `/lsp-understand` as Shipped.
-          (Note: lsp-explore is already listed here — lsp-understand is an
-          additional entry for the broader file-level exploration skill.)
-
-          Read the file before editing to get exact current text for the Edit tool.
-
-          ### File 2: CHANGELOG.md
-
-          Add entries for all five new skills under the `[Unreleased]` section.
-          The current `[Unreleased]` section starts at line 6. Add AFTER the last
-          existing `### Added` item in [Unreleased] (after the `install.sh` entry).
-
-          The current last item in [Unreleased] Added reads:
-          ```
-          - `install.sh` now maintains a managed skills table in `~/.claude/CLAUDE.md` between sentinel comments (`<!-- agent-lsp:skills:start/end -->`). Auto-discovers all skills from SKILL.md frontmatter — adding a new skill and re-running install keeps CLAUDE.md in sync without touching surrounding content.
-          ```
-
-          Add after that item, before the `- Docker builds now trigger...` item:
-
-          ```markdown
-          - **`/lsp-fix-all` skill** — apply available quick-fix code actions for all current diagnostics in a file, one at a time with re-collection after each fix. Distinguishes quick-fix actions from structural refactors; enforces a sequential fix loop to handle line number shifts after each apply_edit.
-
-          - **`/lsp-refactor` skill** — end-to-end safe refactor workflow that sequences blast-radius analysis, speculative preview, disk apply, build verification, and affected-test execution into a single coordinated skill. Inlines tool sequences from lsp-impact, lsp-safe-edit, lsp-verify, and lsp-test-correlation without calling those skills at runtime.
-
-          - **`/lsp-extract-function` skill** — extract a selected code block into a named function. Primary path uses the language server's extract-function code action (refactor.extract kind); manual fallback identifies captured variables and constructs the function signature when no code action is available. Validates name collisions and compilation after extraction.
-
-          - **`/lsp-generate` skill** — trigger language server code generation: interface stubs, test skeletons, missing method stubs, mock types. Uses get_code_actions to surface generator options and execute_command to run them. Documents per-language generator patterns for Go (gopls), TypeScript, Python, and Rust.
-
-          - **`/lsp-understand` skill** — deep-dive exploration of unfamiliar code, accepting a symbol name OR a file path. Synthesizes hover info, implementations, call hierarchy (bounded to 2 levels), references, and source into a structured Code Map showing cross-symbol dependency relationships. Broader than /lsp-explore: operates on files as a unit and surfaces inter-symbol relationships.
-          ```
-
-          ### File 3: docs/FEATURES.md
-
-          Three updates needed:
-
-          **Update 1:** Change the skills count in the section header.
-          Current text at line 220:
-          ```
-          ## Skills (15 total)
-          ```
-          Change to:
-          ```
-          ## Skills (20 total)
-          ```
-
-          **Update 2:** Change the count in line 889 area.
-          Current text:
-          ```
-          - 15 skill directories; each contains `SKILL.md` with frontmatter + prompt body
-          ```
-          Change to:
-          ```
-          - 20 skill directories; each contains `SKILL.md` with frontmatter + prompt body
-          ```
-
-          **Update 3:** Add five rows to the skills table. The table ends with:
-          ```
-          | `/lsp-format-code` | `[file-path]` | format_document, format_range, apply_edit | Format file or selection via language server formatter; applies edits to disk |
-          ```
-          Add these five rows immediately after that line:
-          ```
-          | `/lsp-fix-all` | `[file-path]` | get_diagnostics, get_code_actions, apply_edit, open_document, format_document | Sequential quick-fix loop: collect diagnostics → apply one fix → re-collect; quick-fix kind only; never batches |
-          | `/lsp-refactor` | `[symbol-or-file] [intent]` | get_change_impact, simulate_edit_atomic, simulate_chain, get_diagnostics, run_build, run_tests, get_tests_for_file, apply_edit, format_document | End-to-end refactor: blast-radius → speculative preview → apply → build verify → affected tests |
-          | `/lsp-extract-function` | `[file-path] [start-line] [end-line] [name]` | get_document_symbols, get_code_actions, execute_command, apply_edit, get_diagnostics, format_document | Extract code block into named function; LSP code action primary, manual fallback with captured-variable analysis |
-          | `/lsp-generate` | `[file-path:line:col] [intent]` | get_code_actions, execute_command, apply_edit, format_document, get_diagnostics, go_to_symbol | Language server code generation: interface stubs, test skeletons, missing methods, mocks |
-          | `/lsp-understand` | `[symbol-name \| file-path]` | get_info_on_location, go_to_implementation, call_hierarchy, get_references, get_symbol_source, get_document_symbols, go_to_symbol | Deep Code Map: type info + implementations + call hierarchy (2-level) + references + source; synthesizes cross-symbol relationships |
-          ```
-
-          **Update 4:** In the "Skills (planned)" section near line 791:
-          The current table lists lsp-extract-function, lsp-fix-all, lsp-generate,
-          lsp-refactor as planned. Change the section header from
-          `### Skills (planned)` to `### Skills (shipped in this release)` and
-          add lsp-understand to the table. Read the file to get exact current text.
-
-          ### GitHub description update
-
-          Run this command to update the GitHub repository description:
-          ```
-          gh repo edit blackwell-systems/agent-lsp --description "Stateful MCP runtime over real language servers, not a bridge. Persistent warm index, 50 tools across 30 languages, 20 agent skills."
-          ```
-
-          The current description is:
-          "Stateful MCP runtime over real language servers, not a bridge. Persistent warm index, 50 tools across 30 languages, 14 agentskills standardized skills."
-
-          ### Constraints
-          - Read each file with the Read tool before using the Edit tool — exact
-            text matching is required
-          - Do NOT modify any skill SKILL.md files — those are owned by Wave 1 agents
-          - Do NOT modify go source files or install.sh
-          - Run the gh CLI command exactly as specified above
-
-        files:
-          - ROADMAP.md
-          - CHANGELOG.md
-          - docs/FEATURES.md
-        dependencies: [A, B, C, D, E]
-
+            1. `skills/lsp-fix-all/SKILL.md`
+            2. `skills/lsp-fix-all/references/patterns.md`
+
+            ### File 1: skills/lsp-fix-all/SKILL.md
+
+            Write a complete skill file with this exact frontmatter:
+
+            ```markdown
+            ---
+            name: lsp-fix-all
+            description: Apply available quick-fix code actions for all current diagnostics in a file, one at a time with re-collection between each fix. Use to bulk-resolve errors and warnings the language server can fix automatically.
+            argument-hint: "[file-path]"
+            allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__get_code_actions mcp__lsp__apply_edit mcp__lsp__open_document mcp__lsp__format_document
+            ---
+            ```
+
+            The skill body must cover:
+
+            **Differentiation from lsp-safe-edit:** Open with a clear statement that
+            this skill fixes PRE-EXISTING diagnostics in a file, not post-edit
+            errors. `/lsp-safe-edit` has a code-action step in its Step 7 for
+            fixing errors introduced by a specific edit — this skill is for
+            systematic bulk-fixing of existing issues before or independent of
+            any edit session.
+
+            **When to use vs. not use:**
+            - Use: file has accumulated errors/warnings you want to resolve automatically
+            - Do NOT use: you just made an edit and want to fix new errors (use `/lsp-safe-edit`)
+            - Do NOT use: you want to apply structural refactors (see code action filtering below)
+
+            **Input:** `file_path` (absolute path to the file to fix)
+
+            **Step 1 — Open and collect initial diagnostics**
+
+            Call `mcp__lsp__open_document` then `mcp__lsp__get_diagnostics`.
+            If zero diagnostics: report "No diagnostics found — file is clean." and stop.
+
+            **Step 2 — Classify and filter code actions**
+
+            For EACH diagnostic (process one at a time, not in batch):
+            - Call `mcp__lsp__get_code_actions` at the diagnostic's position/range
+            - Filter to quick-fix kind only: `kind == "quickfix"` or `kind` starts with `"quickfix."`
+            - SKIP actions with kind `"refactor"`, `"refactor.extract"`, `"refactor.inline"`,
+              `"source"`, or no kind field (unknown/structural actions)
+            - If no quick-fix actions available for a diagnostic: skip it, note in summary
+
+            **Decision gate table (embed in skill):**
+
+            | Action kind | Apply? |
+            |-------------|--------|
+            | `quickfix` | YES |
+            | `quickfix.*` | YES |
+            | `refactor` | NO — structural change |
+            | `refactor.extract` | NO — structural change |
+            | `source.organizeImports` | YES — safe formatting |
+            | `source.*` (others) | NO — skip unless organizeImports |
+            | (no kind / empty) | NO — unknown, skip |
+
+            **Step 3 — Apply one fix and re-collect (the core loop)**
+
+            This is the critical correctness constraint: NEVER apply all fixes
+            at once. After applying one `apply_edit`, line numbers in the file
+            shift. Always re-call `get_diagnostics` before processing the next
+            diagnostic.
+
+            Loop until no applicable quick-fixes remain:
+            1. Get current diagnostics
+            2. Find first diagnostic with an available quick-fix
+            3. Apply the fix via `mcp__lsp__apply_edit`
+            4. Return to step 1
+
+            Exit loop when: diagnostics list is empty, OR no remaining diagnostic
+            has an applicable quick-fix action.
+
+            **Step 4 — Verify and format**
+
+            After loop exits: call `mcp__lsp__get_diagnostics` for final state.
+            If errors remain that had no quick-fix: list them with explanation.
+            Call `mcp__lsp__format_document` to clean up any indentation drift
+            from applied edits.
+
+            **Output format:**
+
+            ```
+            ## lsp-fix-all Summary
+
+            File: /path/to/file.go
+            Initial diagnostics: N errors, M warnings
+            Fixes applied: K
+            Remaining (no auto-fix available): J
+
+            ### Fixed
+            - line X: <message> → applied: <action title>
+
+            ### Skipped (no quick-fix available)
+            - line Y: <message>
+            ```
+
+            **Safety rules (embed as bullet list):**
+            - Never apply more than one code action per loop iteration
+            - Always re-collect diagnostics after each `apply_edit` before the next fix
+            - Never apply refactor or structural code actions — quick-fix only
+            - If apply_edit returns an error, stop the loop and report the failure
+            - Maximum iterations: 50 (safety guard against infinite loops in
+              edge cases where a fix introduces a new fixable diagnostic)
+
+            ### File 2: skills/lsp-fix-all/references/patterns.md
+
+            Copy the EXACT contents of skills/lsp-safe-edit/references/patterns.md
+            verbatim into this file. Do not add, remove, or modify any content.
+
+            ### Constraints
+            - Do NOT modify any file outside skills/lsp-fix-all/
+            - Do NOT replicate the "post-edit code action" workflow from lsp-safe-edit
+            - Do NOT use `execute_command` in this skill — apply_edit is sufficient
+              for quick-fixes; execute_command is for generator workflows (lsp-generate)
+            - The allowed-tools frontmatter must use mcp__lsp__ prefixed names
+              (space-separated, no commas)
+          files:
+            - skills/lsp-fix-all/SKILL.md
+            - skills/lsp-fix-all/references/patterns.md
+        - id: B
+          task: |
+            ## Agent B — lsp-refactor skill
+
+            Create the `/lsp-refactor` meta-skill. This skill sequences the full
+            edit lifecycle end-to-end: blast-radius analysis → speculative preview
+            → apply → verify build → run affected tests. Since skills cannot call
+            other skills at runtime, this skill inlines the key tool sequences from
+            lsp-impact, lsp-safe-edit, lsp-verify, and lsp-test-correlation into
+            a single coordinated workflow.
+
+            ### Files to create
+
+            1. `skills/lsp-refactor/SKILL.md`
+            2. `skills/lsp-refactor/references/patterns.md`
+
+            ### File 1: skills/lsp-refactor/SKILL.md
+
+            Write a complete skill file with this exact frontmatter:
+
+            ```markdown
+            ---
+            name: lsp-refactor
+            description: End-to-end safe refactor workflow — blast-radius analysis, speculative preview, apply to disk, verify build, run affected tests. Inlines lsp-impact + lsp-safe-edit + lsp-verify + lsp-test-correlation into one coordinated sequence.
+            argument-hint: "[symbol-or-file] [intent]"
+            allowed-tools: mcp__lsp__get_change_impact mcp__lsp__simulate_edit_atomic mcp__lsp__simulate_chain mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__apply_edit mcp__lsp__open_document mcp__lsp__format_document Edit Write
+            ---
+            ```
+
+            The skill body must cover:
+
+            **Differentiation from existing skills:** Open with a clear statement
+            that this skill does NOT replace lsp-safe-edit (which wraps a single
+            edit with diagnostic comparison) or lsp-impact (read-only analysis).
+            lsp-refactor sequences ALL four of those workflows in order for a
+            complete refactor operation. Use it when you know the target and
+            intent up front and want the full workflow without switching skills.
+
+            **Input:**
+            - `target`: symbol name (dot notation) OR file path
+            - `intent`: description of the change to make
+            - `workspace_root`: absolute path to workspace
+
+            **Phase 1 — Blast-radius analysis (inlined from lsp-impact)**
+
+            Call `mcp__lsp__get_change_impact` with `changed_files` set to the
+            file containing the target symbol:
+            ```
+            mcp__lsp__get_change_impact({
+              "changed_files": ["/abs/path/to/file"],
+              "include_transitive": false
+            })
+            ```
+            Display: affected symbol count, test callers (with test function names),
+            non-test callers, reference count. If reference count > 20, require
+            explicit user confirmation before proceeding ("High blast radius: N
+            callers. Proceed? y/n").
+
+            **Phase 2 — Speculative preview (inlined from lsp-safe-edit)**
+
+            Capture baseline diagnostics:
+            ```
+            mcp__lsp__open_document({ "file_path": "...", "language_id": "..." })
+            mcp__lsp__get_diagnostics({ "file_path": "..." })
+            ```
+
+            For a single-file change: use `simulate_edit_atomic`.
+            For multi-file changes: use `simulate_chain`.
+
+            Display the speculative result using the Diagnostic Diff Output Format
+            from references/patterns.md. If net_delta > 0 (errors introduced): stop
+            and report the errors. Do NOT apply to disk.
+
+            **Phase 3 — Apply to disk**
+
+            Only reached if Phase 2 net_delta <= 0.
+            Apply using Edit or Write tool, OR `mcp__lsp__apply_edit` if the edit
+            was computed by simulation. Format the file:
+            ```
+            mcp__lsp__format_document({ "file_path": "..." })
+            ```
+
+            **Phase 4 — Verify build (inlined from lsp-verify)**
+
+            Run in this order (same as lsp-verify Layer 1 and Layer 2):
+            ```
+            mcp__lsp__get_diagnostics({ "file_path": "..." })
+            mcp__lsp__run_build({ "workspace_root": "..." })
+            ```
+            If build fails: display errors and stop. Do not proceed to test phase.
+
+            **Phase 5 — Run affected tests (inlined from lsp-test-correlation)**
+
+            For each file changed in Phase 3:
+            ```
+            mcp__lsp__get_tests_for_file({ "file_path": "..." })
+            ```
+            Run only the correlated test files:
+            ```
+            mcp__lsp__run_tests({ "workspace_root": "...", "test_files": [...] })
+            ```
+            If no correlated test files found: note "No test correlation found —
+            run full suite manually to confirm."
+
+            **Output format:**
+
+            ```
+            ## lsp-refactor Complete
+
+            ### Phase 1 — Blast Radius
+            Affected symbols: N
+            Test callers: M  (list each with enclosing test function)
+            Non-test callers: K
+
+            ### Phase 2 — Speculative Preview
+            [Diagnostic Diff Output Format from patterns.md]
+            net_delta: 0 → safe to apply
+
+            ### Phase 3 — Applied
+            Files changed: [list]
+
+            ### Phase 4 — Build Verification
+            Diagnostics: N errors (0 new)
+            Build: PASS
+
+            ### Phase 5 — Test Results
+            Test files run: [list]
+            Result: PASS / FAIL
+            ```
+
+            **Abort conditions (embed as explicit list):**
+            - Phase 1: blast radius > 20 callers AND user does not confirm → abort
+            - Phase 2: net_delta > 0 (simulation introduced errors) → abort, show errors
+            - Phase 4: build fails → abort, show build output
+            - Any phase: LSP returns unexpected error → abort, report tool output
+
+            ### File 2: skills/lsp-refactor/references/patterns.md
+
+            Copy the EXACT contents of skills/lsp-safe-edit/references/patterns.md
+            verbatim into this file. Do not add, remove, or modify any content.
+
+            ### Constraints
+            - Do NOT call other skills from within this skill — inline all tool sequences
+            - Do NOT skip Phase 1 even for "small" refactors — blast radius check is mandatory
+            - Do NOT apply to disk if Phase 2 simulation shows net_delta > 0
+            - Do NOT modify any file outside skills/lsp-refactor/
+          files:
+            - skills/lsp-refactor/SKILL.md
+            - skills/lsp-refactor/references/patterns.md
+        - id: C
+          task: |
+            ## Agent C — lsp-extract-function skill
+
+            Create the `/lsp-extract-function` skill. This skill extracts a selected
+            code block into a named function. The primary path uses the language
+            server's extract-function code action if available; the manual fallback
+            applies when no code action is offered.
+
+            ### Files to create
+
+            1. `skills/lsp-extract-function/SKILL.md`
+            2. `skills/lsp-extract-function/references/patterns.md`
+
+            ### File 1: skills/lsp-extract-function/SKILL.md
+
+            Write a complete skill file with this exact frontmatter:
+
+            ```markdown
+            ---
+            name: lsp-extract-function
+            description: Extract a selected code block into a named function. Primary path uses the language server's extract-function code action; falls back to manual extraction when no code action is available. Validates captured variables, scope shadowing, and compilation after extraction.
+            argument-hint: "[file-path] [start-line] [end-line] [new-function-name]"
+            allowed-tools: mcp__lsp__get_document_symbols mcp__lsp__get_code_actions mcp__lsp__execute_command mcp__lsp__apply_edit mcp__lsp__get_diagnostics mcp__lsp__open_document mcp__lsp__format_document mcp__lsp__get_server_capabilities
+            ---
+            ```
+
+            The skill body must cover:
+
+            **Differentiation from lsp-generate:** Open with a clear statement.
+            lsp-extract-function RESTRUCTURES existing code (takes code that already
+            exists and moves it into a new function). lsp-generate creates NEW code
+            that does not yet exist (stubs, mocks, interface implementations). Use
+            this skill when the code is already written; use lsp-generate when you
+            need to generate code from scratch.
+
+            **Input:**
+            - `file_path`: absolute path to the file
+            - `start_line`, `end_line`: line range of code to extract (1-indexed)
+            - `new_function_name`: desired name for the extracted function
+
+            **Step 1 — Get context (document symbols)**
+
+            Call `mcp__lsp__open_document` then `mcp__lsp__get_document_symbols`
+            to understand the containing function and scope. This establishes:
+            - Which function contains the selection
+            - Whether `new_function_name` already exists in the file (name collision check)
+
+            If `new_function_name` already exists as a symbol: report conflict and stop.
+
+            **Step 2 — Check server capabilities**
+
+            Call `mcp__lsp__get_server_capabilities`. Check for `codeActionProvider`.
+            Note whether `execute_command` is listed in `executeCommandProvider.commands`.
+
+            **Step 3 — Primary path: LSP code action**
+
+            Call `mcp__lsp__get_code_actions` with the selection range:
+            ```
+            mcp__lsp__get_code_actions({
+              "file_path": "...",
+              "start_line": N,
+              "start_column": 1,
+              "end_line": M,
+              "end_column": 999
+            })
+            ```
+
+            Filter for extract-function actions: kind contains `"refactor.extract"`
+            or title contains "Extract" and "function" (case-insensitive).
+
+            If extract-function action found:
+            - Display the action title and ask for confirmation if it proposes a
+              different name than `new_function_name`
+            - Execute via `mcp__lsp__execute_command` if the action has a `command`
+              field, OR apply directly via `mcp__lsp__apply_edit` if it has an edit
+            - Skip to Step 5
+
+            If no extract-function action found: fall through to Step 4.
+
+            **Step 4 — Manual fallback**
+
+            When no code action is available, guide the agent through manual extraction:
+
+            a) Read the selected lines to identify:
+               - Variables used inside the selection that are declared outside (→ parameters)
+               - Variables declared inside the selection that are used outside (→ return values)
+               - Return statements inside the selection (→ wrap in function)
+
+            b) Construct the extracted function signature based on captured variables.
+               Display the proposed signature to the user for confirmation before writing.
+
+            c) Apply the extraction:
+               - Insert new function definition after the containing function's closing brace
+               - Replace the selected lines with a call to the new function
+
+            d) Use `mcp__lsp__apply_edit` for the replacements. Apply the call-site
+               replacement first, then insert the new function — order matters to preserve
+               line numbers during editing.
+
+            **Step 5 — Validate**
+
+            After extraction (either path):
+            1. `mcp__lsp__get_diagnostics` — check for errors
+            2. If errors: show them; common causes listed below
+            3. `mcp__lsp__format_document` — clean up indentation
+
+            **Common post-extraction errors and their causes (embed as table):**
+
+            | Error type | Likely cause | Fix |
+            |------------|--------------|-----|
+            | Undefined variable | Captured var not passed as parameter | Add parameter |
+            | Type mismatch | Return type inferred incorrectly | Adjust return type in signature |
+            | Name shadows outer | New function name matches outer scope | Choose different name |
+            | Unused variable | Return value not captured at call site | Add variable at call site |
+
+            **Language-specific notes:**
+            - **Go:** gopls may offer "Extract function" in code actions for selection ranges
+            - **TypeScript/JavaScript:** tsserver may offer "Extract to function in global scope"
+            - **Python:** pylsp and pyright-langserver typically do NOT offer extract-function
+              code actions — manual fallback required
+
+            ### File 2: skills/lsp-extract-function/references/patterns.md
+
+            Copy the EXACT contents of skills/lsp-safe-edit/references/patterns.md
+            verbatim into this file. Do not add, remove, or modify any content.
+
+            ### Constraints
+            - Do NOT use this skill for generating new code from scratch (that is lsp-generate)
+            - Do NOT apply the name-collision check as optional — it is mandatory
+            - Do NOT batch the call-site replacement and function insertion into a single
+              apply_edit if the edits are in different line regions; apply sequentially
+            - Do NOT modify any file outside skills/lsp-extract-function/
+          files:
+            - skills/lsp-extract-function/SKILL.md
+            - skills/lsp-extract-function/references/patterns.md
+        - id: D
+          task: |
+            ## Agent D — lsp-generate skill
+
+            Create the `/lsp-generate` skill. This skill triggers language server
+            code generation: interface stubs, test skeletons, missing method stubs,
+            mock types. It uses `get_code_actions` to surface generator options and
+            `execute_command` to run them.
+
+            ### Files to create
+
+            1. `skills/lsp-generate/SKILL.md`
+            2. `skills/lsp-generate/references/patterns.md`
+
+            ### File 1: skills/lsp-generate/SKILL.md
+
+            Write a complete skill file with this exact frontmatter:
+
+            ```markdown
+            ---
+            name: lsp-generate
+            description: Trigger language server code generation — implement interface stubs, generate test skeletons, add missing methods, generate mock types. Uses get_code_actions to surface generator options and execute_command to run them.
+            argument-hint: "[file-path:line:col] [generation-intent]"
+            allowed-tools: mcp__lsp__get_code_actions mcp__lsp__execute_command mcp__lsp__apply_edit mcp__lsp__format_document mcp__lsp__get_diagnostics mcp__lsp__open_document mcp__lsp__get_server_capabilities mcp__lsp__go_to_symbol
+            ---
+            ```
+
+            The skill body must cover:
+
+            **Differentiation from lsp-extract-function:** Open with a clear
+            statement. lsp-generate creates NEW code that does not yet exist in the
+            file — stubs, mocks, implementations of interfaces, test functions.
+            lsp-extract-function restructures code that already exists. Use
+            lsp-generate when you want the language server to write something new.
+
+            **Input:**
+            - `file_path`: absolute path to the target file
+            - `line`, `column` (or `position_pattern`): position in the file where
+              generation is triggered (e.g., the line with the unimplemented interface,
+              the missing method error, the type declaration)
+            - `intent`: description of what to generate (e.g., "implement io.Reader",
+              "generate test skeleton", "add missing methods", "generate mock for Handler")
+
+            **Step 1 — Open document and locate position**
+
+            Call `mcp__lsp__open_document`. If using `position_pattern`, use the
+            @@ marker convention from references/patterns.md.
+
+            **Step 2 — Get code actions at target position**
+
+            ```
+            mcp__lsp__get_code_actions({
+              "file_path": "...",
+              "start_line": N,
+              "start_column": C,
+              "end_line": N,
+              "end_column": C
+            })
+            ```
+
+            Filter for generator actions: kind `"quickfix"` with titles matching
+            the intent (e.g., "Implement interface", "Generate", "Add stub",
+            "Create test"), OR kind `"source"` for source-level generation.
+
+            If no matching action found: report "No generator action available at
+            this position for the given intent" and suggest manual approach.
+
+            **Step 3 — Select and confirm action**
+
+            Display available generator actions to the user. If multiple match
+            the intent, list all and ask which to apply. Confirm the selected
+            action before executing.
+
+            **Step 4 — Execute generator**
+
+            If action has `command` field: run via `mcp__lsp__execute_command`.
+            If action has `edit` field: apply via `mcp__lsp__apply_edit`.
+            Some actions produce both — apply edit first, then run command.
+
+            **Step 5 — Format and verify**
+
+            ```
+            mcp__lsp__format_document({ "file_path": "..." })
+            mcp__lsp__get_diagnostics({ "file_path": "..." })
+            ```
+
+            Report remaining diagnostics. Stub methods typically leave TODO
+            comments or `panic("not implemented")` bodies — this is expected.
+
+            **Per-language generator patterns (embed as table):**
+
+            | Language | Generator | Trigger location | Code action kind |
+            |----------|-----------|-----------------|-----------------|
+            | Go (gopls) | Implement interface | Line with `var _ MyInterface = (*MyType)(nil)` or type declaration | `quickfix` — "Implement interface" |
+            | Go (gopls) | Generate test file | Any .go file without _test.go counterpart | `source` — "Generate unit tests" |
+            | Go (gopls) | Add missing method | Line with `undefined: method` error | `quickfix` |
+            | TypeScript (tsserver) | Implement interface | Class declaration | `quickfix` — "Implement interface members" |
+            | TypeScript (tsserver) | Add missing method | Method call with no definition | `quickfix` — "Add missing function declaration" |
+            | Python (pyright) | Add import | Name not defined | `quickfix` — "Add import" |
+            | Rust (rust-analyzer) | Implement trait | `impl Trait for Type {}` | `quickfix` — "Add missing impl members" |
+
+            **Fallback when no code action available:**
+
+            If `get_code_actions` returns no generator actions: explain that the
+            language server at this workspace may not support server-side generation
+            for this intent. Suggest manual implementation with guidance specific
+            to the intent (e.g., for interface implementation: list the methods
+            the interface requires by looking up the interface definition first
+            using `go_to_symbol`).
+
+            ### File 2: skills/lsp-generate/references/patterns.md
+
+            Copy the EXACT contents of skills/lsp-safe-edit/references/patterns.md
+            verbatim into this file. Do not add, remove, or modify any content.
+
+            ### Constraints
+            - Do NOT batch execute_command calls — one generator at a time
+            - Do NOT skip user confirmation when multiple generator actions are available
+            - Do NOT modify any file outside skills/lsp-generate/
+            - The allowed-tools frontmatter must use mcp__lsp__ prefixed names
+          files:
+            - skills/lsp-generate/SKILL.md
+            - skills/lsp-generate/references/patterns.md
+        - id: E
+          task: |
+            ## Agent E — lsp-understand skill
+
+            Create the `/lsp-understand` skill. This skill builds a complete picture
+            of unfamiliar code — given a symbol OR a file, it synthesizes hover info,
+            implementations, call hierarchy (bounded to 2 levels), all references,
+            and source — into a structured "Code Map" the user can navigate.
+
+            ### Files to create
+
+            1. `skills/lsp-understand/SKILL.md`
+            2. `skills/lsp-understand/references/patterns.md`
+
+            ### File 1: skills/lsp-understand/SKILL.md
+
+            Write a complete skill file with this exact frontmatter:
+
+            ```markdown
+            ---
+            name: lsp-understand
+            description: Deep-dive exploration of unfamiliar code — given a symbol or file, builds a complete Code Map showing type info, implementations, call hierarchy (2-level depth limit), all references, and source. Broader than lsp-explore: accepts files, synthesizes multi-symbol relationships, and produces a navigable dependency map.
+            argument-hint: "[symbol-name | file-path]"
+            allowed-tools: mcp__lsp__get_info_on_location mcp__lsp__go_to_implementation mcp__lsp__call_hierarchy mcp__lsp__get_references mcp__lsp__get_symbol_source mcp__lsp__get_document_symbols mcp__lsp__open_document mcp__lsp__go_to_symbol mcp__lsp__get_server_capabilities
+            ---
+            ```
+
+            The skill body must cover:
+
+            **Differentiation from lsp-explore:** Open with an explicit comparison.
+            `/lsp-explore` is a single-symbol pass — given one symbol name, it runs
+            hover + implementations + call hierarchy + references and produces a
+            per-symbol report. `/lsp-understand` is broader in three ways:
+            (1) accepts a FILE PATH as input and explores all exported symbols in
+            that file as a group, (2) synthesizes cross-symbol relationships to
+            produce a dependency map rather than isolated per-symbol reports, and
+            (3) enforces a 2-level call hierarchy depth limit to prevent infinite
+            recursion in deeply connected code. Use lsp-explore for quick "what is
+            this one thing" questions; use lsp-understand for "how does this module
+            work as a whole."
+
+            **Input — two modes:**
+
+            Mode A (symbol): User provides a symbol name in dot notation
+            (e.g., `"codec.Encode"`, `"Handler.ServeHTTP"`).
+
+            Mode B (file): User provides an absolute file path. All exported
+            symbols in the file become the entry points.
+
+            **Step 1 — Entry point resolution**
+
+            Mode A: Call `mcp__lsp__go_to_symbol` to locate the symbol definition.
+            Obtain `file_path`, `line`, `column`.
+
+            Mode B: Call `mcp__lsp__open_document` then `mcp__lsp__get_document_symbols`.
+            Filter to exported symbols (uppercase first letter in Go, `export` keyword
+            in TypeScript, `pub` in Rust, etc.). Collect all as entry points.
+            Cap at 10 exported symbols maximum — if more, focus on the top-level
+            functions and types (skip constants and variables).
+
+            **Step 2 — Per-symbol analysis (for each entry point)**
+
+            Run these tool calls. Where possible, parallelize calls within each step:
+
+            a) **Type info and docs:** `mcp__lsp__get_info_on_location`
+               Use `position_pattern` with @@ marker from references/patterns.md.
+
+            b) **Implementations (if interface/abstract type):**
+               `mcp__lsp__go_to_implementation` — list concrete types.
+               Skip if server reports `implementationProvider: false`.
+
+            c) **Call hierarchy — bounded to 2 levels:**
+               `mcp__lsp__call_hierarchy` with direction `"incoming"`.
+               Level 1: direct callers of this symbol.
+               For each Level 1 caller: call `mcp__lsp__call_hierarchy` once more
+               to get Level 2 (callers of the caller).
+               STOP at Level 2 — do not recurse further.
+
+            d) **Outgoing calls (what this symbol calls):**
+               `mcp__lsp__call_hierarchy` with direction `"outgoing"`.
+               Level 1 only — no recursion.
+
+            e) **All references:** `mcp__lsp__get_references`
+               Returns every usage site across the workspace.
+
+            f) **Source:** `mcp__lsp__get_symbol_source`
+               Read the implementation body.
+
+            **Step 3 — Synthesize relationships**
+
+            After analyzing all entry points: identify cross-symbol relationships:
+            - Which entry points call each other (from outgoing calls)?
+            - Which entry points are called by the same callers?
+            - Which entry points implement the same interface?
+
+            This synthesis step is what distinguishes lsp-understand from multiple
+            lsp-explore calls.
+
+            **Step 4 — Output: Code Map**
+
+            Produce a structured Code Map with these sections:
+
+            ```
+            ## Code Map: <target>
+
+            ### Summary
+            <2-3 sentence description of what this code does, synthesized from
+            hover docs and source reading>
+
+            ### Symbols (<N> analyzed)
+
+            #### <SymbolName>
+            - **Type:** <type signature from hover>
+            - **Source:** <file:line>
+            - **Incoming callers (L1):** <list; count only if > 5>
+            - **Incoming callers (L2):** <summarized; e.g., "called by 3 HTTP handlers">
+            - **Outgoing calls:** <what this symbol calls>
+            - **Implements:** <interface name, if applicable>
+            - **References:** N sites across M files
+
+            ### Dependency Relationships
+            <symbols that call each other, as a simple text diagram or list>
+            e.g.:
+              HandlerA → Parse → Validate
+              HandlerB → Parse
+
+            ### Entry Points to This Code
+            <top-level callers that are NOT in this file — where does outside code
+            call in?>
+
+            ### Depth-limit Note
+            Call hierarchy stopped at 2 levels. <N> additional callers exist beyond
+            Level 2 — use /lsp-explore on specific symbols to drill deeper.
+            ```
+
+            **Depth control rules (embed explicitly):**
+            - Call hierarchy recursion stops at Level 2 for INCOMING calls
+            - Outgoing calls: Level 1 only, no recursion
+            - If Level 2 callers > 10: summarize by count and file, do not list individually
+            - Do NOT follow call chains beyond these limits under any circumstances
+
+            **Capability checks:**
+            Before Step 2, call `mcp__lsp__get_server_capabilities`. Skip steps
+            requiring missing capabilities:
+            - `go_to_implementation`: skip 2b if `implementationProvider: false`
+            - `call_hierarchy`: skip 2c/2d if `callHierarchyProvider: false`; note in output
+
+            ### File 2: skills/lsp-understand/references/patterns.md
+
+            Copy the EXACT contents of skills/lsp-safe-edit/references/patterns.md
+            verbatim into this file. Do not add, remove, or modify any content.
+
+            ### Constraints
+            - Do NOT recurse call hierarchy beyond 2 levels — this is a hard limit
+            - Do NOT analyze more than 10 exported symbols per file in Mode B
+            - Do NOT replicate the lsp-explore single-symbol report format — the
+              output must be a Code Map showing cross-symbol relationships
+            - Do NOT modify any file outside skills/lsp-understand/
+          files:
+            - skills/lsp-understand/SKILL.md
+            - skills/lsp-understand/references/patterns.md
+    - number: 2
+      agents:
+        - id: F
+          task: |
+            ## Agent F — Documentation update
+
+            Update three documentation files to reflect the five new skills added
+            in Wave 1. Also update the GitHub repository description.
+
+            ### File 1: ROADMAP.md
+
+            Mark the five new skills as "Shipped" in the Skills section. Read the
+            current content of ROADMAP.md first. The Skills section currently
+            has tables listing planned skills. Update it to reflect:
+
+            The current Skills section header reads:
+            ```
+            Skills encode correct tool sequences so workflows actually happen. The current 15 skills cover navigation, safety checking, and analysis. Two gaps remain.
+            ```
+
+            Change "15 skills" to "20 skills" and remove the phrase "Two gaps remain."
+            Update it to: "Skills encode correct tool sequences so workflows actually happen. The current 20 skills cover navigation, safety checking, analysis, refactoring, and code generation."
+
+            In the "Code action skills" table, change the Status column for all three
+            rows (`/lsp-extract-function`, `/lsp-fix-all`, `/lsp-generate`) from their
+            current state (no Status column — these are in a description-only table)
+            to a note marking them Shipped. The current table has columns
+            `| Skill | Description |`. Add a "Status" column with value "Shipped" for
+            these three skills, or append "(Shipped)" to each skill name.
+
+            In the "Full edit lifecycle skill" table: mark `/lsp-refactor` as Shipped.
+
+            In the "Understanding skill" table: mark `/lsp-understand` as Shipped.
+            (Note: lsp-explore is already listed here — lsp-understand is an
+            additional entry for the broader file-level exploration skill.)
+
+            Read the file before editing to get exact current text for the Edit tool.
+
+            ### File 2: CHANGELOG.md
+
+            Add entries for all five new skills under the `[Unreleased]` section.
+            The current `[Unreleased]` section starts at line 6. Add AFTER the last
+            existing `### Added` item in [Unreleased] (after the `install.sh` entry).
+
+            The current last item in [Unreleased] Added reads:
+            ```
+            - `install.sh` now maintains a managed skills table in `~/.claude/CLAUDE.md` between sentinel comments (`<!-- agent-lsp:skills:start/end -->`). Auto-discovers all skills from SKILL.md frontmatter — adding a new skill and re-running install keeps CLAUDE.md in sync without touching surrounding content.
+            ```
+
+            Add after that item, before the `- Docker builds now trigger...` item:
+
+            ```markdown
+            - **`/lsp-fix-all` skill** — apply available quick-fix code actions for all current diagnostics in a file, one at a time with re-collection after each fix. Distinguishes quick-fix actions from structural refactors; enforces a sequential fix loop to handle line number shifts after each apply_edit.
+
+            - **`/lsp-refactor` skill** — end-to-end safe refactor workflow that sequences blast-radius analysis, speculative preview, disk apply, build verification, and affected-test execution into a single coordinated skill. Inlines tool sequences from lsp-impact, lsp-safe-edit, lsp-verify, and lsp-test-correlation without calling those skills at runtime.
+
+            - **`/lsp-extract-function` skill** — extract a selected code block into a named function. Primary path uses the language server's extract-function code action (refactor.extract kind); manual fallback identifies captured variables and constructs the function signature when no code action is available. Validates name collisions and compilation after extraction.
+
+            - **`/lsp-generate` skill** — trigger language server code generation: interface stubs, test skeletons, missing method stubs, mock types. Uses get_code_actions to surface generator options and execute_command to run them. Documents per-language generator patterns for Go (gopls), TypeScript, Python, and Rust.
+
+            - **`/lsp-understand` skill** — deep-dive exploration of unfamiliar code, accepting a symbol name OR a file path. Synthesizes hover info, implementations, call hierarchy (bounded to 2 levels), references, and source into a structured Code Map showing cross-symbol dependency relationships. Broader than /lsp-explore: operates on files as a unit and surfaces inter-symbol relationships.
+            ```
+
+            ### File 3: docs/FEATURES.md
+
+            Three updates needed:
+
+            **Update 1:** Change the skills count in the section header.
+            Current text at line 220:
+            ```
+            ## Skills (15 total)
+            ```
+            Change to:
+            ```
+            ## Skills (20 total)
+            ```
+
+            **Update 2:** Change the count in line 889 area.
+            Current text:
+            ```
+            - 15 skill directories; each contains `SKILL.md` with frontmatter + prompt body
+            ```
+            Change to:
+            ```
+            - 20 skill directories; each contains `SKILL.md` with frontmatter + prompt body
+            ```
+
+            **Update 3:** Add five rows to the skills table. The table ends with:
+            ```
+            | `/lsp-format-code` | `[file-path]` | format_document, format_range, apply_edit | Format file or selection via language server formatter; applies edits to disk |
+            ```
+            Add these five rows immediately after that line:
+            ```
+            | `/lsp-fix-all` | `[file-path]` | get_diagnostics, get_code_actions, apply_edit, open_document, format_document | Sequential quick-fix loop: collect diagnostics → apply one fix → re-collect; quick-fix kind only; never batches |
+            | `/lsp-refactor` | `[symbol-or-file] [intent]` | get_change_impact, simulate_edit_atomic, simulate_chain, get_diagnostics, run_build, run_tests, get_tests_for_file, apply_edit, format_document | End-to-end refactor: blast-radius → speculative preview → apply → build verify → affected tests |
+            | `/lsp-extract-function` | `[file-path] [start-line] [end-line] [name]` | get_document_symbols, get_code_actions, execute_command, apply_edit, get_diagnostics, format_document | Extract code block into named function; LSP code action primary, manual fallback with captured-variable analysis |
+            | `/lsp-generate` | `[file-path:line:col] [intent]` | get_code_actions, execute_command, apply_edit, format_document, get_diagnostics, go_to_symbol | Language server code generation: interface stubs, test skeletons, missing methods, mocks |
+            | `/lsp-understand` | `[symbol-name \| file-path]` | get_info_on_location, go_to_implementation, call_hierarchy, get_references, get_symbol_source, get_document_symbols, go_to_symbol | Deep Code Map: type info + implementations + call hierarchy (2-level) + references + source; synthesizes cross-symbol relationships |
+            ```
+
+            **Update 4:** In the "Skills (planned)" section near line 791:
+            The current table lists lsp-extract-function, lsp-fix-all, lsp-generate,
+            lsp-refactor as planned. Change the section header from
+            `### Skills (planned)` to `### Skills (shipped in this release)` and
+            add lsp-understand to the table. Read the file to get exact current text.
+
+            ### GitHub description update
+
+            Run this command to update the GitHub repository description:
+            ```
+            gh repo edit blackwell-systems/agent-lsp --description "Stateful MCP runtime over real language servers, not a bridge. Persistent warm index, 50 tools across 30 languages, 20 agent skills."
+            ```
+
+            The current description is:
+            "Stateful MCP runtime over real language servers, not a bridge. Persistent warm index, 50 tools across 30 languages, 14 agentskills standardized skills."
+
+            ### Constraints
+            - Read each file with the Read tool before using the Edit tool — exact
+              text matching is required
+            - Do NOT modify any skill SKILL.md files — those are owned by Wave 1 agents
+            - Do NOT modify go source files or install.sh
+            - Run the gh CLI command exactly as specified above
+          files:
+            - ROADMAP.md
+            - CHANGELOG.md
+            - docs/FEATURES.md
+          dependencies:
+            - A
+            - B
+            - C
+            - D
+            - E
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
 pre_mortem:
-  overall_risk: low
-  rows:
-    - scenario: Wave 1 agent copies wrong patterns.md content or edits it
-      likelihood: low
-      impact: medium
-      mitigation: |
-        Each agent task says "copy EXACT contents verbatim — do not modify."
-        The source file is skills/lsp-rename/references/patterns.md.
-        Agents should read the source file before writing the copy.
-    - scenario: Agent D or C uses execute_command in the wrong skill
-      likelihood: low
-      impact: low
-      mitigation: |
-        lsp-fix-all explicitly says "do NOT use execute_command."
-        lsp-extract-function uses execute_command only for code actions with
-        a command field — constraint is documented. lsp-generate is the primary
-        execute_command skill.
-    - scenario: lsp-understand description confuses users with lsp-explore
-      likelihood: medium
-      impact: low
-      mitigation: |
-        Both skill files must open with an explicit differentiation paragraph.
-        lsp-understand frontmatter description also calls out the distinction.
-    - scenario: Wave 2 agent uses wrong line numbers for Edit tool
-      likelihood: medium
-      impact: low
-      mitigation: |
-        Agent F task says to read each file before editing and use exact text
-        context anchors, not line numbers. The Edit tool uses string matching.
-        Verbatim text extracts are provided in the task for anchor points.
-    - scenario: GitHub description update fails due to auth
-      likelihood: low
-      impact: low
-      mitigation: |
-        If gh CLI fails, the agent should report the error and document the
-        intended description string so a human can apply it manually.
-        This is a non-blocking documentation change.
-    - scenario: frontmatter description exceeds 250 chars
-      likelihood: low
-      impact: medium
-      mitigation: |
-        Each agent task specifies exact frontmatter to use, pre-verified to
-        be within 250 characters. Agents must use the specified description
-        verbatim, not paraphrase it.
+    overall_risk: low
+    rows:
+        - scenario: Wave 1 agent copies wrong patterns.md content or edits it
+          likelihood: low
+          impact: medium
+          mitigation: |
+            Each agent task says "copy EXACT contents verbatim — do not modify."
+            The source file is skills/lsp-rename/references/patterns.md.
+            Agents should read the source file before writing the copy.
+        - scenario: Agent D or C uses execute_command in the wrong skill
+          likelihood: low
+          impact: low
+          mitigation: |
+            lsp-fix-all explicitly says "do NOT use execute_command."
+            lsp-extract-function uses execute_command only for code actions with
+            a command field — constraint is documented. lsp-generate is the primary
+            execute_command skill.
+        - scenario: lsp-understand description confuses users with lsp-explore
+          likelihood: medium
+          impact: low
+          mitigation: |
+            Both skill files must open with an explicit differentiation paragraph.
+            lsp-understand frontmatter description also calls out the distinction.
+        - scenario: Wave 2 agent uses wrong line numbers for Edit tool
+          likelihood: medium
+          impact: low
+          mitigation: |
+            Agent F task says to read each file before editing and use exact text
+            context anchors, not line numbers. The Edit tool uses string matching.
+            Verbatim text extracts are provided in the task for anchor points.
+        - scenario: GitHub description update fails due to auth
+          likelihood: low
+          impact: low
+          mitigation: |
+            If gh CLI fails, the agent should report the error and document the
+            intended description string so a human can apply it manually.
+            This is a non-blocking documentation change.
+        - scenario: frontmatter description exceeds 250 chars
+          likelihood: low
+          impact: medium
+          mitigation: |
+            Each agent task specifies exact frontmatter to use, pre-verified to
+            be within 250 characters. Agents must use the specified description
+            verbatim, not paraphrase it.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+            issues:
+                - check: pattern_accuracy
+                  severity: warning
+                  description: Agent task says to copy from skills/lsp-safe-edit/references/patterns.md, but interface_contracts specifies skills/lsp-rename/references/patterns.md as the canonical source. Both files exist and have identical content — functionally harmless but inconsistent with the stated contract.
+                  file: skills/lsp-fix-all/references/patterns.md
+        B:
+            agent_id: B
+            verdict: PASS
+            issues:
+                - check: pattern_accuracy
+                  severity: warning
+                  description: Agent task says to copy from skills/lsp-safe-edit/references/patterns.md, but interface_contracts specifies skills/lsp-rename/references/patterns.md as the canonical source. Both files exist and have identical content — functionally harmless.
+                  file: skills/lsp-refactor/references/patterns.md
+        C:
+            agent_id: C
+            verdict: PASS
+            issues:
+                - check: pattern_accuracy
+                  severity: warning
+                  description: Agent task says to copy from skills/lsp-safe-edit/references/patterns.md, but interface_contracts specifies skills/lsp-rename/references/patterns.md as the canonical source. Both files exist and have identical content — functionally harmless.
+                  file: skills/lsp-extract-function/references/patterns.md
+        D:
+            agent_id: D
+            verdict: PASS
+            issues:
+                - check: pattern_accuracy
+                  severity: warning
+                  description: Agent task says to copy from skills/lsp-safe-edit/references/patterns.md, but interface_contracts specifies skills/lsp-rename/references/patterns.md as the canonical source. Both files exist and have identical content — functionally harmless.
+                  file: skills/lsp-generate/references/patterns.md
+        E:
+            agent_id: E
+            verdict: PASS
+            issues:
+                - check: pattern_accuracy
+                  severity: warning
+                  description: Agent task says to copy from skills/lsp-safe-edit/references/patterns.md, but interface_contracts specifies skills/lsp-rename/references/patterns.md as the canonical source. Both files exist and have identical content — functionally harmless.
+                  file: skills/lsp-understand/references/patterns.md
+        F:
+            agent_id: F
+            verdict: PASS
+    summary: 'All six agents verified against the codebase. Wave 1 agents A–E all own exclusively new files (action: new) in skill directories that do not yet exist — file existence check passes cleanly. All five target directories (lsp-fix-all, lsp-refactor, lsp-extract-function, lsp-generate, lsp-understand) are absent from skills/. Wave 2 Agent F owns three modify-action files (ROADMAP.md, CHANGELOG.md, docs/FEATURES.md), all of which exist. The specific text anchors Agent F is told to match (Skills section header at ROADMAP.md line 143, install.sh CHANGELOG entry at line 40, Docker builds item at line 41, Skills count at FEATURES.md line 220, skill directories count at line 889, lsp-format-code table row at line 238, Skills (planned) section at line 791) are all verified present with exact text. One advisory warning: the interface_contracts section specifies skills/lsp-rename/references/patterns.md as the canonical source file, but all five Wave 1 agent tasks instruct copying from skills/lsp-safe-edit/references/patterns.md instead. Both files exist and are byte-for-byte identical in content, so this inconsistency is safe and produces no wrong behavior. Symbol accuracy and import chain checks are not applicable (all Wave 1 files are new markdown; no Go code). Complexity and disjoint ownership checks pass — no agent exceeds 8 files and no file is shared within the same wave.'
+    reviewed_at: "2026-04-18T01:04:58Z"
+    issue_count: 1
+state: SCOUT_PENDING
+injection_method: hook
