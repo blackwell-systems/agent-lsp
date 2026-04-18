@@ -1085,4 +1085,5 @@ critic_report:
     reviewed_at: "2026-04-18T01:04:58Z"
     issue_count: 1
 state: SCOUT_PENDING
+original_branch: main
 injection_method: hook
