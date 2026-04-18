@@ -230,6 +230,7 @@ See [docs/tools.md](./docs/tools.md) for the full reference with parameters and 
 
 ## Further reading
 
+- [docs/skills.md](./docs/skills.md) — skill reference: workflows, use cases, and composition
 - [docs/tools.md](./docs/tools.md) — full tool reference
 - [docs/language-support.md](./docs/language-support.md) — language coverage matrix
 - [docs/speculative-execution.md](./docs/speculative-execution.md) — simulate-before-apply workflows
