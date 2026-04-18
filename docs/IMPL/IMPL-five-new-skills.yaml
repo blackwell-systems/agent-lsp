@@ -991,6 +991,67 @@ quality_gates:
         - type: test
           command: GOWORK=off go test ./internal/... ./cmd/...
           required: true
+completion_reports:
+    A:
+        status: complete
+        branch: saw/five-new-skills/wave1-agent-A
+        commit: cb5cdc0
+        files_changed:
+            - skills/lsp-fix-all/SKILL.md
+            - skills/lsp-fix-all/references/patterns.md
+        files_created:
+            - skills/lsp-fix-all/SKILL.md
+            - skills/lsp-fix-all/references/patterns.md
+        verification: PASS
+        notes: 'lsp-fix-all skill created. SKILL.md covers: differentiation from lsp-safe-edit, decision gate table, one-fix-per-iteration loop with re-collection, 50-iteration safety guard, summary output format, safety rules. references/patterns.md copied verbatim from lsp-safe-edit. All gates pass (build, vet, tests).'
+    B:
+        status: complete
+        branch: saw/five-new-skills/wave1-agent-B
+        commit: 276e43b
+        files_changed:
+            - skills/lsp-refactor/SKILL.md
+            - skills/lsp-refactor/references/patterns.md
+        files_created:
+            - skills/lsp-refactor/SKILL.md
+            - skills/lsp-refactor/references/patterns.md
+        verification: PASS
+        notes: lsp-refactor skill created with 5-phase workflow (blast-radius, speculative preview, apply, build verify, test correlation). references/patterns.md copied verbatim from lsp-safe-edit. Build, vet, and all tests pass.
+    C:
+        status: complete
+        branch: saw/five-new-skills/wave1-agent-C
+        commit: fe87949
+        files_changed:
+            - skills/lsp-extract-function/SKILL.md
+            - skills/lsp-extract-function/references/patterns.md
+        files_created:
+            - skills/lsp-extract-function/SKILL.md
+            - skills/lsp-extract-function/references/patterns.md
+        verification: PASS
+        notes: lsp-extract-function skill complete. SKILL.md covers LSP primary path (get_code_actions filtering for refactor.extract), manual fallback with captured-variable analysis, mandatory name collision check, sequential apply_edit order, and post-extraction validation. patterns.md is verbatim copy from lsp-safe-edit/references/patterns.md. Build, vet, and all tests pass.
+    D:
+        status: complete
+        branch: saw/five-new-skills/wave1-agent-D
+        commit: a06ace1
+        files_changed:
+            - skills/lsp-generate/SKILL.md
+            - skills/lsp-generate/references/patterns.md
+        files_created:
+            - skills/lsp-generate/SKILL.md
+            - skills/lsp-generate/references/patterns.md
+        verification: PASS
+        notes: lsp-generate skill created. SKILL.md covers the full 5-step workflow (open doc, get code actions, confirm, execute, format+verify), per-language generator patterns table, and fallback guidance. references/patterns.md is a verbatim copy from lsp-safe-edit. All build/vet/test gates pass.
+    E:
+        status: complete
+        branch: saw/five-new-skills/wave1-agent-E
+        commit: e7c0f4c
+        files_changed:
+            - skills/lsp-understand/SKILL.md
+            - skills/lsp-understand/references/patterns.md
+        files_created:
+            - skills/lsp-understand/SKILL.md
+            - skills/lsp-understand/references/patterns.md
+        verification: PASS
+        notes: 'lsp-understand skill created with SKILL.md and verbatim patterns.md. All quality gates pass: build, vet, tests. Frontmatter matches required schema exactly. patterns.md is verbatim copy of lsp-safe-edit/references/patterns.md.'
 pre_mortem:
     overall_risk: low
     rows:
@@ -1086,4 +1147,5 @@ critic_report:
     reviewed_at: "2026-04-18T01:04:58Z"
     issue_count: 1
 state: REVIEWED
+original_branch: main
 injection_method: hook
