@@ -18,7 +18,7 @@ widespread the change is; lsp-edit-export tells you how to execute the change sa
 
 **Invocation:**
 - **File path** (e.g. `"internal/lsp/client.go"`) → use the File-level entry (Step 0) to surface all exported-symbol impact at once.
-- **Symbol name** in dot notation (e.g. `"codec.Encode"`, `"Buffer.Reset"`) → skip to Step 1.
+- **Symbol name** in dot notation (e.g. `"codec.Encode"`, `"Buffer.Reset"`) → skip Step 0; start at Prerequisites, then Step 1.
 
 ---
 
