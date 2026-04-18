@@ -8,51 +8,35 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ### Added
 
 - **HTTP+SSE transport** — agent-lsp can now serve MCP over HTTP using `--http [--port N]`. Enables persistent remote service deployment: Docker containers on remote hosts, shared CI servers, and multi-client setups without cold-start cost. Auth via `AGENT_LSP_TOKEN` environment variable enforces Bearer token authentication using `crypto/subtle.ConstantTimeCompare`.
-
 - **`internal/httpauth` package** — `BearerTokenMiddleware(token, next http.Handler)` wraps any HTTP handler with constant-time Bearer token validation. Returns RFC 7235-compliant 401 with `WWW-Authenticate: Bearer` header and `{"error":"unauthorized"}` JSON body. No-op passthrough when token is empty.
-
 - **`/health` endpoint** — unauthenticated `GET /health` returns `{"status":"ok"}` (200). Bypasses Bearer token auth so container orchestrators and Docker healthchecks can probe liveness without credentials. `docker-compose.yml` wires `HEALTHCHECK` for the `agent-lsp-http` service.
-
 - **Docker security hardening** — images now run as uid/gid 65532 (`nonroot`); `EXPOSE 8080` added; `HOME` set to `/tmp` (writable by nonroot); `docker-compose.yml` adds `agent-lsp-http` service for HTTP mode with `AGENT_LSP_TOKEN` wiring.
-
 - **`docker-compose.yml` HTTP service** — `agent-lsp-http` service exposes port `${AGENT_LSP_HTTP_PORT:-8080}:8080` with token read from `AGENT_LSP_TOKEN` env var (not CLI arg).
+- **`/lsp-explore` skill** — composes hover, go_to_implementation, call_hierarchy, and get_references into a single "tell me about this symbol" workflow for navigating unfamiliar code.
+- **`/lsp-fix-all` skill** — apply available quick-fix code actions for all current diagnostics in a file, one at a time with re-collection after each fix. Enforces a sequential fix loop to handle line number shifts after each apply_edit.
+- **`/lsp-refactor` skill** — end-to-end safe refactor: blast-radius analysis → speculative preview → apply → build verify → targeted tests. Inlines tool sequences from lsp-impact, lsp-safe-edit, lsp-verify, and lsp-test-correlation.
+- **`/lsp-extract-function` skill** — extract a selected code block into a named function. Primary path uses the language server's extract-function code action; manual fallback identifies captured variables and constructs the function signature.
+- **`/lsp-generate` skill** — trigger language server code generation (interface stubs, test skeletons, missing method stubs, mock types) via `get_code_actions` + `execute_command`. Documents per-language generator patterns for Go, TypeScript, Python, and Rust.
+- **`/lsp-understand` skill** — deep-dive exploration of unfamiliar code by symbol name or file path. Synthesizes hover, implementations, call hierarchy (2-level depth limit), references, and source into a structured Code Map. Broader than `/lsp-explore`: operates on files as a unit and surfaces inter-symbol relationships.
+- **`agent-lsp doctor` subcommand** — probes each configured language server, reports version and supported capabilities, exits 1 if any server fails. Useful for CI health checks and debugging setup issues.
+- **LineScope for `position_pattern`** — `line_scope_start` / `line_scope_end` args restrict pattern matching to a line range, eliminating false matches when the same token appears multiple times in a file.
+- **`rename_symbol` glob exclusions** — new optional `exclude_globs` parameter (array of glob strings) excludes matching files from the returned WorkspaceEdit. Useful for generated code (`**/*_gen.go`), vendored files (`vendor/**`), and test fixtures (`testdata/**`).
+- **MIT LICENSE file** — added explicit license; copyright Blackwell Systems and Dayna Blackwell.
 
 ### Changed
 
-- **Auth token reads from env var** — `AGENT_LSP_TOKEN` environment variable takes precedence over `--token` CLI flag, keeping credentials out of the process list (`ps aux`, `/proc/<pid>/cmdline`). `--token` still accepted for local dev but env var always wins. Using `--token` without the env var now prints a warning to stderr.
-
+- **Auth token reads from env var** — `AGENT_LSP_TOKEN` environment variable takes precedence over `--token` CLI flag, keeping credentials out of the process list. `--token` still accepted for local dev but env var always wins; using `--token` without the env var prints a warning to stderr.
 - **HTTP server timeouts** — `ReadHeaderTimeout: 10s`, `ReadTimeout: 30s`, `WriteTimeout: 60s`, and `IdleTimeout: 120s` added to prevent Slowloris-style resource exhaustion and stalled response writers.
-
-- **`--listen-addr` IP validation** — `--listen-addr` now rejects hostnames and invalid values with a clear error; only valid IP addresses accepted (`net.ParseIP`).
-
-- **`--no-auth` loopback enforcement** — `--no-auth` is rejected when `--listen-addr` is a non-loopback address; unauthenticated exposure to the network requires an explicit loopback bind (`127.0.0.1`).
-
-- **`entrypoint.sh` security** — replaced `eval "${install_cmd}"` with a POSIX `case` whitelist covering all 8 package managers; `awk` server name lookup now uses `-v name=` variable binding (no regex injection via `LSP_SERVERS`); `apt-get` arm extracts and validates package name instead of passing full command to `sh -c`; all `${rest}` expansions quoted.
-
-- **Port range validation** — `--port` now rejects values outside 1–65535 with a clear error message; port 0 and values > 65535 are no longer silently accepted.
-
-- **Accurate HTTP bind log** — startup log now reports the actual bound address from `ln.Addr().String()` rather than the configured address string.
-
-- **`/lsp-explore` skill** — new agent skill that composes hover, go_to_implementation, call_hierarchy, and get_references into a single "tell me about this symbol" workflow for navigating unfamiliar code. Installed via `cd skills && ./install.sh`.
-
-- **rename_symbol glob exclusions** — new optional exclude_globs parameter (array of glob strings). Files matching any pattern are excluded from the returned WorkspaceEdit. Useful for generated code (`**/*_gen.go`), vendored files (`vendor/**`), and test fixtures (`testdata/**`). Uses `filepath.Match` syntax, matched against both full path and basename.
-
-- `install.sh` now maintains a managed skills table in `~/.claude/CLAUDE.md` between sentinel comments (`<!-- agent-lsp:skills:start/end -->`). Auto-discovers all skills from SKILL.md frontmatter — adding a new skill and re-running install keeps CLAUDE.md in sync without touching surrounding content.
-
-- **`/lsp-fix-all` skill** — apply available quick-fix code actions for all current diagnostics in a file, one at a time with re-collection after each fix. Distinguishes quick-fix actions from structural refactors; enforces a sequential fix loop to handle line number shifts after each apply_edit.
-
-- **`/lsp-refactor` skill** — end-to-end safe refactor workflow that sequences blast-radius analysis, speculative preview, disk apply, build verification, and affected-test execution into a single coordinated skill. Inlines tool sequences from lsp-impact, lsp-safe-edit, lsp-verify, and lsp-test-correlation without calling those skills at runtime.
-
-- **`/lsp-extract-function` skill** — extract a selected code block into a named function. Primary path uses the language server's extract-function code action (refactor.extract kind); manual fallback identifies captured variables and constructs the function signature when no code action is available. Validates name collisions and compilation after extraction.
-
-- **`/lsp-generate` skill** — trigger language server code generation: interface stubs, test skeletons, missing method stubs, mock types. Uses get_code_actions to surface generator options and execute_command to run them. Documents per-language generator patterns for Go (gopls), TypeScript, Python, and Rust.
-
-- **`/lsp-understand` skill** — deep-dive exploration of unfamiliar code, accepting a symbol name OR a file path. Synthesizes hover info, implementations, call hierarchy (bounded to 2 levels), references, and source into a structured Code Map showing cross-symbol dependency relationships. Broader than /lsp-explore: operates on files as a unit and surfaces inter-symbol relationships.
-
-- Docker builds now trigger on release tags only; removed `:edge` tag
-- Moved `Dockerfile`, `Dockerfile.full`, `Dockerfile.lang`, and `docker-compose.yml` into `docker/` directory
-- Removed `:base` as a user-facing tag (still used internally between CI jobs)
-- Surfaced quick install snippet at top of README after value proposition
+- **`--listen-addr` IP validation** — rejects hostnames and invalid values; only valid IP addresses accepted (`net.ParseIP`).
+- **`--no-auth` loopback enforcement** — `--no-auth` is rejected when `--listen-addr` is a non-loopback address.
+- **`entrypoint.sh` security** — replaced `eval` with a POSIX `case` whitelist; `awk` uses `-v name=` variable binding; `apt-get` arm validates package name; all expansions quoted.
+- **Port range validation** — `--port` rejects values outside 1–65535.
+- **Accurate HTTP bind log** — reports actual bound address from `ln.Addr().String()`.
+- **`install.sh` CLAUDE.md sync** — maintains a managed skills table in `~/.claude/CLAUDE.md` between sentinel comments; auto-discovers skills from SKILL.md frontmatter.
+- Docker builds now trigger on release tags only; removed `:edge` tag.
+- Moved `Dockerfile`, `Dockerfile.full`, `Dockerfile.lang`, and `docker-compose.yml` into `docker/` directory.
+- Removed `:base` as a user-facing tag (still used internally between CI jobs).
+- Surfaced quick install snippet at top of README after value proposition.
 
 ## [0.1.2] - 2026-04-10
 
