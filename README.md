@@ -35,28 +35,57 @@ agent-lsp init
 
 Raw tools get ignored. Skills get used. Each skill encodes the correct tool sequence so workflows actually happen without per-prompt orchestration instructions.
 
+See [docs/skills.md](./docs/skills.md) for full descriptions and usage guidance.
+
+**Before you change anything**
+
+| Skill | Purpose |
+|-------|---------|
+| `/lsp-impact` | Blast-radius analysis before touching a symbol or file |
+| `/lsp-implement` | Find all concrete implementations of an interface |
+| `/lsp-dead-code` | Detect zero-reference exports before cleanup |
+
+**Editing safely**
+
 | Skill | Purpose |
 |-------|---------|
 | `/lsp-safe-edit` | Speculative preview before disk write; before/after diagnostic diff; surfaces code actions on errors |
-| `/lsp-edit-export` | Safe editing of exported symbols — finds all callers first |
-| `/lsp-edit-symbol` | Edit a named symbol without knowing its file or position |
-| `/lsp-rename` | `prepare_rename` safety gate, preview all sites, confirm, apply atomically |
-| `/lsp-verify` | Diagnostics + build + tests after every edit |
 | `/lsp-simulate` | Test changes in-memory without touching the file |
-| `/lsp-impact` | Blast-radius analysis before touching a symbol or file |
-| `/lsp-dead-code` | Detect zero-reference exports before cleanup |
-| `/lsp-implement` | Find all concrete implementations of an interface |
+| `/lsp-edit-symbol` | Edit a named symbol without knowing its file or position |
+| `/lsp-edit-export` | Safe editing of exported symbols — finds all callers first |
+| `/lsp-rename` | `prepare_rename` safety gate, preview all sites, confirm, apply atomically |
+
+**Understanding unfamiliar code**
+
+| Skill | Purpose |
+|-------|---------|
+| `/lsp-explore` | "Tell me about this symbol": hover + implementations + call hierarchy + references in one pass |
+| `/lsp-understand` | Deep-dive Code Map for a symbol or file: type info, call hierarchy, references, source |
 | `/lsp-docs` | Three-tier documentation: hover → offline toolchain → source |
-| `/lsp-explore` | "Tell me about this symbol": hover + implementations + call hierarchy + references in one pass — for navigating unfamiliar code |
 | `/lsp-cross-repo` | Find all usages of a library symbol across consumer repos |
 | `/lsp-local-symbols` | File-scoped symbol list, usage search, and type info |
+
+**After editing**
+
+| Skill | Purpose |
+|-------|---------|
+| `/lsp-verify` | Diagnostics + build + tests after every edit |
+| `/lsp-fix-all` | Apply quick-fix code actions for all diagnostics in a file |
 | `/lsp-test-correlation` | Find and run only tests that cover an edited file |
 | `/lsp-format-code` | Format a file or selection via the language server formatter |
-| `/lsp-fix-all` | Apply quick-fix code actions for all diagnostics in a file |
-| `/lsp-refactor` | End-to-end refactor: blast-radius → preview → apply → verify → test |
-| `/lsp-extract-function` | Extract a code block into a named function via code actions |
+
+**Generating code**
+
+| Skill | Purpose |
+|-------|---------|
 | `/lsp-generate` | Trigger server-side code generation (interface stubs, test skeletons, mocks) |
-| `/lsp-understand` | Deep-dive Code Map for a symbol or file: type info, call hierarchy, references, source |
+| `/lsp-extract-function` | Extract a code block into a named function via code actions |
+
+**Full workflow**
+
+| Skill | Purpose |
+|-------|---------|
+| `/lsp-refactor` | End-to-end refactor: blast-radius → preview → apply → verify → test |
 
 ```bash
 cd skills && ./install.sh
