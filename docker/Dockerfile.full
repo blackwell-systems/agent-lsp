@@ -7,6 +7,9 @@
 ARG BASE_TAG=base
 FROM ghcr.io/blackwell-systems/agent-lsp:${BASE_TAG}
 
+# Base image runs as nonroot — switch to root for package installation
+USER root
+
 # Install Node.js (needed for npm-based servers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nodejs npm \
@@ -60,3 +63,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends clangd \
 # - terraform-ls (Terraform): binary release from hashicorp.com
 
 LABEL org.opencontainers.image.description="agent-lsp with all supported language servers (~2-3 GB)"
+
+USER nonroot

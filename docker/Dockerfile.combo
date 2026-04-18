@@ -11,6 +11,9 @@ FROM ghcr.io/blackwell-systems/agent-lsp:${BASE_TAG}
 ARG NPM_PACKAGES=""
 ARG GO_PACKAGES=""
 
+# Base image runs as nonroot — switch to root for package installation
+USER root
+
 RUN if [ -n "${NPM_PACKAGES}" ]; then \
       apt-get update && apt-get install -y --no-install-recommends nodejs npm && \
       npm install -g ${NPM_PACKAGES} && \
@@ -26,3 +29,5 @@ RUN if [ -n "${GO_PACKAGES}" ]; then \
     fi
 
 ENV PATH=$PATH:/usr/local/go/bin
+
+USER nonroot
