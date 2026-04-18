@@ -217,7 +217,7 @@ Machine-readable feature inventory for AI analysis. No prose. Dense structured l
 
 ---
 
-## Skills (15 total)
+## Skills (20 total)
 
 | Skill | Invocation | Allowed Tools | Description |
 |-------|-----------|---------------|-------------|
@@ -236,6 +236,11 @@ Machine-readable feature inventory for AI analysis. No prose. Dense structured l
 | `/lsp-local-symbols` | `[file-path]` | get_document_symbols, get_references, get_info_on_location | File-scoped symbol list, usages within file, type info — faster than workspace search |
 | `/lsp-test-correlation` | `[source-file]` | get_tests_for_file, run_tests | Find and run only tests covering an edited file |
 | `/lsp-format-code` | `[file-path]` | format_document, format_range, apply_edit | Format file or selection via language server formatter; applies edits to disk |
+| `/lsp-fix-all` | `[file-path]` | get_diagnostics, get_code_actions, apply_edit, open_document, format_document | Sequential quick-fix loop: collect diagnostics → apply one fix → re-collect; quick-fix kind only; never batches |
+| `/lsp-refactor` | `[symbol-or-file] [intent]` | get_change_impact, simulate_edit_atomic, simulate_chain, get_diagnostics, run_build, run_tests, get_tests_for_file, apply_edit, format_document | End-to-end refactor: blast-radius → speculative preview → apply → build verify → affected tests |
+| `/lsp-extract-function` | `[file-path] [start-line] [end-line] [name]` | get_document_symbols, get_code_actions, execute_command, apply_edit, get_diagnostics, format_document | Extract code block into named function; LSP code action primary, manual fallback with captured-variable analysis |
+| `/lsp-generate` | `[file-path:line:col] [intent]` | get_code_actions, execute_command, apply_edit, format_document, get_diagnostics, go_to_symbol | Language server code generation: interface stubs, test skeletons, missing methods, mocks |
+| `/lsp-understand` | `[symbol-name \| file-path]` | get_info_on_location, go_to_implementation, call_hierarchy, get_references, get_symbol_source, get_document_symbols, go_to_symbol | Deep Code Map: type info + implementations + call hierarchy (2-level) + references + source; synthesizes cross-symbol relationships |
 
 **Installation:** `cd skills && ./install.sh`
 - `--copy` flag: copies instead of symlinks
@@ -788,7 +793,7 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 - `ruby.security` — Brakeman security scan (Rails)
 - `ruby.audit` — `bundle-audit` CVE scan on `Gemfile.lock`
 
-### Skills (planned)
+### Skills (shipped in this release)
 
 | Skill | Purpose |
 |-------|---------|
@@ -796,6 +801,7 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 | `/lsp-fix-all` | Diagnostics → apply code action fixes → verify |
 | `/lsp-generate` | Server-side code generation (implement interface, stubs, methods) |
 | `/lsp-refactor` | Meta-skill: impact → preview → apply → verify → test; composed from lsp-impact + lsp-safe-edit + lsp-verify + lsp-test-correlation |
+| `/lsp-understand` | Deep-dive exploration of unfamiliar code by symbol name or file path; synthesizes hover, implementations, call hierarchy, references, and source into a structured Code Map |
 
 ### Skill Schema Specification (planned)
 
@@ -886,7 +892,7 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 - Each package has smoke tests verifying alias targets are non-nil at compile time
 
 **skills/:**
-- 15 skill directories; each contains `SKILL.md` with frontmatter + prompt body
+- 20 skill directories; each contains `SKILL.md` with frontmatter + prompt body
 - `install.sh` — symlinks/copies skill dirs to `~/.claude/skills/`; maintains CLAUDE.md managed block
 
 ### Key Architectural Facts
