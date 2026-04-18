@@ -979,6 +979,7 @@ waves:
             - C
             - D
             - E
+      base_commit: 8c31eddddf8e5b210df81c01581bbe70ad3666bd
 quality_gates:
     level: standard
     gates:
@@ -1147,5 +1148,4 @@ critic_report:
     reviewed_at: "2026-04-18T01:04:58Z"
     issue_count: 1
 state: REVIEWED
-original_branch: main
 injection_method: hook
