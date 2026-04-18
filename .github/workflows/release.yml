@@ -50,7 +50,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_TAP_TOKEN: ${{ secrets.GORELEASER_TAP_TOKEN }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
 
   npm-publish:
     needs: release

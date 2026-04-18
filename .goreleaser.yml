@@ -274,7 +274,7 @@ winget:
       owner: microsoft
       name: winget-pkgs
       branch: "agent-lsp-{{.Version}}"
-      token: "{{ .Env.WINGET_TOKEN }}"
+      token: "{{ .Env.GORELEASER_TAP_TOKEN }}"
       pull_request:
         enabled: true
         draft: false
