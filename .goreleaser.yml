@@ -247,6 +247,42 @@ dockers:
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 
+winget:
+  - name: agent-lsp
+    publisher: BlackwellSystems
+    publisher_url: https://github.com/blackwell-systems
+    publisher_support_url: https://github.com/blackwell-systems/agent-lsp/issues
+    package_identifier: BlackwellSystems.agent-lsp
+    license: MIT
+    license_url: https://github.com/blackwell-systems/agent-lsp/blob/main/LICENSE
+    copyright: Blackwell Systems and Dayna Blackwell
+    homepage: https://github.com/blackwell-systems/agent-lsp
+    short_description: MCP server giving AI agents reliable access to language server protocol
+    description: |
+      agent-lsp is a stateful MCP server over real language servers. It keeps the
+      language server's semantic index warm and adds a skill layer that turns
+      multi-step code operations into single, correct workflows. 50 tools, 30
+      languages, persistent sessions.
+    tags:
+      - lsp
+      - mcp
+      - ai
+      - developer-tools
+      - language-server
+    skip_upload: "{{ if .IsSnapshot }}true{{ else }}false{{ end }}"
+    repository:
+      owner: microsoft
+      name: winget-pkgs
+      branch: "agent-lsp-{{.Version}}"
+      token: "{{ .Env.WINGET_TOKEN }}"
+      pull_request:
+        enabled: true
+        draft: false
+        base:
+          owner: microsoft
+          name: winget-pkgs
+          branch: master
+
 release:
   github:
     owner: blackwell-systems
