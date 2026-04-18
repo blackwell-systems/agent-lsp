@@ -1,0 +1,30 @@
+{
+    "version": "0.1.2",
+    "description": "MCP server giving AI agents reliable access to language server protocol — 50 tools, 30 languages, persistent sessions.",
+    "homepage": "https://github.com/blackwell-systems/agent-lsp",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/blackwell-systems/agent-lsp/releases/download/v0.1.2/agent-lsp_windows_amd64.zip",
+            "hash": "caac5bc51b78fcc68b8aea0dadf6f61d9e5dc8564d64eb3a7b88c5b71cd58cf4"
+        },
+        "arm64": {
+            "url": "https://github.com/blackwell-systems/agent-lsp/releases/download/v0.1.2/agent-lsp_windows_arm64.zip",
+            "hash": "9b7263953f8f376a63546647a97e7a5af669faf7882502b2e12e3338f641ad2c"
+        }
+    },
+    "bin": "agent-lsp.exe",
+    "checkver": {
+        "github": "https://github.com/blackwell-systems/agent-lsp"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/blackwell-systems/agent-lsp/releases/download/v$version/agent-lsp_windows_amd64.zip"
+            },
+            "arm64": {
+                "url": "https://github.com/blackwell-systems/agent-lsp/releases/download/v$version/agent-lsp_windows_arm64.zip"
+            }
+        }
+    }
+}

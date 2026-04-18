@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **Windows install support** — `install.ps1` PowerShell script (no admin required; installs to `%LOCALAPPDATA%\agent-lsp` and adds to user PATH), Scoop bucket manifest (`bucket/agent-lsp.json`; `scoop bucket add blackwell-systems https://github.com/blackwell-systems/agent-lsp`), and Winget manifests (`winget/manifests/`; `winget install BlackwellSystems.agent-lsp`).
 - **HTTP+SSE transport** — agent-lsp can now serve MCP over HTTP using `--http [--port N]`. Enables persistent remote service deployment: Docker containers on remote hosts, shared CI servers, and multi-client setups without cold-start cost. Auth via `AGENT_LSP_TOKEN` environment variable enforces Bearer token authentication using `crypto/subtle.ConstantTimeCompare`.
 - **`internal/httpauth` package** — `BearerTokenMiddleware(token, next http.Handler)` wraps any HTTP handler with constant-time Bearer token validation. Returns RFC 7235-compliant 401 with `WWW-Authenticate: Bearer` header and `{"error":"unauthorized"}` JSON body. No-op passthrough when token is empty.
 - **`/health` endpoint** — unauthenticated `GET /health` returns `{"status":"ok"}` (200). Bypasses Bearer token auth so container orchestrators and Docker healthchecks can probe liveness without credentials. `docker-compose.yml` wires `HEALTHCHECK` for the `agent-lsp-http` service.

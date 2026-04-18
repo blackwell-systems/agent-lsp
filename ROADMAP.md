@@ -4,7 +4,7 @@
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Windows install script** | Planned | PowerShell install script + Scoop/Chocolatey package — GoReleaser ships Windows binaries but there's no Windows install story |
+| **Windows install script** | Shipped | PowerShell `install.ps1` (no admin required), Scoop bucket (`bucket/agent-lsp.json`), and Winget manifests (`winget/manifests/`) |
 | **Nix flake** | Planned | `nix run github:blackwell-systems/agent-lsp` — Nix users expect it; large overlap with the developer audience |
 
 ## Extensions

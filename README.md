@@ -121,13 +121,33 @@ Images run as a non-root user (uid 65532) by default. Set `AGENT_LSP_TOKEN` via 
 
 ## Installation
 
+**macOS / Linux**
+
 ```bash
-# curl | sh (Linux / macOS)
+# curl | sh
 curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh
 
 # Homebrew
 brew install blackwell-systems/tap/agent-lsp
+```
 
+**Windows**
+
+```powershell
+# PowerShell (no admin required)
+iwr -useb https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.ps1 | iex
+
+# Scoop
+scoop bucket add blackwell-systems https://github.com/blackwell-systems/agent-lsp
+scoop install blackwell-systems/agent-lsp
+
+# Winget
+winget install BlackwellSystems.agent-lsp
+```
+
+**All platforms**
+
+```bash
 # npm
 npm install -g @blackwell-systems/agent-lsp
 
