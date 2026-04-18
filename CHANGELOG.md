@@ -38,6 +38,17 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - **rename_symbol glob exclusions** — new optional exclude_globs parameter (array of glob strings). Files matching any pattern are excluded from the returned WorkspaceEdit. Useful for generated code (`**/*_gen.go`), vendored files (`vendor/**`), and test fixtures (`testdata/**`). Uses `filepath.Match` syntax, matched against both full path and basename.
 
 - `install.sh` now maintains a managed skills table in `~/.claude/CLAUDE.md` between sentinel comments (`<!-- agent-lsp:skills:start/end -->`). Auto-discovers all skills from SKILL.md frontmatter — adding a new skill and re-running install keeps CLAUDE.md in sync without touching surrounding content.
+
+- **`/lsp-fix-all` skill** — apply available quick-fix code actions for all current diagnostics in a file, one at a time with re-collection after each fix. Distinguishes quick-fix actions from structural refactors; enforces a sequential fix loop to handle line number shifts after each apply_edit.
+
+- **`/lsp-refactor` skill** — end-to-end safe refactor workflow that sequences blast-radius analysis, speculative preview, disk apply, build verification, and affected-test execution into a single coordinated skill. Inlines tool sequences from lsp-impact, lsp-safe-edit, lsp-verify, and lsp-test-correlation without calling those skills at runtime.
+
+- **`/lsp-extract-function` skill** — extract a selected code block into a named function. Primary path uses the language server's extract-function code action (refactor.extract kind); manual fallback identifies captured variables and constructs the function signature when no code action is available. Validates name collisions and compilation after extraction.
+
+- **`/lsp-generate` skill** — trigger language server code generation: interface stubs, test skeletons, missing method stubs, mock types. Uses get_code_actions to surface generator options and execute_command to run them. Documents per-language generator patterns for Go (gopls), TypeScript, Python, and Rust.
+
+- **`/lsp-understand` skill** — deep-dive exploration of unfamiliar code, accepting a symbol name OR a file path. Synthesizes hover info, implementations, call hierarchy (bounded to 2 levels), references, and source into a structured Code Map showing cross-symbol dependency relationships. Broader than /lsp-explore: operates on files as a unit and surfaces inter-symbol relationships.
+
 - Docker builds now trigger on release tags only; removed `:edge` tag
 - Moved `Dockerfile`, `Dockerfile.full`, `Dockerfile.lang`, and `docker-compose.yml` into `docker/` directory
 - Removed `:base` as a user-facing tag (still used internally between CI jobs)

@@ -140,27 +140,28 @@ The gap between what clangd provides and what the broader toolchain offers is la
 
 ## Skills
 
-Skills encode correct tool sequences so workflows actually happen. The current 15 skills cover navigation, safety checking, and analysis. Two gaps remain.
+Skills encode correct tool sequences so workflows actually happen. The current 20 skills cover navigation, safety checking, analysis, refactoring, and code generation.
 
-### Code action skills (gap: `get_code_actions` + `execute_command` are underserved)
+### Code action skills
 
-| Skill | Description |
-|-------|-------------|
-| `/lsp-extract-function` | Extract a selected code block into a named function using LSP code actions |
-| `/lsp-fix-all` | Get diagnostics → apply available code action fixes for each error → verify |
-| `/lsp-generate` | Trigger server-side code generation (implement interface, generate test stubs, add missing methods) |
+| Skill | Description | Status |
+|-------|-------------|--------|
+| `/lsp-extract-function` | Extract a selected code block into a named function using LSP code actions | Shipped |
+| `/lsp-fix-all` | Get diagnostics → apply available code action fixes for each error → verify | Shipped |
+| `/lsp-generate` | Trigger server-side code generation (implement interface, generate test stubs, add missing methods) | Shipped |
 
 ### Full edit lifecycle skill
 
-| Skill | Description |
-|-------|-------------|
-| `/lsp-refactor` | Meta-skill: impact check → speculative preview → apply → verify → run affected tests. Takes an intent and sequences the full workflow end-to-end |
+| Skill | Description | Status |
+|-------|-------------|--------|
+| `/lsp-refactor` | Meta-skill: impact check → speculative preview → apply → verify → run affected tests. Takes an intent and sequences the full workflow end-to-end | Shipped |
 
 ### Understanding skill
 
-| Skill | Description |
-|-------|-------------|
-| `/lsp-explore` | "Tell me about this symbol": hover + implementations + call hierarchy + references in one pass — for navigating unfamiliar code |
+| Skill | Description | Status |
+|-------|-------------|--------|
+| `/lsp-explore` | "Tell me about this symbol": hover + implementations + call hierarchy + references in one pass — for navigating unfamiliar code | Shipped |
+| `/lsp-understand` | Deep-dive exploration of unfamiliar code by symbol name or file path; synthesizes hover, implementations, call hierarchy, references, and source into a structured Code Map | Shipped |
 
 ### Skill composition
 
