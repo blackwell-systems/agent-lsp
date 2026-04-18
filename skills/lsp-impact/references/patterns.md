@@ -143,6 +143,21 @@ or use the shorter form if the receiver prefix is ambiguous:
 use the explicit `line` and `column` fields returned by `go_to_symbol` in
 Step 1 instead.
 
+### LineScope: Restricting to a Line Range
+
+When the same token appears multiple times in a file, add `line_scope_start`
+and `line_scope_end` to restrict the search:
+
+```
+"position_pattern": "func @@FunctionName(",
+"line_scope_start": 40,
+"line_scope_end": 60
+```
+
+Use the line number from `go_to_symbol` (Step 1) as an anchor:
+`line_scope_start: symbol_line - 5, line_scope_end: symbol_line + 5`.
+Omitting both args preserves full-file search for all existing callers.
+
 ---
 
 ## 4. Relationship to lsp-edit-export
