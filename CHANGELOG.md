@@ -11,15 +11,21 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 - **`internal/httpauth` package** — `BearerTokenMiddleware(token, next http.Handler)` wraps any HTTP handler with constant-time Bearer token validation. Returns RFC 7235-compliant 401 with `WWW-Authenticate: Bearer` header and `{"error":"unauthorized"}` JSON body. No-op passthrough when token is empty.
 
+- **`/health` endpoint** — unauthenticated `GET /health` returns `{"status":"ok"}` (200). Bypasses Bearer token auth so container orchestrators and Docker healthchecks can probe liveness without credentials. `docker-compose.yml` wires `HEALTHCHECK` for the `agent-lsp-http` service.
+
 - **Docker security hardening** — images now run as uid/gid 65532 (`nonroot`); `EXPOSE 8080` added; `HOME` set to `/tmp` (writable by nonroot); `docker-compose.yml` adds `agent-lsp-http` service for HTTP mode with `AGENT_LSP_TOKEN` wiring.
 
 - **`docker-compose.yml` HTTP service** — `agent-lsp-http` service exposes port `${AGENT_LSP_HTTP_PORT:-8080}:8080` with token read from `AGENT_LSP_TOKEN` env var (not CLI arg).
 
 ### Changed
 
-- **Auth token reads from env var** — `AGENT_LSP_TOKEN` environment variable takes precedence over `--token` CLI flag, keeping credentials out of the process list (`ps aux`, `/proc/<pid>/cmdline`). `--token` still accepted for local dev but env var always wins.
+- **Auth token reads from env var** — `AGENT_LSP_TOKEN` environment variable takes precedence over `--token` CLI flag, keeping credentials out of the process list (`ps aux`, `/proc/<pid>/cmdline`). `--token` still accepted for local dev but env var always wins. Using `--token` without the env var now prints a warning to stderr.
 
-- **HTTP server timeouts** — `ReadHeaderTimeout: 10s` and `ReadTimeout: 30s` added to prevent Slowloris-style resource exhaustion.
+- **HTTP server timeouts** — `ReadHeaderTimeout: 10s`, `ReadTimeout: 30s`, `WriteTimeout: 60s`, and `IdleTimeout: 120s` added to prevent Slowloris-style resource exhaustion and stalled response writers.
+
+- **`--listen-addr` IP validation** — `--listen-addr` now rejects hostnames and invalid values with a clear error; only valid IP addresses accepted (`net.ParseIP`).
+
+- **`--no-auth` loopback enforcement** — `--no-auth` is rejected when `--listen-addr` is a non-loopback address; unauthenticated exposure to the network requires an explicit loopback bind (`127.0.0.1`).
 
 - **`entrypoint.sh` security** — replaced `eval "${install_cmd}"` with a POSIX `case` whitelist covering all 8 package managers; `awk` server name lookup now uses `-v name=` variable binding (no regex injection via `LSP_SERVERS`); `apt-get` arm extracts and validates package name instead of passing full command to `sh -c`; all `${rest}` expansions quoted.
 
@@ -29,13 +35,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 - **`/lsp-explore` skill** — new agent skill that composes hover, go_to_implementation, call_hierarchy, and get_references into a single "tell me about this symbol" workflow for navigating unfamiliar code. Installed via `cd skills && ./install.sh`.
 
-- **rename_symbol glob exclusions** — new optional exclude_globs parameter
-  (array of glob strings). Files matching any pattern are excluded from the
-  returned WorkspaceEdit. Useful for generated code (**/*_gen.go),
-  vendored files (vendor/**), and test fixtures (testdata/**). Uses
-  filepath.Match syntax, matched against both full path and basename.
-
-### Changed
+- **rename_symbol glob exclusions** — new optional exclude_globs parameter (array of glob strings). Files matching any pattern are excluded from the returned WorkspaceEdit. Useful for generated code (`**/*_gen.go`), vendored files (`vendor/**`), and test fixtures (`testdata/**`). Uses `filepath.Match` syntax, matched against both full path and basename.
 
 - `install.sh` now maintains a managed skills table in `~/.claude/CLAUDE.md` between sentinel comments (`<!-- agent-lsp:skills:start/end -->`). Auto-discovers all skills from SKILL.md frontmatter — adding a new skill and re-running install keeps CLAUDE.md in sync without touching surrounding content.
 - Docker builds now trigger on release tags only; removed `:edge` tag

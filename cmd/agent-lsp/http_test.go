@@ -172,6 +172,17 @@ func TestRunHTTP_AuthWiring(t *testing.T) {
 		}
 	})
 
+	t.Run("/health returns 200 without auth", func(t *testing.T) {
+		resp, err := client.Get(baseURL + "/health")
+		if err != nil {
+			t.Fatalf("GET /health failed: %v", err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("want 200 from /health, got %d", resp.StatusCode)
+		}
+	})
+
 	// Shut down and confirm clean exit.
 	cancel()
 	select {

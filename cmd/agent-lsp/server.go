@@ -421,10 +421,18 @@ func (h maxBodyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // RunHTTP starts the MCP server over HTTP using the go-sdk's StreamableHTTPHandler.
 // addr is "host:port". token is the Bearer token required by clients (empty = no auth).
 func RunHTTP(ctx context.Context, server *mcp.Server, addr string, token string) error {
-	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+	mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		return server
 	}, nil)
-	wrapped := securityHeaders(httpauth.BearerTokenMiddleware(token, maxBodyHandler{handler}))
+
+	// /health is unauthenticated — required for container orchestration probes.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+	mux.Handle("/", httpauth.BearerTokenMiddleware(token, maxBodyHandler{mcpHandler}))
+	wrapped := securityHeaders(mux)
 	httpServer := &http.Server{
 		Addr:              addr,
 		Handler:           wrapped,

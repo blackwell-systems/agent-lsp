@@ -126,8 +126,8 @@ The gap between what clangd provides and what the broader toolchain offers is la
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **HTTP/SSE transport** | Planned (v0.2) | Run agent-lsp as a persistent HTTP server; enables remote deployments, Docker without `-i`, and multi-client sessions sharing one warm index |
-| **Language server health endpoint** | Planned | HTTP `/health` endpoint returning language server status — required for container orchestration and Docker-based production deployments |
+| **HTTP/SSE transport** | Shipped | `--http [--port N] [--listen-addr IP]` runs agent-lsp as a persistent HTTP server; Bearer token auth via `AGENT_LSP_TOKEN`; enables remote deployments, Docker without `-i`, and multi-client sessions sharing one warm index |
+| **`/health` endpoint** | Shipped | Unauthenticated `GET /health → {"status":"ok"}` bypasses auth middleware; `docker-compose.yml` wires `HEALTHCHECK` for the HTTP service |
 
 ## Product
 
