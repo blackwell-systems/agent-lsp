@@ -741,6 +741,7 @@ waves:
           files:
             - internal/tools/position_pattern.go
             - internal/tools/position_pattern_test.go
+      base_commit: 3d8959483bd32ebe471fda5ca43510b0b18038cf
 quality_gates:
     level: standard
     gates:
@@ -817,6 +818,5 @@ pre_mortem:
             Task brief prescribes the exact refactor: extract resolveInContent, have
             both ResolvePositionPattern and ResolvePositionPatternInRange call it.
             Postcondition check verifies 'func resolveInContent' exists in the file.
-state: "REVIEWED"
-original_branch: main
+state: REVIEWED
 injection_method: hook
