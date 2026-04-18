@@ -52,7 +52,7 @@ Enumerate exported symbols in a file and surface those with zero references acro
 - Checking whether a function you are about to delete has any hidden callers.
 
 **What it does that raw tools miss:**
-Doesn't just call `get_references` — it verifies indexing is complete before classifying anything (a common failure mode that produces false dead-code candidates), then cross-checks zero-reference results against grep for registration patterns that LSP cannot see (e.g., `server.AddTool(HandleFoo)`). The result is a classified report, not a raw list.
+Doesn't just call `get_references` — it verifies indexing is complete before classifying anything (a common failure mode that produces false dead-code candidates), then cross-checks zero-reference results against grep for registration patterns that LSP cannot see (e.g., `router.Handle("/path", myHandler)`). The result is a classified report, not a raw list.
 
 ---
 
@@ -230,7 +230,7 @@ ranked by severity.
 - When you want a single command that covers "does it type-check, compile, and pass tests."
 
 **What it does that raw tools miss:**
-Runs all three layers in parallel — diagnostics, build, and tests at the same time rather than sequentially. When `changed_files` is provided, it pre-correlates test files so failures point directly to which tests cover the changed code. Code actions are surfaced for any diagnostic errors so quick fixes are visible immediately.
+Runs diagnostics first, then build, then tests — ordered by severity so the fastest signal comes first. When `changed_files` is provided, it pre-correlates test files so failures point directly to which tests cover the changed code. Code actions are surfaced for any diagnostic errors so quick fixes are visible immediately.
 
 ---
 
