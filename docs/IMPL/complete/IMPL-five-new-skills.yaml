@@ -1,3 +1,4 @@
+completion_date: "2026-04-17"
 title: Five New LSP Agent Skills
 feature_slug: five-new-skills
 verdict: SUITABLE
@@ -1053,6 +1054,16 @@ completion_reports:
             - skills/lsp-understand/references/patterns.md
         verification: PASS
         notes: 'lsp-understand skill created with SKILL.md and verbatim patterns.md. All quality gates pass: build, vet, tests. Frontmatter matches required schema exactly. patterns.md is verbatim copy of lsp-safe-edit/references/patterns.md.'
+    F:
+        status: complete
+        branch: saw/five-new-skills/wave2-agent-F
+        commit: bf6880c
+        files_changed:
+            - ROADMAP.md
+            - CHANGELOG.md
+            - docs/FEATURES.md
+        verification: PASS
+        notes: 'All three doc files updated: ROADMAP.md marks 5 new skills Shipped and updates count to 20; CHANGELOG.md adds entries for all 5 skills in [Unreleased]; FEATURES.md updates count to 20 in two places, adds 5 rows to skills table, and renames Skills (planned) to Skills (shipped in this release). GitHub repo description updated via gh CLI. Build, vet, and tests all pass.'
 pre_mortem:
     overall_risk: low
     rows:
@@ -1147,5 +1158,5 @@ critic_report:
     summary: 'All six agents verified against the codebase. Wave 1 agents A–E all own exclusively new files (action: new) in skill directories that do not yet exist — file existence check passes cleanly. All five target directories (lsp-fix-all, lsp-refactor, lsp-extract-function, lsp-generate, lsp-understand) are absent from skills/. Wave 2 Agent F owns three modify-action files (ROADMAP.md, CHANGELOG.md, docs/FEATURES.md), all of which exist. The specific text anchors Agent F is told to match (Skills section header at ROADMAP.md line 143, install.sh CHANGELOG entry at line 40, Docker builds item at line 41, Skills count at FEATURES.md line 220, skill directories count at line 889, lsp-format-code table row at line 238, Skills (planned) section at line 791) are all verified present with exact text. One advisory warning: the interface_contracts section specifies skills/lsp-rename/references/patterns.md as the canonical source file, but all five Wave 1 agent tasks instruct copying from skills/lsp-safe-edit/references/patterns.md instead. Both files exist and are byte-for-byte identical in content, so this inconsistency is safe and produces no wrong behavior. Symbol accuracy and import chain checks are not applicable (all Wave 1 files are new markdown; no Go code). Complexity and disjoint ownership checks pass — no agent exceeds 8 files and no file is shared within the same wave.'
     reviewed_at: "2026-04-18T01:04:58Z"
     issue_count: 1
-state: REVIEWED
+state: COMPLETE
 injection_method: hook

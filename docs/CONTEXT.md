@@ -69,3 +69,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-http-transport-docker-security.yaml
 - **doctor-linescope**: completed 2026-04-17, 1 waves, 2 agents
   - IMPL doc: docs/IMPL/complete/IMPL-doctor-linescope.yaml
+- **five-new-skills**: completed 2026-04-17, 2 waves, 6 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-five-new-skills.yaml
