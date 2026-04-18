@@ -817,6 +817,6 @@ pre_mortem:
             Task brief prescribes the exact refactor: extract resolveInContent, have
             both ResolvePositionPattern and ResolvePositionPatternInRange call it.
             Postcondition check verifies 'func resolveInContent' exists in the file.
-state: SCOUT_PENDING
+state: "REVIEWED"
 original_branch: main
 injection_method: hook
