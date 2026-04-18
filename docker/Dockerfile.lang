@@ -13,6 +13,9 @@ ARG LSP_PACKAGE
 ARG PACKAGE_MGR
 ARG LSP_BINARY
 
+# Base image runs as nonroot — switch to root for package installation
+USER root
+
 # Install language server based on package manager
 RUN set -eux; \
     case "${PACKAGE_MGR}" in \
@@ -44,3 +47,5 @@ ENV PATH=$PATH:/usr/local/bin:/usr/local/go/bin
 
 # Set language label
 LABEL org.opencontainers.image.description="agent-lsp with ${LANG} language server"
+
+USER nonroot
