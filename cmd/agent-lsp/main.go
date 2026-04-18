@@ -29,6 +29,12 @@ func main() {
 		return
 	}
 
+	// Subcommand routing: agent-lsp doctor
+	if len(os.Args) >= 2 && os.Args[1] == "doctor" {
+		runDoctor(os.Args[2:])
+		return
+	}
+
 	logging.SetLevelFromEnv()
 	parsed, err := config.ParseArgs(os.Args[1:])
 	if err != nil {
