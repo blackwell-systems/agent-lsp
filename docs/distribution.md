@@ -19,11 +19,30 @@ brew install blackwell-systems/tap/agent-lsp
 ```
 Formula in [blackwell-systems/homebrew-tap](https://github.com/blackwell-systems/homebrew-tap) is updated automatically by GoReleaser on every release.
 
-### curl | sh
+### curl | sh (macOS / Linux)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh
 ```
 Detects OS and architecture, downloads the matching binary from GitHub Releases, installs to `/usr/local/bin`.
+
+### PowerShell (Windows)
+```powershell
+iwr -useb https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.ps1 | iex
+```
+Detects amd64/arm64, downloads the matching zip from GitHub Releases, installs to `%LOCALAPPDATA%\agent-lsp`, adds to user PATH. No admin required.
+
+### Scoop (Windows)
+```powershell
+scoop bucket add blackwell-systems https://github.com/blackwell-systems/agent-lsp
+scoop install blackwell-systems/agent-lsp
+```
+Manifest at `bucket/agent-lsp.json` in this repo (the repo doubles as the Scoop bucket). `autoupdate` is configured — `scoop update agent-lsp` picks up new releases automatically.
+
+### Winget (Windows)
+```powershell
+winget install BlackwellSystems.agent-lsp
+```
+Manifests at `winget/manifests/b/BlackwellSystems/agent-lsp/`. Submit new versions as a PR to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) — copy the `winget/manifests/` directory structure, update version and hashes.
 
 ### npm
 ```bash
@@ -99,7 +118,7 @@ Docker images are built inside the `release` job by GoReleaser (`dockers:` secti
 
 | Channel | Notes |
 |---------|-------|
-| **Windows install script** | PowerShell script + Scoop/Chocolatey package |
+| **Windows install script** | Shipped — `install.ps1`, Scoop bucket, Winget manifests |
 | **Nix flake** | `nix run github:blackwell-systems/agent-lsp` |
 | **Awesome MCP Servers** | PR to the curated GitHub list |
 | **VS Code extension** | Zero-CLI-setup path for Copilot/Continue/Cline users |
