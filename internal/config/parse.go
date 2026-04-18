@@ -20,9 +20,11 @@ type ParseResult struct {
 	Config *Config
 
 	// HTTP transport fields
-	HTTPMode  bool
-	HTTPPort  int
-	HTTPToken string
+	HTTPMode       bool
+	HTTPPort       int
+	HTTPToken      string
+	HTTPListenAddr string // bind address; defaults to 127.0.0.1
+	HTTPNoAuth     bool   // explicit opt-in to unauthenticated HTTP mode
 }
 
 // extensionMap maps language IDs to their file extensions.
@@ -64,6 +66,8 @@ func ParseArgs(args []string) (ParseResult, error) {
 	var httpMode bool
 	httpPort := 8080
 	var httpToken string
+	httpListenAddr := "127.0.0.1"
+	var httpNoAuth bool
 	remainder := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -82,6 +86,14 @@ func ParseArgs(args []string) (ParseResult, error) {
 				return ParseResult{}, fmt.Errorf("--port value %d is out of range (1–65535)", p)
 			}
 			httpPort = p
+		case "--listen-addr":
+			if i+1 >= len(args) {
+				return ParseResult{}, fmt.Errorf("--listen-addr requires a value")
+			}
+			i++
+			httpListenAddr = args[i]
+		case "--no-auth":
+			httpNoAuth = true
 		case "--token":
 			if i+1 >= len(args) {
 				return ParseResult{}, fmt.Errorf("--token requires a value")
@@ -104,6 +116,8 @@ func ParseArgs(args []string) (ParseResult, error) {
 		r.HTTPMode = httpMode
 		r.HTTPPort = httpPort
 		r.HTTPToken = httpToken
+		r.HTTPListenAddr = httpListenAddr
+		r.HTTPNoAuth = httpNoAuth
 		return r
 	}
 

@@ -20,20 +20,41 @@ run_install_command() {
   case "${cmd}" in
     "GOPATH=/usr/local go install "*)
       rest="${cmd#GOPATH=/usr/local go install }"
+      # Single-token validation: Go module paths must not contain spaces.
+      case "${rest}" in
+        '' | *[[:space:]]*)
+          echo "agent-lsp: ERROR: go package spec must be a single token: ${rest}" >&2
+          return 1
+          ;;
+      esac
       GOPATH=/usr/local go install "${rest}"
       ;;
     "go install "*)
       rest="${cmd#go install }"
+      case "${rest}" in
+        '' | *[[:space:]]*)
+          echo "agent-lsp: ERROR: go package spec must be a single token: ${rest}" >&2
+          return 1
+          ;;
+      esac
       go install "${rest}"
       ;;
     "npm install -g "*)
       rest="${cmd#npm install -g }"
-      npm install -g "${rest}"
+      # npm allows multiple space-separated package names — validate chars but allow spaces.
+      case "${rest}" in
+        '' | *[!\ a-zA-Z0-9@._/:+-]*)
+          echo "agent-lsp: ERROR: npm package spec contains invalid characters: ${rest}" >&2
+          return 1
+          ;;
+      esac
+      # Word-split intentional: supports multi-package installs (e.g. typescript-language-server typescript)
+      # shellcheck disable=SC2086
+      npm install -g ${rest}
       ;;
     "apt-get update"*)
       # Extract the package name from the fixed pattern:
       #   apt-get update && apt-get install -y --no-install-recommends <pkg> && rm -rf ...
-      # Use sed to capture the token after --no-install-recommends up to the next space or end.
       pkg=$(printf '%s' "${cmd}" | sed 's/.*--no-install-recommends \([^ ]*\).*/\1/')
       # Validate: only alphanumeric, hyphens, dots, plus, underscores — no shell metacharacters.
       case "${pkg}" in
@@ -46,18 +67,42 @@ run_install_command() {
       ;;
     "cargo install "*)
       rest="${cmd#cargo install }"
+      case "${rest}" in
+        '' | *[[:space:]]*)
+          echo "agent-lsp: ERROR: cargo package spec must be a single token: ${rest}" >&2
+          return 1
+          ;;
+      esac
       cargo install "${rest}"
       ;;
     "pip install "*)
       rest="${cmd#pip install }"
+      case "${rest}" in
+        '' | *[[:space:]]*)
+          echo "agent-lsp: ERROR: pip package spec must be a single token: ${rest}" >&2
+          return 1
+          ;;
+      esac
       pip install "${rest}"
       ;;
     "dotnet tool install -g "*)
       rest="${cmd#dotnet tool install -g }"
+      case "${rest}" in
+        '' | *[[:space:]]*)
+          echo "agent-lsp: ERROR: dotnet package spec must be a single token: ${rest}" >&2
+          return 1
+          ;;
+      esac
       dotnet tool install -g "${rest}"
       ;;
     "gem install "*)
       rest="${cmd#gem install }"
+      case "${rest}" in
+        '' | *[[:space:]]*)
+          echo "agent-lsp: ERROR: gem package spec must be a single token: ${rest}" >&2
+          return 1
+          ;;
+      esac
       gem install "${rest}"
       ;;
     "echo "*)
@@ -86,13 +131,21 @@ if [ -n "${LSP_SERVERS}" ]; then
   echo "agent-lsp: installing requested language servers: ${LSP_SERVERS}"
   mkdir -p "${CACHE_DIR}"
 
-  # Split LSP_SERVERS on commas (POSIX sh compatible, no bashisms)
-  servers=$(printf '%s\n' "${LSP_SERVERS}" | tr ',' '\n')
-
-  for server in ${servers}; do
-    # Trim any leading/trailing whitespace (use tr to strip spaces/tabs)
+  # Split LSP_SERVERS on commas and iterate. Uses while-read to prevent glob
+  # expansion from ${servers} (CRITICAL: unquoted for-loop expands * against filesystem).
+  printf '%s\n' "${LSP_SERVERS}" | tr ',' '\n' | while IFS= read -r server; do
+    # Trim any leading/trailing whitespace
     server=$(printf '%s' "${server}" | tr -d ' \t')
     [ -z "${server}" ] && continue
+
+    # Validate server name against allowlist (MEDIUM-4: prevents path traversal in
+    # CACHE_DIR and awk injection). Only a-z, A-Z, 0-9, hyphens, dots, underscores.
+    case "${server}" in
+      *[!a-zA-Z0-9._-]*)
+        echo "agent-lsp: WARNING: invalid server name '${server}' (allowed: a-z A-Z 0-9 . _ -), skipping" >&2
+        continue
+        ;;
+    esac
 
     # Check if already on PATH
     if command -v "${server}" > /dev/null 2>&1; then

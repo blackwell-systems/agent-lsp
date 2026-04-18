@@ -229,7 +229,7 @@ type toolDeps struct {
 }
 
 // Run creates and starts the MCP server.
-func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string, httpMode bool, httpPort int, httpToken string) error {
+func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string, httpMode bool, httpPort int, httpToken string, httpListenAddr string, httpNoAuth bool) error {
 	cs := &clientState{client: resolver.DefaultClient()}
 	var initMu sync.Mutex
 	// clientForFileWithAutoInit extends clientForFile with auto-init behavior.
@@ -376,16 +376,38 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	logging.Log(logging.LevelInfo, "agent-lsp server starting")
 
-	if httpMode && httpToken == "" {
-		logging.Log(logging.LevelWarning, "HTTP mode active with no auth token — all requests accepted without authentication; set AGENT_LSP_TOKEN for production use")
+	if httpMode && httpToken == "" && !httpNoAuth {
+		return fmt.Errorf("HTTP mode requires an auth token; set AGENT_LSP_TOKEN environment variable\n(to intentionally run without auth, pass --no-auth)")
+	}
+	if httpMode && httpToken == "" && httpNoAuth {
+		logging.Log(logging.LevelWarning, "HTTP mode active with no auth token (--no-auth) — all requests accepted without authentication")
 	}
 
 	if httpMode {
-		addr := fmt.Sprintf(":%d", httpPort)
+		addr := fmt.Sprintf("%s:%d", httpListenAddr, httpPort)
 		return RunHTTP(ctx, server, addr, httpToken)
 	}
 	transport := &mcp.StdioTransport{}
 	return server.Run(ctx, transport)
+}
+
+// securityHeaders adds X-Content-Type-Options and Cache-Control headers to all responses.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// maxBodyHandler limits request body size to prevent memory exhaustion.
+const maxRequestBodyBytes = 4 * 1024 * 1024 // 4 MB
+
+type maxBodyHandler struct{ next http.Handler }
+
+func (h maxBodyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+	h.next.ServeHTTP(w, r)
 }
 
 // RunHTTP starts the MCP server over HTTP using the go-sdk's StreamableHTTPHandler.
@@ -394,12 +416,13 @@ func RunHTTP(ctx context.Context, server *mcp.Server, addr string, token string)
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		return server
 	}, nil)
-	wrapped := httpauth.BearerTokenMiddleware(token, handler)
+	wrapped := securityHeaders(httpauth.BearerTokenMiddleware(token, maxBodyHandler{handler}))
 	httpServer := &http.Server{
 		Addr:              addr,
 		Handler:           wrapped,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {

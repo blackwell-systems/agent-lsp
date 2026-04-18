@@ -61,6 +61,8 @@ services:
       - "--http"
       - "--port"
       - "8080"
+      - "--listen-addr"
+      - "0.0.0.0"  # bind all interfaces so Docker port mapping works
       # Token is read from AGENT_LSP_TOKEN env var (set above) — do NOT pass
       # via --token flag to avoid credential exposure in ps / /proc/<pid>/cmdline.
     deploy:
