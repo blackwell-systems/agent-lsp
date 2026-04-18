@@ -1,0 +1,36 @@
+# agent-lsp base image — GoReleaser build
+# Uses the pre-compiled binary from the GoReleaser build context.
+# For local/dev builds use Dockerfile (multi-stage, compiles from source).
+
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+    && rm -rf /var/lib/apt/lists/*
+
+# GoReleaser places the compiled binary and extra_files at the build context root
+COPY agent-lsp /usr/local/bin/agent-lsp
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY docker/lsp-servers.yaml /etc/agent-lsp/lsp-servers.yaml
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+RUN mkdir -p /var/cache/lsp-servers
+
+RUN groupadd --gid 65532 nonroot \
+    && useradd --uid 65532 --gid 65532 --no-create-home --shell /usr/sbin/nologin nonroot \
+    && chown -R nonroot:nonroot /var/cache/lsp-servers
+
+EXPOSE 8080
+
+ENV HOME=/tmp
+
+RUN mkdir -p /workspace && chown nonroot:nonroot /workspace
+WORKDIR /workspace
+
+USER nonroot
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD []

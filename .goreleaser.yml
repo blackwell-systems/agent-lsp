@@ -97,7 +97,10 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:latest"
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:{{ .Version }}"
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:{{ .Major }}.{{ .Minor }}"
-    dockerfile: docker/Dockerfile
+    dockerfile: docker/Dockerfile.release
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
