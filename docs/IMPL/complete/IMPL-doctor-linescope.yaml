@@ -1,3 +1,4 @@
+completion_date: "2026-04-17"
 title: agent-lsp doctor subcommand and LineScope line range filter for position_pattern
 feature_slug: doctor-linescope
 verdict: SUITABLE
@@ -754,6 +755,51 @@ quality_gates:
         - type: test
           command: GOWORK=off go test ./internal/... ./cmd/...
           required: true
+post_merge_checklist:
+    groups:
+        - title: Background Service Initialization
+          items:
+            - description: Verify if doctor.go needs initialization in Server constructor
+completion_reports:
+    A:
+        status: complete
+        branch: saw/doctor-linescope/wave1-agent-A
+        commit: 4cecdfe
+        files_changed:
+            - cmd/agent-lsp/doctor.go
+            - cmd/agent-lsp/doctor_test.go
+            - cmd/agent-lsp/main.go
+        files_created:
+            - cmd/agent-lsp/doctor.go
+            - cmd/agent-lsp/doctor_test.go
+        tests_added:
+            - TestDoctorCapabilityMap_NotEmpty
+            - TestPrintDoctorReport_NoResults
+            - TestPrintDoctorReport_FailedServer
+            - TestPrintDoctorReport_OkServer
+            - TestRunDoctor_NilAutodetectGraceful
+            - TestDoctorHasCapability_TrueValues
+            - TestDoctorHasCapability_FalseValue
+            - TestBuildDoctorEntries_Identity
+            - TestJoinStrings
+        verification: PASS
+        notes: doctor subcommand complete. 9 tests passing. Local doctorCapabilityMap defined (does not import internal/tools). buildDoctorEntries helper added for testability. Main.go doctor route inserted after init route.
+    B:
+        status: complete
+        branch: saw/doctor-linescope/wave1-agent-B
+        commit: 0ec02d1
+        files_changed:
+            - internal/tools/position_pattern.go
+            - internal/tools/position_pattern_test.go
+        tests_added:
+            - TestResolvePositionPatternInRange_Basic
+            - TestResolvePositionPatternInRange_NoRestriction
+            - TestResolvePositionPatternInRange_NotInRange
+            - TestResolvePositionPatternInRange_InvalidBounds
+            - TestExtractPositionWithPattern_LineScope
+            - TestExtractPositionWithPattern_LineScopeAbsent
+        verification: PASS
+        notes: All 15 tests pass. resolveInContent extracted from ResolvePositionPattern. ResolvePositionPatternInRange added with correct line translation. ExtractPositionWithPattern reads optional line_scope_start/end via toIntOptional. Vet and build clean.
 pre_mortem:
     overall_risk: low
     rows:
@@ -818,5 +864,5 @@ pre_mortem:
             Task brief prescribes the exact refactor: extract resolveInContent, have
             both ResolvePositionPattern and ResolvePositionPatternInRange call it.
             Postcondition check verifies 'func resolveInContent' exists in the file.
-state: REVIEWED
+state: COMPLETE
 injection_method: hook

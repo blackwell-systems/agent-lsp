@@ -67,3 +67,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-lsp-explore-rename-globs.yaml
 - **http-transport-docker-security**: completed 2026-04-17, 1 waves, 5 agents
   - IMPL doc: docs/IMPL/complete/IMPL-http-transport-docker-security.yaml
+- **doctor-linescope**: completed 2026-04-17, 1 waves, 2 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-doctor-linescope.yaml
