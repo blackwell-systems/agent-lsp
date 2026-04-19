@@ -62,8 +62,20 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GORELEASER_TAP_TOKEN: ${{ secrets.GORELEASER_TAP_TOKEN }}
+          GORELEASER_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+  winget:
+    name: Publish to winget
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: BlackwellSystems.agent-lsp
+          max-versions-to-keep: 5
+          fork-user: blackwell-systems
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
   npm-publish:
     needs: release
