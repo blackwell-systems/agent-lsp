@@ -47,11 +47,11 @@ type ApplyEditArgs struct {
 
 type ExecuteCommandArgs struct {
 	Command   string        `json:"command"`
-	Arguments []interface{} `json:"arguments,omitempty"`
+	Arguments []map[string]interface{} `json:"arguments,omitempty"`
 }
 
 type DidChangeWatchedFilesArgs struct {
-	Changes []interface{} `json:"changes"`
+	Changes []map[string]interface{} `json:"changes"`
 }
 
 type SetLogLevelArgs struct {

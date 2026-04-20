@@ -32,7 +32,7 @@ type EvaluateSessionArgs struct {
 
 type SimulateChainArgs struct {
 	SessionID string        `json:"session_id"`
-	Edits     []interface{} `json:"edits"`
+	Edits     []map[string]interface{} `json:"edits"`
 	TimeoutMs int           `json:"timeout_ms,omitempty"`
 }
 
