@@ -9,7 +9,7 @@
 
 **The most complete MCP server for language intelligence.** 50 tools, 30 CI-verified languages, 20 agent workflows. Single Go binary.
 
-AI agents make incorrect code changes because they can't see the full picture — who calls this function, what breaks if I rename it, does the build still pass. Language servers have the answers, but existing MCP bridges either cold-start on every request or expose raw tools that agents use incorrectly.
+AI agents make incorrect code changes because they can't see the full picture: who calls this function, what breaks if I rename it, does the build still pass. Language servers have the answers, but existing MCP bridges either cold-start on every request or expose raw tools that agents use incorrectly.
 
 agent-lsp is a **stateful runtime** over real language servers. It indexes your workspace once, keeps the index warm, and adds a **skill layer** that encodes correct multi-step operations so they actually complete.
 
@@ -20,19 +20,19 @@ agent-lsp init
 
 ### How it works
 
-One agent-lsp process manages your language servers. Point your AI at `~/code/` — it routes `.go` to gopls, `.ts` to typescript-language-server, `.py` to pyright. No reconfiguration when you switch projects. The session stays warm across files, packages, and repositories.
+One agent-lsp process manages your language servers. Point your AI at `~/code/`. It routes `.go` to gopls, `.ts` to typescript-language-server, `.py` to pyright. No reconfiguration when you switch projects. The session stays warm across files, packages, and repositories.
 
 ### Tested, not assumed
 
 Every other MCP-LSP implementation lists supported languages in a config file. None of them run the actual language server in CI to verify it works.
 
-agent-lsp CI runs **30 real language servers** against real fixture codebases on every push — Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, Clojure, Dart, Terraform, Nix, Prisma, SQL, MongoDB, and more. When we say "works with gopls," that's a verified, automated claim, not a hope.
+agent-lsp CI runs **30 real language servers** against real fixture codebases on every push: Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, Clojure, Dart, Terraform, Nix, Prisma, SQL, MongoDB, and more. When we say "works with gopls," that's a verified, automated claim, not a hope.
 
 ### Speculative execution
 
 Simulate changes in memory before writing to disk. No other MCP-LSP implementation has this.
 
-`simulate_edit_atomic` previews the diagnostic impact of any edit — you see exactly what breaks before the file is touched. `simulate_chain` evaluates a sequence of dependent edits (rename a function, update all callers, change the return type) and reports which step first introduces an error.
+`simulate_edit_atomic` previews the diagnostic impact of any edit. You see exactly what breaks before the file is touched. `simulate_chain` evaluates a sequence of dependent edits (rename a function, update all callers, change the return type) and reports which step first introduces an error.
 
 8 speculative execution tools: `create_simulation_session`, `simulate_edit`, `simulate_chain`, `evaluate_session`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`.
 
@@ -69,7 +69,7 @@ See [docs/skills.md](./docs/skills.md) for full descriptions and usage guidance.
 | `/lsp-safe-edit` | Speculative preview before disk write; before/after diagnostic diff; surfaces code actions on errors |
 | `/lsp-simulate` | Test changes in-memory without touching the file |
 | `/lsp-edit-symbol` | Edit a named symbol without knowing its file or position |
-| `/lsp-edit-export` | Safe editing of exported symbols — finds all callers first |
+| `/lsp-edit-export` | Safe editing of exported symbols, finds all callers first |
 | `/lsp-rename` | `prepare_rename` safety gate, preview all sites, confirm, apply atomically |
 
 **Understanding unfamiliar code**
@@ -134,7 +134,7 @@ docker run --rm \
   --http --port 8080 go:gopls
 ```
 
-Images run as a non-root user (uid 65532) by default. Set `AGENT_LSP_TOKEN` via environment variable — never `--token` on the command line. Images are also mirrored to Docker Hub (`blackwellsystems/agent-lsp`). See [DOCKER.md](./DOCKER.md) for the full tag list, HTTP mode setup, and security hardening options.
+Images run as a non-root user (uid 65532) by default. Set `AGENT_LSP_TOKEN` via environment variable, never `--token` on the command line. Images are also mirrored to Docker Hub (`blackwellsystems/agent-lsp`). See [DOCKER.md](./DOCKER.md) for the full tag list, HTTP mode setup, and security hardening options.
 
 ## Installation
 
@@ -248,7 +248,7 @@ Then use any of the 50 tools. The session stays warm; no restart needed when swi
 - **Large monorepos**: one server handles all languages, routes by file extension
 - **Code migration**: refactor across repos with full cross-repo reference tracking
 - **CI pipelines**: validate against real language server behavior
-- **Niche language stacks**: Gleam, Elixir, Prisma, Zig, Clojure, Nix, Dart, Scala, MongoDB — CI-verified, not just config-listed
+- **Niche language stacks**: Gleam, Elixir, Prisma, Zig, Clojure, Nix, Dart, Scala, MongoDB, all CI-verified
 
 ## Multi-Language Support
 
@@ -266,15 +266,15 @@ See [docs/tools.md](./docs/tools.md) for the full reference with parameters and 
 
 ## Further reading
 
-- [docs/skills.md](./docs/skills.md) — skill reference: workflows, use cases, and composition
-- [docs/tools.md](./docs/tools.md) — full tool reference
-- [docs/language-support.md](./docs/language-support.md) — language coverage matrix
-- [docs/speculative-execution.md](./docs/speculative-execution.md) — simulate-before-apply workflows
-- [docs/lsp-conformance.md](./docs/lsp-conformance.md) — LSP 3.17 spec coverage
-- [docs/architecture.md](./docs/architecture.md) — Go package structure and internals
-- [docs/ci-notes.md](./docs/ci-notes.md) — CI quirks and test harness details
-- [docs/distribution.md](./docs/distribution.md) — install channels and release pipeline
-- [DOCKER.md](./DOCKER.md) — Docker tags, compose, and volume caching
+- [docs/skills.md](./docs/skills.md) - skill reference: workflows, use cases, and composition
+- [docs/tools.md](./docs/tools.md) - full tool reference
+- [docs/language-support.md](./docs/language-support.md) - language coverage matrix
+- [docs/speculative-execution.md](./docs/speculative-execution.md) - simulate-before-apply workflows
+- [docs/lsp-conformance.md](./docs/lsp-conformance.md) - LSP 3.17 spec coverage
+- [docs/architecture.md](./docs/architecture.md) - Go package structure and internals
+- [docs/ci-notes.md](./docs/ci-notes.md) - CI quirks and test harness details
+- [docs/distribution.md](./docs/distribution.md) - install channels and release pipeline
+- [DOCKER.md](./DOCKER.md) - Docker tags, compose, and volume caching
 
 ## Development
 
