@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 PackageIdentifier: BlackwellSystems.agent-lsp
-PackageVersion: 0.1.2
+PackageVersion: 0.2.0
 PackageLocale: en-US
 Publisher: Blackwell Systems
 PublisherUrl: https://github.com/blackwell-systems
