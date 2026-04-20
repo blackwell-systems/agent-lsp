@@ -7,29 +7,46 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Agent Skills](assets/badge-agentskills.svg)](https://agentskills.io)
 
-**agent-lsp makes code operations reliable for AI agents.**
+**The most complete MCP server for language intelligence.** 50 tools, 30 CI-verified languages, 20 agent workflows. Single Go binary.
 
-It is a **stateful runtime** over real language servers, not a bridge. It keeps the language server's semantic index warm and adds a **skill layer** that turns multi-step code operations into single, correct workflows.
+AI agents make incorrect code changes because they can't see the full picture — who calls this function, what breaks if I rename it, does the build still pass. Language servers have the answers, but existing MCP bridges either cold-start on every request or expose raw tools that agents use incorrectly.
 
-Most MCP-LSP tools fail in practice:
-
-- **Stateless bridges** — no session, no context, no cross-file awareness
-- **Raw tools** — agents skip steps or use them incorrectly
-
-The tools exist. The workflow doesn't reliably happen.
-
-agent-lsp fixes both. The **persistent session** indexes your workspace once and keeps it warm. The **skill layer** encodes correct tool sequences so workflows actually happen.
-
-**Example:** call `/lsp-rename` and it will validate the rename, preview all affected files, show diagnostic impact, and apply atomically. One command. No missed steps.
-
-**50 tools. 49 CI-verified end-to-end. 30 languages.** Built to [LSP 3.17 spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+agent-lsp is a **stateful runtime** over real language servers. It indexes your workspace once, keeps the index warm, and adds a **skill layer** that encodes correct multi-step operations so they actually complete.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh
 agent-lsp init
 ```
 
-**Work across all your projects in one session.** Point your AI at `~/code/`. One agent-lsp process routes `.go` to gopls, `.ts` to typescript-language-server, `.py` to pyright — no reconfiguration when you switch projects.
+### How it works
+
+One agent-lsp process manages your language servers. Point your AI at `~/code/` — it routes `.go` to gopls, `.ts` to typescript-language-server, `.py` to pyright. No reconfiguration when you switch projects. The session stays warm across files, packages, and repositories.
+
+### Tested, not assumed
+
+Every other MCP-LSP implementation lists supported languages in a config file. None of them run the actual language server in CI to verify it works.
+
+agent-lsp CI runs **30 real language servers** against real fixture codebases on every push — Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, Clojure, Dart, Terraform, Nix, Prisma, SQL, MongoDB, and more. When we say "works with gopls," that's a verified, automated claim, not a hope.
+
+### Speculative execution
+
+Simulate changes in memory before writing to disk. No other MCP-LSP implementation has this.
+
+`simulate_edit_atomic` previews the diagnostic impact of any edit — you see exactly what breaks before the file is touched. `simulate_chain` evaluates a sequence of dependent edits (rename a function, update all callers, change the return type) and reports which step first introduces an error.
+
+8 speculative execution tools: `create_simulation_session`, `simulate_edit`, `simulate_chain`, `evaluate_session`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`.
+
+See [docs/speculative-execution.md](./docs/speculative-execution.md) for the full workflow.
+
+### Works with
+
+| AI Tool | Transport | Config |
+|---------|-----------|--------|
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | stdio | `mcpServers` in `.mcp.json` |
+| [Continue](https://continue.dev) | stdio | `mcpServers` in `config.json` |
+| [Cline](https://github.com/cline/cline) | stdio | `mcpServers` in settings |
+| [Cursor](https://cursor.com) | stdio | `mcpServers` in settings |
+| Any MCP client | HTTP+SSE | `--http --port 8080` with Bearer token auth |
 
 ## Skills
 
@@ -210,23 +227,19 @@ Then use any of the 50 tools. The session stays warm; no restart needed when swi
 
 ## Why agent-lsp
 
-| | agent-lsp | other MCP-LSP implementations |
+| | agent-lsp | next best competitor |
 |--|---------|---------------------|
-| Languages (CI-verified) | **30** (end-to-end integration tests) | config-listed, untested |
-| Tools | **50** | 3–18 |
-| Multi-server routing | **✓** (one process, many languages) | varies |
-| LSP spec compliance | **3.17, built to spec** | ad hoc |
+| Tools | **50** | 39 |
+| Languages (CI-verified) | **30** (end-to-end integration tests) | 0 (config-listed, untested) |
+| Agent workflows (skills) | **20** | 0 (in MCP space) |
+| Speculative execution | **8 tools** (simulate before writing) | none |
 | Connection model | **persistent** (warm index) | per-request or cold-start |
-| Cross-file references | **✓** | rarely |
-| Real-time diagnostic subscriptions | **✓** | ✗ |
-| Semantic token classification | **✓** | ✗ (only one competitor) |
-| Call hierarchy | **✓** (single tool, direction param) | ✗ or 3 separate tools |
-| Type hierarchy | **✓** (single tool, direction param) | ✗ or untested |
-| Fuzzy position fallback | **✓** | ✗ or partial |
-| Auto-watch (index stays fresh) | **✓** (always-on, debounced) | ✗ (manual notify required) |
-| Multi-root / cross-repo | **✓** (`add_workspace_folder`) | ✗ or single-workspace only |
-| HTTP+SSE transport | **✓** (bearer token auth, timeouts, non-root Docker) | ✗ or experimental |
-| Distribution | **single Go binary** | Node.js or Bun runtime required |
+| Call hierarchy | **✓** (single tool, direction param) | split across 3 tools or absent |
+| Type hierarchy | **✓** (CI-verified) | untested or absent |
+| Cross-repo references | **✓** (multi-root workspace) | single-workspace only |
+| Auto-watch | **✓** (always-on, debounced) | manual notify required |
+| HTTP+SSE transport | **✓** (bearer token auth, non-root Docker) | experimental or absent |
+| Distribution | **single Go binary** (8 channels) | Node.js/Bun runtime required |
 
 ## Use Cases
 
@@ -235,12 +248,15 @@ Then use any of the 50 tools. The session stays warm; no restart needed when swi
 - **Large monorepos**: one server handles all languages, routes by file extension
 - **Code migration**: refactor across repos with full cross-repo reference tracking
 - **CI pipelines**: validate against real language server behavior
+- **Niche language stacks**: Gleam, Elixir, Prisma, Zig, Clojure, Nix, Dart, Scala, MongoDB — CI-verified, not just config-listed
 
 ## Multi-Language Support
 
-30 languages, CI-verified end-to-end against real language servers on every CI run. No other MCP-LSP implementation has an equivalent test matrix.
+30 languages, CI-verified end-to-end against real language servers on every CI run. No other MCP-LSP implementation tests a single language in CI.
 
-See [docs/language-support.md](./docs/language-support.md) for the full coverage matrix and per-language CI notes.
+Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, Clojure, Dart, Terraform, Nix, Prisma, SQL, MongoDB, JavaScript, YAML, JSON, Dockerfile, CSS, HTML.
+
+See [docs/language-support.md](./docs/language-support.md) for the full coverage matrix.
 
 ## Tools
 
