@@ -168,7 +168,7 @@ Some language servers support multi-client connections over TCP (gopls supports 
 | Feature | Status | Description |
 |---------|--------|-------------|
 | **VS Code extension** | Planned | Auto-start agent-lsp, command palette for skills, inline diff preview for speculative execution, code lens for blast-radius annotations |
-| **JetBrains plugin** | Planned | Same scope as VS Code extension for IntelliJ, GoLand, PyCharm |
+| **JetBrains plugin** | Planned | Single plugin for all JetBrains IDEs (GoLand, IntelliJ, PyCharm, WebStorm, CLion, Rider). Only needs `com.intellij.modules.platform` dependency since agent-lsp manages its own LSP connections. No language-specific module dependencies required. |
 | **Neovim plugin** | Planned | Lua plugin using `vim.lsp.buf_get_clients()` to proxy requests through existing LSP connections |
 
 ## Bigger Bets
