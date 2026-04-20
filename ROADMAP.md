@@ -4,8 +4,7 @@
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Windows install script** | Shipped | PowerShell `install.ps1` (no admin required), Scoop bucket (`bucket/agent-lsp.json`), and Winget manifests (`winget/manifests/`) |
-| **Nix flake** | Planned | `nix run github:blackwell-systems/agent-lsp` — Nix users expect it; large overlap with the developer audience |
+| **Nix flake** | Planned | `nix run github:blackwell-systems/agent-lsp` |
 
 ## Extensions
 
@@ -116,56 +115,21 @@ The gap between what clangd provides and what the broader toolchain offers is la
 | `ruby.security` | Brakeman security scan (Rails) |
 | `ruby.audit` | `bundle-audit` CVE scan on `Gemfile.lock` |
 
-## Tools
-
-| Feature | Status | Description |
-|---------|--------|-------------|
-| **LineScope for position_pattern** | Planned | Restrict a `position_pattern` match to a specific line range — eliminates false matches when the same token appears multiple times in a file |
-
-## Transport
-
-| Feature | Status | Description |
-|---------|--------|-------------|
-| **HTTP/SSE transport** | Shipped | `--http [--port N] [--listen-addr IP]` runs agent-lsp as a persistent HTTP server; Bearer token auth via `AGENT_LSP_TOKEN`; enables remote deployments, Docker without `-i`, and multi-client sessions sharing one warm index |
-| **`/health` endpoint** | Shipped | Unauthenticated `GET /health → {"status":"ok"}` bypasses auth middleware; `docker-compose.yml` wires `HEALTHCHECK` for the HTTP service |
-
 ## Product
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **`agent-lsp doctor`** | Planned | Diagnostic command: checks each configured language server starts correctly, reports version, lists supported capabilities — reduces "why isn't this working" setup friction |
-| **`agent-lsp update`** | Planned | Self-update to the latest release — standard for CLI tools; fetches from GitHub Releases and replaces the binary in-place |
-| **Config file format** | Planned | `~/.agent-lsp.json` or `agent-lsp.json` project file for complex setups with per-server options — currently arg-based only |
-| **Continue.dev config support** | Planned | `agent-lsp init` currently skips Continue.dev; it uses a different config format than `mcpServers` and is a popular AI coding extension |
+| **`agent-lsp update`** | Planned | Self-update to the latest release; fetches from GitHub Releases and replaces the binary in-place |
+| **Config file format** | Planned | `~/.agent-lsp.json` or `agent-lsp.json` project file for complex setups with per-server options |
+| **Continue.dev config support** | Planned | `agent-lsp init` currently skips Continue.dev; it uses a different config format than `mcpServers` |
 
 ## Skills
 
-Skills encode correct tool sequences so workflows actually happen. The current 20 skills cover navigation, safety checking, analysis, refactoring, and code generation.
-
-### Code action skills
-
-| Skill | Description | Status |
-|-------|-------------|--------|
-| `/lsp-extract-function` | Extract a selected code block into a named function using LSP code actions | Shipped |
-| `/lsp-fix-all` | Get diagnostics → apply available code action fixes for each error → verify | Shipped |
-| `/lsp-generate` | Trigger server-side code generation (implement interface, generate test stubs, add missing methods) | Shipped |
-
-### Full edit lifecycle skill
-
-| Skill | Description | Status |
-|-------|-------------|--------|
-| `/lsp-refactor` | Meta-skill: impact check → speculative preview → apply → verify → run affected tests. Takes an intent and sequences the full workflow end-to-end | Shipped |
-
-### Understanding skill
-
-| Skill | Description | Status |
-|-------|-------------|--------|
-| `/lsp-explore` | "Tell me about this symbol": hover + implementations + call hierarchy + references in one pass — for navigating unfamiliar code | Shipped |
-| `/lsp-understand` | Deep-dive exploration of unfamiliar code by symbol name or file path; synthesizes hover, implementations, call hierarchy, references, and source into a structured Code Map | Shipped |
+20 skills shipped. See [docs/skills.md](docs/skills.md) for the full catalog.
 
 ### Skill composition
 
-Skills calling other skills — `/lsp-refactor` composed from `/lsp-impact` + `/lsp-safe-edit` + `/lsp-verify` + `/lsp-test-correlation`. Requires runtime support for skill invocation from within a skill.
+Skills calling other skills. `/lsp-refactor` is already composed from `/lsp-impact` + `/lsp-safe-edit` + `/lsp-verify` + `/lsp-test-correlation`. Formal runtime support for skill-to-skill invocation would enable arbitrary composition.
 
 ## Skill Schema Specification
 
