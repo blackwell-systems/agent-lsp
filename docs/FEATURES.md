@@ -38,12 +38,12 @@ Machine-readable feature inventory for AI analysis. No prose. Dense structured l
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `go_to_definition` | Jump to symbol definition | `file_path` (string, req), `line` (int, req), `column` (int, req), `position_pattern` (string, opt) |
+| `go_to_definition` | Jump to symbol definition | `file_path` (string, req), `line` (int, req), `column` (int, req), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
 | `go_to_type_definition` | Jump to type declaration | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `go_to_implementation` | Find all concrete implementations | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `go_to_declaration` | Jump to symbol declaration | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `go_to_symbol` | Navigate by dot-notation symbol name | `symbol_path` (string, req), `workspace_root` (string, req), `language` (string, opt) |
-| `rename_symbol` | Rename symbol across workspace | `file_path` (string, req), `line` (int, req), `column` (int, req), `new_name` (string, req), `dry_run` (bool, opt), `exclude_globs` ([]string, opt), `position_pattern` (string, opt) |
+| `rename_symbol` | Rename symbol across workspace | `file_path` (string, req), `line` (int, req), `column` (int, req), `new_name` (string, req), `dry_run` (bool, opt), `exclude_globs` ([]string, opt), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
 | `prepare_rename` | Validate rename at position | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `get_document_highlights` | Find all local occurrences (file-scoped) | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `call_hierarchy` | Show incoming/outgoing calls | `file_path` (string, req), `line` (int, req), `column` (int, req), `direction` (string, opt: "both", "incoming", "outgoing") |
@@ -70,16 +70,16 @@ Machine-readable feature inventory for AI analysis. No prose. Dense structured l
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `get_info_on_location` | Hover information at position | `file_path` (string, req), `line` (int, req), `column` (int, req), `position_pattern` (string, opt) |
+| `get_info_on_location` | Hover information at position | `file_path` (string, req), `line` (int, req), `column` (int, req), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
 | `get_completions` | Code completions at position | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `get_signature_help` | Function signature at cursor | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `get_code_actions` | Available refactorings/fixes | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req) |
 | `get_document_symbols` | All symbols in file | `file_path` (string, req), `language_id` (string, opt), `format` (string, opt: "outline") |
 | `get_workspace_symbols` | Symbols across workspace | `query` (string, req), `detail_level` (string, opt: "basic", "hover"), `limit` (int, opt), `offset` (int, opt) |
-| `get_references` | All usages of symbol | `file_path` (string, req), `line` (int, req), `column` (int, req), `include_declaration` (bool, opt), `position_pattern` (string, opt) |
+| `get_references` | All usages of symbol | `file_path` (string, req), `line` (int, req), `column` (int, req), `include_declaration` (bool, opt), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
 | `get_inlay_hints` | Type annotations/param labels | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req) |
 | `get_semantic_tokens` | Token type classification | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req) |
-| `get_symbol_source` | Extract source text for symbol | `file_path` (string, req), `line` (int, req), `character` (int, opt), `position_pattern` (string, opt) |
+| `get_symbol_source` | Extract source text for symbol | `file_path` (string, req), `line` (int, req), `character` (int, opt), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
 | `get_symbol_documentation` | Toolchain docs (go doc, pydoc, cargo doc) | `symbol` (string, req), `language_id` (string, req), `format` (string, opt) |
 | `get_change_impact` | Blast-radius analysis | `changed_files` (array, req), `include_transitive` (bool, opt) |
 | `get_cross_repo_references` | Find usages across consumer repos | `symbol_file` (string, req), `line` (int, req), `column` (int, req), `consumer_roots` (array, req), `language_id` (string, opt) |
@@ -241,6 +241,8 @@ Machine-readable feature inventory for AI analysis. No prose. Dense structured l
 | `/lsp-extract-function` | `[file-path] [start-line] [end-line] [name]` | get_document_symbols, get_code_actions, execute_command, apply_edit, get_diagnostics, format_document | Extract code block into named function; LSP code action primary, manual fallback with captured-variable analysis |
 | `/lsp-generate` | `[file-path:line:col] [intent]` | get_code_actions, execute_command, apply_edit, format_document, get_diagnostics, go_to_symbol | Language server code generation: interface stubs, test skeletons, missing methods, mocks |
 | `/lsp-understand` | `[symbol-name \| file-path]` | get_info_on_location, go_to_implementation, call_hierarchy, get_references, get_symbol_source, get_document_symbols, go_to_symbol | Deep Code Map: type info + implementations + call hierarchy (2-level) + references + source; synthesizes cross-symbol relationships |
+
+**User-facing reference:** `docs/skills.md` — one-page skill catalog with usage examples and trigger conditions
 
 **Installation:** `cd skills && ./install.sh`
 - `--copy` flag: copies instead of symlinks
@@ -621,10 +623,16 @@ Events flow through `logging` package at `LevelDebug` (lifecycle) and `LevelErro
 | Smithery/Glama | done (v0.1.2) | auto-indexed via `smithery.yaml` |
 | mcpservers.org | done (v0.1.2) | manual listing |
 | PulseMCP | done (v0.1.2) | ingests from official registry weekly |
-| Windows installer | planned | PowerShell + Scoop/Chocolatey |
+| Windows `install.ps1` | done (v0.2.0) | `irm https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.ps1 \| iex` — installs to `%LOCALAPPDATA%\agent-lsp`, adds to user PATH; no admin required |
+| Scoop | done (v0.2.0) | `scoop bucket add blackwell-systems https://github.com/blackwell-systems/agent-lsp && scoop install agent-lsp` — manifest at `bucket/agent-lsp.json` |
+| Winget | done (v0.2.0) | `winget install BlackwellSystems.agent-lsp` — manifests at `winget/manifests/` |
 | Nix flake | planned | `nix run github:blackwell-systems/agent-lsp` |
 | Awesome MCP Servers | planned | PR to curated GitHub list |
 | VS Code extension | planned | zero-CLI-setup for Copilot/Continue/Cline |
+
+### Licensing
+
+- **MIT LICENSE** — copyright Blackwell Systems and Dayna Blackwell; `LICENSE` file at repo root
 
 ### Platforms (GitHub Releases binaries)
 
@@ -658,6 +666,7 @@ mcp-registry-publish → publishes metadata to official MCP Registry (GitHub OID
 GoReleaser (inside release job):
     v* tag → 11 image stanzas pushed to both GHCR + Docker Hub:
     base/latest/semver, go, typescript, python, ruby, cpp, php, web, backend, fullstack, full
+    Uses docker/Dockerfile.release (pre-compiled binary from GoReleaser build context)
 ```
 
 ---
@@ -681,10 +690,14 @@ GoReleaser (inside release job):
 **Registries:** `ghcr.io/blackwell-systems/agent-lsp` (primary), `blackwellsystems/agent-lsp` (mirror)
 **Tags:** `latest` and `base` are the same image; semver tags (`0.1.2`, `0.1`) also pushed for the base image
 **Trigger:** Release tags (`v*`) only
-**Build:** `docker/Dockerfile` (base/latest), `docker/Dockerfile.lang` (per-language), `docker/Dockerfile.combo` (web/backend/fullstack), `docker/Dockerfile.full` (full); all use two-stage build — Go builder + `debian:bookworm-slim`; static binary; no Go runtime in final image
-**Security:** Runs as uid/gid 65532 (`nonroot`); no root shell; auth token read from `AGENT_LSP_TOKEN` env var (never CLI arg); HTTP server enforces `ReadHeaderTimeout`/`ReadTimeout`; entrypoint uses package-manager whitelist (no eval)
+**Build:** `docker/Dockerfile` (base/latest, multi-stage), `docker/Dockerfile.release` (GoReleaser, pre-compiled binary), `docker/Dockerfile.lang` (per-language), `docker/Dockerfile.combo` (web/backend/fullstack), `docker/Dockerfile.full` (full); source-build Dockerfiles use two-stage — Go builder + `debian:bookworm-slim`; static binary; no Go runtime in final image
+**Security:** Runs as uid/gid 65532 (`nonroot`); `EXPOSE 8080`; `HOME=/tmp` (writable by nonroot); no root shell; auth token read from `AGENT_LSP_TOKEN` env var (never CLI arg); HTTP server enforces `ReadHeaderTimeout`/`ReadTimeout`/`WriteTimeout`/`IdleTimeout`; entrypoint uses package-manager whitelist (no eval)
+**USER root fix:** `Dockerfile.lang`, `Dockerfile.combo`, `Dockerfile.full` switch to `USER root` for package installation, then back to `USER nonroot` before entrypoint
+**HEALTHCHECK:** `docker-compose.yml` wires `HEALTHCHECK CMD curl -sf http://localhost:8080/health` for the `agent-lsp-http` service
 **Memory limit (docker-compose default):** 4 GB; CPU limit: 2 cores
 **Workspace mount:** read-write (code actions may modify files); mount `:ro` for read-only analysis
+
+**docker-compose.yml HTTP service:** `agent-lsp-http` service exposes port `${AGENT_LSP_HTTP_PORT:-8080}:8080` with token read from `AGENT_LSP_TOKEN` env var.
 
 **HTTP mode (docker run):**
 ```bash
@@ -793,33 +806,13 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 - `ruby.security` — Brakeman security scan (Rails)
 - `ruby.audit` — `bundle-audit` CVE scan on `Gemfile.lock`
 
-### Skills (shipped in this release)
-
-| Skill | Purpose |
-|-------|---------|
-| `/lsp-extract-function` | Extract selected code into named function via LSP code actions |
-| `/lsp-fix-all` | Diagnostics → apply code action fixes → verify |
-| `/lsp-generate` | Server-side code generation (implement interface, stubs, methods) |
-| `/lsp-refactor` | Meta-skill: impact → preview → apply → verify → test; composed from lsp-impact + lsp-safe-edit + lsp-verify + lsp-test-correlation |
-| `/lsp-understand` | Deep-dive exploration of unfamiliar code by symbol name or file path; synthesizes hover, implementations, call hierarchy, references, and source into a structured Code Map |
-
 ### Skill Schema Specification (planned)
 
 - JSON Schema definitions for each skill's expected inputs and guaranteed outputs — machine-readable contracts alongside prose SKILL.md files
 - Schema validation tooling for CI — validates agent skill invocations against schema
 
-### Tools (planned)
-
-- **LineScope for `position_pattern`** — restrict match to line range; eliminates false matches when same token appears multiple times
-
-### Transport (planned)
-
-- **HTTP/SSE transport (v0.2)** — persistent server, remote deployments, Docker without `-i`, multi-client sessions sharing one warm index
-- **Language server health endpoint** — `/health` for container orchestration
-
 ### Product (planned)
 
-- **`agent-lsp doctor`** — checks each configured language server starts correctly, reports version, lists supported capabilities
 - **`agent-lsp update`** — self-update to latest release; fetches from GitHub Releases, replaces binary in-place
 - **Config file format** — `~/.agent-lsp.json` or `agent-lsp.json` project file for complex setups with per-server options
 - **Continue.dev config support** — `agent-lsp init` currently skips Continue.dev (different config format than `mcpServers`)
@@ -836,9 +829,10 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 ### Package Structure
 
 **cmd/agent-lsp:**
-- `main.go` — CLI entrypoint; argument parsing; signal handling; panic recovery via `runWithRecovery`; `--version` flag; `LOG_LEVEL` env
+- `main.go` — CLI entrypoint; argument parsing; signal handling; panic recovery via `runWithRecovery`; `--version` flag; `LOG_LEVEL` env; `--http`/`--port` flags for HTTP+SSE transport
 - `version.go` — `var Version = "dev"`; set at build time via `-ldflags="-X main.Version=x.y.z"` by GoReleaser
-- `server.go` — MCP server construction; `toolDeps` struct; `mcpSessionSender`; `InitializedHandler` wires logging bridge; `csResolver` wrapper
+- `server.go` — MCP server construction; `toolDeps` struct; `mcpSessionSender`; `InitializedHandler` wires logging bridge; `csResolver` wrapper; HTTP server setup with `/health` endpoint
+- `doctor.go` — `agent-lsp doctor` subcommand; probes each configured language server, reports version + supported capabilities, exits 1 on failure
 - `tools_navigation.go` — 10 navigation tools
 - `tools_analysis.go` — 13 analysis tools
 - `tools_workspace.go` — 19 workspace/lifecycle tools (includes `set_log_level`)
@@ -881,6 +875,10 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 - `logging.go` — `Log`, `SetServer`, `SetLevel`, `SetLevelFromEnv` (called explicitly from `main()`; `init()` is no-op); `MarkServerInitialized`; MCP notification bridge; 8 log levels per MCP spec
 - Pre-MCP-session: writes to stderr; post-MCP-session: routes through `logging/message` notifications
 
+**internal/httpauth:**
+- `auth.go` — `BearerTokenMiddleware(token string, next http.Handler) http.Handler`; constant-time Bearer token validation via `crypto/subtle.ConstantTimeCompare`; RFC 7235-compliant 401 with `WWW-Authenticate: Bearer` header and `{"error":"unauthorized"}` JSON body; no-op passthrough when token is empty
+- `auth_test.go` — unit tests for middleware
+
 **internal/extensions:**
 - `registry.go` — `ExtensionRegistry`; `Activate`, `RegisterFactory`, `GetToolHandlers`; registered via `init()` functions at compile time; extensions take precedence over core handlers
 
@@ -908,6 +906,7 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 - **Server-initiated requests:** all three types gopls sends handled
 - **Normalization layer:** `normalize.go` centralizes polymorphic response handling
 - **Fuzzy matching:** workspace symbol lookup with `position_pattern` fallback
+- **LineScope:** `line_scope_start`/`line_scope_end` parameters restrict `position_pattern` matching to a line range; eliminates false matches when the same token appears multiple times in a file
 - **1-based coordinates:** all line/column inputs 1-indexed; `WithDocument` converts to 0-based for LSP
 - **Static binary:** `CGO_ENABLED=0`, no runtime dependency
 - **GOWORK stripping:** subprocess environment has `GOWORK` stripped via `removeEnv` to prevent gopls from loading wrong workspace
@@ -1009,6 +1008,7 @@ type Extension interface {
 | `agent-lsp --config /path/to/lsp-mcp.json` | Start MCP server from JSON config |
 | `agent-lsp` | Start MCP server with auto-detected language servers |
 | `agent-lsp --http [--port N] <lang:server...>` | Start MCP server over HTTP+SSE |
+| `agent-lsp doctor` | Probe each configured language server; report version + capabilities; exit 1 on failure |
 | `agent-lsp init` | Interactive setup wizard |
 | `agent-lsp init --non-interactive` | CI/scripted setup |
 | `agent-lsp --version` | Print version and exit |
@@ -1024,6 +1024,10 @@ type Extension interface {
 | `AGENT_LSP_TOKEN` (env) | — | Bearer token for auth; empty = unauthenticated (warns on start) |
 
 Auth token must be set via environment variable — not `--token` flag — to avoid credential exposure in the process list.
+
+**`/health` endpoint:** unauthenticated `GET /health` returns `{"status":"ok"}` (200). Bypasses Bearer token auth so container orchestrators and Docker healthchecks can probe liveness without credentials.
+
+**Auth middleware:** `internal/httpauth.BearerTokenMiddleware(token, next)` — constant-time Bearer token validation via `crypto/subtle.ConstantTimeCompare`; RFC 7235-compliant 401 with `WWW-Authenticate: Bearer` header; no-op passthrough when token is empty.
 
 **Example:** `agent-lsp go:gopls typescript:typescript-language-server,--stdio python:pyright-langserver,--stdio`
 
