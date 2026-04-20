@@ -9,12 +9,20 @@ agent-lsp is a [Model Context Protocol](https://modelcontextprotocol.io/) server
 ```
 cmd/agent-lsp/
   main.go               ← CLI entrypoint; argument parsing, signal handling, panic recovery;
-                           --version flag prints Version (injected by GoReleaser, falls back to "dev")
+                           --version flag prints Version (injected by GoReleaser, falls back to "dev");
+                           dispatches to runInit (init subcommand) and runDoctor (doctor subcommand)
   version.go            ← var Version = "dev"; set at build time via -ldflags="-X main.Version=x.y.z"
   doc.go                ← package-level doc comment
-  server.go             ← MCP server construction; tool/resource registration; mcpSessionSender
+  init.go               ← runInit: interactive `agent-lsp init` subcommand; generates mcp.json config
+  init_test.go          ← tests for init subcommand
+  doctor.go             ← runDoctor: `agent-lsp doctor` subcommand; starts each configured LSP server,
+                           checks capabilities, and reports which tools are supported/unsupported
+  doctor_test.go        ← tests for doctor subcommand
+  server.go             ← MCP server construction; tool/resource registration; mcpSessionSender;
+                           HTTP transport via --http flag (Streamable HTTP + optional Bearer token auth);
                            (tool registration was extracted from server.go in a decomposition wave;
                            server.go now delegates to the four tool files below)
+  http_test.go          ← tests for HTTP transport and --http/--port/--token flag parsing
   tools_navigation.go   ← 10 navigation tools: go_to_definition, go_to_type_definition,
                            go_to_implementation, go_to_declaration, go_to_symbol,
                            rename_symbol, prepare_rename, get_document_highlights,
@@ -39,6 +47,11 @@ internal/config/
   parse.go         ← Argument parsing (single-server, multi-server, --config, auto-detect)
   infer.go         ← InferWorkspaceRoot: walks up from a file to find go.mod/package.json/etc.
   autodetect.go    ← AutodetectServers: scans PATH for known language server binaries
+
+internal/httpauth/
+  auth.go          ← BearerTokenMiddleware: HTTP middleware enforcing Bearer token authentication
+                     for --http mode; constant-time comparison via crypto/subtle
+  auth_test.go     ← tests for Bearer token middleware
 
 internal/lsp/
   client.go        ← LSPClient: subprocess lifecycle, JSON-RPC framing, request/response
@@ -80,7 +93,8 @@ internal/tools/
   utilities.go     ← apply_edit, execute_command, did_change_watched_files, set_log_level,
                      format_document, format_range, rename_symbol, prepare_rename
   fuzzy.go         ← fuzzy matching utilities for workspace symbol lookup
-  position_pattern.go ← position_pattern argument handling (e.g. "func Foo")
+  position_pattern.go ← position_pattern argument handling (e.g. "func Foo"); LineScope
+                       (line_scope_start/line_scope_end) for disambiguating duplicate matches
   runner.go        ← build/test runner dispatch table
 
 internal/resources/
@@ -141,6 +155,12 @@ skills/            ← Agent Skills (SKILL.md directories)
   lsp-local-symbols/ ← List all symbols in a file
   lsp-cross-repo/  ← Cross-repository navigation
   lsp-test-correlation/ ← Map source files to test files
+  lsp-explore/     ← Symbol exploration: hover + implementations + call hierarchy + references
+  lsp-understand/  ← Deep codebase understanding and navigation
+  lsp-refactor/    ← Multi-step refactoring workflows
+  lsp-extract-function/ ← Extract code into a new function
+  lsp-fix-all/     ← Fix all diagnostics in a file or workspace
+  lsp-generate/    ← Generate code with LSP-aware validation
 ```
 
 ---
@@ -485,6 +505,12 @@ The installer scans for `SKILL.md` files up to two levels deep, creates `~/.clau
 | `lsp-local-symbols` | List all symbols in a file |
 | `lsp-cross-repo` | Navigate references across multiple repositories via `get_cross_repo_references` |
 | `lsp-test-correlation` | Map source files to their test files |
+| `lsp-explore` | Symbol exploration: hover + implementations + call hierarchy + references in one pass |
+| `lsp-understand` | Deep codebase understanding and navigation |
+| `lsp-refactor` | Multi-step refactoring workflows |
+| `lsp-extract-function` | Extract code into a new function |
+| `lsp-fix-all` | Fix all diagnostics in a file or workspace |
+| `lsp-generate` | Generate code with LSP-aware validation |
 
 ---
 
