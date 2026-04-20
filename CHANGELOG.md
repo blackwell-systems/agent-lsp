@@ -7,6 +7,32 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **`--help` flag** — `agent-lsp --help` (or `-h` or `help`) prints usage summary with all modes and subcommands.
+- **`docs/skills.md`** — user-facing skill reference organized by workflow category with concrete use cases and composition examples.
+- **`glama.json`** — Glama MCP registry profile for server discovery and quality scoring.
+
+### Changed
+
+- **Graceful startup with no language servers** — auto-detect mode now starts the MCP server with all 50 tools registered even when no language servers are found on PATH. Previously exited with an error. Enables introspection, container health checks, and deferred server configuration via `start_lsp`.
+
+### Fixed
+
+- **BSD awk in `install.sh`** — fixed CLAUDE.md managed block update failing silently on macOS due to embedded newlines in awk `-v` variable. Uses temp file with `getline` instead.
+- **Docker `USER nonroot` inheritance** — `Dockerfile.lang`, `Dockerfile.combo`, and `Dockerfile.full` now switch to `USER root` before `apt-get install` and back to `nonroot` after. Previously failed with exit code 100 because the base image's `USER nonroot` was inherited.
+- **`Dockerfile.release` for GoReleaser** — GoReleaser Docker builds now use a dedicated Dockerfile that copies the pre-built binary instead of compiling from source. Fixes build context issues where source files were unavailable.
+- **Docker build ordering** — release workflow pre-builds and pushes the base image before GoReleaser starts, fixing parallel build race where language images couldn't find the base in the registry.
+- **Leaked agent constraint in `/lsp-generate`** — removed SAW agent brief instruction that leaked into the published SKILL.md.
+
+## [0.2.1] - 2026-04-20
+
+### Fixed
+
+- **Exit code on no-args** — `agent-lsp` invoked with no arguments and no language servers on PATH now exits 0 with usage help instead of exit 1. Fixes Winget validation failure.
+
+## [0.2.0] - 2026-04-19
+
+### Added
+
 - **Windows install support** — `install.ps1` PowerShell script (no admin required; installs to `%LOCALAPPDATA%\agent-lsp` and adds to user PATH), Scoop bucket manifest (`bucket/agent-lsp.json`; `scoop bucket add blackwell-systems https://github.com/blackwell-systems/agent-lsp`), and Winget manifests (`winget/manifests/`; `winget install BlackwellSystems.agent-lsp`).
 - **HTTP+SSE transport** — agent-lsp can now serve MCP over HTTP using `--http [--port N]`. Enables persistent remote service deployment: Docker containers on remote hosts, shared CI servers, and multi-client setups without cold-start cost. Auth via `AGENT_LSP_TOKEN` environment variable enforces Bearer token authentication using `crypto/subtle.ConstantTimeCompare`.
 - **`internal/httpauth` package** — `BearerTokenMiddleware(token, next http.Handler)` wraps any HTTP handler with constant-time Bearer token validation. Returns RFC 7235-compliant 401 with `WWW-Authenticate: Bearer` header and `{"error":"unauthorized"}` JSON body. No-op passthrough when token is empty.
