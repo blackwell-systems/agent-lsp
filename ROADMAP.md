@@ -146,9 +146,33 @@ The case for machine-readable skill contracts:
 | **Skill input/output schema** | Planned | JSON Schema definitions for each skill's expected inputs and guaranteed outputs — machine-readable contracts alongside the prose skill files |
 | **Schema validation tooling** | Planned | Validate agent skill invocations against the schema at runtime or in CI — surfaces misuse before it causes silent failures |
 
+## IDE Integration
+
+agent-lsp already works with any IDE that has an MCP client (VS Code via Continue/Cline, JetBrains via AI Assistant, Cursor, Windsurf, Neovim via mcp.nvim). The items below improve this from "works" to "native."
+
+### Passive mode (connect to existing language servers)
+
+agent-lsp currently launches and manages its own language server processes. In IDE environments, the IDE already has gopls/pyright/rust-analyzer running and indexed. Passive mode would connect to an already-running server instead of spawning a duplicate, eliminating double-indexing and double memory usage.
+
+`agent-lsp --connect go:localhost:9999 typescript:localhost:9998`
+
+Some language servers support multi-client connections over TCP (gopls supports `gopls -listen=:9999`). Passive mode would connect to these sockets and share the IDE's warm index. No IDE plugin required for this path.
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **`--connect` transport** | Planned | Connect to an existing language server TCP socket instead of spawning a new process |
+| **Shared index** | Planned | Reuse the IDE's warm language server index; no duplicate indexing or memory overhead |
+
+### IDE extensions
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **VS Code extension** | Planned | Auto-start agent-lsp, command palette for skills, inline diff preview for speculative execution, code lens for blast-radius annotations |
+| **JetBrains plugin** | Planned | Same scope as VS Code extension for IntelliJ, GoLand, PyCharm |
+| **Neovim plugin** | Planned | Lua plugin using `vim.lsp.buf_get_clients()` to proxy requests through existing LSP connections |
+
 ## Bigger Bets
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **VS Code extension** | Planned | Largest surface area for developer tools — makes agent-lsp available to Copilot, Continue, and Cline users with zero CLI setup |
 | **Observability** | Planned | Metrics (requests/sec, latency per tool, error rate) for production deployments — valuable for teams running agent-lsp as shared infrastructure |
