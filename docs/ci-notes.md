@@ -14,7 +14,7 @@ Implementation details for contributors and maintainers about the language serve
 
 **SQL (sqls):** Requires a live PostgreSQL service container. The CI job provisions `postgres:16` automatically.
 
-**Nix (nil):** Runs with `continue-on-error: true`. The Nix installer is slow in CI; nil installs via `nix profile`.
+**Nix (nil):** Runs with `continue-on-error: true`. The Nix installer is slow in CI; nil installs via `nix profile install github:oxalica/nil`.
 
 **MongoDB:** The language server is extracted from the `mongodb-js/vscode` VS Code extension VSIX at `dist/languageServer.js`. The CI job has `continue-on-error: true` since the extracted server may behave differently outside a VS Code extension host context. Requires a live `mongo:7` service container provisioned automatically.
 

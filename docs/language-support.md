@@ -107,7 +107,7 @@ See [ci-notes.md](./ci-notes.md) for per-language CI quirks.
 | Prisma | prisma-language-server | investigating (continue-on-error; server requires VS Code extension host) |
 | SQL | sqls | passing (postgres:16 service container) |
 | Clojure | clojure-lsp | passing |
-| Nix | nil | passing |
+| Nix | nil | best-effort (continue-on-error CI job; Nix installer slow in CI) |
 | Dart | dart language-server | passing |
 | MongoDB | mongodb-language-server | investigating (continue-on-error; server bundled in VS Code extension, not published standalone) |
 
@@ -129,7 +129,7 @@ See [ci-notes.md](./ci-notes.md) for per-language CI quirks.
 | `multi-lang-prisma` | Prisma | ubuntu-latest (continue-on-error) |
 | `multi-lang-sql` | SQL | ubuntu-latest (postgres:16 service) |
 | `multi-lang-clojure` | Clojure | ubuntu-latest |
-| `multi-lang-nix` | Nix | ubuntu-latest |
+| `multi-lang-nix` | Nix | ubuntu-latest (continue-on-error) |
 | `multi-lang-dart` | Dart | ubuntu-latest |
 | `multi-lang-mongodb` | MongoDB | ubuntu-latest (continue-on-error) |
 | `speculative-test` | session lifecycle (gopls) | ubuntu-latest |
