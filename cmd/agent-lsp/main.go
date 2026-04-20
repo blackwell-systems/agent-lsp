@@ -23,6 +23,22 @@ func main() {
 		os.Exit(0)
 	}
 
+	if len(os.Args) == 2 && (os.Args[1] == "--help" || os.Args[1] == "-h" || os.Args[1] == "help") {
+		fmt.Println("agent-lsp - MCP server for language intelligence")
+		fmt.Println("")
+		fmt.Println("Usage:")
+		fmt.Println("  agent-lsp go:gopls typescript:tsserver,--stdio   Multi-server mode")
+		fmt.Println("  agent-lsp --config /path/to/config.json          Config file mode")
+		fmt.Println("  agent-lsp --http [--port 8080] [lsp-args...]     HTTP+SSE transport")
+		fmt.Println("  agent-lsp                                        Auto-detect servers")
+		fmt.Println("")
+		fmt.Println("Commands:")
+		fmt.Println("  agent-lsp init       Auto-detect servers and configure your AI tool")
+		fmt.Println("  agent-lsp doctor     Check all configured language servers")
+		fmt.Println("  agent-lsp --version  Print version")
+		os.Exit(0)
+	}
+
 	// Subcommand routing: agent-lsp init
 	if len(os.Args) >= 2 && os.Args[1] == "init" {
 		runInit(os.Args[2:])
@@ -38,13 +54,14 @@ func main() {
 	logging.SetLevelFromEnv()
 	parsed, err := config.ParseArgs(os.Args[1:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		fmt.Fprintln(os.Stderr, "usage (single-server): agent-lsp <language-id> <lsp-server-binary> [args...]")
 		fmt.Fprintln(os.Stderr, "usage (multi-server):   agent-lsp go:gopls typescript:tsserver,--stdio")
 		fmt.Fprintln(os.Stderr, "usage (config file):    agent-lsp --config /path/to/lsp-mcp.json")
 		fmt.Fprintln(os.Stderr, "usage (auto-detect):    agent-lsp")
 		fmt.Fprintln(os.Stderr, "usage (http mode):      agent-lsp --http [--port 8080] [--listen-addr 127.0.0.1] [lsp-args...]  # set AGENT_LSP_TOKEN env var for auth")
-		os.Exit(1)
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Run 'agent-lsp init' to auto-detect language servers and configure your AI tool.")
+		os.Exit(0)
 	}
 
 	var resolver lsp.ClientResolver
