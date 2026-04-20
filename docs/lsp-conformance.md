@@ -16,6 +16,7 @@ Every LSP 3.17 method and its MCP surface. "Protocol only" means the method is c
 |-----------|------|----------|--------|
 | `textDocument/didOpen` | §3.15.7 | `open_document` | ✓ |
 | `textDocument/didClose` | §3.15.9 | `close_document` | ✓ |
+| `textDocument/didChange` | §3.15.8 | — | ✓ protocol only (sent internally by `open_document` for already-open files and by simulation edits) |
 | `textDocument/publishDiagnostics` | §3.17.1 | `get_diagnostics` | ✓ |
 | `textDocument/hover` | §3.15.11 | `get_info_on_location` | ✓ |
 | `textDocument/completion` | §3.15.13 | `get_completions` | ✓ |

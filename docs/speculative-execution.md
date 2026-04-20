@@ -222,7 +222,7 @@ Observes current session state. Calls `WaitForDiagnostics`, diffs against baseli
 
 A caller may call `simulate_edit` multiple times before calling `evaluate_session`. The evaluation reflects the cumulative state.
 
-**Atomic convenience wrapper:** `simulate_edit_atomic` is internally a create → apply → evaluate → discard cycle. It always manages its own session lifecycle — pass `workspace_root` + `language` (not a `session_id`). Returns an `EvaluationResult` directly. Useful for single-edit what-if checks without managing session IDs.
+**Atomic convenience wrapper:** `simulate_edit_atomic` supports two modes. **Standalone** (`session_id` omitted): creates a temporary session, applies the edit, evaluates, then destroys — pass `workspace_root` + `language`. **Existing session** (`session_id` provided): applies the edit into an existing session and evaluates without destroying it. Returns an `EvaluationResult` directly. Useful for single-edit what-if checks without managing session IDs.
 
 ---
 
