@@ -2645,9 +2645,9 @@ structured result, not an MCP error — callers can detect it and fall back to
 
 ### Position-pattern parameter (`position_pattern`)
 
-Three existing tools accept an optional `position_pattern` field:
-`get_info_on_location`, `get_references`, `go_to_definition`, and
-`rename_symbol`. When provided, it replaces the `line`/`column` pair.
+Five tools accept an optional `position_pattern` field:
+`get_info_on_location`, `get_references`, `go_to_definition`,
+`rename_symbol`, and `get_symbol_source`. When provided, it replaces the `line`/`column` pair.
 
 **How it works**
 
@@ -2723,7 +2723,7 @@ still executes on all other files.
 
 ## Skills
 
-Fourteen agent-native skills compose agent-lsp tools into single-command
+Twenty agent-native skills compose agent-lsp tools into single-command
 workflows. Install with `cd skills && ./install.sh`.
 
 | Skill | Tools used | Purpose |
@@ -2742,5 +2742,11 @@ workflows. Install with `cd skills && ./install.sh`.
 | `/lsp-local-symbols` | `get_document_symbols`, `get_document_highlights`, `get_info_on_location` | File-scoped analysis — list all symbols in a file, find all usages of a symbol within the file (faster than workspace search), get type info |
 | `/lsp-test-correlation` | `get_tests_for_file`, `get_workspace_symbols`, `run_tests` | Find and run only the tests covering an edited file; multi-file deduplication; fallback to workspace symbol search when mapping is absent |
 | `/lsp-format-code` | `format_document`, `format_range`, `apply_edit`, `get_diagnostics` | Format a file or selection via the language server formatter; full-file or range; verifies no diagnostics introduced after applying |
+| `/lsp-explore` | `go_to_symbol`, `get_info_on_location`, `go_to_implementation`, `call_hierarchy`, `get_references` | Symbol exploration: hover + implementations + call hierarchy + references in one pass — for navigating unfamiliar code |
+| `/lsp-understand` | `get_info_on_location`, `go_to_implementation`, `call_hierarchy`, `get_references`, `get_symbol_source`, `get_document_symbols`, `go_to_symbol` | Deep-dive exploration — builds a Code Map showing type info, implementations, call hierarchy, references, and source |
+| `/lsp-refactor` | `get_change_impact`, `simulate_edit_atomic`, `simulate_chain`, `get_diagnostics`, `run_build`, `run_tests`, `get_tests_for_file`, `apply_edit`, `format_document` | End-to-end safe refactor: blast-radius analysis, speculative preview, apply, verify build, run affected tests |
+| `/lsp-extract-function` | `get_document_symbols`, `get_code_actions`, `execute_command`, `apply_edit`, `get_diagnostics`, `format_document` | Extract a code block into a named function; primary path uses LSP code action, falls back to manual extraction |
+| `/lsp-fix-all` | `get_diagnostics`, `get_code_actions`, `apply_edit`, `format_document` | Bulk-apply quick-fix code actions for all diagnostics in a file |
+| `/lsp-generate` | `get_code_actions`, `execute_command`, `apply_edit`, `format_document`, `get_diagnostics` | Trigger LSP code generation — implement interface stubs, generate test skeletons, add missing methods |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.
