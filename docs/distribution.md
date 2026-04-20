@@ -95,11 +95,20 @@ Published automatically via `mcp-publisher` in CI using GitHub OIDC (no secrets 
 curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.blackwell-systems/agent-lsp"
 ```
 
-### Smithery / Glama
-A `smithery.yaml` in the repo root enables indexing on Smithery and Glama. These platforms auto-discover servers from GitHub and npm.
+### Glama
+Listed at [glama.ai/mcp/servers/blackwell-systems/agent-lsp](https://glama.ai/mcp/servers/blackwell-systems/agent-lsp). Profile managed via `glama.json` in repo root. Score badge: A grade. Build verified — server passes Glama's automated inspection checks.
+
+### Smithery
+`smithery.yaml` in the repo root enables auto-indexing on Smithery. Auto-discovered from GitHub.
+
+### cursor.directory
+Submitted. Cursor detects 20 skill components from SKILL.md files. Listed under Developer Tools.
 
 ### mcpservers.org
 Manually submitted. Free listing.
+
+### Awesome MCP Servers
+PR submitted ([punkpeye/awesome-mcp-servers#5145](https://github.com/punkpeye/awesome-mcp-servers/pull/5145)). Pending maintainer review.
 
 ## Release pipeline
 
@@ -118,7 +127,6 @@ Docker images are built inside the `release` job by GoReleaser (`dockers:` secti
 
 | Channel | Notes |
 |---------|-------|
-| **Windows install script** | Shipped — `install.ps1`, Scoop bucket, Winget manifests |
 | **Nix flake** | `nix run github:blackwell-systems/agent-lsp` |
-| **Awesome MCP Servers** | PR to the curated GitHub list |
+| **mcp.so** | Top Google result for "MCP servers"; direct submission |
 | **VS Code extension** | Zero-CLI-setup path for Copilot/Continue/Cline users |
