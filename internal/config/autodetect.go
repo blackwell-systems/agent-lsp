@@ -75,9 +75,12 @@ func AutodetectServers() (*Config, error) {
 		logging.Log(logging.LevelInfo, fmt.Sprintf("auto-detected %s: %s", lang, spec.Binary))
 	}
 
-	// Return error if no servers were found
+	// Return empty config if no servers were found — MCP server will still
+	// start and register all tools; language servers can be added later via
+	// start_lsp or by restarting with explicit args.
 	if len(servers) == 0 {
-		return nil, fmt.Errorf("no language servers found in PATH")
+		logging.Log(logging.LevelWarning, "no language servers found in PATH — starting with no servers configured")
+		return &Config{Servers: nil}, nil
 	}
 
 	return &Config{Servers: servers}, nil

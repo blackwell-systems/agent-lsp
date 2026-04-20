@@ -59,9 +59,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage (config file):    agent-lsp --config /path/to/lsp-mcp.json")
 		fmt.Fprintln(os.Stderr, "usage (auto-detect):    agent-lsp")
 		fmt.Fprintln(os.Stderr, "usage (http mode):      agent-lsp --http [--port 8080] [--listen-addr 127.0.0.1] [lsp-args...]  # set AGENT_LSP_TOKEN env var for auth")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Run 'agent-lsp init' to auto-detect language servers and configure your AI tool.")
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	var resolver lsp.ClientResolver
