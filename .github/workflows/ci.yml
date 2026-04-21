@@ -118,6 +118,11 @@ jobs:
           sudo chmod +x /usr/local/bin/jdtls
           echo "jdtls installed at $(which jdtls)"
 
+      - name: Smoke-test jdtls startup
+        run: |
+          echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}' \
+            | timeout 10 jdtls 2>&1 | head -20 || true
+
       - name: Run Java language tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Java$" ./test/ -timeout 15m
 
