@@ -1,3 +1,4 @@
+completion_date: "2026-04-20"
 title: Complete MCP Tool Metadata — Annotations, Parameter Descriptions, and Improved Tool Descriptions
 feature_slug: mcp-tool-metadata
 verdict: SUITABLE
@@ -517,6 +518,7 @@ waves:
             - Do NOT modify files outside your ownership list
           files:
             - cmd/agent-lsp/tools_session.go
+      base_commit: c38dea54a581d3dfaa61687da4e2e0fbe8b678dd
 quality_gates:
     level: standard
     gates:
@@ -539,6 +541,39 @@ scaffolds:
         func boolPtr(b bool) *bool { return &b }
       import_path: N/A (same package main)
       status: committed
+completion_reports:
+    A:
+        status: complete
+        branch: saw/mcp-tool-metadata/wave1-agent-A
+        commit: d8618d5
+        files_changed:
+            - cmd/agent-lsp/tools_analysis.go
+        verification: PASS
+        notes: Added ToolAnnotations to all 13 tools and jsonschema tags to all 60 Args struct fields. Build, vet, and all tests pass.
+    B:
+        status: complete
+        branch: saw/mcp-tool-metadata/wave1-agent-B
+        commit: 9da2567
+        files_changed:
+            - cmd/agent-lsp/tools_navigation.go
+        verification: PASS
+        notes: All 10 navigation tools annotated with ToolAnnotations. All 46 Args struct fields have jsonschema description tags. Build, vet, and tests all pass.
+    C:
+        status: complete
+        branch: saw/mcp-tool-metadata/wave1-agent-C
+        commit: 8c1e10b
+        files_changed:
+            - cmd/agent-lsp/tools_workspace.go
+        verification: PASS
+        notes: Added ToolAnnotations to all 19 tools and jsonschema descriptions to 34 struct fields across 16 Args types. Build and vet pass clean. Pre-existing test failure in TestRunHTTP_AuthWiring (connection refused race) is unrelated to this change.
+    D:
+        status: complete
+        branch: saw/mcp-tool-metadata/wave1-agent-D
+        commit: 795f38b
+        files_changed:
+            - cmd/agent-lsp/tools_session.go
+        verification: PASS
+        notes: Added Annotations to all 8 mcp.Tool literals and jsonschema description tags to all 31 Args struct fields. Build, vet, and tests all pass.
 pre_mortem:
     overall_risk: low
     rows:
@@ -588,6 +623,5 @@ critic_report:
     summary: 'All agent briefs verified against codebase. File existence checks pass: helpers.go does not exist (correct for action:new), all modify-target files exist. Tool counts match for agents A (13), B (10), D (8). Agent C''s brief says ''17 tools'' but file has 19 and the brief''s own detailed enumeration lists all 19 correctly — warning only. Agent B''s brief says RenameSymbolArgs has 7 fields but it has 8 (ExcludeGlobs missed in count) — warning only since all fields are visible in the struct. ToolAnnotations struct fields verified against MCP SDK: ReadOnlyHint (bool), DestructiveHint (*bool), OpenWorldHint (*bool), IdempotentHint (bool), Title (string) — all brief patterns match. boolPtr helper does not conflict with existing code. jsonschema package present in go.mod. Interface contract is trivially correct. No disjoint ownership violations. No complexity balance issues.'
     reviewed_at: "2026-04-21T02:35:15Z"
     issue_count: 2
-state: WAVE_PENDING
-original_branch: main
+state: COMPLETE
 injection_method: hook
