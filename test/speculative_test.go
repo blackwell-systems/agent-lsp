@@ -303,6 +303,12 @@ func runSpeculativeLanguageTest(t *testing.T, binaryPath string, lang speculativ
 		}); err != nil || res.IsError {
 			t.Logf("[%s] open_document for safeEditFile failed (non-fatal): err=%v", lang.name, err)
 		}
+		// Call get_diagnostics to flush any pending diagnostic publications and ensure
+		// the baseline captured during the first simulate_edit reflects steady state.
+		// Without this, a short sleep risks capturing an empty baseline before the
+		// server finishes processing, causing false-positive net_delta values.
+		time.Sleep(3 * time.Second)
+		_, _ = callTool(ctx, session, "get_diagnostics", map[string]any{"file_path": safeFile})
 		time.Sleep(2 * time.Second)
 	}
 
