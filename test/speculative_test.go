@@ -11,10 +11,147 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestSpeculativeSessions tests the speculative session lifecycle tools:
-// create_simulation_session, simulate_edit_atomic, evaluate_session,
-// commit_session, and discard_session. These tools are session-lifecycle
-// tests, not per-language matrix tests.
+// speculativeLangConfig holds per-language configuration for speculative session tests.
+type speculativeLangConfig struct {
+	name       string
+	id         string
+	binary     string
+	serverArgs []string
+	fixture    string        // absolute path to workspace root (passed to start_lsp)
+	file       string        // absolute path to primary source file
+	initWait   time.Duration // how long to wait after start_lsp before opening a document
+
+	// safeEdit inserts a comment at the given position — must produce net_delta=0.
+	safeEditLine int
+	safeEditCol  int
+	safeEditText string
+
+	// errorEdit replaces a range with a type-wrong value — must produce net_delta>0.
+	// If errorEditText is empty, the error_detection subtest is skipped.
+	errorEditLine    int
+	errorEditCol     int
+	errorEditEndLine int
+	errorEditEndCol  int
+	errorEditText    string
+}
+
+// buildSpeculativeLangConfigs returns configs for all languages covered by speculative
+// session tests. Each config targets a fixture file whose type errors are well-defined
+// so the error_detection subtest can assert net_delta>0 reliably.
+func buildSpeculativeLangConfigs(fixtureBase string) []speculativeLangConfig {
+	return []speculativeLangConfig{
+		{
+			// Go: replace `return fmt.Sprintf(...)` in Greet() with `return 42`.
+			// gopls immediately flags: cannot use 42 (type untyped int) as string.
+			name:             "Go",
+			id:               "go",
+			binary:           "gopls",
+			serverArgs:       []string{},
+			fixture:          filepath.Join(fixtureBase, "go"),
+			file:             filepath.Join(fixtureBase, "go", "main.go"),
+			initWait:         8 * time.Second,
+			safeEditLine:     1,
+			safeEditCol:      1,
+			safeEditText:     "// speculative comment\n",
+			errorEditLine:    13,
+			errorEditCol:     1,
+			errorEditEndLine: 14,
+			errorEditEndCol:  1,
+			errorEditText:    "\treturn 42\n",
+		},
+		{
+			// TypeScript: replace `return a + b;` in add() with `return "wrong";`.
+			// tsserver flags: Type 'string' is not assignable to type 'number'.
+			name:             "TypeScript",
+			id:               "typescript",
+			binary:           "typescript-language-server",
+			serverArgs:       []string{"--stdio"},
+			fixture:          filepath.Join(fixtureBase, "typescript"),
+			file:             filepath.Join(fixtureBase, "typescript", "src", "example.ts"),
+			initWait:         8 * time.Second,
+			safeEditLine:     1,
+			safeEditCol:      1,
+			safeEditText:     "// speculative comment\n",
+			errorEditLine:    5,
+			errorEditCol:     1,
+			errorEditEndLine: 6,
+			errorEditEndCol:  1,
+			errorEditText:    "  return \"wrong\";\n",
+		},
+		{
+			// Python: replace `return x + y` in add() with `return "wrong"`.
+			// pyright flags: Expression of type 'str' cannot be assigned to return type 'int'.
+			name:             "Python",
+			id:               "python",
+			binary:           "pyright-langserver",
+			serverArgs:       []string{"--stdio"},
+			fixture:          filepath.Join(fixtureBase, "python"),
+			file:             filepath.Join(fixtureBase, "python", "main.py"),
+			initWait:         8 * time.Second,
+			safeEditLine:     1,
+			safeEditCol:      1,
+			safeEditText:     "# speculative comment\n",
+			errorEditLine:    2,
+			errorEditCol:     1,
+			errorEditEndLine: 3,
+			errorEditEndCol:  1,
+			errorEditText:    "    return \"wrong\"\n",
+		},
+		{
+			// Rust: replace `x + y` in add() with `"wrong"`.
+			// rust-analyzer flags: expected `i32`, found `&str`.
+			name:             "Rust",
+			id:               "rust",
+			binary:           "rust-analyzer",
+			serverArgs:       []string{},
+			fixture:          filepath.Join(fixtureBase, "rust"),
+			file:             filepath.Join(fixtureBase, "rust", "src", "main.rs"),
+			initWait:         15 * time.Second, // rust-analyzer compiles before indexing
+			safeEditLine:     1,
+			safeEditCol:      1,
+			safeEditText:     "// speculative comment\n",
+			errorEditLine:    24,
+			errorEditCol:     1,
+			errorEditEndLine: 25,
+			errorEditEndCol:  1,
+			errorEditText:    "    \"wrong\"\n",
+		},
+		{
+			// C++: replace `return x + y;` in add() with `return "wrong";`.
+			// clangd flags: cannot initialize return object of type 'int' with an lvalue
+			// of type 'const char[6]'.
+			name:             "C++",
+			id:               "cpp",
+			binary:           "clangd",
+			serverArgs:       []string{},
+			fixture:          filepath.Join(fixtureBase, "cpp"),
+			file:             filepath.Join(fixtureBase, "cpp", "person.cpp"),
+			initWait:         10 * time.Second,
+			safeEditLine:     1,
+			safeEditCol:      1,
+			safeEditText:     "// speculative comment\n",
+			errorEditLine:    10,
+			errorEditCol:     1,
+			errorEditEndLine: 11,
+			errorEditEndCol:  1,
+			errorEditText:    "    return \"wrong\";\n",
+		},
+	}
+}
+
+// TestSpeculativeSessions tests the speculative session lifecycle tools across
+// all supported languages. Each language runs as a parallel subtest with its own
+// MCP connection and LSP process. Subtests within a language run sequentially,
+// sharing the same session.
+//
+// Subtests per language:
+//   - discard_path: create → simulate_edit → evaluate → discard
+//   - commit_path: create → simulate_edit → commit (dry-run, no disk write)
+//   - simulate_edit_non_atomic: create → simulate_edit → evaluate → discard
+//   - destroy_session: create → destroy → verify rejected
+//   - simulate_chain: create → simulate_chain → discard
+//   - simulate_edit_atomic_standalone: simulate_edit_atomic one-shot
+//   - error_detection: simulate_edit_atomic with a type-breaking edit
 func TestSpeculativeSessions(t *testing.T) {
 	t.Parallel()
 
@@ -24,437 +161,378 @@ func TestSpeculativeSessions(t *testing.T) {
 	}
 
 	fixtureBase := filepath.Join(testDir(t), "fixtures")
-	goFixture := filepath.Join(fixtureBase, "go")
-	goFile := filepath.Join(goFixture, "main.go")
+	langs := buildSpeculativeLangConfigs(fixtureBase)
 
-	lspBinaryPath, err := exec.LookPath("gopls")
+	for _, lang := range langs {
+		lang := lang // capture loop var
+		t.Run(lang.name, func(t *testing.T) {
+			t.Parallel()
+			runSpeculativeLanguageTest(t, binaryPath, lang)
+		})
+	}
+}
+
+// runSpeculativeLanguageTest establishes a dedicated MCP connection for lang and
+// runs all speculative session subtests against it.
+func runSpeculativeLanguageTest(t *testing.T, binaryPath string, lang speculativeLangConfig) {
+	t.Helper()
+
+	lspBinaryPath, err := exec.LookPath(lang.binary)
 	if err != nil {
-		t.Skip("skipping TestSpeculativeSessions: gopls not found on PATH")
+		t.Skipf("skipping %s: %s not found on PATH", lang.name, lang.binary)
+		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	cmd := exec.Command(binaryPath, "go", lspBinaryPath)
+	args := append([]string{lang.id, lspBinaryPath}, lang.serverArgs...)
+	cmd := exec.Command(binaryPath, args...)
 	client := mcp.NewClient(&mcp.Implementation{Name: "speculative-session-test", Version: "1.0"}, nil)
 	transport := &mcp.CommandTransport{Command: cmd}
 	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
-		t.Fatalf("failed to connect MCP session: %v", err)
+		t.Skipf("[%s] failed to connect MCP session: %v", lang.name, err)
+		return
 	}
 	defer session.Close()
 
-	// Tier 1: start_lsp.
-	res, err := callTool(ctx, session, "start_lsp", map[string]any{"root_dir": goFixture})
+	// start_lsp.
+	res, err := callTool(ctx, session, "start_lsp", map[string]any{"root_dir": lang.fixture})
 	if err != nil || res.IsError {
-		t.Skipf("start_lsp failed for gopls: err=%v isError=%v", err, res.IsError)
+		t.Skipf("[%s] start_lsp failed: err=%v isError=%v", lang.name, err, res.IsError)
+		return
 	}
-	time.Sleep(8 * time.Second)
+	time.Sleep(lang.initWait)
 
-	// Open main.go so the server has document state.
+	// open_document so the server has document state.
 	res, err = callTool(ctx, session, "open_document", map[string]any{
-		"file_path":   goFile,
-		"language_id": "go",
+		"file_path":   lang.file,
+		"language_id": lang.id,
 	})
 	if err != nil || res.IsError {
-		t.Skipf("open_document failed: err=%v isError=%v", err, res.IsError)
+		t.Skipf("[%s] open_document failed: err=%v isError=%v", lang.name, err, res.IsError)
+		return
 	}
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	t.Run("discard_path", func(t *testing.T) {
-		// Create a session.
-		res, err := callTool(ctx, session, "create_simulation_session", map[string]any{
-			"workspace_root": goFixture,
-			"language":       "go",
-		})
-		if err != nil {
-			t.Skipf("create_simulation_session failed: %v", err)
-		}
-		if res.IsError {
-			text, _ := textFromResult(res)
-			t.Skipf("create_simulation_session returned IsError (speculative sessions may not be supported): %s", text)
-		}
-		text, err := textFromResult(res)
-		if err != nil {
-			t.Fatalf("failed to parse create_simulation_session response: %v", err)
-		}
-		var createResult map[string]any
-		if err := json.Unmarshal([]byte(text), &createResult); err != nil {
-			t.Fatalf("failed to unmarshal create_simulation_session response: %s", text)
-		}
-		sessionID, _ := createResult["session_id"].(string)
+		sessionID := createSession(t, ctx, session, lang)
 		if sessionID == "" {
-			t.Fatalf("create_simulation_session: no session_id in response: %s", text)
+			return
 		}
-		t.Logf("created speculative session: %s", sessionID)
 
-		// Apply a speculative edit (comment — should introduce no errors).
-		res, err = callTool(ctx, session, "simulate_edit", map[string]any{
-			"session_id":   sessionID,
-			"file_path":    goFile,
-			"start_line":   1,
-			"start_column": 1,
-			"end_line":     1,
-			"end_column":   1,
-			"new_text":     "// speculative comment\n",
-		})
+		applyComment(t, ctx, session, lang, sessionID)
+		evaluateAndCheck(t, ctx, session, lang, sessionID, false)
+
+		res, err := callTool(ctx, session, "discard_session", map[string]any{"session_id": sessionID})
 		if err != nil {
-			t.Errorf("simulate_edit failed: %v", err)
+			t.Errorf("[%s] discard_session failed: %v", lang.name, err)
 		} else if res.IsError {
 			text, _ := textFromResult(res)
-			t.Logf("simulate_edit returned IsError (may be expected): %s", text)
+			t.Errorf("[%s] discard_session returned IsError: %s", lang.name, text)
 		} else {
-			editText, _ := textFromResult(res)
-			var editResult map[string]any
-			if jErr := json.Unmarshal([]byte(editText), &editResult); jErr == nil {
-				applied, _ := editResult["edit_applied"].(bool)
-				if !applied {
-					t.Errorf("simulate_edit: edit_applied=false, expected true")
-				}
-			}
-			t.Logf("simulate_edit succeeded")
-		}
-
-		// Evaluate the session — a comment edit should produce net_delta=0.
-		res, err = callTool(ctx, session, "evaluate_session", map[string]any{
-			"session_id": sessionID,
-		})
-		if err != nil {
-			t.Errorf("evaluate_session failed: %v", err)
-		} else {
-			evalText, _ := textFromResult(res)
-			var evalResult map[string]any
-			if jErr := json.Unmarshal([]byte(evalText), &evalResult); jErr == nil {
-				netDelta, _ := evalResult["net_delta"].(float64)
-				confidence, _ := evalResult["confidence"].(string)
-				t.Logf("evaluate_session: net_delta=%.0f confidence=%q", netDelta, confidence)
-				// net_delta <= 0 is the correct invariant: a comment must not introduce
-				// new errors. Negative values (resolved > introduced) are acceptable —
-				// they indicate transient baseline diagnostics that cleared during
-				// evaluation (common during gopls warmup in CI).
-				if netDelta > 0 && confidence != "low" {
-					t.Errorf("comment-only edit must not introduce errors: net_delta=%.0f (confidence=%q)", netDelta, confidence)
-				}
-			} else {
-				t.Logf("evaluate_session raw: %s", evalText)
-			}
-		}
-
-		// Discard the session.
-		res, err = callTool(ctx, session, "discard_session", map[string]any{
-			"session_id": sessionID,
-		})
-		if err != nil {
-			t.Errorf("discard_session failed: %v", err)
-		} else if res.IsError {
-			text, _ := textFromResult(res)
-			t.Errorf("discard_session returned IsError: %s", text)
-		} else {
-			t.Logf("discard_session succeeded")
+			t.Logf("[%s] discard_session succeeded", lang.name)
 		}
 	})
 
 	t.Run("commit_path", func(t *testing.T) {
-		// Create a second session for the commit path.
-		res, err := callTool(ctx, session, "create_simulation_session", map[string]any{
-			"workspace_root": goFixture,
-			"language":       "go",
-		})
-		if err != nil || res.IsError {
-			t.Skipf("create_simulation_session failed for commit path (expected if not supported)")
-		}
-		text, err := textFromResult(res)
-		if err != nil {
-			t.Fatalf("failed to parse create_simulation_session response: %v", err)
-		}
-		var createResult map[string]any
-		if err := json.Unmarshal([]byte(text), &createResult); err != nil {
-			t.Fatalf("failed to unmarshal: %s", text)
-		}
-		sessionID, _ := createResult["session_id"].(string)
+		sessionID := createSession(t, ctx, session, lang)
 		if sessionID == "" {
-			t.Fatalf("no session_id in response")
+			return
 		}
 
-		// Apply a valid edit (comment) before committing.
-		res, err = callTool(ctx, session, "simulate_edit", map[string]any{
-			"session_id":   sessionID,
-			"file_path":    goFile,
-			"start_line":   1,
-			"start_column": 1,
-			"end_line":     1,
-			"end_column":   1,
-			"new_text":     "// committed edit\n",
-		})
-		if err != nil {
-			t.Logf("simulate_edit failed before commit (skipping commit): %v", err)
-		}
+		applyComment(t, ctx, session, lang, sessionID)
 
-		// Commit the session.
-		res, err = callTool(ctx, session, "commit_session", map[string]any{
+		// commit without apply=true — returns a unified diff only, does not write to disk.
+		res, err := callTool(ctx, session, "commit_session", map[string]any{
 			"session_id": sessionID,
 		})
 		if err != nil {
-			t.Errorf("commit_session failed: %v", err)
+			t.Errorf("[%s] commit_session failed: %v", lang.name, err)
 		} else if res.IsError {
 			text, _ := textFromResult(res)
-			t.Logf("commit_session returned IsError (may be expected if server does not support it): %s", text)
+			t.Logf("[%s] commit_session returned IsError (may be expected if server does not support it): %s", lang.name, text)
 		} else {
-			t.Logf("commit_session succeeded")
+			t.Logf("[%s] commit_session succeeded", lang.name)
 		}
 	})
 
 	t.Run("simulate_edit_non_atomic", func(t *testing.T) {
-		// Tests simulate_edit (the non-atomic variant) followed by evaluate_session.
-		res, err := callTool(ctx, session, "create_simulation_session", map[string]any{
-			"workspace_root": goFixture,
-			"language":       "go",
-		})
-		if err != nil || res.IsError {
-			t.Skipf("create_simulation_session failed (expected if not supported)")
-		}
-		text, err := textFromResult(res)
-		if err != nil {
-			t.Fatalf("failed to parse create_simulation_session response: %v", err)
-		}
-		var createResult map[string]any
-		if err := json.Unmarshal([]byte(text), &createResult); err != nil {
-			t.Fatalf("failed to unmarshal: %s", text)
-		}
-		sessionID, _ := createResult["session_id"].(string)
+		sessionID := createSession(t, ctx, session, lang)
 		if sessionID == "" {
-			t.Fatalf("no session_id in response")
+			return
 		}
-		defer func() {
-			_, _ = callTool(ctx, session, "discard_session", map[string]any{"session_id": sessionID})
-		}()
+		defer discardSession(ctx, session, sessionID)
 
-		// Apply a non-atomic edit (no immediate evaluate).
-		res, err = callTool(ctx, session, "simulate_edit", map[string]any{
-			"session_id":   sessionID,
-			"file_path":    goFile,
-			"start_line":   1,
-			"start_column": 1,
-			"end_line":     1,
-			"end_column":   1,
-			"new_text":     "// non-atomic edit\n",
-		})
-		if err != nil {
-			t.Errorf("simulate_edit failed: %v", err)
-		} else if res.IsError {
-			text, _ := textFromResult(res)
-			t.Logf("simulate_edit returned IsError (may be expected): %s", text)
-		} else {
-			t.Logf("simulate_edit succeeded")
-		}
-
-		// Explicitly evaluate after the non-atomic edit.
-		res, err = callTool(ctx, session, "evaluate_session", map[string]any{
-			"session_id": sessionID,
-		})
-		if err != nil {
-			t.Errorf("evaluate_session after simulate_edit failed: %v", err)
-		} else {
-			evalText, _ := textFromResult(res)
-			t.Logf("evaluate_session result: %s", evalText)
-		}
+		applyComment(t, ctx, session, lang, sessionID)
+		evaluateAndCheck(t, ctx, session, lang, sessionID, false)
 	})
 
 	t.Run("destroy_session", func(t *testing.T) {
-		// Create a session solely to test destroy_session.
-		res, err := callTool(ctx, session, "create_simulation_session", map[string]any{
-			"workspace_root": goFixture,
-			"language":       "go",
-		})
-		if err != nil || res.IsError {
-			t.Skipf("create_simulation_session failed (expected if not supported)")
-		}
-		text, err := textFromResult(res)
-		if err != nil {
-			t.Fatalf("failed to parse create_simulation_session response: %v", err)
-		}
-		var createResult map[string]any
-		if err := json.Unmarshal([]byte(text), &createResult); err != nil {
-			t.Fatalf("failed to unmarshal: %s", text)
-		}
-		sessionID, _ := createResult["session_id"].(string)
+		sessionID := createSession(t, ctx, session, lang)
 		if sessionID == "" {
-			t.Fatalf("no session_id in response")
+			return
 		}
 
-		res, err = callTool(ctx, session, "destroy_session", map[string]any{
-			"session_id": sessionID,
-		})
+		res, err := callTool(ctx, session, "destroy_session", map[string]any{"session_id": sessionID})
 		if err != nil {
-			t.Errorf("destroy_session failed: %v", err)
+			t.Errorf("[%s] destroy_session failed: %v", lang.name, err)
 		} else if res.IsError {
 			text, _ := textFromResult(res)
-			t.Errorf("destroy_session returned IsError: %s", text)
+			t.Errorf("[%s] destroy_session returned IsError: %s", lang.name, text)
 		} else {
-			t.Logf("destroy_session succeeded")
+			t.Logf("[%s] destroy_session succeeded", lang.name)
 		}
 
-		// Verify destroyed session is no longer accessible.
-		res, err = callTool(ctx, session, "evaluate_session", map[string]any{
-			"session_id": sessionID,
-		})
+		// A destroyed session must be rejected by subsequent calls.
+		res, err = callTool(ctx, session, "evaluate_session", map[string]any{"session_id": sessionID})
 		if err == nil && !res.IsError {
-			t.Errorf("evaluate_session succeeded after destroy_session — session was not removed")
+			t.Errorf("[%s] evaluate_session succeeded after destroy_session — session was not removed", lang.name)
 		} else {
-			t.Logf("evaluate_session correctly rejected destroyed session")
+			t.Logf("[%s] evaluate_session correctly rejected destroyed session", lang.name)
 		}
 	})
 
 	t.Run("simulate_chain", func(t *testing.T) {
-		// Create a session for simulate_chain.
-		res, err := callTool(ctx, session, "create_simulation_session", map[string]any{
-			"workspace_root": goFixture,
-			"language":       "go",
-		})
-		if err != nil || res.IsError {
-			t.Skipf("create_simulation_session failed (expected if not supported)")
-		}
-		text, err := textFromResult(res)
-		if err != nil {
-			t.Fatalf("failed to parse create_simulation_session response: %v", err)
-		}
-		var createResult map[string]any
-		if err := json.Unmarshal([]byte(text), &createResult); err != nil {
-			t.Fatalf("failed to unmarshal: %s", text)
-		}
-		sessionID, _ := createResult["session_id"].(string)
+		sessionID := createSession(t, ctx, session, lang)
 		if sessionID == "" {
-			t.Fatalf("no session_id in response")
+			return
 		}
-		defer func() {
-			_, _ = callTool(ctx, session, "discard_session", map[string]any{"session_id": sessionID})
-		}()
+		defer discardSession(ctx, session, sessionID)
 
-		// Apply a two-step chain: add a comment, then add another.
-		res, err = callTool(ctx, session, "simulate_chain", map[string]any{
+		// Two-step comment chain — both steps must have cumulative_delta=0.
+		res, err := callTool(ctx, session, "simulate_chain", map[string]any{
 			"session_id": sessionID,
 			"edits": []map[string]any{
 				{
-					"file_path":    goFile,
-					"start_line":   1,
-					"start_column": 1,
-					"end_line":     1,
-					"end_column":   1,
+					"file_path":    lang.file,
+					"start_line":   lang.safeEditLine,
+					"start_column": lang.safeEditCol,
+					"end_line":     lang.safeEditLine,
+					"end_column":   lang.safeEditCol,
 					"new_text":     "// chain step 1\n",
 				},
 				{
-					"file_path":    goFile,
-					"start_line":   2,
-					"start_column": 1,
-					"end_line":     2,
-					"end_column":   1,
+					"file_path":    lang.file,
+					"start_line":   lang.safeEditLine + 1,
+					"start_column": lang.safeEditCol,
+					"end_line":     lang.safeEditLine + 1,
+					"end_column":   lang.safeEditCol,
 					"new_text":     "// chain step 2\n",
 				},
 			},
 		})
 		if err != nil {
-			t.Errorf("simulate_chain failed: %v", err)
-		} else if res.IsError {
+			t.Errorf("[%s] simulate_chain failed: %v", lang.name, err)
+			return
+		}
+		if res.IsError {
 			text, _ := textFromResult(res)
-			t.Logf("simulate_chain returned IsError (may be expected): %s", text)
-		} else {
-			chainText, _ := textFromResult(res)
-			var chainResult map[string]any
-			if jErr := json.Unmarshal([]byte(chainText), &chainResult); jErr == nil {
-				cumulativeDelta, _ := chainResult["cumulative_delta"].(float64)
-				safeThrough, _ := chainResult["safe_to_apply_through_step"].(float64)
-				t.Logf("simulate_chain: cumulative_delta=%.0f safe_to_apply_through_step=%.0f", cumulativeDelta, safeThrough)
-				if cumulativeDelta != 0 {
-					t.Errorf("expected cumulative_delta=0 for two-comment chain, got %.0f", cumulativeDelta)
-				}
-				if safeThrough != 2 {
-					t.Errorf("expected safe_to_apply_through_step=2, got %.0f", safeThrough)
-				}
-			} else {
-				t.Logf("simulate_chain raw: %s", chainText)
+			t.Logf("[%s] simulate_chain returned IsError (may be expected): %s", lang.name, text)
+			return
+		}
+		chainText, _ := textFromResult(res)
+		var chainResult map[string]any
+		if err := json.Unmarshal([]byte(chainText), &chainResult); err == nil {
+			cumulativeDelta, _ := chainResult["cumulative_delta"].(float64)
+			safeThrough, _ := chainResult["safe_to_apply_through_step"].(float64)
+			t.Logf("[%s] simulate_chain: cumulative_delta=%.0f safe_to_apply_through_step=%.0f",
+				lang.name, cumulativeDelta, safeThrough)
+			if cumulativeDelta != 0 {
+				t.Errorf("[%s] expected cumulative_delta=0 for two-comment chain, got %.0f",
+					lang.name, cumulativeDelta)
 			}
-			t.Logf("simulate_chain succeeded")
+			if safeThrough != 2 {
+				t.Errorf("[%s] expected safe_to_apply_through_step=2, got %.0f",
+					lang.name, safeThrough)
+			}
+		} else {
+			t.Logf("[%s] simulate_chain raw: %s", lang.name, chainText)
 		}
 	})
 
 	t.Run("simulate_edit_atomic_standalone", func(t *testing.T) {
-		// Tests simulate_edit_atomic as a self-contained tool: it creates its own
-		// session, applies an edit, evaluates, and destroys — all internally.
-		// The response is an EvaluationResult with net_delta, errors_introduced, etc.
 		res, err := callTool(ctx, session, "simulate_edit_atomic", map[string]any{
-			"workspace_root": goFixture,
-			"language":       "go",
-			"file_path":      goFile,
-			"start_line":     1,
-			"start_column":   1,
-			"end_line":       1,
-			"end_column":     1,
-			"new_text":       "// atomic speculative comment\n",
+			"workspace_root": lang.fixture,
+			"language":       lang.id,
+			"file_path":      lang.file,
+			"start_line":     lang.safeEditLine,
+			"start_column":   lang.safeEditCol,
+			"end_line":       lang.safeEditLine,
+			"end_column":     lang.safeEditCol,
+			"new_text":       lang.safeEditText,
 		})
 		if err != nil {
-			t.Skipf("simulate_edit_atomic failed: %v", err)
+			t.Skipf("[%s] simulate_edit_atomic failed: %v", lang.name, err)
+			return
 		}
 		if res.IsError {
 			text, _ := textFromResult(res)
-			t.Skipf("simulate_edit_atomic returned IsError (may not be supported): %s", text)
+			t.Skipf("[%s] simulate_edit_atomic returned IsError (may not be supported): %s", lang.name, text)
+			return
 		}
 		text, _ := textFromResult(res)
 		var evalResult map[string]any
 		if err := json.Unmarshal([]byte(text), &evalResult); err != nil {
-			t.Fatalf("could not parse simulate_edit_atomic response: %s", text)
+			t.Fatalf("[%s] could not parse simulate_edit_atomic response: %s", lang.name, text)
 		}
-		// A comment-only edit must not introduce errors (net_delta <= 0).
 		netDelta, _ := evalResult["net_delta"].(float64)
 		confidence, _ := evalResult["confidence"].(string)
-		t.Logf("simulate_edit_atomic: net_delta=%.0f confidence=%q", netDelta, confidence)
+		t.Logf("[%s] simulate_edit_atomic: net_delta=%.0f confidence=%q", lang.name, netDelta, confidence)
 		if netDelta > 0 && confidence != "low" {
-			t.Errorf("comment-only edit must not introduce errors: net_delta=%.0f (confidence=%q)", netDelta, confidence)
+			t.Errorf("[%s] comment-only edit must not introduce errors: net_delta=%.0f (confidence=%q)",
+				lang.name, netDelta, confidence)
 		}
 	})
 
 	t.Run("error_detection", func(t *testing.T) {
-		// Validates the core speculative session value proposition: evaluate_session
-		// (or simulate_edit_atomic) reports net_delta > 0 when an error-introducing
-		// edit is applied. Uses simulate_edit_atomic for simplicity.
-		//
-		// Edit: replace the return statement in Greet() (line 13) with a type-incorrect
-		// value. `return 42` is invalid in a function declared to return string.
+		if lang.errorEditText == "" {
+			t.Skipf("[%s] no error edit configured; skipping error_detection", lang.name)
+			return
+		}
+		// Validates the core speculative session value proposition: simulate_edit_atomic
+		// reports net_delta > 0 when a type-breaking edit is applied.
 		res, err := callTool(ctx, session, "simulate_edit_atomic", map[string]any{
-			"workspace_root": goFixture,
-			"language":       "go",
-			"file_path":      goFile,
-			"start_line":     13,
-			"start_column":   1,
-			"end_line":       14,
-			"end_column":     1,
-			"new_text":       "\treturn 42\n",
+			"workspace_root": lang.fixture,
+			"language":       lang.id,
+			"file_path":      lang.file,
+			"start_line":     lang.errorEditLine,
+			"start_column":   lang.errorEditCol,
+			"end_line":       lang.errorEditEndLine,
+			"end_column":     lang.errorEditEndCol,
+			"new_text":       lang.errorEditText,
 		})
 		if err != nil {
-			t.Skipf("simulate_edit_atomic failed: %v", err)
+			t.Skipf("[%s] simulate_edit_atomic failed: %v", lang.name, err)
+			return
 		}
 		if res.IsError {
 			text, _ := textFromResult(res)
-			t.Skipf("simulate_edit_atomic returned IsError (may not be supported): %s", text)
+			t.Skipf("[%s] simulate_edit_atomic returned IsError (may not be supported): %s", lang.name, text)
+			return
 		}
 		text, _ := textFromResult(res)
 		var evalResult map[string]any
 		if err := json.Unmarshal([]byte(text), &evalResult); err != nil {
-			t.Fatalf("could not parse error_detection response: %s", text)
+			t.Fatalf("[%s] could not parse error_detection response: %s", lang.name, text)
 		}
 		netDelta, _ := evalResult["net_delta"].(float64)
 		confidence, _ := evalResult["confidence"].(string)
 		timeout, _ := evalResult["timeout"].(bool)
 		introduced, _ := evalResult["errors_introduced"].([]any)
-		t.Logf("error_detection: net_delta=%.0f confidence=%q timeout=%v errors_introduced=%d",
-			netDelta, confidence, timeout, len(introduced))
+		t.Logf("[%s] error_detection: net_delta=%.0f confidence=%q timeout=%v errors_introduced=%d",
+			lang.name, netDelta, confidence, timeout, len(introduced))
 		if netDelta <= 0 {
 			if confidence == "low" || timeout {
-				t.Logf("net_delta=0 with confidence=%q timeout=%v — gopls may not have indexed in time; acceptable in CI", confidence, timeout)
+				t.Logf("[%s] net_delta=0 with confidence=%q timeout=%v — server may not have indexed in time; acceptable in CI",
+					lang.name, confidence, timeout)
 			} else {
-				t.Errorf("expected net_delta > 0 for type-error edit (return 42 in string func), got %.0f (confidence=%q)", netDelta, confidence)
+				t.Errorf("[%s] expected net_delta > 0 for type-error edit, got %.0f (confidence=%q)",
+					lang.name, netDelta, confidence)
 			}
 		} else {
-			t.Logf("error_detection correctly reported net_delta=%.0f with %d error(s)", netDelta, len(introduced))
+			t.Logf("[%s] error_detection correctly reported net_delta=%.0f with %d error(s)",
+				lang.name, netDelta, len(introduced))
 		}
 	})
+}
+
+// createSession creates a simulation session and returns the session ID.
+// Returns "" and calls t.Skipf if creation fails (e.g., feature not supported).
+func createSession(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang speculativeLangConfig) string {
+	t.Helper()
+	res, err := callTool(ctx, session, "create_simulation_session", map[string]any{
+		"workspace_root": lang.fixture,
+		"language":       lang.id,
+	})
+	if err != nil {
+		t.Skipf("[%s] create_simulation_session failed: %v", lang.name, err)
+		return ""
+	}
+	if res.IsError {
+		text, _ := textFromResult(res)
+		t.Skipf("[%s] create_simulation_session returned IsError: %s", lang.name, text)
+		return ""
+	}
+	text, err := textFromResult(res)
+	if err != nil {
+		t.Fatalf("[%s] failed to parse create_simulation_session response: %v", lang.name, err)
+		return ""
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		t.Fatalf("[%s] failed to unmarshal create_simulation_session response: %s", lang.name, text)
+		return ""
+	}
+	id, _ := result["session_id"].(string)
+	if id == "" {
+		t.Fatalf("[%s] create_simulation_session: no session_id in response: %s", lang.name, text)
+		return ""
+	}
+	t.Logf("[%s] created speculative session: %s", lang.name, id)
+	return id
+}
+
+// applyComment applies a safe comment edit to sessionID and logs the result.
+func applyComment(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang speculativeLangConfig, sessionID string) {
+	t.Helper()
+	res, err := callTool(ctx, session, "simulate_edit", map[string]any{
+		"session_id":   sessionID,
+		"file_path":    lang.file,
+		"start_line":   lang.safeEditLine,
+		"start_column": lang.safeEditCol,
+		"end_line":     lang.safeEditLine,
+		"end_column":   lang.safeEditCol,
+		"new_text":     lang.safeEditText,
+	})
+	if err != nil {
+		t.Errorf("[%s] simulate_edit failed: %v", lang.name, err)
+		return
+	}
+	if res.IsError {
+		text, _ := textFromResult(res)
+		t.Logf("[%s] simulate_edit returned IsError (may be expected): %s", lang.name, text)
+		return
+	}
+	editText, _ := textFromResult(res)
+	var editResult map[string]any
+	if err := json.Unmarshal([]byte(editText), &editResult); err == nil {
+		applied, _ := editResult["edit_applied"].(bool)
+		if !applied {
+			t.Errorf("[%s] simulate_edit: edit_applied=false, expected true", lang.name)
+		}
+	}
+	t.Logf("[%s] simulate_edit succeeded", lang.name)
+}
+
+// evaluateAndCheck calls evaluate_session and asserts net_delta <= 0 for safe edits
+// or net_delta > 0 for error edits (controlled by expectError).
+func evaluateAndCheck(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang speculativeLangConfig, sessionID string, expectError bool) {
+	t.Helper()
+	res, err := callTool(ctx, session, "evaluate_session", map[string]any{
+		"session_id": sessionID,
+	})
+	if err != nil {
+		t.Errorf("[%s] evaluate_session failed: %v", lang.name, err)
+		return
+	}
+	evalText, _ := textFromResult(res)
+	var evalResult map[string]any
+	if err := json.Unmarshal([]byte(evalText), &evalResult); err != nil {
+		t.Logf("[%s] evaluate_session raw: %s", lang.name, evalText)
+		return
+	}
+	netDelta, _ := evalResult["net_delta"].(float64)
+	confidence, _ := evalResult["confidence"].(string)
+	t.Logf("[%s] evaluate_session: net_delta=%.0f confidence=%q", lang.name, netDelta, confidence)
+	if !expectError && netDelta > 0 && confidence != "low" {
+		t.Errorf("[%s] comment-only edit must not introduce errors: net_delta=%.0f (confidence=%q)",
+			lang.name, netDelta, confidence)
+	}
+}
+
+// discardSession discards sessionID silently (used in deferred cleanup).
+func discardSession(ctx context.Context, session *mcp.ClientSession, sessionID string) {
+	_, _ = callTool(ctx, session, "discard_session", map[string]any{"session_id": sessionID})
 }

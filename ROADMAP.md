@@ -127,6 +127,18 @@ The gap between what clangd provides and what the broader toolchain offers is la
 
 20 skills shipped. See [docs/skills.md](docs/skills.md) for the full catalog.
 
+### Creation skills
+
+Current skills are oriented around modifying existing code. These skills target greenfield creation workflows where LSP can still add value through completions, diagnostics, and code actions.
+
+| Skill | Description |
+|-------|-------------|
+| `/lsp-create` | Iterative file creation with diagnostic checks between steps. Create file, open in LSP, write incrementally, verify diagnostics after each addition, format on completion. `/lsp-safe-edit` for files that don't exist yet. |
+| `/lsp-implement` (extend) | Given an interface or type definition, generate the full implementation using `get_completions` to discover required methods, verify it compiles via diagnostics, format. |
+| `/lsp-discover-api` | Completion-driven API exploration. Open a file, place the cursor after a package qualifier, call `get_completions` to show available methods/fields. Use LSP knowledge instead of training data (which may be outdated). |
+| `/lsp-bootstrap` | Project scaffolding with LSP verification. Create build files (go.mod, package.json, Cargo.toml), start LSP, confirm indexing works, verify initial diagnostics are clean before writing application code. |
+| `/lsp-wire` | After creating a new package/module, verify it's importable from the intended consumer, check the public API surface via `get_document_symbols`, confirm no dangling imports or missing exports. |
+
 ### Skill composition
 
 Skills calling other skills. `/lsp-refactor` is already composed from `/lsp-impact` + `/lsp-safe-edit` + `/lsp-verify` + `/lsp-test-correlation`. Formal runtime support for skill-to-skill invocation would enable arbitrary composition.
@@ -170,6 +182,78 @@ Some language servers support multi-client connections over TCP (gopls supports 
 | **VS Code extension** | Planned | Auto-start agent-lsp, command palette for skills, inline diff preview for speculative execution, code lens for blast-radius annotations |
 | **JetBrains plugin** | Planned | Single plugin for all JetBrains IDEs (GoLand, IntelliJ, PyCharm, WebStorm, CLion, Rider). Only needs `com.intellij.modules.platform` dependency since agent-lsp manages its own LSP connections. No language-specific module dependencies required. |
 | **Neovim plugin** | Planned | Lua plugin using `vim.lsp.buf_get_clients()` to proxy requests through existing LSP connections |
+
+## CI Performance Metrics
+
+Instrument the existing test suite to capture per-language timing data on every CI run, then publish it as a public `docs/metrics.md` table. This turns CI from a pass/fail gate into a performance baseline.
+
+### What to measure
+
+| Metric | How | Where |
+|--------|-----|-------|
+| Server init time | `start_lsp` to first successful response | Existing multi-lang tests |
+| Diagnostic settle time | `open_document` to `get_diagnostics` returning stable results | Existing multi-lang tests |
+| Speculative execution confidence | `confidence` field from `simulate_edit_atomic` (`high`/`partial`/`eventual`) | New speculative test per language |
+| Speculative round-trip time | `simulate_edit_atomic` call to response | New speculative test per language |
+| Cross-file propagation time | Edit file A → diagnostics update in file B | New test using multi-file fixtures |
+| Tool latency (hover, definition, references, completions) | Per-call `time.Since` wrapping | Existing tier-2 tool tests |
+
+### Output schema
+
+Each CI job writes `metrics/<language>.json`:
+
+```json
+{
+  "language": "go",
+  "server": "gopls",
+  "init_ms": 1240,
+  "diagnostic_settle_ms": 890,
+  "speculative_confidence": "high",
+  "speculative_round_trip_ms": 2100,
+  "cross_file_propagation_ms": 1800,
+  "tool_latency_ms": {
+    "hover": 45,
+    "definition": 62,
+    "references": 310,
+    "completions": 120
+  },
+  "timestamp": "2026-04-21T00:00:00Z",
+  "ci_run_id": 12345
+}
+```
+
+### Files to create/modify
+
+| File | Change |
+|------|--------|
+| `test/metrics.go` | New — timing harness, JSON serialization, `WriteMetrics(path string)` |
+| `test/multi_lang_test.go` | Instrument `TestMultiLanguage` — wrap each tool call with `time.Since`, collect into `LanguageMetrics` struct |
+| `test/speculative_test.go` | Expand to all supported languages (currently Go only); record `speculative_confidence` and `speculative_round_trip_ms` per language |
+| `.github/workflows/ci.yml` | Add `upload-artifact` step per language job; add `collect-metrics` job that runs after all language jobs, downloads all artifacts, and commits merged `metrics.json` to a `metrics` branch |
+| `scripts/generate-metrics.py` | New — reads `metrics/<language>.json` files, computes p50/p95 after 5+ runs from `metrics/history.json`, renders `docs/metrics.md` |
+| `docs/metrics.md` | Generated output — markdown table with one row per language |
+
+### Public dashboard format
+
+```markdown
+| Language   | Server          | Init  | Diag Settle | Spec Confidence | Spec RT | Cross-file |
+|------------|-----------------|-------|-------------|-----------------|---------|------------|
+| Go         | gopls           | 1.2s  | 0.9s        | high            | 2.1s    | 1.8s       |
+| Rust       | rust-analyzer   | 2.1s  | 1.4s        | high            | 2.8s    | 2.2s       |
+| TypeScript | tsserver        | 0.8s  | 0.6s        | high            | 1.3s    | 1.1s       |
+| Python     | pyright         | 1.5s  | 1.1s        | high            | 2.4s    | —          |
+```
+
+### Rolling averages
+
+After 5+ CI runs, `generate-metrics.py` reads `metrics/history.json` on the `metrics` branch and replaces single-run numbers with p50/p95 per metric. The history file is a JSON array of per-run records; the script appends the latest run and trims to the last 50 entries.
+
+### Implementation notes
+
+- The timing harness must not fail the test on timeout — capture what is available and write `-1` for unresolvable metrics.
+- Cross-file propagation requires multi-file test fixtures; Go and TypeScript already have them in `test/testdata`; Python and Rust need new fixtures.
+- Speculative confidence for languages without `high` confidence is expected — record the actual value, not a failure.
+- The `collect-metrics` CI job should only run on the `main` branch to avoid polluting the metrics branch with PR data.
 
 ## Bigger Bets
 

@@ -357,7 +357,7 @@ jobs:
       - name: Run Elixir tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Elixir$" ./test/ -timeout 15m
 
-  # Speculative session lifecycle (Go/gopls only)
+  # Speculative session lifecycle (Go, TypeScript, Python, Rust, C++)
   speculative-test:
     runs-on: ubuntu-latest
     steps:
@@ -373,6 +373,20 @@ jobs:
 
       - name: Install gopls
         run: go install golang.org/x/tools/gopls@latest
+
+      - name: Install TypeScript language server
+        run: npm install -g typescript-language-server typescript
+
+      - name: Install Pyright
+        run: npm install -g pyright
+
+      - name: Install Rust toolchain + rust-analyzer
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-analyzer
+
+      - name: Install clangd
+        run: sudo apt-get install -y clangd
 
       - name: Run speculative session tests
         run: GOWORK=off go test -v -run TestSpeculativeSessions ./test/ -timeout 10m
