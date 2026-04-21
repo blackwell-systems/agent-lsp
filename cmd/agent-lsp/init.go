@@ -77,7 +77,7 @@ func runInit(args []string) {
 	if !nonInteractive {
 		fmt.Println("Which AI tool to configure?")
 		fmt.Println("  1. Claude Code  (project .mcp.json in current directory)")
-		fmt.Println("  2. Claude Code  (global ~/.claude/claude_desktop_config.json)")
+		fmt.Println("  2. Claude Code  (global ~/.claude/.mcp.json)")
 		fmt.Println("  3. Claude Desktop")
 		fmt.Println("  4. Cursor       (.cursor/mcp.json in current directory)")
 		fmt.Println("  5. Cline/VS Code (.vscode/cline_mcp_settings.json in current directory)")

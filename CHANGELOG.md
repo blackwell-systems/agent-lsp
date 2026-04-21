@@ -429,7 +429,7 @@ First-class cross-repo caller analysis. Given a symbol (file + position) and a l
 - Initial Go port of LSP-MCP — full 1:1 implementation with TypeScript reference
 - All 24 tools: session (4), analysis (7), navigation (5), refactoring (6), utilities (2)
 - `WithDocument[T]` generic helper — Go equivalent of the TypeScript `withDocument` pattern
-- Single binary distribution via `go install github.com/blackwell-systems/agent-lsp@latest`
+- Single binary distribution via `go install github.com/blackwell-systems/agent-lsp/cmd/agent-lsp@latest`
 - Buffer-based LSP message framing with byte-accurate `Content-Length` parsing (no UTF-8/UTF-16 mismatch)
 - `WaitForDiagnostics` with 500ms stabilisation window
 - `WaitForFileIndexed` with 1500ms stability window — lets gopls finish cross-package indexing before issuing `get_references`

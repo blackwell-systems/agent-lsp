@@ -167,7 +167,7 @@ winget install BlackwellSystems.agent-lsp
 npm install -g @blackwell-systems/agent-lsp
 
 # Go install
-go install github.com/blackwell-systems/agent-lsp@latest
+go install github.com/blackwell-systems/agent-lsp/cmd/agent-lsp@latest
 ```
 
 </details>
