@@ -185,7 +185,14 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 	defer session.Close()
 
 	// --- Tier 1: start_lsp ---
-	res, err := callTool(ctx, session, "start_lsp", map[string]any{"root_dir": lang.fixture})
+	// For Java, pass ready_timeout_seconds so start_lsp blocks on $/progress
+	// completion instead of returning immediately after initialize. This replaces
+	// a fixed sleep and fires as soon as jdtls finishes workspace indexing.
+	startArgs := map[string]any{"root_dir": lang.fixture}
+	if lang.id == "java" {
+		startArgs["ready_timeout_seconds"] = float64(240)
+	}
+	res, err := callTool(ctx, session, "start_lsp", startArgs)
 	if err != nil {
 		t.Errorf("[%s] start_lsp failed: %v", lang.name, err)
 		return langTestResult{tier1: "fail"}
@@ -206,17 +213,20 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 	}
 	t.Logf("[%s] start_lsp result: %s", lang.name, startText)
 
-	// LSP init wait after start_lsp — JVM servers need longer to finish indexing.
+	// Short fixed wait for non-Java servers to settle after initialize.
+	// Java uses ready_timeout_seconds above and needs no additional sleep.
 	var initWait time.Duration
 	switch lang.id {
 	case "java":
-		initWait = 240 * time.Second
+		initWait = 0
 	case "kotlin", "scala":
 		initWait = 30 * time.Second
 	default:
 		initWait = 8 * time.Second
 	}
-	time.Sleep(initWait)
+	if initWait > 0 {
+		time.Sleep(initWait)
+	}
 
 	// --- Tier 1: open_document ---
 	res, err = callTool(ctx, session, "open_document", map[string]any{

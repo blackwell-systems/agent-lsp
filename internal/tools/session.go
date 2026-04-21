@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
@@ -34,6 +35,15 @@ func HandleStartLsp(
 	}
 
 	setClient(client)
+
+	// Optional: block until $/progress indexing completes before returning.
+	// Useful for servers like jdtls that index the workspace asynchronously
+	// after initialize and need time before Tier 2 tools return results.
+	if secs, ok := args["ready_timeout_seconds"].(float64); ok && secs > 0 {
+		timeout := time.Duration(secs) * time.Second
+		client.WaitForWorkspaceReadyTimeout(ctx, timeout)
+	}
+
 	return types.TextResult("LSP server started successfully"), nil
 }
 

@@ -420,6 +420,13 @@ func (c *LSPClient) handleProgress(params json.RawMessage) {
 // A timer goroutine guarantees the deadline fires even if gopls never emits
 // a matching "end" progress token (preventing an indefinite block).
 func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
+	c.WaitForWorkspaceReadyTimeout(ctx, 60*time.Second)
+}
+
+// WaitForWorkspaceReadyTimeout blocks until all active $/progress tokens are
+// done or the given timeout elapses. Use this when the default 60s cap is
+// insufficient (e.g. jdtls Maven workspace indexing).
+func (c *LSPClient) WaitForWorkspaceReadyTimeout(ctx context.Context, timeout time.Duration) {
 	c.progressMu.Lock()
 	defer c.progressMu.Unlock()
 	if len(c.progressTokens) == 0 {
@@ -427,12 +434,12 @@ func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
 	}
 
 	// Guarantee a wakeup at the deadline so the cond var doesn't block forever
-	// if gopls emits a begin token without a corresponding end token.
+	// if the server emits a begin token without a corresponding end token.
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
 		select {
-		case <-time.After(60 * time.Second):
+		case <-time.After(timeout):
 			c.progressCond.Broadcast()
 		case <-ctx.Done():
 			c.progressCond.Broadcast()
@@ -440,7 +447,7 @@ func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
 		}
 	}()
 
-	deadline := time.Now().Add(60 * time.Second)
+	deadline := time.Now().Add(timeout)
 	for len(c.progressTokens) > 0 {
 		if time.Now().After(deadline) || ctx.Err() != nil {
 			return
