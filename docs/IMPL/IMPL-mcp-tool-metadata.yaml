@@ -1,0 +1,591 @@
+title: Complete MCP Tool Metadata — Annotations, Parameter Descriptions, and Improved Tool Descriptions
+feature_slug: mcp-tool-metadata
+verdict: SUITABLE
+suitability_assessment: |
+    1. File decomposition: 4 tool files + 1 new helper file = 5 files. Each file is
+       independently modifiable (no cross-file type dependencies for this change).
+       4 agents can work in parallel on disjoint files.
+
+    2. Investigation-first items: None. The ToolAnnotations struct, jsonschema tag
+       format, and all tool definitions are fully visible and understood.
+
+    3. Interface discoverability: The only shared artifact is the boolPtr helper
+       function. Its signature is trivial: func boolPtr(b bool) *bool. All agents
+       can import it from a scaffold or it can be placed in one agent's file and
+       referenced by others in subsequent waves. Since all 4 tool files are in the
+       same package (package main), a helper defined in any file is visible to all.
+       However, to avoid compilation failure during parallel execution, the helper
+       must exist before agents run.
+
+    4. Pre-implementation status: No existing annotations, no jsonschema tags on
+       any Args struct, no boolPtr helper. All work is greenfield additions to
+       existing files. 0% already implemented.
+
+    5. Parallelization value: 4 independent agents modifying ~200-400 lines each.
+       Build/test cycle is ~10s (go build + go test). Files per agent: 1 each.
+       Task complexity: moderate (must classify each tool correctly, write accurate
+       descriptions for every parameter). All agents are wave 1 (fully parallel)
+       after scaffold. Clear speedup over sequential.
+
+    Estimated times:
+    - Scout phase: ~5 min
+    - Agent execution: ~8 min (4 agents x 8 min avg, fully parallel)
+    - Merge & verification: ~3 min
+    Total SAW time: ~16 min
+
+    Sequential baseline: ~32 min (4 files x 8 min avg)
+    Time savings: ~16 min (50% faster)
+
+    Recommendation: Clear speedup. Proceed.
+test_command: GOWORK=off go test ./internal/... ./cmd/...
+lint_command: GOWORK=off go vet ./...
+file_ownership:
+    - file: cmd/agent-lsp/helpers.go
+      agent: A
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/tools_analysis.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/tools_navigation.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/tools_workspace.go
+      agent: C
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/tools_session.go
+      agent: D
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: boolPtr
+      description: Helper to create *bool pointers for ToolAnnotations fields
+      definition: |
+        func boolPtr(b bool) *bool { return &b }
+      location: cmd/agent-lsp/helpers.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## What to implement
+
+            Add MCP tool annotations, jsonschema parameter descriptions, and improved
+            tool descriptions to all 13 tools in `cmd/agent-lsp/tools_analysis.go`.
+
+            ### 1. Add Annotations to every mcp.Tool{} literal
+
+            For ALL 13 tools in this file (get_info_on_location, get_completions,
+            get_signature_help, get_code_actions, get_document_symbols,
+            get_workspace_symbols, get_references, get_inlay_hints,
+            get_semantic_tokens, get_symbol_source, get_symbol_documentation,
+            get_change_impact, get_cross_repo_references), add:
+
+            ```go
+            Annotations: &mcp.ToolAnnotations{
+                Title:           "<Human-readable title>",
+                ReadOnlyHint:    true,
+                DestructiveHint: boolPtr(false),
+                OpenWorldHint:   boolPtr(false),
+            },
+            ```
+
+            Title examples: "Get Hover Info", "Get Completions", "Get Signature Help",
+            "Get Code Actions", "Get Document Symbols", "Get Workspace Symbols",
+            "Find References", "Get Inlay Hints", "Get Semantic Tokens",
+            "Get Symbol Source", "Get Symbol Documentation", "Get Change Impact",
+            "Get Cross-Repo References"
+
+            ### 2. Add jsonschema struct tags to every Args struct field
+
+            Add `jsonschema:"description text"` tags to EVERY field in EVERY Args struct.
+            The description must NOT start with "WORD=" pattern. Place the jsonschema tag
+            after the json tag, separated by a space.
+
+            Example transformation:
+            ```go
+            // Before:
+            FilePath string `json:"file_path"`
+            // After:
+            FilePath string `json:"file_path" jsonschema:"Absolute path to the source file to analyze"`
+            ```
+
+            Args structs to annotate:
+            - GetInfoOnLocationArgs (5 fields)
+            - GetCompletionsArgs (4 fields)
+            - GetSignatureHelpArgs (4 fields)
+            - GetCodeActionsArgs (6 fields)
+            - GetDocumentSymbolsArgs (3 fields)
+            - GetWorkspaceSymbolsArgs (4 fields)
+            - GetReferencesArgs (6 fields)
+            - GetInlayHintsArgs (6 fields)
+            - GetSemanticTokensArgs (6 fields)
+            - GetSymbolSourceArgs (5 fields)
+            - GetSymbolDocumentationArgs (4 fields)
+            - GetChangeImpactArgs (2 fields)
+            - GetCrossRepoReferencesArgs (5 fields)
+
+            Common field descriptions:
+            - FilePath: "Absolute path to the source file"
+            - LanguageID: "Language identifier (e.g. go, typescript, python). Optional; auto-detected from file extension"
+            - Line: "1-indexed line number in the file"
+            - Column: "1-indexed column (character offset) in the line"
+            - PositionPattern: "Alternative to line/column: use @@pattern@@ syntax to match text near the target position"
+            - StartLine/EndLine: "1-indexed start/end line of the range"
+            - StartColumn/EndColumn: "1-indexed start/end column of the range"
+
+            ### 3. Keep existing Description text (do NOT rewrite descriptions)
+
+            The existing descriptions in this file are already high-quality. Do NOT
+            modify the Description field values. Only add Annotations and struct tags.
+
+            ## Interfaces
+
+            Uses `boolPtr(b bool) *bool` from `cmd/agent-lsp/helpers.go` (scaffold).
+
+            ## Verification
+
+            ```bash
+            cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go build ./...
+            cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go vet ./...
+            ```
+
+            Postconditions:
+            ```bash
+            # Every tool has Annotations
+            grep -c "Annotations:" cmd/agent-lsp/tools_analysis.go
+            # Expected: 13
+
+            # Every Args struct field has jsonschema tag
+            grep -c 'jsonschema:"' cmd/agent-lsp/tools_analysis.go
+            # Expected: >= 55 (all fields across all structs)
+            ```
+
+            ## Constraints
+            - Do NOT modify the Description field text on any tool
+            - Do NOT modify function bodies or handler logic
+            - Do NOT add boolPtr to this file — it lives in helpers.go (scaffold)
+            - Do NOT modify files outside your ownership list
+          files:
+            - cmd/agent-lsp/tools_analysis.go
+        - id: B
+          task: |
+            ## What to implement
+
+            Add MCP tool annotations and jsonschema parameter descriptions to all 10
+            tools in `cmd/agent-lsp/tools_navigation.go`.
+
+            ### 1. Add Annotations to every mcp.Tool{} literal
+
+            For ALL 10 tools in this file, add Annotations. Classification:
+
+            **Pure read-only (9 tools):** go_to_definition, go_to_type_definition,
+            go_to_implementation, go_to_declaration, go_to_symbol, prepare_rename,
+            get_document_highlights, call_hierarchy, type_hierarchy
+            ```go
+            Annotations: &mcp.ToolAnnotations{
+                Title:           "<Title>",
+                ReadOnlyHint:    true,
+                DestructiveHint: boolPtr(false),
+                OpenWorldHint:   boolPtr(false),
+            },
+            ```
+
+            **rename_symbol** — returns a WorkspaceEdit but does NOT apply it (read-only):
+            ```go
+            Annotations: &mcp.ToolAnnotations{
+                Title:           "Rename Symbol",
+                ReadOnlyHint:    true,
+                DestructiveHint: boolPtr(false),
+                OpenWorldHint:   boolPtr(false),
+            },
+            ```
+
+            Titles: "Go to Definition", "Go to Type Definition", "Go to Implementation",
+            "Go to Declaration", "Go to Symbol", "Rename Symbol", "Prepare Rename",
+            "Get Document Highlights", "Call Hierarchy", "Type Hierarchy"
+
+            ### 2. Add jsonschema struct tags to every Args struct field
+
+            Args structs to annotate:
+            - GoToDefinitionArgs (5 fields)
+            - GoToTypeDefinitionArgs (4 fields)
+            - GoToImplementationArgs (4 fields)
+            - GoToDeclarationArgs (4 fields)
+            - RenameSymbolArgs (7 fields)
+            - PrepareRenameArgs (4 fields)
+            - GoToSymbolArgs (3 fields)
+            - GetDocumentHighlightsArgs (4 fields)
+            - CallHierarchyArgs (5 fields)
+            - TypeHierarchyArgs (5 fields)
+
+            Common field descriptions:
+            - FilePath: "Absolute path to the source file"
+            - LanguageID: "Language identifier (e.g. go, typescript, python). Optional; auto-detected from file extension"
+            - Line: "1-indexed line number in the file"
+            - Column: "1-indexed column (character offset) in the line"
+            - PositionPattern: "Alternative to line/column: use @@pattern@@ syntax to match text near the target position"
+            - NewName (RenameSymbolArgs): "New name for the symbol"
+            - DryRun (RenameSymbolArgs): "If true, return the edit without applying. Always true for this read-only tool"
+            - ExcludeGlobs (RenameSymbolArgs): "Glob patterns for files to exclude from rename (e.g. vendor/**, *_gen.go)"
+            - SymbolPath (GoToSymbolArgs): "Dot-notation symbol path (e.g. MyStruct.MyMethod, http.Handler)"
+            - WorkspaceRoot (GoToSymbolArgs): "Workspace root directory for symbol search. Optional; uses current workspace"
+            - Language (GoToSymbolArgs): "Language filter for symbol search. Optional"
+            - Direction (CallHierarchyArgs/TypeHierarchyArgs): "Direction: incoming, outgoing, or both (default: both)"
+
+            ### 3. Keep existing Description text unchanged
+
+            ## Interfaces
+
+            Uses `boolPtr(b bool) *bool` from `cmd/agent-lsp/helpers.go` (scaffold).
+
+            ## Verification
+
+            ```bash
+            cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go build ./...
+            cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go vet ./...
+            ```
+
+            Postconditions:
+            ```bash
+            grep -c "Annotations:" cmd/agent-lsp/tools_navigation.go
+            # Expected: 10
+
+            grep -c 'jsonschema:"' cmd/agent-lsp/tools_navigation.go
+            # Expected: >= 45
+            ```
+
+            ## Constraints
+            - Do NOT modify the Description field text on any tool
+            - Do NOT modify function bodies or handler logic
+            - Do NOT add boolPtr to this file — it lives in helpers.go (scaffold)
+            - Do NOT modify files outside your ownership list
+          files:
+            - cmd/agent-lsp/tools_navigation.go
+        - id: C
+          task: |
+            ## What to implement
+
+            Add MCP tool annotations and jsonschema parameter descriptions to all 17
+            tools in `cmd/agent-lsp/tools_workspace.go`.
+
+            ### 1. Add Annotations to every mcp.Tool{} literal
+
+            Classification by tool:
+
+            **Process lifecycle — not read-only, not destructive, idempotent (5 tools):**
+            start_lsp, restart_lsp_server, add_workspace_folder, remove_workspace_folder,
+            set_log_level
+            ```go
+            Annotations: &mcp.ToolAnnotations{
+                Title:           "<Title>",
+                ReadOnlyHint:    false,
+                IdempotentHint:  true,
+                DestructiveHint: boolPtr(false),
+                OpenWorldHint:   boolPtr(false),
+            },
+            ```
+
+            **Pure read-only (7 tools):** open_document, close_document, get_diagnostics,
+            get_server_capabilities, list_workspace_folders, detect_lsp_servers,
+            get_tests_for_file
+            ```go
+            Annotations: &mcp.ToolAnnotations{
+                Title:           "<Title>",
+                ReadOnlyHint:    true,
+                DestructiveHint: boolPtr(false),
+                OpenWorldHint:   boolPtr(false),
+            },
+            ```
+
+            **Read-only (returns edits, does NOT apply) (2 tools):** format_document,
+            format_range
+            ```go
+            Annotations: &mcp.ToolAnnotations{
+                Title:           "<Title>",
+                ReadOnlyHint:    true,
+                DestructiveHint: boolPtr(false),
+                OpenWorldHint:   boolPtr(false),
+            },
+            ```
+
+            **Disk/process mutation — destructive (3 tools):** apply_edit, execute_command,
+            did_change_watched_files
+            ```go
+            Annotations: &mcp.ToolAnnotations{
+                Title:           "<Title>",
+                ReadOnlyHint:    false,
+                DestructiveHint: boolPtr(true),
+                OpenWorldHint:   boolPtr(false),
+            },
+            ```
+
+            **External execution — not read-only, not destructive (2 tools):** run_build,
+            run_tests
+            ```go
+            Annotations: &mcp.ToolAnnotations{
+                Title:           "<Title>",
+                ReadOnlyHint:    false,
+                DestructiveHint: boolPtr(false),
+                OpenWorldHint:   boolPtr(false),
+            },
+            ```
+
+            Titles: "Start LSP Server", "Restart LSP Server", "Add Workspace Folder",
+            "Remove Workspace Folder", "Open Document", "Close Document",
+            "Get Diagnostics", "Get Server Capabilities", "List Workspace Folders",
+            "Detect LSP Servers", "Run Build", "Run Tests", "Get Tests for File",
+            "Set Log Level", "Apply Edit", "Execute Command",
+            "Notify File Changes", "Format Document", "Format Range"
+
+            ### 2. Add jsonschema struct tags to every Args struct field
+
+            Args structs to annotate:
+            - StartLspArgs (2 fields)
+            - RestartLspArgs (1 field)
+            - WorkspaceFolderArgs (1 field)
+            - OpenDocumentArgs (3 fields)
+            - CloseDocumentArgs (1 field)
+            - GetDiagnosticsArgs (1 field)
+            - ApplyEditArgs (4 fields)
+            - ExecuteCommandArgs (2 fields)
+            - DidChangeWatchedFilesArgs (1 field)
+            - SetLogLevelArgs (1 field)
+            - FormatDocumentArgs (4 fields)
+            - FormatRangeArgs (8 fields)
+            - DetectLspServersArgs (1 field)
+            - RunBuildArgs (3 fields)
+            - RunTestsArgs (3 fields)
+            - GetTestsForFileArgs (1 field)
+
+            Field-specific descriptions:
+            - RootDir (StartLspArgs): "Workspace root directory containing the project (e.g. directory with go.mod, package.json)"
+            - LanguageID (StartLspArgs): "Language server to start (e.g. go, typescript, rust). Optional; auto-detected"
+            - RootDir (RestartLspArgs): "Optional new workspace root. If omitted, restarts with current root"
+            - Path (WorkspaceFolderArgs): "Absolute path to the workspace folder to add/remove"
+            - FilePath (OpenDocumentArgs): "Absolute path to the file to open in the LSP server"
+            - Text (OpenDocumentArgs): "Optional file content override. If omitted, reads from disk"
+            - FilePath (GetDiagnosticsArgs): "File path to get diagnostics for. If omitted, returns diagnostics for all open files"
+            - Edit (ApplyEditArgs): "WorkspaceEdit object (as returned by rename_symbol or format_document)"
+            - OldText (ApplyEditArgs): "Text to find and replace (text-match mode)"
+            - NewText (ApplyEditArgs): "Replacement text (text-match mode)"
+            - Command (ExecuteCommandArgs): "LSP command identifier (from code action's command field)"
+            - Arguments (ExecuteCommandArgs): "Command arguments as array of JSON objects"
+            - Changes (DidChangeWatchedFilesArgs): "Array of file change events: [{uri, type}] where type is 1=created, 2=changed, 3=deleted"
+            - Level (SetLogLevelArgs): "Log level: emergency, alert, critical, error, warning, notice, info, or debug"
+            - TabSize (FormatDocumentArgs): "Tab size in spaces. Default: 4"
+            - InsertSpaces (FormatDocumentArgs): "Use spaces instead of tabs. Default: true"
+            - WorkspaceDir (RunBuildArgs/RunTestsArgs): "Workspace directory to build/test"
+            - Path (RunBuildArgs/RunTestsArgs): "Optional sub-path to narrow build/test scope"
+            - Language (RunBuildArgs/RunTestsArgs): "Optional language override (go, rust, typescript, python)"
+
+            ### 3. Keep existing Description text unchanged
+
+            ## Interfaces
+
+            Uses `boolPtr(b bool) *bool` from `cmd/agent-lsp/helpers.go` (scaffold).
+
+            ## Verification
+
+            ```bash
+            cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go build ./...
+            cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go vet ./...
+            ```
+
+            Postconditions:
+            ```bash
+            grep -c "Annotations:" cmd/agent-lsp/tools_workspace.go
+            # Expected: 17
+
+            grep -c 'jsonschema:"' cmd/agent-lsp/tools_workspace.go
+            # Expected: >= 35
+            ```
+
+            ## Constraints
+            - Do NOT modify the Description field text on any tool
+            - Do NOT modify function bodies or handler logic
+            - Do NOT add boolPtr to this file — it lives in helpers.go (scaffold)
+            - Do NOT modify files outside your ownership list
+            - list_workspace_folders and get_server_capabilities use `_ struct{}` as
+              args (no fields to annotate) — only add Annotations to the Tool literal
+          files:
+            - cmd/agent-lsp/tools_workspace.go
+        - id: D
+          task: |
+            ## What to implement
+
+            Add MCP tool annotations and jsonschema parameter descriptions to all 8
+            tools in `cmd/agent-lsp/tools_session.go`.
+
+            ### 1. Add Annotations to every mcp.Tool{} literal
+
+            Classification:
+
+            **In-memory mutation — session tools (6 tools):**
+            create_simulation_session, simulate_edit, simulate_chain,
+            commit_session, discard_session, destroy_session
+            ```go
+            Annotations: &mcp.ToolAnnotations{
+                Title:           "<Title>",
+                ReadOnlyHint:    false,
+                DestructiveHint: boolPtr(false),
+                OpenWorldHint:   boolPtr(false),
+            },
+            ```
+
+            **Read-only — evaluate_session (returns diagnostics, no mutation):**
+            ```go
+            Annotations: &mcp.ToolAnnotations{
+                Title:           "Evaluate Session",
+                ReadOnlyHint:    true,
+                DestructiveHint: boolPtr(false),
+                OpenWorldHint:   boolPtr(false),
+            },
+            ```
+
+            **Atomic one-shot — simulate_edit_atomic (creates+destroys session):**
+            ```go
+            Annotations: &mcp.ToolAnnotations{
+                Title:           "Simulate Edit (Atomic)",
+                ReadOnlyHint:    false,
+                DestructiveHint: boolPtr(false),
+                OpenWorldHint:   boolPtr(false),
+            },
+            ```
+
+            Titles: "Create Simulation Session", "Simulate Edit", "Evaluate Session",
+            "Simulate Chain", "Commit Session", "Discard Session", "Destroy Session",
+            "Simulate Edit (Atomic)"
+
+            ### 2. Add jsonschema struct tags to every Args struct field
+
+            Args structs to annotate:
+            - CreateSimulationSessionArgs (2 fields)
+            - SimulateEditArgs (7 fields)
+            - EvaluateSessionArgs (3 fields)
+            - SimulateChainArgs (3 fields)
+            - CommitSessionArgs (3 fields)
+            - DiscardSessionArgs (1 field)
+            - DestroySessionArgs (1 field)
+            - SimulateEditAtomicArgs (11 fields)
+
+            Field-specific descriptions:
+            - WorkspaceRoot: "Workspace root directory for the simulation session"
+            - Language: "Language identifier for the session (e.g. go, typescript)"
+            - SessionID: "Session identifier returned by create_simulation_session"
+            - FilePath: "Absolute path to the file to edit within the session"
+            - StartLine: "1-indexed start line of the range to replace"
+            - StartColumn: "1-indexed start column of the range to replace"
+            - EndLine: "1-indexed end line of the range to replace"
+            - EndColumn: "1-indexed end column of the range to replace"
+            - NewText: "Replacement text for the specified range"
+            - Scope (EvaluateSessionArgs): "Evaluation scope: file (fast, single file) or workspace (full, all files). Default: file"
+            - TimeoutMs: "Timeout in milliseconds for LSP diagnostics collection. Default: 5000"
+            - Edits (SimulateChainArgs): "Array of edit objects, each with file_path, start_line, start_column, end_line, end_column, new_text"
+            - Target (CommitSessionArgs): "Commit target: disk (write files) or patch (return unified diff). Default: patch"
+            - Apply (CommitSessionArgs): "If true, write changes to disk and notify LSP. If false, return diff only"
+
+            ### 3. Keep existing Description text unchanged
+
+            ## Interfaces
+
+            Uses `boolPtr(b bool) *bool` from `cmd/agent-lsp/helpers.go` (scaffold).
+
+            ## Verification
+
+            ```bash
+            cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go build ./...
+            cd /Users/dayna.blackwell/code/agent-lsp && GOWORK=off go vet ./...
+            ```
+
+            Postconditions:
+            ```bash
+            grep -c "Annotations:" cmd/agent-lsp/tools_session.go
+            # Expected: 8
+
+            grep -c 'jsonschema:"' cmd/agent-lsp/tools_session.go
+            # Expected: >= 30
+            ```
+
+            ## Constraints
+            - Do NOT modify the Description field text on any tool
+            - Do NOT modify function bodies or handler logic
+            - Do NOT add boolPtr to this file — it lives in helpers.go (scaffold)
+            - Do NOT modify files outside your ownership list
+          files:
+            - cmd/agent-lsp/tools_session.go
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
+scaffolds:
+    - file_path: cmd/agent-lsp/helpers.go
+      contents: |
+        package main
+
+        // boolPtr returns a pointer to the given bool value.
+        // Used for ToolAnnotations fields that are *bool (DestructiveHint, OpenWorldHint).
+        func boolPtr(b bool) *bool { return &b }
+      import_path: N/A (same package main)
+      status: pending
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: Agent uses wrong jsonschema tag syntax (e.g. jsonschema:"desc=..." or starts with WORD=)
+          likelihood: low
+          impact: medium
+          mitigation: Task prompts explicitly state the constraint; build will succeed regardless (runtime schema issue only)
+        - scenario: Agent forgets boolPtr helper is in scaffold and defines it locally
+          likelihood: low
+          impact: high
+          mitigation: Constraint explicitly listed in every agent task; go build would catch duplicate
+        - scenario: Agent accidentally modifies Description text while adding Annotations
+          likelihood: medium
+          impact: low
+          mitigation: Constraint clearly stated; description changes are functionally harmless but undesirable
+        - scenario: Agent misclassifies a tool (e.g. marks apply_edit as ReadOnly)
+          likelihood: low
+          impact: medium
+          mitigation: Classification table provided per-tool in each agent task with explicit annotation blocks
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+            issues:
+                - check: symbol_accuracy
+                  severity: warning
+                  description: Brief states RenameSymbolArgs has 7 fields but the struct actually has 8 fields (FilePath, LanguageID, Line, Column, NewName, PositionPattern, DryRun, ExcludeGlobs). The ExcludeGlobs field is not counted. Agent may miss annotating one field, though the field is visible in the struct.
+                  file: cmd/agent-lsp/tools_navigation.go
+                  symbol: RenameSymbolArgs
+        C:
+            agent_id: C
+            verdict: PASS
+            issues:
+                - check: pattern_accuracy
+                  severity: warning
+                  description: Brief opening says "all 17 tools" and postcondition expects grep count of 17, but the file contains 19 mcp.AddTool calls (19 tools). The brief body correctly enumerates all 19 tools across 5 categories (5+7+2+3+2=19) and lists 19 titles. The summary count and postcondition are wrong but the detailed instructions are complete.
+                  file: cmd/agent-lsp/tools_workspace.go
+                  symbol: registerWorkspaceTools
+        D:
+            agent_id: D
+            verdict: PASS
+    summary: 'All agent briefs verified against codebase. File existence checks pass: helpers.go does not exist (correct for action:new), all modify-target files exist. Tool counts match for agents A (13), B (10), D (8). Agent C''s brief says ''17 tools'' but file has 19 and the brief''s own detailed enumeration lists all 19 correctly — warning only. Agent B''s brief says RenameSymbolArgs has 7 fields but it has 8 (ExcludeGlobs missed in count) — warning only since all fields are visible in the struct. ToolAnnotations struct fields verified against MCP SDK: ReadOnlyHint (bool), DestructiveHint (*bool), OpenWorldHint (*bool), IdempotentHint (bool), Title (string) — all brief patterns match. boolPtr helper does not conflict with existing code. jsonschema package present in go.mod. Interface contract is trivially correct. No disjoint ownership violations. No complexity balance issues.'
+    reviewed_at: "2026-04-21T02:35:15Z"
+    issue_count: 2
+state: WAVE_PENDING
