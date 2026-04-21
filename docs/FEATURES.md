@@ -1,10 +1,10 @@
 # agent-lsp Features Dump
 
-Machine-readable feature inventory for AI analysis. No prose. Dense structured lists only.
+Comprehensive feature inventory. Covers all tools, skills, and capabilities with CI verification status.
 
 ---
 
-## Tools (50 total, 49 CI-verified)
+## Tools (50 total, 50 CI-verified)
 
 ### Session & Lifecycle (8 tools)
 
@@ -210,8 +210,7 @@ Machine-readable feature inventory for AI analysis. No prose. Dense structured l
 - Returns `EvaluationResult` directly
 
 **Total: 50 tools**
-- **CI-verified: 49**
-- **50th tool:** `set_log_level` (in workspace category; CI-verified separately)
+- **CI-verified: 50** (including `set_log_level`, which is verified separately across all 30 languages)
 - **1-indexed coordinates:** All line/column parameters are 1-based (editor convention)
 - **0-based conversion:** `extractRange` helper converts to 0-based for LSP protocol internally
 

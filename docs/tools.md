@@ -6,6 +6,21 @@ the 0-based values the LSP spec requires.
 
 ---
 
+## Table of Contents
+
+- [Session tools](#session-tools) — `start_lsp`, `restart_lsp_server`, `open_document`, `close_document`, `add_workspace_folder`, `remove_workspace_folder`, `list_workspace_folders`
+- [Analysis tools](#analysis-tools) — `get_diagnostics`, `get_info_on_location`, `get_completions`, `get_signature_help`, `get_code_actions`, `get_document_symbols`, `get_workspace_symbols`, `get_change_impact`, `get_cross_repo_references`
+- [Navigation tools](#navigation-tools) — `get_references`, `go_to_definition`, `go_to_type_definition`, `go_to_implementation`, `go_to_declaration`
+- [Refactoring tools](#refactoring-tools) — `rename_symbol`, `prepare_rename`, `format_document`, `format_range`, `apply_edit`, `execute_command`
+- [Utilities](#utilities) — `did_change_watched_files`, `set_log_level`
+- [Code Intelligence tools](#code-intelligence-tools) — `call_hierarchy`, `type_hierarchy`, `get_inlay_hints`, `get_semantic_tokens`, `get_document_highlights`, `get_server_capabilities`, `detect_lsp_servers`, `run_build`, `run_tests`, `get_tests_for_file`
+- [Simulation tools](#simulation-tools) — `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`
+- [Startup and warm-up notes](#startup-and-warm-up-notes)
+- [Symbol lookup tools](#symbol-lookup-tools) — `go_to_symbol`, `get_symbol_source`, `get_symbol_documentation`
+- [Skills](#skills)
+
+---
+
 ## Session tools
 
 ### `start_lsp`
@@ -2750,3 +2765,10 @@ workflows. Install with `cd skills && ./install.sh`.
 | `/lsp-generate` | `get_code_actions`, `execute_command`, `apply_edit`, `format_document`, `get_diagnostics` | Trigger LSP code generation — implement interface stubs, generate test skeletons, add missing methods |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.
+
+---
+
+## See also
+
+- [docs/skills.md](./skills.md) — skill reference with workflows, use cases, and composition patterns
+- [docs/language-support.md](./language-support.md) — language coverage matrix and per-language tool support

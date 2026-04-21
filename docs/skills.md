@@ -4,7 +4,7 @@ agent-lsp ships 20 skills — named workflows that encode correct tool sequences
 multi-step operations happen reliably. This doc is a developer reference: what each
 skill does, when to reach for it, and what it does that raw tool calls miss.
 
-For installation: `cd skills && ./install.sh`
+For installation: `cd skills && ./install.sh`. For the individual tools that skills compose, see [docs/tools.md](./tools.md).
 
 ---
 
@@ -369,3 +369,10 @@ fast feedback without running the full suite.
 Start with lsp-explore for a single symbol triage. Escalate to lsp-understand
 when you need the full module picture before making changes. Then use lsp-safe-edit
 to gate the edit on diagnostic impact.
+
+---
+
+## See also
+
+- [docs/tools.md](./tools.md) — full tool reference with parameters and examples
+- [docs/language-support.md](./language-support.md) — language coverage matrix and per-language tool support

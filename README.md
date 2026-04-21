@@ -13,10 +13,7 @@ AI agents make incorrect code changes because they can't see the full picture: w
 
 agent-lsp is a **stateful runtime** over real language servers. It indexes your workspace once, keeps the index warm, and adds a **skill layer** that encodes correct multi-step operations so they actually complete.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh
-agent-lsp init
-```
+**How the pieces fit together:** [LSP](https://microsoft.github.io/language-server-protocol/) (Language Server Protocol) is how editors get code intelligence — completions, diagnostics, go-to-definition. [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) is the standard way AI tools like Claude Code discover and call external tools. agent-lsp bridges the two: language server intelligence, accessible to AI agents.
 
 ### How it works
 
@@ -104,10 +101,6 @@ See [docs/skills.md](./docs/skills.md) for full descriptions and usage guidance.
 |-------|---------|
 | `/lsp-refactor` | End-to-end refactor: blast-radius → preview → apply → verify → test |
 
-```bash
-cd skills && ./install.sh
-```
-
 ## Docker
 
 **Stdio mode** (MCP client spawns the container directly):
@@ -136,15 +129,20 @@ docker run --rm \
 
 Images run as a non-root user (uid 65532) by default. Set `AGENT_LSP_TOKEN` via environment variable, never `--token` on the command line. Images are also mirrored to Docker Hub (`blackwellsystems/agent-lsp`). See [DOCKER.md](./DOCKER.md) for the full tag list, HTTP mode setup, and security hardening options.
 
-## Installation
+## Setup
+
+### Step 1: Install agent-lsp
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh
+```
+
+<details>
+<summary>Alternative install methods</summary>
 
 **macOS / Linux**
 
 ```bash
-# curl | sh
-curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh
-
-# Homebrew
 brew install blackwell-systems/tap/agent-lsp
 ```
 
@@ -172,17 +170,9 @@ npm install -g @blackwell-systems/agent-lsp
 go install github.com/blackwell-systems/agent-lsp@latest
 ```
 
-## Quick start
+</details>
 
-```bash
-agent-lsp init
-```
-
-Detects language servers on your PATH, asks which AI tool you use, and writes the correct MCP config. For CI or scripted use: `agent-lsp init --non-interactive`.
-
-## Setup
-
-### Step 1: Install language servers
+### Step 2: Install language servers
 
 Install the servers for your stack. Common ones:
 
@@ -197,7 +187,23 @@ Install the servers for your stack. Common ones:
 
 Full list of 30 supported languages in [docs/language-support.md](./docs/language-support.md).
 
-### Step 2: Add to your AI config
+### Step 3: Verify setup
+
+```bash
+agent-lsp doctor
+```
+
+Probes each configured language server and reports capabilities. Fix any failures before proceeding.
+
+### Step 4: Configure your AI tool
+
+```bash
+agent-lsp init
+```
+
+Detects language servers on your PATH, asks which AI tool you use, and writes the correct MCP config. For CI or scripted use: `agent-lsp init --non-interactive`.
+
+The generated config looks like:
 
 ```json
 {
@@ -217,7 +223,15 @@ Full list of 30 supported languages in [docs/language-support.md](./docs/languag
 
 Each arg is `language:server-binary` (comma-separate server args).
 
-### Step 3: Start working
+### Step 5: Install skills
+
+```bash
+cd skills && ./install.sh
+```
+
+Skills are multi-tool workflows that encode reliable procedures — blast-radius check before edit, speculative preview before write, test run after change. See [docs/skills.md](./docs/skills.md) for the full list.
+
+### Step 6: Start working
 
 ```
 start_lsp(root_dir="/your/project")
