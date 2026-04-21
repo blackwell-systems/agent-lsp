@@ -12,8 +12,9 @@ import (
 // Workspace/lifecycle tool arg types.
 
 type StartLspArgs struct {
-	RootDir    string `json:"root_dir" jsonschema:"Workspace root directory containing the project (e.g. directory with go.mod, package.json)"`
-	LanguageID string `json:"language_id,omitempty" jsonschema:"Language server to start (e.g. go, typescript, rust). Optional; auto-detected"`
+	RootDir              string  `json:"root_dir" jsonschema:"Workspace root directory containing the project (e.g. directory with go.mod, package.json)"`
+	LanguageID           string  `json:"language_id,omitempty" jsonschema:"Language server to start (e.g. go, typescript, rust). Optional; auto-detected"`
+	ReadyTimeoutSeconds  float64 `json:"ready_timeout_seconds,omitempty" jsonschema:"If > 0, block until all $/progress workspace-indexing tokens complete or this many seconds elapse. Useful for servers like jdtls that index asynchronously after initialize."`
 }
 
 type RestartLspArgs struct {
