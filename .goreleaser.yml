@@ -87,16 +87,17 @@ brews:
       system "#{bin}/agent-lsp", "--version"
 
 dockers:
-  # ── Base image ──────────────────────────────────────────────────────────────
+  # ── Base image (amd64) ─────────────────────────────────────────────────────
   - image_templates:
-      - "ghcr.io/blackwell-systems/agent-lsp:base"
-      - "ghcr.io/blackwell-systems/agent-lsp:latest"
-      - "ghcr.io/blackwell-systems/agent-lsp:{{ .Version }}"
-      - "ghcr.io/blackwell-systems/agent-lsp:{{ .Major }}.{{ .Minor }}"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:base"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:latest"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:{{ .Version }}"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:{{ .Major }}.{{ .Minor }}"
+      - "ghcr.io/blackwell-systems/agent-lsp:base-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:latest-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:{{ .Version }}-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:{{ .Major }}.{{ .Minor }}-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:base-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:latest-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:{{ .Version }}-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:{{ .Major }}.{{ .Minor }}-amd64"
+    goarch: amd64
     dockerfile: docker/Dockerfile.release
     extra_files:
       - docker/entrypoint.sh
@@ -107,10 +108,32 @@ dockers:
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 
-  # ── Per-language images ─────────────────────────────────────────────────────
+  # ── Base image (arm64) ─────────────────────────────────────────────────────
   - image_templates:
-      - "ghcr.io/blackwell-systems/agent-lsp:go"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:go"
+      - "ghcr.io/blackwell-systems/agent-lsp:base-arm64"
+      - "ghcr.io/blackwell-systems/agent-lsp:latest-arm64"
+      - "ghcr.io/blackwell-systems/agent-lsp:{{ .Version }}-arm64"
+      - "ghcr.io/blackwell-systems/agent-lsp:{{ .Major }}.{{ .Minor }}-arm64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:base-arm64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:latest-arm64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:{{ .Version }}-arm64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:{{ .Major }}.{{ .Minor }}-arm64"
+    goarch: arm64
+    dockerfile: docker/Dockerfile.release
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--cache-from=type=gha"
+      - "--cache-to=type=gha,mode=max"
+
+  # ── Go (amd64) ─────────────────────────────────────────────────────────────
+  - image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:go-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:go-amd64"
+    goarch: amd64
     dockerfile: docker/Dockerfile.lang
     use: buildx
     build_flag_templates:
@@ -123,9 +146,28 @@ dockers:
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 
+  # ── Go (arm64) ─────────────────────────────────────────────────────────────
   - image_templates:
-      - "ghcr.io/blackwell-systems/agent-lsp:typescript"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:typescript"
+      - "ghcr.io/blackwell-systems/agent-lsp:go-arm64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:go-arm64"
+    goarch: arm64
+    dockerfile: docker/Dockerfile.lang
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=LANG=go"
+      - "--build-arg=LSP_PACKAGE=golang.org/x/tools/gopls@latest"
+      - "--build-arg=PACKAGE_MGR=go"
+      - "--build-arg=LSP_BINARY=gopls"
+      - "--cache-from=type=gha"
+      - "--cache-to=type=gha,mode=max"
+
+  # ── TypeScript (amd64) ─────────────────────────────────────────────────────
+  - image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:typescript-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:typescript-amd64"
+    goarch: amd64
     dockerfile: docker/Dockerfile.lang
     use: buildx
     build_flag_templates:
@@ -138,9 +180,28 @@ dockers:
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 
+  # ── TypeScript (arm64) ─────────────────────────────────────────────────────
   - image_templates:
-      - "ghcr.io/blackwell-systems/agent-lsp:python"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:python"
+      - "ghcr.io/blackwell-systems/agent-lsp:typescript-arm64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:typescript-arm64"
+    goarch: arm64
+    dockerfile: docker/Dockerfile.lang
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=LANG=typescript"
+      - "--build-arg=LSP_PACKAGE=typescript-language-server typescript"
+      - "--build-arg=PACKAGE_MGR=npm"
+      - "--build-arg=LSP_BINARY=typescript-language-server"
+      - "--cache-from=type=gha"
+      - "--cache-to=type=gha,mode=max"
+
+  # ── Python (amd64) ─────────────────────────────────────────────────────────
+  - image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:python-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:python-amd64"
+    goarch: amd64
     dockerfile: docker/Dockerfile.lang
     use: buildx
     build_flag_templates:
@@ -153,9 +214,28 @@ dockers:
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 
+  # ── Python (arm64) ─────────────────────────────────────────────────────────
   - image_templates:
-      - "ghcr.io/blackwell-systems/agent-lsp:ruby"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:ruby"
+      - "ghcr.io/blackwell-systems/agent-lsp:python-arm64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:python-arm64"
+    goarch: arm64
+    dockerfile: docker/Dockerfile.lang
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=LANG=python"
+      - "--build-arg=LSP_PACKAGE=pyright"
+      - "--build-arg=PACKAGE_MGR=npm"
+      - "--build-arg=LSP_BINARY=pyright-langserver"
+      - "--cache-from=type=gha"
+      - "--cache-to=type=gha,mode=max"
+
+  # ── Ruby (amd64) ───────────────────────────────────────────────────────────
+  - image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:ruby-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:ruby-amd64"
+    goarch: amd64
     dockerfile: docker/Dockerfile.lang
     use: buildx
     build_flag_templates:
@@ -168,9 +248,28 @@ dockers:
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 
+  # ── Ruby (arm64) ───────────────────────────────────────────────────────────
   - image_templates:
-      - "ghcr.io/blackwell-systems/agent-lsp:cpp"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:cpp"
+      - "ghcr.io/blackwell-systems/agent-lsp:ruby-arm64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:ruby-arm64"
+    goarch: arm64
+    dockerfile: docker/Dockerfile.lang
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=LANG=ruby"
+      - "--build-arg=LSP_PACKAGE=solargraph"
+      - "--build-arg=PACKAGE_MGR=gem"
+      - "--build-arg=LSP_BINARY=solargraph"
+      - "--cache-from=type=gha"
+      - "--cache-to=type=gha,mode=max"
+
+  # ── C++ (amd64) ────────────────────────────────────────────────────────────
+  - image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:cpp-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:cpp-amd64"
+    goarch: amd64
     dockerfile: docker/Dockerfile.lang
     use: buildx
     build_flag_templates:
@@ -183,9 +282,28 @@ dockers:
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 
+  # ── C++ (arm64) ────────────────────────────────────────────────────────────
   - image_templates:
-      - "ghcr.io/blackwell-systems/agent-lsp:php"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:php"
+      - "ghcr.io/blackwell-systems/agent-lsp:cpp-arm64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:cpp-arm64"
+    goarch: arm64
+    dockerfile: docker/Dockerfile.lang
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=LANG=cpp"
+      - "--build-arg=LSP_PACKAGE=clangd"
+      - "--build-arg=PACKAGE_MGR=apt"
+      - "--build-arg=LSP_BINARY=clangd"
+      - "--cache-from=type=gha"
+      - "--cache-to=type=gha,mode=max"
+
+  # ── PHP (amd64) ────────────────────────────────────────────────────────────
+  - image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:php-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:php-amd64"
+    goarch: amd64
     dockerfile: docker/Dockerfile.lang
     use: buildx
     build_flag_templates:
@@ -198,10 +316,28 @@ dockers:
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 
-  # ── Combo images ────────────────────────────────────────────────────────────
+  # ── PHP (arm64) ────────────────────────────────────────────────────────────
   - image_templates:
-      - "ghcr.io/blackwell-systems/agent-lsp:web"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:web"
+      - "ghcr.io/blackwell-systems/agent-lsp:php-arm64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:php-arm64"
+    goarch: arm64
+    dockerfile: docker/Dockerfile.lang
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=LANG=php"
+      - "--build-arg=LSP_PACKAGE=intelephense"
+      - "--build-arg=PACKAGE_MGR=npm"
+      - "--build-arg=LSP_BINARY=intelephense"
+      - "--cache-from=type=gha"
+      - "--cache-to=type=gha,mode=max"
+
+  # ── Web combo (amd64) ──────────────────────────────────────────────────────
+  - image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:web-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:web-amd64"
+    goarch: amd64
     dockerfile: docker/Dockerfile.combo
     use: buildx
     build_flag_templates:
@@ -212,9 +348,26 @@ dockers:
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 
+  # ── Web combo (arm64) ──────────────────────────────────────────────────────
   - image_templates:
-      - "ghcr.io/blackwell-systems/agent-lsp:backend"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:backend"
+      - "ghcr.io/blackwell-systems/agent-lsp:web-arm64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:web-arm64"
+    goarch: arm64
+    dockerfile: docker/Dockerfile.combo
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=NPM_PACKAGES=typescript-language-server typescript pyright"
+      - "--build-arg=GO_PACKAGES="
+      - "--cache-from=type=gha"
+      - "--cache-to=type=gha,mode=max"
+
+  # ── Backend combo (amd64) ──────────────────────────────────────────────────
+  - image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:backend-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:backend-amd64"
+    goarch: amd64
     dockerfile: docker/Dockerfile.combo
     use: buildx
     build_flag_templates:
@@ -225,9 +378,26 @@ dockers:
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 
+  # ── Backend combo (arm64) ──────────────────────────────────────────────────
   - image_templates:
-      - "ghcr.io/blackwell-systems/agent-lsp:fullstack"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:fullstack"
+      - "ghcr.io/blackwell-systems/agent-lsp:backend-arm64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:backend-arm64"
+    goarch: arm64
+    dockerfile: docker/Dockerfile.combo
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=NPM_PACKAGES=pyright"
+      - "--build-arg=GO_PACKAGES=golang.org/x/tools/gopls@latest"
+      - "--cache-from=type=gha"
+      - "--cache-to=type=gha,mode=max"
+
+  # ── Fullstack combo (amd64) ────────────────────────────────────────────────
+  - image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:fullstack-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:fullstack-amd64"
+    goarch: amd64
     dockerfile: docker/Dockerfile.combo
     use: buildx
     build_flag_templates:
@@ -238,10 +408,26 @@ dockers:
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 
-  # ── Full image ──────────────────────────────────────────────────────────────
+  # ── Fullstack combo (arm64) ────────────────────────────────────────────────
   - image_templates:
-      - "ghcr.io/blackwell-systems/agent-lsp:full"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:full"
+      - "ghcr.io/blackwell-systems/agent-lsp:fullstack-arm64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:fullstack-arm64"
+    goarch: arm64
+    dockerfile: docker/Dockerfile.combo
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=NPM_PACKAGES=typescript-language-server typescript pyright"
+      - "--build-arg=GO_PACKAGES=golang.org/x/tools/gopls@latest"
+      - "--cache-from=type=gha"
+      - "--cache-to=type=gha,mode=max"
+
+  # ── Full image (amd64) ─────────────────────────────────────────────────────
+  - image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:full-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:full-amd64"
+    goarch: amd64
     dockerfile: docker/Dockerfile.full
     use: buildx
     build_flag_templates:
@@ -249,6 +435,140 @@ dockers:
       - "--build-arg=BASE_TAG=base"
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
+
+  # ── Full image (arm64) ─────────────────────────────────────────────────────
+  - image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:full-arm64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:full-arm64"
+    goarch: arm64
+    dockerfile: docker/Dockerfile.full
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--build-arg=BASE_TAG=base"
+      - "--cache-from=type=gha"
+      - "--cache-to=type=gha,mode=max"
+
+docker_manifests:
+  # ── Base / latest / versioned ──────────────────────────────────────────────
+  - name_template: "ghcr.io/blackwell-systems/agent-lsp:base"
+    image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:base-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:base-arm64"
+  - name_template: "ghcr.io/blackwell-systems/agent-lsp:latest"
+    image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:latest-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:latest-arm64"
+  - name_template: "ghcr.io/blackwell-systems/agent-lsp:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:{{ .Version }}-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/blackwell-systems/agent-lsp:{{ .Major }}.{{ .Minor }}"
+    image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:{{ .Major }}.{{ .Minor }}-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:{{ .Major }}.{{ .Minor }}-arm64"
+  - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:base"
+    image_templates:
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:base-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:base-arm64"
+  - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:latest"
+    image_templates:
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:latest-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:latest-arm64"
+  - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:{{ .Version }}"
+    image_templates:
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:{{ .Version }}-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:{{ .Version }}-arm64"
+  - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:{{ .Major }}.{{ .Minor }}"
+    image_templates:
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:{{ .Major }}.{{ .Minor }}-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:{{ .Major }}.{{ .Minor }}-arm64"
+
+  # ── Per-language ───────────────────────────────────────────────────────────
+  - name_template: "ghcr.io/blackwell-systems/agent-lsp:go"
+    image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:go-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:go-arm64"
+  - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:go"
+    image_templates:
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:go-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:go-arm64"
+  - name_template: "ghcr.io/blackwell-systems/agent-lsp:typescript"
+    image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:typescript-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:typescript-arm64"
+  - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:typescript"
+    image_templates:
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:typescript-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:typescript-arm64"
+  - name_template: "ghcr.io/blackwell-systems/agent-lsp:python"
+    image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:python-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:python-arm64"
+  - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:python"
+    image_templates:
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:python-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:python-arm64"
+  - name_template: "ghcr.io/blackwell-systems/agent-lsp:ruby"
+    image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:ruby-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:ruby-arm64"
+  - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:ruby"
+    image_templates:
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:ruby-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:ruby-arm64"
+  - name_template: "ghcr.io/blackwell-systems/agent-lsp:cpp"
+    image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:cpp-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:cpp-arm64"
+  - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:cpp"
+    image_templates:
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:cpp-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:cpp-arm64"
+  - name_template: "ghcr.io/blackwell-systems/agent-lsp:php"
+    image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:php-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:php-arm64"
+  - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:php"
+    image_templates:
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:php-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:php-arm64"
+
+  # ── Combo ──────────────────────────────────────────────────────────────────
+  - name_template: "ghcr.io/blackwell-systems/agent-lsp:web"
+    image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:web-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:web-arm64"
+  - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:web"
+    image_templates:
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:web-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:web-arm64"
+  - name_template: "ghcr.io/blackwell-systems/agent-lsp:backend"
+    image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:backend-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:backend-arm64"
+  - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:backend"
+    image_templates:
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:backend-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:backend-arm64"
+  - name_template: "ghcr.io/blackwell-systems/agent-lsp:fullstack"
+    image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:fullstack-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:fullstack-arm64"
+  - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:fullstack"
+    image_templates:
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:fullstack-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:fullstack-arm64"
+
+  # ── Full ───────────────────────────────────────────────────────────────────
+  - name_template: "ghcr.io/blackwell-systems/agent-lsp:full"
+    image_templates:
+      - "ghcr.io/blackwell-systems/agent-lsp:full-amd64"
+      - "ghcr.io/blackwell-systems/agent-lsp:full-arm64"
+  - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:full"
+    image_templates:
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:full-amd64"
+      - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:full-arm64"
 
 release:
   github:

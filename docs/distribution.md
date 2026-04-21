@@ -81,7 +81,7 @@ docker pull ghcr.io/blackwell-systems/agent-lsp:python
 docker pull ghcr.io/blackwell-systems/agent-lsp:fullstack
 ```
 
-Images are built and pushed to both registries automatically by GoReleaser on every `v*` tag. Tags: `latest`, `base`, semver (`0.1.2`, `0.1`), and per-language (`go`, `typescript`, `python`, `ruby`, `cpp`, `php`, `web`, `backend`, `fullstack`, `full`).
+All images are multi-arch (`linux/amd64` + `linux/arm64`) via Docker manifest lists. Native performance on Apple Silicon and AWS Graviton — no Rosetta/QEMU emulation. Built and pushed to both registries automatically by GoReleaser on every `v*` tag. Tags: `latest`, `base`, semver (`0.1.2`, `0.1`), and per-language (`go`, `typescript`, `python`, `ruby`, `cpp`, `php`, `web`, `backend`, `fullstack`, `full`).
 
 ## MCP registries
 
@@ -121,7 +121,7 @@ npm-publish          → downloads binaries from GitHub Release, publishes 7 npm
 mcp-registry-publish → publishes metadata to official MCP Registry (GitHub OIDC)
 ```
 
-Docker images are built inside the `release` job by GoReleaser (`dockers:` section). All 11 images (base, 6 per-language, 3 combos, full) are built sequentially — base first so downstream images can pull it as their `FROM` layer.
+Docker images are built inside the `release` job by GoReleaser (`dockers:` section). 22 images (11 tags × 2 architectures) are built and combined into 11 multi-arch manifest lists via `docker_manifests`. Base images build first so downstream images can pull them as their `FROM` layer.
 
 ## Planned
 
