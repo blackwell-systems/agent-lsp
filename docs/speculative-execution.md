@@ -466,7 +466,7 @@ This is the correct strategy for all cases: pay per touched file, not per sessio
 
 ### What "settled" means
 
-Diagnostics are considered settled when no new `textDocument/publishDiagnostics` notification has arrived for the target file within a quiet window (default: 300ms). The existing `WaitForDiagnostics` implementation handles this.
+Diagnostics are considered settled when no new `textDocument/publishDiagnostics` notification has arrived for the target file within a quiet window (default: 500ms). The existing `WaitForDiagnostics` implementation handles this.
 
 A settle timeout (default: 3000ms) caps the wait. If the server has not published anything within the timeout, use whatever is cached — and mark the baseline with `baseline_confidence: "partial"` to flag that the diff may contain false positives.
 

@@ -1004,7 +1004,7 @@ type Extension interface {
 |---------|---------|
 | `agent-lsp <lang:server[,args]...>` | Start MCP server (multi-server mode, stdio) |
 | `agent-lsp <lang> <server>` | Start MCP server (legacy single-server mode, stdio) |
-| `agent-lsp --config /path/to/lsp-mcp.json` | Start MCP server from JSON config |
+| `agent-lsp --config /path/to/agent-lsp.json` | Start MCP server from JSON config |
 | `agent-lsp` | Start MCP server with auto-detected language servers |
 | `agent-lsp --http [--port N] <lang:server...>` | Start MCP server over HTTP+SSE |
 | `agent-lsp doctor` | Probe each configured language server; report version + capabilities; exit 1 on failure |
