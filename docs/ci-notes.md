@@ -4,7 +4,7 @@ Implementation details for contributors and maintainers about the language serve
 
 ## Per-language quirks
 
-**Java (jdtls):** Tier 2 tests are skipped when jdtls does not finish indexing within the CI timeout. This is a known jdtls cold-start characteristic, not a tool bug.
+**Java (jdtls):** Runs in a dedicated `multi-lang-java` job with `continue-on-error: true` and a 15-minute timeout. Isolated from other language servers to avoid OOM kills — jdtls under memory contention with other servers receives SIGTERM (exit status 15) from the runner. The dedicated job allocates `-Xmx2G` and the full runner memory budget. Tier 2 tools that require workspace indexing (go_to_definition, references, completions, format, semantic tokens, signature_help) need the full 240s initWait before they return results.
 
 **Scala (metals):** Runs in a separate CI job with `continue-on-error: true` and a 30-minute timeout. metals requires sbt compilation on first start; results are informational.
 

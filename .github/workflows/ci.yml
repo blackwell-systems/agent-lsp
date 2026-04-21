@@ -35,7 +35,7 @@ jobs:
       - name: Binary smoke tests
         run: GOWORK=off go test -run TestBinary ./...
 
-  # Core languages: Go, TypeScript, Python, Rust, Java
+  # Core languages: Go, TypeScript, Python, Rust, Kotlin
   multi-lang-core:
     runs-on: ubuntu-latest
     steps:
@@ -45,11 +45,6 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
 
       - name: Build
         run: GOWORK=off go build ./...
@@ -68,16 +63,6 @@ jobs:
         with:
           components: rust-analyzer
 
-      - name: Install jdtls
-        continue-on-error: true
-        run: |
-          wget -q "https://download.eclipse.org/jdtls/snapshots/jdt-language-server-latest.tar.gz" -O /tmp/jdtls.tar.gz
-          sudo mkdir -p /opt/jdtls /tmp/jdtls-data
-          sudo tar -xzf /tmp/jdtls.tar.gz -C /opt/jdtls
-          LAUNCHER=$(ls /opt/jdtls/plugins/org.eclipse.equinox.launcher_*.jar | head -1)
-          printf '#!/bin/bash\nexec java \\\n  -Declipse.application=org.eclipse.jdt.ls.core.id1 \\\n  -Dosgi.bundles.defaultStartLevel=4 \\\n  -Declipse.product=org.eclipse.jdt.ls.core.product \\\n  -Dlog.level=ERROR \\\n  -Xmx1G \\\n  --add-modules=ALL-SYSTEM \\\n  --add-opens java.base/java.util=ALL-UNNAMED \\\n  --add-opens java.base/java.lang=ALL-UNNAMED \\\n  -jar %s \\\n  -configuration /opt/jdtls/config_linux \\\n  -data /tmp/jdtls-data "$@"\n' "$LAUNCHER" | sudo tee /usr/local/bin/jdtls > /dev/null
-          sudo chmod +x /usr/local/bin/jdtls
-
       - name: Install kotlin-language-server
         continue-on-error: true
         env:
@@ -89,7 +74,41 @@ jobs:
           sudo ln -sf /opt/kls/server/bin/kotlin-language-server /usr/local/bin/kotlin-language-server
 
       - name: Run core language tests
-        run: GOWORK=off go test -v -run "TestMultiLanguage/^(Go|TypeScript|Python|Rust|Java|Kotlin)$" ./test/ -timeout 45m
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^(Go|TypeScript|Python|Rust|Kotlin)$" ./test/ -timeout 30m
+
+  # Java (jdtls) — isolated job to avoid memory contention with other language servers.
+  # jdtls cold-start requires sole access to runner memory; SIGTERM under multi-server
+  # load indicates OOM kill. continue-on-error since jdtls download is external.
+  multi-lang-java:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install jdtls
+        run: |
+          wget -q "https://download.eclipse.org/jdtls/snapshots/jdt-language-server-latest.tar.gz" -O /tmp/jdtls.tar.gz
+          sudo mkdir -p /opt/jdtls /tmp/jdtls-data
+          sudo tar -xzf /tmp/jdtls.tar.gz -C /opt/jdtls
+          LAUNCHER=$(ls /opt/jdtls/plugins/org.eclipse.equinox.launcher_*.jar | head -1)
+          printf '#!/bin/bash\nexec java \\\n  -Declipse.application=org.eclipse.jdt.ls.core.id1 \\\n  -Dosgi.bundles.defaultStartLevel=4 \\\n  -Declipse.product=org.eclipse.jdt.ls.core.product \\\n  -Dlog.level=ERROR \\\n  -Xmx2G \\\n  --add-modules=ALL-SYSTEM \\\n  --add-opens java.base/java.util=ALL-UNNAMED \\\n  --add-opens java.base/java.lang=ALL-UNNAMED \\\n  -jar %s \\\n  -configuration /opt/jdtls/config_linux \\\n  -data /tmp/jdtls-workspace-lsp-mcp-test "$@"\n' "$LAUNCHER" | sudo tee /usr/local/bin/jdtls > /dev/null
+          sudo chmod +x /usr/local/bin/jdtls
+
+      - name: Run Java language tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^Java$" ./test/ -timeout 15m
 
   # Extended languages: C, C++, JavaScript, PHP, Ruby, YAML, JSON, Dockerfile, CSharp
   multi-lang-extended:
