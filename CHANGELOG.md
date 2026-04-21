@@ -7,6 +7,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **MCP tool annotations** — all 50 tools now declare `ToolAnnotations` with `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, and `OpenWorldHint`. MCP clients can auto-approve read-only tools (~30 of 50) without human confirmation.
+- **JSON Schema parameter descriptions** — 171 `jsonschema` struct tags across all Args structs. Schema description coverage goes from 0% to 100%. Agents see parameter semantics (1-indexed positions, valid values, defaults) in the tool schema itself.
 - **`--help` flag** — `agent-lsp --help` (or `-h` or `help`) prints usage summary with all modes and subcommands.
 - **`docs/skills.md`** — user-facing skill reference organized by workflow category with concrete use cases and composition examples.
 - **`glama.json`** — Glama MCP registry profile for server discovery and quality scoring.
