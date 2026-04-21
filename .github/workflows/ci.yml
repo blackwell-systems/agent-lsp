@@ -357,7 +357,7 @@ jobs:
       - name: Run Elixir tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Elixir$" ./test/ -timeout 15m
 
-  # Speculative session lifecycle (Go, TypeScript, Python, Rust, C++)
+  # Speculative session lifecycle (Go, TypeScript, Python, Rust, C++, CSharp, Dart, Java)
   speculative-test:
     runs-on: ubuntu-latest
     steps:
@@ -367,6 +367,11 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
 
       - name: Build
         run: GOWORK=off go build ./...
@@ -388,8 +393,29 @@ jobs:
       - name: Install clangd
         run: sudo apt-get install -y clangd
 
+      - name: Install csharp-ls
+        run: dotnet tool install -g csharp-ls
+
+      - name: Install Dart SDK
+        run: |
+          sudo apt-get install -y apt-transport-https
+          wget -qO- https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/dart.gpg
+          echo 'deb [signed-by=/usr/share/keyrings/dart.gpg arch=amd64] https://storage.googleapis.com/download.dartlang.org/linux/debian stable main' | sudo tee /etc/apt/sources.list.d/dart_stable.list
+          sudo apt-get update
+          sudo apt-get install -y dart
+
+      - name: Install jdtls
+        continue-on-error: true
+        run: |
+          wget -q "https://download.eclipse.org/jdtls/snapshots/jdt-language-server-latest.tar.gz" -O /tmp/jdtls.tar.gz
+          sudo mkdir -p /opt/jdtls /tmp/jdtls-workspace-speculative-test
+          sudo tar -xzf /tmp/jdtls.tar.gz -C /opt/jdtls
+          LAUNCHER=$(ls /opt/jdtls/plugins/org.eclipse.equinox.launcher_*.jar | head -1)
+          printf '#!/bin/bash\nexec java \\\n  -Declipse.application=org.eclipse.jdt.ls.core.id1 \\\n  -Dosgi.bundles.defaultStartLevel=4 \\\n  -Declipse.product=org.eclipse.jdt.ls.core.product \\\n  -Dlog.level=ERROR \\\n  -Xmx1G \\\n  --add-modules=ALL-SYSTEM \\\n  --add-opens java.base/java.util=ALL-UNNAMED \\\n  --add-opens java.base/java.lang=ALL-UNNAMED \\\n  -jar %s \\\n  -configuration /opt/jdtls/config_linux \\\n  -data /tmp/jdtls-workspace-speculative-test "$@"\n' "$LAUNCHER" | sudo tee /usr/local/bin/jdtls > /dev/null
+          sudo chmod +x /usr/local/bin/jdtls
+
       - name: Run speculative session tests
-        run: GOWORK=off go test -v -run TestSpeculativeSessions ./test/ -timeout 10m
+        run: GOWORK=off go test -v -run TestSpeculativeSessions ./test/ -timeout 20m
 
   # SQL via sqls (requires live PostgreSQL service)
   multi-lang-sql:

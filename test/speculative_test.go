@@ -20,6 +20,7 @@ type speculativeLangConfig struct {
 	fixture    string        // absolute path to workspace root (passed to start_lsp)
 	file       string        // absolute path to primary source file
 	initWait   time.Duration // how long to wait after start_lsp before opening a document
+	timeout    time.Duration // overall test timeout; defaults to 120s if zero
 
 	// safeEdit inserts a comment at the given position — must produce net_delta=0.
 	safeEditLine int
@@ -136,6 +137,66 @@ func buildSpeculativeLangConfigs(fixtureBase string) []speculativeLangConfig {
 			errorEditEndCol:  1,
 			errorEditText:    "    return \"wrong\";\n",
 		},
+		{
+			// C#: replace `return $"Hello, {Name}";` in Greet() with `return 42;`.
+			// csharp-ls flags: Cannot implicitly convert type 'int' to 'string'.
+			name:             "CSharp",
+			id:               "csharp",
+			binary:           "csharp-ls",
+			serverArgs:       []string{},
+			fixture:          filepath.Join(fixtureBase, "csharp"),
+			file:             filepath.Join(fixtureBase, "csharp", "Person.cs"),
+			initWait:         10 * time.Second,
+			safeEditLine:     1,
+			safeEditCol:      1,
+			safeEditText:     "// speculative comment\n",
+			errorEditLine:    17,
+			errorEditCol:     1,
+			errorEditEndLine: 18,
+			errorEditEndCol:  1,
+			errorEditText:    "        return 42;\n",
+		},
+		{
+			// Dart: replace `return 'Hello, $name';` in greet() with `return 42;`.
+			// Dart analysis server flags: A value of type 'int' can't be returned from
+			// a function with return type 'String'.
+			name:             "Dart",
+			id:               "dart",
+			binary:           "dart",
+			serverArgs:       []string{"language-server", "--client-id=agent-lsp"},
+			fixture:          filepath.Join(fixtureBase, "dart"),
+			file:             filepath.Join(fixtureBase, "dart", "lib", "fixture.dart"),
+			initWait:         8 * time.Second,
+			safeEditLine:     1,
+			safeEditCol:      1,
+			safeEditText:     "// speculative comment\n",
+			errorEditLine:    3,
+			errorEditCol:     1,
+			errorEditEndLine: 4,
+			errorEditEndCol:  1,
+			errorEditText:    "    return 42;\n",
+		},
+		{
+			// Java: replace `return x + y;` in add() with `return "wrong";`.
+			// jdtls flags: Type mismatch: cannot convert from String to int.
+			// Needs extended timeout — jdtls JVM startup + indexing takes ~60-90s.
+			name:             "Java",
+			id:               "java",
+			binary:           "jdtls",
+			serverArgs:       []string{"-data", "/tmp/jdtls-workspace-speculative-test"},
+			fixture:          filepath.Join(fixtureBase, "java"),
+			file:             filepath.Join(fixtureBase, "java", "src", "main", "java", "com", "example", "Person.java"),
+			initWait:         120 * time.Second,
+			timeout:          300 * time.Second,
+			safeEditLine:     1,
+			safeEditCol:      1,
+			safeEditText:     "// speculative comment\n",
+			errorEditLine:    21,
+			errorEditCol:     1,
+			errorEditEndLine: 22,
+			errorEditEndCol:  1,
+			errorEditText:    "        return \"wrong\";\n",
+		},
 	}
 }
 
@@ -183,7 +244,11 @@ func runSpeculativeLanguageTest(t *testing.T, binaryPath string, lang speculativ
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	testTimeout := lang.timeout
+	if testTimeout == 0 {
+		testTimeout = 120 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
 	args := append([]string{lang.id, lspBinaryPath}, lang.serverArgs...)
