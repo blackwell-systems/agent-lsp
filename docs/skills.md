@@ -6,6 +6,14 @@ skill does, when to reach for it, and what it does that raw tool calls miss.
 
 For installation: `cd skills && ./install.sh`. For the individual tools that skills compose, see [docs/tools.md](./tools.md).
 
+## Quick example
+
+```
+/lsp-impact "MyFunction"     # See what breaks before you change it
+/lsp-refactor "MyFunction"   # Full safe refactor: impact → preview → apply → verify → test
+/lsp-verify                  # Confirm nothing broke after any edit
+```
+
 ---
 
 ## Before you change anything

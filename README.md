@@ -193,7 +193,7 @@ Full list of 30 supported languages in [docs/language-support.md](./docs/languag
 agent-lsp doctor
 ```
 
-Probes each configured language server and reports capabilities. Fix any failures before proceeding.
+Probes each configured language server and reports capabilities. Fix any failures before proceeding. See [language support](./docs/language-support.md) for install commands and server-specific notes.
 
 ### Step 4: Configure your AI tool
 
@@ -226,34 +226,39 @@ Each arg is `language:server-binary` (comma-separate server args).
 ### Step 5: Install skills
 
 ```bash
-cd skills && ./install.sh
+git clone https://github.com/blackwell-systems/agent-lsp.git /tmp/agent-lsp-skills
+cd /tmp/agent-lsp-skills/skills && ./install.sh
 ```
+
+Skills are prompt files installed into your AI tool's configuration — they don't require the full repo.
 
 Skills are multi-tool workflows that encode reliable procedures — blast-radius check before edit, speculative preview before write, test run after change. See [docs/skills.md](./docs/skills.md) for the full list.
 
 ### Step 6: Start working
 
+Your AI agent calls tools automatically. The first call initializes the workspace:
+
 ```
 start_lsp(root_dir="/your/project")
 ```
 
-Then use any of the 50 tools. The session stays warm; no restart needed when switching files.
+This is what the agent does, not something you type. Then use any of the 50 tools. The session stays warm; no restart needed when switching files.
 
-## Why agent-lsp
+## What's unique about agent-lsp
 
-| | agent-lsp | next best competitor |
-|--|---------|---------------------|
-| Tools | **50** | 39 |
-| Languages (CI-verified) | **30** (end-to-end integration tests) | 0 (config-listed, untested) |
-| Agent workflows (skills) | **20** | 0 (in MCP space) |
-| Speculative execution | **8 tools** (simulate before writing) | none |
-| Connection model | **persistent** (warm index) | per-request or cold-start |
-| Call hierarchy | **✓** (single tool, direction param) | split across 3 tools or absent |
-| Type hierarchy | **✓** (CI-verified) | untested or absent |
-| Cross-repo references | **✓** (multi-root workspace) | single-workspace only |
-| Auto-watch | **✓** (always-on, debounced) | manual notify required |
-| HTTP+SSE transport | **✓** (bearer token auth, non-root Docker) | experimental or absent |
-| Distribution | **single Go binary** (8 channels) | Node.js/Bun runtime required |
+| Capability | Details |
+|------------|---------|
+| Tools | **50** |
+| Languages (CI-verified) | **30** — end-to-end integration tests on every push |
+| Agent workflows (skills) | **20** — named multi-step procedures |
+| Speculative execution | **8 tools** — simulate changes before writing to disk |
+| Connection model | **persistent** — warm index across files and projects |
+| Call hierarchy | **✓** — single tool, direction param |
+| Type hierarchy | **✓** — CI-verified |
+| Cross-repo references | **✓** — multi-root workspace |
+| Auto-watch | **✓** — always-on, debounced file watching |
+| HTTP+SSE transport | **✓** — bearer token auth, non-root Docker |
+| Distribution | **single Go binary** — 8 install channels |
 
 ## Use Cases
 
@@ -280,15 +285,20 @@ See [docs/tools.md](./docs/tools.md) for the full reference with parameters and 
 
 ## Further reading
 
-- [docs/skills.md](./docs/skills.md) - skill reference: workflows, use cases, and composition
-- [docs/tools.md](./docs/tools.md) - full tool reference
-- [docs/language-support.md](./docs/language-support.md) - language coverage matrix
-- [docs/speculative-execution.md](./docs/speculative-execution.md) - simulate-before-apply workflows
-- [docs/lsp-conformance.md](./docs/lsp-conformance.md) - LSP 3.17 spec coverage
-- [docs/architecture.md](./docs/architecture.md) - Go package structure and internals
-- [docs/ci-notes.md](./docs/ci-notes.md) - CI quirks and test harness details
-- [docs/distribution.md](./docs/distribution.md) - install channels and release pipeline
-- [DOCKER.md](./DOCKER.md) - Docker tags, compose, and volume caching
+### Documentation
+
+- [Tools reference](./docs/tools.md) — full tool reference with parameters and examples
+- [Skills reference](./docs/skills.md) — skill reference: workflows, use cases, and composition
+- [Language support](./docs/language-support.md) — language coverage matrix
+- [Architecture](./docs/architecture.md) — system design and internals
+- [Speculative execution](./docs/speculative-execution.md) — simulate-before-apply workflows
+- [LSP conformance](./docs/lsp-conformance.md) — LSP 3.17 spec coverage
+- [Docker](./DOCKER.md) — Docker tags, compose, and volume caching
+
+### Contributing
+
+- [CI notes](./docs/ci-notes.md) — CI quirks and test harness details
+- [Distribution](./docs/distribution.md) — install channels and release pipeline
 
 ## Development
 

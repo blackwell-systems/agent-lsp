@@ -13,7 +13,9 @@ the 0-based values the LSP spec requires.
 - [Navigation tools](#navigation-tools) — `get_references`, `go_to_definition`, `go_to_type_definition`, `go_to_implementation`, `go_to_declaration`
 - [Refactoring tools](#refactoring-tools) — `rename_symbol`, `prepare_rename`, `format_document`, `format_range`, `apply_edit`, `execute_command`
 - [Utilities](#utilities) — `did_change_watched_files`, `set_log_level`
-- [Code Intelligence tools](#code-intelligence-tools) — `call_hierarchy`, `type_hierarchy`, `get_inlay_hints`, `get_semantic_tokens`, `get_document_highlights`, `get_server_capabilities`, `detect_lsp_servers`, `run_build`, `run_tests`, `get_tests_for_file`
+- [Code Intelligence tools](#code-intelligence-tools) — `call_hierarchy`, `type_hierarchy`, `get_inlay_hints`, `get_semantic_tokens`, `get_document_highlights`
+- [Build & Test tools](#build--test-tools) — `run_build`, `run_tests`, `get_tests_for_file`
+- [Server Introspection tools](#server-introspection-tools) — `get_server_capabilities`, `detect_lsp_servers`
 - [Simulation tools](#simulation-tools) — `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`
 - [Startup and warm-up notes](#startup-and-warm-up-notes)
 - [Symbol lookup tools](#symbol-lookup-tools) — `go_to_symbol`, `get_symbol_source`, `get_symbol_documentation`
@@ -42,14 +44,14 @@ workspace root at runtime.
 
 ```json
 {
-  "root_dir": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project"
+  "root_dir": "/home/user/projects/agent-lsp/test/ts-project"
 }
 ```
 
 **Actual output**
 
 ```
-LSP server initialized with root: /Users/dayna.blackwell/code/LSP-MCP/test/ts-project
+LSP server initialized with root: /home/user/projects/agent-lsp/test/ts-project
 ```
 
 **Notes**
@@ -115,7 +117,7 @@ operations.
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts",
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/example.ts",
   "language_id": "typescript"
 }
 ```
@@ -123,14 +125,14 @@ operations.
 **Actual output**
 
 ```
-File successfully opened: /Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts
+File successfully opened: /home/user/projects/agent-lsp/test/ts-project/src/example.ts
 ```
 
 **Notes**
 
 - Idempotent: opening an already-open file is safe; it re-sends `didOpen` so
   the server refreshes its view of the file content.
-- The file must exist on disk; the tool reads it with `fs.readFile`.
+- The file must exist on disk; the tool reads its content before sending it to the language server.
 - The server tracks `file_path` and `language_id` internally so it can
   `reopenDocument` when `get_diagnostics` is called.
 
@@ -151,14 +153,14 @@ Remove a file from the language server's open-document set. Sends
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/consumer.ts"
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/consumer.ts"
 }
 ```
 
 **Actual output**
 
 ```
-File successfully closed: /Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/consumer.ts
+File successfully closed: /home/user/projects/agent-lsp/test/ts-project/src/consumer.ts
 ```
 
 **Notes**
@@ -189,17 +191,17 @@ both projects.
 **Example call**
 
 ```json
-{ "path": "/Users/dayna.blackwell/code/my-app" }
+{ "path": "/home/user/projects/my-app" }
 ```
 
 **Actual output**
 
 ```json
 {
-  "added": "/Users/dayna.blackwell/code/my-app",
+  "added": "/home/user/projects/my-app",
   "workspace_folders": [
-    { "uri": "file:///Users/dayna.blackwell/code/my-library", "name": "/Users/dayna.blackwell/code/my-library" },
-    { "uri": "file:///Users/dayna.blackwell/code/my-app",     "name": "/Users/dayna.blackwell/code/my-app" }
+    { "uri": "file:///home/user/projects/my-library", "name": "/home/user/projects/my-library" },
+    { "uri": "file:///home/user/projects/my-app",     "name": "/home/user/projects/my-app" }
   ]
 }
 ```
@@ -235,7 +237,7 @@ Return the current list of workspace folders the server is indexing.
 ```json
 {
   "workspace_folders": [
-    { "uri": "file:///Users/dayna.blackwell/code/my-library", "name": "/Users/dayna.blackwell/code/my-library" }
+    { "uri": "file:///home/user/projects/my-library", "name": "/home/user/projects/my-library" }
   ]
 }
 ```
@@ -260,7 +262,7 @@ language server to publish diagnostics, then returns them.
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts"
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/example.ts"
 }
 ```
 
@@ -268,7 +270,7 @@ language server to publish diagnostics, then returns them.
 
 ```json
 {
-  "file:///Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts": []
+  "file:///home/user/projects/agent-lsp/test/ts-project/src/example.ts": []
 }
 ```
 
@@ -276,8 +278,8 @@ language server to publish diagnostics, then returns them.
 
 ```json
 {
-  "file:///Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts": [],
-  "file:///Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/consumer.ts": []
+  "file:///home/user/projects/agent-lsp/test/ts-project/src/example.ts": [],
+  "file:///home/user/projects/agent-lsp/test/ts-project/src/consumer.ts": []
 }
 ```
 
@@ -331,7 +333,7 @@ contextual detail that the language server provides on hover.
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts",
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/example.ts",
   "language_id": "typescript",
   "line": 4,
   "column": 17
@@ -385,7 +387,7 @@ from a module, or valid identifiers in scope.
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/consumer.ts",
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/consumer.ts",
   "language_id": "typescript",
   "line": 11,
   "column": 9
@@ -446,7 +448,7 @@ highlights the active parameter.
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/consumer.ts",
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/consumer.ts",
   "language_id": "typescript",
   "line": 4,
   "column": 16
@@ -507,7 +509,7 @@ The range start must not be after the range end (validated by the schema).
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts",
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/example.ts",
   "language_id": "typescript",
   "start_line": 44,
   "start_column": 15,
@@ -573,7 +575,7 @@ methods, etc.) via `textDocument/documentSymbol`. Returns a hierarchical
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts",
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/example.ts",
   "language_id": "typescript"
 }
 ```
@@ -655,7 +657,7 @@ name. Optionally enrich results with hover documentation for a paginated window.
     "name": "Greeter",
     "kind": 5,
     "location": {
-      "uri": "file:///Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts",
+      "uri": "file:///home/user/projects/agent-lsp/test/ts-project/src/example.ts",
       "range": {
         "start": { "line": 19, "character": 0 },
         "end": { "line": 32, "character": 1 }
@@ -844,7 +846,7 @@ Find all locations where a symbol is referenced across the workspace, via
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts",
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/example.ts",
   "language_id": "typescript",
   "line": 4,
   "column": 17,
@@ -863,21 +865,21 @@ Find all locations where a symbol is referenced across the workspace, via
 ```json
 [
   {
-    "file": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts",
+    "file": "/home/user/projects/agent-lsp/test/ts-project/src/example.ts",
     "line": 4,
     "column": 17,
     "end_line": 4,
     "end_column": 20
   },
   {
-    "file": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/consumer.ts",
+    "file": "/home/user/projects/agent-lsp/test/ts-project/src/consumer.ts",
     "line": 1,
     "column": 10,
     "end_line": 1,
     "end_column": 13
   },
   {
-    "file": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/consumer.ts",
+    "file": "/home/user/projects/agent-lsp/test/ts-project/src/consumer.ts",
     "line": 4,
     "column": 13,
     "end_line": 4,
@@ -916,7 +918,7 @@ Jump to where a symbol is defined, via `textDocument/definition`.
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/consumer.ts",
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/consumer.ts",
   "language_id": "typescript",
   "line": 4,
   "column": 13
@@ -928,7 +930,7 @@ Jump to where a symbol is defined, via `textDocument/definition`.
 ```json
 [
   {
-    "file": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts",
+    "file": "/home/user/projects/agent-lsp/test/ts-project/src/example.ts",
     "line": 4,
     "column": 17,
     "end_line": 4,
@@ -958,7 +960,7 @@ itself, via `textDocument/typeDefinition`.
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/consumer.ts",
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/consumer.ts",
   "language_id": "typescript",
   "line": 7,
   "column": 9
@@ -970,7 +972,7 @@ itself, via `textDocument/typeDefinition`.
 ```json
 [
   {
-    "file": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts",
+    "file": "/home/user/projects/agent-lsp/test/ts-project/src/example.ts",
     "line": 11,
     "column": 18,
     "end_line": 15,
@@ -1095,7 +1097,7 @@ is **not applied automatically**. Pass it to `apply_edit` to commit the changes.
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts",
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/example.ts",
   "language_id": "typescript",
   "line": 4,
   "column": 17,
@@ -1108,7 +1110,7 @@ is **not applied automatically**. Pass it to `apply_edit` to commit the changes.
 ```json
 {
   "changes": {
-    "file:///Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts": [
+    "file:///home/user/projects/agent-lsp/test/ts-project/src/example.ts": [
       {
         "range": {
           "start": { "line": 3, "character": 16 },
@@ -1117,7 +1119,7 @@ is **not applied automatically**. Pass it to `apply_edit` to commit the changes.
         "newText": "sum"
       }
     ],
-    "file:///Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/consumer.ts": [
+    "file:///home/user/projects/agent-lsp/test/ts-project/src/consumer.ts": [
       {
         "range": {
           "start": { "line": 0, "character": 9 },
@@ -1172,7 +1174,7 @@ would be renamed and a suggested placeholder name.
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts",
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/example.ts",
   "language_id": "typescript",
   "line": 4,
   "column": 17
@@ -1222,7 +1224,7 @@ write the formatted output to disk.
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts",
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/example.ts",
   "language_id": "typescript",
   "tab_size": 2,
   "insert_spaces": true
@@ -1284,7 +1286,7 @@ Range start must not be after range end (schema-validated).
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts",
+  "file_path": "/home/user/projects/agent-lsp/test/ts-project/src/example.ts",
   "language_id": "typescript",
   "start_line": 20,
   "start_column": 1,
@@ -1332,7 +1334,7 @@ Use either `workspace_edit` (positional mode, for edits returned by `rename_symb
 {
   "workspace_edit": {
     "changes": {
-      "file:///Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts": [
+      "file:///home/user/projects/agent-lsp/test/ts-project/src/example.ts": [
         {
           "range": {
             "start": { "line": 3, "character": 16 },
@@ -1442,11 +1444,11 @@ server refreshes its caches.
 {
   "changes": [
     {
-      "uri": "file:///Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/newfile.ts",
+      "uri": "file:///home/user/projects/agent-lsp/test/ts-project/src/newfile.ts",
       "type": 1
     },
     {
-      "uri": "file:///Users/dayna.blackwell/code/LSP-MCP/test/ts-project/src/example.ts",
+      "uri": "file:///home/user/projects/agent-lsp/test/ts-project/src/example.ts",
       "type": 2
     }
   ]
@@ -1479,7 +1481,7 @@ Notified server of 2 file change(s)
 
 ### `set_log_level`
 
-Control the verbosity of logs written by the lsp-mcp server process.
+Control the verbosity of logs written by the agent-lsp server process.
 
 **Parameters**
 
@@ -1840,6 +1842,8 @@ do not trigger a workspace-wide reference search.
 
 ---
 
+## Server Introspection tools
+
 ### `get_server_capabilities`
 
 Return the language server's capability map and classify every agent-lsp tool
@@ -1927,7 +1931,7 @@ Does not require `start_lsp` to have been called — it works standalone.
 
 ```json
 {
-  "workspace_dir": "/Users/dayna.blackwell/code/myproject"
+  "workspace_dir": "/home/user/projects/myproject"
 }
 ```
 
@@ -1935,7 +1939,7 @@ Does not require `start_lsp` to have been called — it works standalone.
 
 ```json
 {
-  "workspace_dir": "/Users/dayna.blackwell/code/myproject",
+  "workspace_dir": "/home/user/projects/myproject",
   "workspace_languages": ["go", "typescript"],
   "installed_servers": [
     {
@@ -1973,6 +1977,8 @@ Does not require `start_lsp` to have been called — it works standalone.
   server args.
 
 ---
+
+## Build & Test tools
 
 ### `run_build`
 
@@ -2125,7 +2131,7 @@ Create an isolated speculative session rooted at the current workspace state. Th
 
 ```json
 {
-  "workspace_root": "/Users/dayna.blackwell/code/myproject",
+  "workspace_root": "/home/user/projects/myproject",
   "language": "go"
 }
 ```
@@ -2168,7 +2174,7 @@ Apply an in-memory edit to an existing session. Does not modify files on disk. M
 ```json
 {
   "session_id": "a3f2-4b91-...",
-  "file_path": "/Users/dayna.blackwell/code/myproject/pkg/handler.go",
+  "file_path": "/home/user/projects/myproject/pkg/handler.go",
   "start_line": 42,
   "start_column": 1,
   "end_line": 42,
@@ -2258,13 +2264,13 @@ Apply a sequence of edits within a session and evaluate diagnostics after each s
   "session_id": "a3f2-4b91-...",
   "edits": [
     {
-      "file_path": "/Users/dayna.blackwell/code/myproject/pkg/handler.go",
+      "file_path": "/home/user/projects/myproject/pkg/handler.go",
       "start_line": 10, "start_column": 1,
       "end_line": 10,   "end_column": 30,
       "new_text": "first change"
     },
     {
-      "file_path": "/Users/dayna.blackwell/code/myproject/pkg/handler.go",
+      "file_path": "/home/user/projects/myproject/pkg/handler.go",
       "start_line": 20, "start_column": 1,
       "end_line": 20,   "end_column": 30,
       "new_text": "second change"
@@ -2436,9 +2442,9 @@ Two modes:
 
 ```json
 {
-  "workspace_root": "/Users/dayna.blackwell/code/myproject",
+  "workspace_root": "/home/user/projects/myproject",
   "language": "go",
-  "file_path": "/Users/dayna.blackwell/code/myproject/pkg/handler.go",
+  "file_path": "/home/user/projects/myproject/pkg/handler.go",
   "start_line": 42,
   "start_column": 1,
   "end_line": 42,
@@ -2487,7 +2493,7 @@ before workspace loading completes:
    config item.
 3. `client/registerCapability` — acknowledged with `null`.
 
-lsp-mcp handles all three automatically. For `get_references`, the client
+agent-lsp handles all three automatically. For `get_references`, the client
 additionally waits for all `$/progress` end events before returning. tsserver
 does not emit `$/progress`, so references may require a brief wait and retry
 on first use. Set `set_log_level` to `debug` and look for `Progress end:` log
@@ -2563,7 +2569,7 @@ etc.) whose range contains a given cursor position. Composes
 
 ```json
 {
-  "file_path": "/Users/dayna.blackwell/code/myproject/main.go",
+  "file_path": "/home/user/projects/myproject/main.go",
   "language_id": "go",
   "line": 12,
   "character": 5

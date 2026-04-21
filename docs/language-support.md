@@ -78,38 +78,40 @@ See [ci-notes.md](./ci-notes.md) for per-language CI quirks.
 
 ## Current (30 languages, CI-tested)
 
+**stable** = all Tier 1 tools pass CI. **experimental** = server works but CI results are informational.
+
 | Language | Language Server | Status |
 |---|---|---|
-| TypeScript | typescript-language-server | passing |
-| Python | pyright-langserver | passing |
-| Go | gopls | passing |
-| Rust | rust-analyzer | passing |
+| TypeScript | typescript-language-server | stable |
+| Python | pyright-langserver | stable |
+| Go | gopls | stable |
+| Rust | rust-analyzer | stable |
 | Java | jdtls | flaky (cold-start indexing) |
-| C | clangd | passing |
-| PHP | intelephense | passing |
-| C++ | clangd | passing |
-| JavaScript | typescript-language-server | passing |
-| Ruby | solargraph | passing |
-| YAML | yaml-language-server | passing |
-| JSON | vscode-json-language-server | passing |
-| Dockerfile | docker-langserver | passing |
-| C# | csharp-ls | passing |
-| Kotlin | kotlin-language-server | passing |
-| Lua | lua-language-server | passing |
-| Swift | sourcekit-lsp | passing (macos-latest runner) |
-| Zig | zls | passing |
-| CSS | vscode-css-language-server | passing |
-| HTML | vscode-html-language-server | passing |
-| Terraform | terraform-ls | passing |
-| Scala | metals | best-effort (cold-start; continue-on-error CI job) |
-| Gleam | gleam (built-in lsp) | passing |
-| Elixir | elixir-ls | best-effort (continue-on-error CI job) |
-| Prisma | prisma-language-server | investigating (continue-on-error; server requires VS Code extension host) |
-| SQL | sqls | passing (postgres:16 service container) |
-| Clojure | clojure-lsp | passing |
-| Nix | nil | best-effort (continue-on-error CI job; Nix installer slow in CI) |
-| Dart | dart language-server | passing |
-| MongoDB | mongodb-language-server | investigating (continue-on-error; server bundled in VS Code extension, not published standalone) |
+| C | clangd | stable |
+| PHP | intelephense | stable |
+| C++ | clangd | stable |
+| JavaScript | typescript-language-server | stable |
+| Ruby | solargraph | stable |
+| YAML | yaml-language-server | stable |
+| JSON | vscode-json-language-server | stable |
+| Dockerfile | docker-langserver | stable |
+| C# | csharp-ls | stable |
+| Kotlin | kotlin-language-server | stable |
+| Lua | lua-language-server | stable |
+| Swift | sourcekit-lsp | stable (macos-latest runner) |
+| Zig | zls | stable |
+| CSS | vscode-css-language-server | stable |
+| HTML | vscode-html-language-server | stable |
+| Terraform | terraform-ls | stable |
+| Scala | metals | experimental |
+| Gleam | gleam (built-in lsp) | stable |
+| Elixir | elixir-ls | experimental |
+| Prisma | prisma-language-server | experimental |
+| SQL | sqls | stable (postgres:16 service container) |
+| Clojure | clojure-lsp | stable |
+| Nix | nil | experimental |
+| Dart | dart language-server | stable |
+| MongoDB | mongodb-language-server | experimental |
 
 ---
 
