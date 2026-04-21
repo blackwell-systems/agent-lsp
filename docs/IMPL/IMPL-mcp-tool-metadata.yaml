@@ -589,3 +589,5 @@ critic_report:
     reviewed_at: "2026-04-21T02:35:15Z"
     issue_count: 2
 state: WAVE_PENDING
+original_branch: main
+injection_method: hook
