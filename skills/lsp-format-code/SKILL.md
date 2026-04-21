@@ -98,7 +98,7 @@ without committing.
 
 Changes applied: N edits
 Lines affected: <range or "whole file">
-Formatter: <gopls | tsserver | rust-analyzer | ...>
+Formatter: <gopls | typescript-language-server | rust-analyzer | ...>
 
 Status: FORMATTED ✓
 ```
@@ -148,7 +148,7 @@ apply per-file to keep changes scoped and reversible.
 | Language | Formatter | Server |
 |----------|-----------|--------|
 | Go | `gofmt` (via gopls) | `gopls` |
-| TypeScript / JavaScript | `prettier` or built-in (via tsserver) | `typescript-language-server` |
+| TypeScript / JavaScript | `prettier` or built-in (via typescript-language-server) | `typescript-language-server` |
 | Rust | `rustfmt` (via rust-analyzer) | `rust-analyzer` |
 | Python | `black` or `autopep8` (via pyright/pylsp) | `pyright-langserver` or `pylsp` |
 | C / C++ | `clang-format` (via clangd) | `clangd` |

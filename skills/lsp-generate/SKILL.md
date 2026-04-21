@@ -105,8 +105,8 @@ server. Surface any unexpected errors.
 | Go (gopls) | Implement interface | Line with `var _ MyInterface = (*MyType)(nil)` or type declaration | `quickfix` — "Implement interface" |
 | Go (gopls) | Generate test file | Any .go file without _test.go counterpart | `source` — "Generate unit tests" |
 | Go (gopls) | Add missing method | Line with `undefined: method` error | `quickfix` |
-| TypeScript (tsserver) | Implement interface | Class declaration | `quickfix` — "Implement interface members" |
-| TypeScript (tsserver) | Add missing method | Method call with no definition | `quickfix` — "Add missing function declaration" |
+| TypeScript (typescript-language-server) | Implement interface | Class declaration | `quickfix` — "Implement interface members" |
+| TypeScript (typescript-language-server) | Add missing method | Method call with no definition | `quickfix` — "Add missing function declaration" |
 | Python (pyright) | Add import | Name not defined | `quickfix` — "Add import" |
 | Rust (rust-analyzer) | Implement trait | `impl Trait for Type {}` | `quickfix` — "Add missing impl members" |
 

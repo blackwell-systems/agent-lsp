@@ -101,7 +101,7 @@ Display the preview summary to the user:
 Rename preview: OldName -> NewName
   Locations to update: N (from get_references count)
   Files affected:      M (distinct files in workspace_edit)
-  Language server:     <gopls | tsserver | rust-analyzer | ...>
+  Language server:     <gopls | typescript-language-server | rust-analyzer | ...>
 
 Changes:
   path/to/file1.go  lines 12, 45, 78
@@ -208,12 +208,8 @@ rename is safe.
 
 ## Language Support
 
-The following language servers support `rename_symbol`:
-
-- **Go** — `gopls`
-- **TypeScript / JavaScript** — `tsserver`
-- **Rust** — `rust-analyzer`
-
-Other LSP-compliant servers that implement `textDocument/rename` also work.
+Tested with `gopls`, `typescript-language-server`, and `rust-analyzer`. Most
+LSP-compliant servers support `textDocument/rename` — agent-lsp works with
+any of the 30+ supported language servers that advertise rename capability.
 Check your server's capability list via `mcp__lsp__get_server_capabilities` if
 you are unsure.

@@ -229,7 +229,7 @@ Follow with the Diagnostic Summary if any errors changed (format in
 
 - **Go:** gopls may offer "Extract function" in code actions for selection ranges.
   Check code actions first; gopls support varies by version.
-- **TypeScript/JavaScript:** tsserver may offer "Extract to function in global scope"
+- **TypeScript/JavaScript:** typescript-language-server may offer "Extract to function in global scope"
   or "Extract to inner function" — filter for these titles in Step 3.
 - **Python:** pylsp and pyright-langserver typically do NOT offer extract-function
   code actions. Manual fallback (Step 4) is required for Python files.

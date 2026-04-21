@@ -1,17 +1,17 @@
-# lsp-mcp-go Audit 4
+# agent-lsp Audit 4
 
 ## Summary
-- Audited: `internal/config/`, `cmd/lsp-mcp-go/server.go`, `internal/tools/`, `internal/session/`, `internal/lsp/`, `internal/resources/`, `internal/logging/`, `internal/extensions/`
-- Layer map: `cmd/lsp-mcp-go` → `internal/tools`, `internal/session`, `internal/resources`, `internal/extensions` → `internal/lsp` → `internal/types`. `internal/logging` is used by all layers. No cycles detected.
+- Audited: `internal/config/`, `cmd/agent-lsp/server.go`, `internal/tools/`, `internal/session/`, `internal/lsp/`, `internal/resources/`, `internal/logging/`, `internal/extensions/`
+- Layer map: `cmd/agent-lsp` → `internal/tools`, `internal/session`, `internal/resources`, `internal/extensions` → `internal/lsp` → `internal/types`. `internal/logging` is used by all layers. No cycles detected.
 - Highest severity: error
 - Signal: Five findings of note — one data race on a package-level variable, one resource leak on partial server initialization, two dead public APIs with no production caller, and one wired parameter that is accepted but never used.
 
 ---
 
-## cmd/lsp-mcp-go/server.go
+## cmd/agent-lsp/server.go
 
 **dead_symbol** · error · confidence: reduced
-`cmd/lsp-mcp-go/server.go:119` · [LSP unavailable — Grep fallback, reduced confidence]
+`cmd/agent-lsp/server.go:119` · [LSP unavailable — Grep fallback, reduced confidence]
 What: The `registry *extensions.ExtensionRegistry` parameter of `Run` is accepted in the function signature but never referenced anywhere in the function body. `registry.ToolHandlers()`, `registry.ResourceHandlers()`, `registry.SubscriptionHandlers()`, and `registry.PromptHandlers()` are never called from `Run`. The `ExtensionRegistry` returned by `extensions.NewRegistry()` in `main.go` is wired through, populated with language extensions, and then silently dropped. The extension system is fully registered but produces no runtime effect.
 Fix: Either wire `registry` into the tool/resource dispatch loop inside `Run` (per the design intent of the extension system), or remove the parameter and the activation calls in `main.go` until the feature is ready. Carrying a populated but unused parameter is misleading and masks the integration gap.
 
@@ -44,7 +44,7 @@ Fix: Remove the type if it is not part of an upcoming feature, or add a `// TODO
 
 **dead_symbol** · warning · confidence: reduced
 `internal/resources/subscriptions.go:22` (`HandleSubscribeDiagnostics`), `internal/resources/subscriptions.go:55` (`HandleUnsubscribeDiagnostics`), `internal/resources/subscriptions.go:13` (`NotifyFunc`) · [LSP unavailable — Grep fallback, reduced confidence]
-What: All three exported symbols are defined in `subscriptions.go` and called only from `resources_test.go`. They are never imported or called from `cmd/lsp-mcp-go/server.go` or any other production package. The subscription infrastructure exists but is not wired into the MCP server's `resources/subscribe` flow — the resource templates are registered, but the `server.AddResourceSubscribeHandler`-equivalent callback is absent from `server.go`.
+What: All three exported symbols are defined in `subscriptions.go` and called only from `resources_test.go`. They are never imported or called from `cmd/agent-lsp/server.go` or any other production package. The subscription infrastructure exists but is not wired into the MCP server's `resources/subscribe` flow — the resource templates are registered, but the `server.AddResourceSubscribeHandler`-equivalent callback is absent from `server.go`.
 Fix: Either wire `HandleSubscribeDiagnostics`/`HandleUnsubscribeDiagnostics` into `server.go`'s resource subscription handling, or document the symbols as "pending integration" with a `TODO` comment.
 
 ---
@@ -62,7 +62,7 @@ Fix: Run `gofmt` on the file to correct the indentation at lines 291–292. This
 
 | Severity | Confidence | Check Type | Finding | Location |
 |----------|------------|------------|---------|----------|
-| error | reduced | dead_symbol | `registry` parameter accepted by `Run` but never used — entire extension system is wired but produces no runtime effect | `cmd/lsp-mcp-go/server.go:119` |
+| error | reduced | dead_symbol | `registry` parameter accepted by `Run` but never used — entire extension system is wired but produces no runtime effect | `cmd/agent-lsp/server.go:119` |
 | error | high | coverage_gap | `initWarning` read/write in `Log()` is not protected by `mu` — data race under concurrent goroutines | `internal/logging/logging.go:100` |
 | error | high | silent_failure | `StartAll` leaks already-started LSP subprocess clients when a later entry fails to initialize | `internal/lsp/manager.go:89` |
 | warning | reduced | dead_symbol | `ResourceEntry` type defined but never used in any production code | `internal/resources/resources.go:25` |

@@ -4,7 +4,6 @@ description: "Edit a named symbol without knowing its file or position. Use when
 argument-hint: "[symbol-name] [new-body-or-signature]"
 allowed-tools:
   - mcp__lsp__get_workspace_symbols
-  - mcp__lsp__go_to_definition
   - mcp__lsp__get_document_symbols
   - mcp__lsp__apply_edit
 ---

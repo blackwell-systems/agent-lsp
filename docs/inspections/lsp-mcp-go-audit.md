@@ -1,4 +1,4 @@
-# lsp-mcp-go Code Quality Audit
+# agent-lsp Code Quality Audit
 
 **Date:** 2026-04-06
 **Inspector version:** 0.2.0
@@ -7,10 +7,10 @@
 
 ## Summary
 
-- **Audited:** `internal/session/`, `internal/tools/`, `cmd/lsp-mcp-go/server.go`, `internal/lsp/`, `internal/resources/`, `internal/types/`, `internal/extensions/`, `internal/config/`, `cmd/lsp-mcp-go/main.go`
+- **Audited:** `internal/session/`, `internal/tools/`, `cmd/agent-lsp/server.go`, `internal/lsp/`, `internal/resources/`, `internal/types/`, `internal/extensions/`, `internal/config/`, `cmd/agent-lsp/main.go`
 - **Layer map:**
   ```
-  cmd/lsp-mcp-go → internal/tools, internal/resources, internal/session, internal/lsp, internal/types, internal/extensions, internal/config
+  cmd/agent-lsp → internal/tools, internal/resources, internal/session, internal/lsp, internal/types, internal/extensions, internal/config
   internal/tools → internal/lsp, internal/types, internal/logging
   internal/session → internal/lsp, internal/types, internal/logging
   internal/resources → internal/lsp, internal/types, internal/logging
@@ -23,24 +23,24 @@
 
 ---
 
-## `cmd/lsp-mcp-go/server.go`
+## `cmd/agent-lsp/server.go`
 
 **coverage_gap** · error · confidence: high
-`cmd/lsp-mcp-go/server.go:108` · [LSP unavailable — Grep fallback]
+`cmd/agent-lsp/server.go:108` · [LSP unavailable — Grep fallback]
 What: `clientForFile` ignores both the `resolver` and `filePath` parameters and always returns `cs.get()`. The function signature advertises multi-server routing (it accepts a `resolver` and `filePath`) but the body is `return cs.get()`. This means multi-server mode never routes by file extension at this call site — all tools that use `clientForFile` (open_document, close_document, get_diagnostics, get_info_on_location, get_completions, get_signature_help, get_code_actions, get_document_symbols, get_references, go_to_definition, go_to_type_definition, go_to_implementation, go_to_declaration, rename_symbol, prepare_rename, format_document, format_range) always use the default client regardless of the file's language. The comment at the function acknowledges this: `TODO: Multi-server routing should update both cs and resolver when servers start.`
 Fix: Route through `resolver.ClientForFile(filePath)` instead of `cs.get()`, consistent with how `csResolver.ClientForFile` delegates to the real resolver.
 
 ---
 
 **coverage_gap** · error · confidence: high
-`cmd/lsp-mcp-go/server.go:240-242` · [LSP unavailable — Grep fallback]
+`cmd/agent-lsp/server.go:240-242` · [LSP unavailable — Grep fallback]
 What: `ExecuteCommandArgs` declares the arguments field with JSON tag `"arguments"`, so `toolArgsToMap` serializes the field as `{"arguments": [...]}`. However, `HandleExecuteCommand` reads `args["args"].([]interface{})` — key `"args"` not `"arguments"`. The type-assert always fails silently, so `cmdArgs` is always `nil` regardless of what the caller provides. Every `execute_command` call that passes arguments silently discards them, forwarding an empty argument list to the LSP server instead.
 Fix: Change the lookup in `HandleExecuteCommand` from `args["args"]` to `args["arguments"]`.
 
 ---
 
 **scope_analysis** · warning · confidence: high
-`cmd/lsp-mcp-go/server.go:72-103` · [LSP unavailable — Grep fallback]
+`cmd/agent-lsp/server.go:72-103` · [LSP unavailable — Grep fallback]
 What: `makeCallToolResult` performs two distinct responsibilities: JSON-marshaling the intermediate `types.ToolResult` to bytes, then re-parsing a purpose-built anonymous struct to extract `Content` and `IsError` fields, then re-building an `*mcp.CallToolResult`. This double round-trip exists because the layer boundary prevents `cmd/` from importing the MCP SDK types into `internal/types`. The function is 32 lines of error-path logic for what is structurally a type adapter.
 Fix: Define a concrete adapter type in `internal/types` or accept that the double marshal is the intentional bridge, but document the reason. The function is not a scope problem per se — it is doing one thing — but the dual-parse is a fragile implementation that could silently drop content if the anonymous struct shape drifts from `types.ToolResult`.
 
@@ -157,7 +157,7 @@ Fix: Use `url.URL{Scheme: "file", Path: rootDir}.String()` consistent with `Crea
 ---
 
 **init_side_effects** · warning · confidence: high
-`extensions/haskell/` (imported via `_ "github.com/blackwell-systems/lsp-mcp-go/extensions/haskell"` in main.go) · [LSP unavailable — Grep fallback]
+`extensions/haskell/` (imported via `_ "github.com/blackwell-systems/agent-lsp/extensions/haskell"` in main.go) · [LSP unavailable — Grep fallback]
 What: The `init()` function in the haskell extension calls `extensions.RegisterFactory(...)`, which mutates a global map (`factories`) under a mutex. This is the intended design — it is documented in the architecture. The pattern is not a bug; it is flagged here for completeness because `init()` global mutation is present. The registration is deterministic and has no I/O.
 Fix: None — this is the documented design. Noted for completeness.
 
@@ -252,8 +252,8 @@ Fix: Consider a `extractFileArgs(args map[string]interface{}) (filePath, languag
 
 | Severity | Confidence | Check Type | Finding | Location |
 |----------|------------|------------|---------|----------|
-| error | high | coverage_gap | `clientForFile` ignores resolver; all tools use default client regardless of file language | `cmd/lsp-mcp-go/server.go:108` |
-| error | high | coverage_gap | `execute_command` arguments silently dropped: struct field `"arguments"` vs handler key `"args"` | `cmd/lsp-mcp-go/server.go:242`, `internal/tools/workspace.go:207` |
+| error | high | coverage_gap | `clientForFile` ignores resolver; all tools use default client regardless of file language | `cmd/agent-lsp/server.go:108` |
+| error | high | coverage_gap | `execute_command` arguments silently dropped: struct field `"arguments"` vs handler key `"args"` | `cmd/agent-lsp/server.go:242`, `internal/tools/workspace.go:207` |
 | error | high | coverage_gap | `session.Status` mutated without per-session mutex in 5 locations; races with `MarkDirty`/`IsTerminal`/`IsDirty` | `internal/session/manager.go:161,197,241,342,388,406` |
 | error | high | duplicate_semantics | `session.uriToPath` strips `"file://"` without percent-decoding; diverges from `lsp.uriToPath` which uses `url.Parse` | `internal/session/manager.go:466` vs `internal/lsp/client.go:1797` |
 | error | high | coverage_gap | `Discard` re-reads from disk instead of using saved baseline content; fails if file changed between edit and discard | `internal/session/manager.go:353` |

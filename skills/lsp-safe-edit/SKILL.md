@@ -130,8 +130,6 @@ Returns:
 - Simple in-place edits with no dependent follow-on edits (Step 3 is sufficient)
 - New file creation (no existing text to simulate against)
 
-See `docs/refactor-preview.md` for worked examples.
-
 ### Step 4 — Apply the edit to disk
 
 Apply the change using the Edit or Write tool:

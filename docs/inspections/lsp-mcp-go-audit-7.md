@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-10
 **Inspector version:** 0.8.0
-**Repo root:** `/Users/dayna.blackwell/code/agent-lsp`
+**Repo root:** `/path/to/agent-lsp`
 
 ---
 

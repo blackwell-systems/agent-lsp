@@ -1,11 +1,11 @@
-# lsp-mcp-go Code Quality Audit — Inspection 2
+# agent-lsp Code Quality Audit — Inspection 2
 
 ## Summary
 
-- **Audited:** `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO` (full repo)
+- **Audited:** `/path/to/agent-lsp` (full repo)
 - **Layer map:**
   ```
-  cmd/lsp-mcp-go → internal/tools, internal/resources, internal/session,
+  cmd/agent-lsp → internal/tools, internal/resources, internal/session,
                     internal/extensions, internal/lsp, internal/logging, internal/types
   internal/tools  → internal/lsp, internal/types, internal/session
   internal/resources → internal/lsp, internal/types
@@ -33,7 +33,7 @@ The built-in `LSP` tool was invoked for all symbol-level checks (findReferences,
 **dead_symbol** · error · confidence: reduced
 `internal/resources/resources.go:217` and `internal/resources/resources.go:266`
 [LSP unavailable — Grep fallback, reduced confidence]
-What: `generateResourceList` (line 217) and `resourceTemplates` (line 266) are unexported functions defined in the `resources` package. Grep across all non-test `.go` files in the repo finds zero call sites outside of `internal/resources/resources_test.go`. The MCP server in `cmd/lsp-mcp-go/server.go` registers the three resource handlers directly via `server.AddResource` and never calls either function. As a result, MCP clients that call `resources/list` receive only the three statically registered URIs. The dynamic per-file entries that `generateResourceList` would produce (per-file `lsp-diagnostics://`, `lsp-hover://`, and `lsp-completions://` URIs keyed to open documents) are never surfaced. The URI templates that `resourceTemplates` would expose are also unreachable.
+What: `generateResourceList` (line 217) and `resourceTemplates` (line 266) are unexported functions defined in the `resources` package. Grep across all non-test `.go` files in the repo finds zero call sites outside of `internal/resources/resources_test.go`. The MCP server in `cmd/agent-lsp/server.go` registers the three resource handlers directly via `server.AddResource` and never calls either function. As a result, MCP clients that call `resources/list` receive only the three statically registered URIs. The dynamic per-file entries that `generateResourceList` would produce (per-file `lsp-diagnostics://`, `lsp-hover://`, and `lsp-completions://` URIs keyed to open documents) are never surfaced. The URI templates that `resourceTemplates` would expose are also unreachable.
 Fix: Wire `generateResourceList` into the MCP resources/list handler so that open-document-specific resource entries are visible to callers. Wire `resourceTemplates` into the resources/templates/list handler. If the static registrations in `server.go` are the intended permanent design, delete both functions and their test coverage.
 
 ---
@@ -157,5 +157,5 @@ Fix: Defer the stderr write to the first call to `Log()`, or move the environmen
 
 - **LSP `findReferences` and `hover`:** The built-in `LSP` tool was invoked for all symbol-level checks and returned `No such tool available: LSP` each time. All symbol-level checks fell back to Grep. All findings carry `confidence: reduced`. Grep cannot detect aliased calls, interface-dispatch call sites, or dynamically constructed symbol references.
 - **`layer_violation`:** Verified by reading all import blocks against the committed layer map. No violations found. `internal/lsp` does not import `internal/tools` or `cmd`. `internal/types` imports only stdlib.
-- **`panic_not_recovered`:** No `panic(` calls in production code. `runWithRecovery` in `cmd/lsp-mcp-go/main.go` handles panics from `server.Run` with a deferred `recover()`. No findings.
+- **`panic_not_recovered`:** No `panic(` calls in production code. `runWithRecovery` in `cmd/agent-lsp/main.go` handles panics from `server.Run` with a deferred `recover()`. No findings.
 - **`SimulateChain` scope override:** The `SimulateChain` loop (session/manager.go:265) evaluates using hardcoded `"file"` scope regardless of the caller-supplied `timeoutMs`, silently ignoring workspace-scope evaluation for chained edits. This behavioral gap was noted during reading but not raised as a finding at reduced confidence — it may be intentional design given the per-step evaluation model.

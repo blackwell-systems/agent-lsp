@@ -1,11 +1,11 @@
-# lsp-mcp-go Code Quality Audit — Inspection 3
+# agent-lsp Code Quality Audit — Inspection 3
 
 ## Summary
 
-- **Audited:** `/Users/dayna.blackwell/workspace/code/LSP-MCP-GO` (full repo, post audit-2 fixes)
+- **Audited:** `/path/to/agent-lsp` (full repo, post audit-2 fixes)
 - **Layer map:**
   ```
-  cmd/lsp-mcp-go → internal/tools, internal/resources, internal/session,
+  cmd/agent-lsp → internal/tools, internal/resources, internal/session,
                     internal/extensions, internal/lsp, internal/logging, internal/types
   internal/tools  → internal/lsp, internal/types, internal/session
   internal/resources → internal/lsp, internal/types
@@ -212,7 +212,7 @@ not removed during dead-code cleanup.
 - `test_coverage` — not applied; a full exported-symbol coverage sweep requires reliable
   LSP to be meaningful.
 - `layer_violation` — all import blocks verified against layer map; no violations found.
-- `panic_not_recovered` — `runWithRecovery` in `cmd/lsp-mcp-go/main.go` provides
+- `panic_not_recovered` — `runWithRecovery` in `cmd/agent-lsp/main.go` provides
   top-level recovery; no unrecovered panics in goroutines found.
 - `duplicate_semantics` (applyRangeEdit / applyEditsToFile) — acknowledged in audit-2,
   cross-reference comment added per the audit-2 IMPL; no new finding raised.

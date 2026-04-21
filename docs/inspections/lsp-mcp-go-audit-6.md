@@ -63,7 +63,7 @@ No layer violations were observed.
 
 #### C1 — `AddWorkspaceFolder` replaces the rootDir watcher with the new-folder watcher: original workspace goes dark
 
-**File:** `/Users/dayna.blackwell/code/agent-lsp/internal/lsp/client.go`, line 1848
+**File:** `/path/to/agent-lsp/internal/lsp/client.go`, line 1848
 **Check:** `bug` / `silent_failure`
 
 The H2 fix from audit #5 changed `startWatcher(c.rootDir)` to `startWatcher(path)` to ensure the added folder is watched. However, `startWatcher` always calls `stopWatcherLocked()` first, which closes the channel of the currently-running goroutine watching `c.rootDir`. The result: after `AddWorkspaceFolder("/new/repo")`, the original workspace root stops receiving `didChangeWatchedFiles` notifications. Edits to files under `c.rootDir` are no longer propagated to the LSP server. The LSP index for the original workspace goes stale silently.
@@ -83,7 +83,7 @@ c.startWatcher(path)   // stops rootDir watcher; only path is watched after this
 
 #### C2 — `initialized` not cleared on unplanned LSP process exit: `CheckInitialized` passes on a dead server
 
-**File:** `/Users/dayna.blackwell/code/agent-lsp/internal/lsp/client.go`, lines 193–203
+**File:** `/path/to/agent-lsp/internal/lsp/client.go`, lines 193–203
 **Check:** `bug` / `silent_failure`
 
 The exit-monitor goroutine in `start()` calls `rejectPending(exitErr)` to unblock waiting requests, but does **not** set `c.initialized = false`. After an unplanned LSP subprocess crash (OOM, segfault, etc.):
@@ -104,7 +104,7 @@ Callers receive opaque errors and cannot distinguish a crashed server from a tra
 
 #### H1 — `NormalizeDocumentSymbols` name map uses last-write-wins for duplicate names: child wiring silently wrong
 
-**File:** `/Users/dayna.blackwell/code/agent-lsp/internal/lsp/normalize.go`, line 61
+**File:** `/path/to/agent-lsp/internal/lsp/normalize.go`, line 61
 **Check:** `silent_failure` / `scope_analysis`
 
 When normalizing `SymbolInformation[]` responses (Pass 1), the name map is keyed by `info.Name`:
@@ -123,7 +123,7 @@ This is structural: the name map must be keyed by a compound key such as `contai
 
 #### H2 — `SerializedExecutor` serializes all sessions globally: independent sessions block each other
 
-**File:** `/Users/dayna.blackwell/code/agent-lsp/internal/session/executor.go`, lines 12–35
+**File:** `/path/to/agent-lsp/internal/session/executor.go`, lines 12–35
 **Check:** `scope_analysis`
 
 `SessionManager` holds a single `SerializedExecutor` shared across all sessions. The `sem chan struct{}` is a capacity-1 channel. When session A is in `Evaluate` (waiting 3–8 seconds for diagnostics to stabilize), any concurrent call to session B's `ApplyEdit` or `Evaluate` blocks on `e.sem <- struct{}{}` until A releases.
@@ -149,7 +149,7 @@ Per-session locking can be achieved by adding a `sync.Mutex` to `SimulationSessi
 
 #### H3 — `ResolvePositionPattern` uses byte column offsets, not UTF-16 code unit offsets: wrong positions on non-ASCII files
 
-**File:** `/Users/dayna.blackwell/code/agent-lsp/internal/tools/position_pattern.go`, lines 40–49
+**File:** `/path/to/agent-lsp/internal/tools/position_pattern.go`, lines 40–49
 **Check:** `bug`
 
 LSP positions use UTF-16 code unit offsets for the `character` field (LSP spec §3.4). `ResolvePositionPattern` computes `col` as:
@@ -175,7 +175,7 @@ The same issue affects `textMatchApply` in `workspace.go` lines 323–325, which
 
 #### M1 — `start()` exit-monitor goroutine: `cmd.Wait()` called on process started from `exec.Command`; stderr drain goroutine may race `cmd.Wait`
 
-**File:** `/Users/dayna.blackwell/code/agent-lsp/internal/lsp/client.go`, lines 176–203
+**File:** `/path/to/agent-lsp/internal/lsp/client.go`, lines 176–203
 **Check:** `scope_analysis` / potential data race
 
 `cmd.StderrPipe()` returns a pipe whose read end is passed to `drainStderr`. `cmd.Wait()` in the exit monitor goroutine closes all `cmd.StdoutPipe()` and `cmd.StderrPipe()` connections internally (per `os/exec` contract). This can cause the `drainStderr` goroutine's `r.Read(buf)` to receive an error simultaneously with `Wait()` completing, which is the expected behavior.
@@ -188,7 +188,7 @@ Actually, promoting this to a documentation note rather than a finding. Let me n
 
 #### M1 — `logging.MarkServerInitialized()` called before MCP session is established: log routing flag set prematurely
 
-**File:** `/Users/dayna.blackwell/code/agent-lsp/cmd/agent-lsp/server.go`, line 1016
+**File:** `/path/to/agent-lsp/cmd/agent-lsp/server.go`, line 1016
 **Check:** `scope_analysis` / `silent_failure`
 
 `MarkServerInitialized()` is called at line 1016, before `server.Run(ctx, transport)`. At this point, `logging.mcpServer` is still `nil` (no MCP client has connected yet). `Log` checks `if initialized && sender != nil` before routing to MCP, so the nil sender prevents actual MCP sends — this is safe.
@@ -203,7 +203,7 @@ The call at line 1016 should be removed; `InitializedHandler` is the canonical a
 
 #### M2 — `DiffDiagnostics` is O(n*m): quadratic scan on large diagnostic sets
 
-**File:** `/Users/dayna.blackwell/code/agent-lsp/internal/session/differ.go`, lines 42–83
+**File:** `/path/to/agent-lsp/internal/session/differ.go`, lines 42–83
 **Check:** `scope_analysis`
 
 `DiffDiagnostics` uses a nested loop comparing every diagnostic in `current` against every diagnostic in `baseline`:
@@ -227,7 +227,7 @@ A fingerprint-keyed map (`map[string]int` counting occurrences, where fingerprin
 
 #### M3 — `textMatchApply` uses string concatenation for file URI: special characters in file paths not percent-encoded
 
-**File:** `/Users/dayna.blackwell/code/agent-lsp/internal/tools/workspace.go`, line 338
+**File:** `/path/to/agent-lsp/internal/tools/workspace.go`, line 338
 **Check:** `scope_analysis`
 
 ```go
@@ -250,7 +250,7 @@ fileURI := "file://" + filePath
 
 #### L1 — `NormalizeDocumentSymbols` SymbolInformation tree reconstruction uses pointer-dereferenced copies in Pass 3: children added in Pass 2 after the copy are included correctly, but the comment is misleading
 
-**File:** `/Users/dayna.blackwell/code/agent-lsp/internal/lsp/normalize.go`, lines 76–83
+**File:** `/path/to/agent-lsp/internal/lsp/normalize.go`, lines 76–83
 **Check:** `scope_analysis`
 
 The comment on Pass 3 says "Value-copying roots before Pass 2 completes would miss children added later." The implementation correctly defers the value copy to after Pass 2 completes, via `*symPtrs[i]`. This is correct. However, children appended to a parent's `Children []types.DocumentSymbol` slice are value-type elements (structs, not pointers). When Pass 3 dereferences `*symPtrs[i]`, it gets a copy of the parent including its `Children` slice header (pointer + len + cap) — which points to the same backing array populated in Pass 2. This works for the top-level copy, but grandchildren added to a child's `Children` after that child was appended to the parent will be in the child's backing array, not the grandchild's parent copy in the parent's `Children` slice.
@@ -263,7 +263,7 @@ In practice, `SymbolInformation` has no grandparent depth (it is a flat list), s
 
 #### L2 — `waitForWorkspaceReady` uses a 100ms polling loop with no notification channel: up to 100ms latency after workspace indexing completes
 
-**File:** `/Users/dayna.blackwell/code/agent-lsp/internal/lsp/client.go`, lines 396–414
+**File:** `/path/to/agent-lsp/internal/lsp/client.go`, lines 396–414
 **Check:** `scope_analysis`
 
 `waitForWorkspaceReady` polls `progressTokens` every 100ms. When the last progress token is removed (the workspace is ready), the method may sleep up to 100ms before detecting it. For fast language servers (e.g., gopls on a small module), this is a gratuitous wait imposed on every `Initialize` call. A condition variable or a notification channel triggered from `handleProgress` when `progressTokens` becomes empty would eliminate the latency.
@@ -274,7 +274,7 @@ In practice, `SymbolInformation` has no grandparent depth (it is a flat list), s
 
 #### L3 — `AddWorkspaceFolder` context parameter dropped: no context propagation to `sendNotification`
 
-**File:** `/Users/dayna.blackwell/code/agent-lsp/internal/lsp/client.go`, line 1823
+**File:** `/path/to/agent-lsp/internal/lsp/client.go`, line 1823
 **Check:** `context_propagation`
 
 `AddWorkspaceFolder(path string)` has no `ctx context.Context` parameter, but calls `c.sendNotification(...)` which internally calls `c.writeRaw(body)`. If the caller's context is cancelled (e.g., a tool timeout), there is no way to cancel the notification send. `sendNotification` always completes (or fails on pipe error) regardless of external cancellation. Compare with `sendRequest` which accepts and honors a context.
@@ -287,7 +287,7 @@ For a notification (fire-and-forget), this is lower severity than for a request.
 
 #### L4 — `HandleAddWorkspaceFolder` / `HandleRemoveWorkspaceFolder` / `HandleListWorkspaceFolders`: json.Marshal error discarded with `_`
 
-**File:** `/Users/dayna.blackwell/code/agent-lsp/internal/tools/workspace_folders.go`, lines 34, 57, 71
+**File:** `/path/to/agent-lsp/internal/tools/workspace_folders.go`, lines 34, 57, 71
 **Check:** `silent_failure`
 
 ```go

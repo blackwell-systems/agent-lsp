@@ -2,7 +2,7 @@
 
 **Audit date:** 2026-04-06 (updated 2026-04-10: Findings 1–6 all resolved)
 **Inspector version:** 0.2.0
-**Repo root:** `/Users/dayna.blackwell/code/agent-lsp`
+**Repo root:** `/path/to/agent-lsp`
 **Checks applied:** `cross_field_consistency`, `coverage_gap`, `silent_failure`, `doc_drift`
 **Scope:** Spec compliance gaps against LSP 3.17 — divergences from what LSP 3.17 requires or specifies.
 **Previously fixed issues excluded per audit brief.**
