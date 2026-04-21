@@ -352,7 +352,7 @@ agent-lsp go gopls
 agent-lsp go:gopls typescript:typescript-language-server,--stdio
 
 # Config file: JSON with a "servers" array
-agent-lsp --config /path/to/lsp-mcp.json
+agent-lsp --config /path/to/agent-lsp.json
 
 # Auto-detect: scans PATH for known language server binaries
 agent-lsp
@@ -646,7 +646,7 @@ CreateFileURI("/path/to/file.go")  // → "file:///path/to/file.go"
 URIToFilePath("file:///path/to/file.go")  // → "/path/to/file.go"
 ```
 
-All conversions use `url.URL` / `url.Parse` rather than string slicing. This correctly handles percent-encoded characters (e.g. spaces in paths → `%20`) and is robust to non-standard URI forms.
+All conversions use `url.URL` / `url.Parse` rather than string slicing. This correctly handles percent-encoded characters (e.g. spaces in paths → `%20`) and handles non-standard URI forms correctly.
 
 `ValidateFilePath` additionally rejects path traversal: if `rootDir` is non-empty, the resolved absolute path must be equal to `rootDir` or have `rootDir/` as a prefix.
 

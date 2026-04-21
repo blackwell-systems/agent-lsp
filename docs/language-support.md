@@ -119,7 +119,8 @@ See [ci-notes.md](./ci-notes.md) for per-language CI quirks.
 
 | Job | Languages | Runner |
 |---|---|---|
-| `multi-lang-core` | Go, TypeScript, Python, Rust, Java, Kotlin | ubuntu-latest |
+| `multi-lang-core` | Go, TypeScript, Python, Rust, Kotlin | ubuntu-latest |
+| `multi-lang-java` | Java | ubuntu-latest (continue-on-error) |
 | `multi-lang-extended` | C, C++, JavaScript, PHP, Ruby, YAML, JSON, Dockerfile, C#, CSS, HTML | ubuntu-latest |
 | `multi-lang-zig` | Zig | ubuntu-latest |
 | `multi-lang-terraform` | Terraform | ubuntu-latest |
@@ -134,7 +135,7 @@ See [ci-notes.md](./ci-notes.md) for per-language CI quirks.
 | `multi-lang-nix` | Nix | ubuntu-latest (continue-on-error) |
 | `multi-lang-dart` | Dart | ubuntu-latest |
 | `multi-lang-mongodb` | MongoDB | ubuntu-latest (continue-on-error) |
-| `speculative-test` | session lifecycle (gopls) | ubuntu-latest |
+| `speculative-test` | Go, TypeScript, Python, Rust, C++, C#, Dart, Java (speculative sessions) | ubuntu-latest |
 
 ---
 

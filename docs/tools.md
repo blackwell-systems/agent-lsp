@@ -111,7 +111,7 @@ operations.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
-| `language_id` | string | no | Language identifier (`typescript`, `javascript`, `go`, `python`, `haskell`, etc.). Defaults to `"plaintext"` when omitted; auto-detected from extension by most analysis tools. |
+| `language_id` | string | no | Language identifier (`typescript`, `javascript`, `go`, `python`, `rust`, etc.). Defaults to `"plaintext"` when omitted; auto-detected from extension by most analysis tools. |
 
 **Example call**
 
@@ -2622,11 +2622,6 @@ Dispatches to a per-language toolchain command based on `language_id`:
 | `python` | `pydoc <symbol>` |
 | `rust` | `cargo doc --open` (offline cache lookup) |
 
-All dispatchers run with a 10-second timeout. When the toolchain command fails,
-`source` is set to `"error"` and `error` contains the stderr. This is a
-structured result, not an MCP error — callers can detect it and fall back to
-`get_info_on_location` (hover).
-
 **Example call**
 
 ```json
@@ -2687,7 +2682,7 @@ of the character immediately after `@@`.
 ```
 
 This positions the cursor at the `D` in `GetDefinition` — equivalent to
-passing the line/column manually, but robust to line number drift.
+passing the line/column manually, but resistant to line number drift.
 
 **Error cases**
 

@@ -4,7 +4,7 @@ agent-lsp ships 20 skills — named workflows that encode correct tool sequences
 multi-step operations happen reliably. This doc is a developer reference: what each
 skill does, when to reach for it, and what it does that raw tool calls miss.
 
-For installation: `cd skills && ./install.sh`. For the individual tools that skills compose, see [docs/tools.md](./tools.md).
+See the [Setup guide](../README.md#setup) for installation instructions. For the individual tools that skills compose, see [docs/tools.md](./tools.md).
 
 ## Quick example
 

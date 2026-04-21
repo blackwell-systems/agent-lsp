@@ -317,9 +317,7 @@ These must hold for every session, for every operation:
 
 ## Implementation Scope
 
-Build the full session model in one pass. There are no delivery tiers — the session API is the foundation from day one.
-
-### Core API (full implementation)
+### Core API
 
 ```
 create_simulation_session(workspace_root, language) → session_id
@@ -633,6 +631,8 @@ Version must increment on each change. Tracked per open document on `SimulationS
 
 ---
 
+<details><summary>Design history: resolved questions</summary>
+
 ## Open Questions
 
 ### Resolved
@@ -666,7 +666,11 @@ Sessions are in-memory only — IDs become invalid on MCP server restart. This i
 
 Dirty is terminal — destroy and reinitialize. No recovery path. Dirty means LSP state is unknown; replaying edits against uncertain base is worse than reinitializing.
 
+</details>
+
 ---
+
+<details><summary>Design history: deferred items</summary>
 
 ## Deferred by Design
 
@@ -698,3 +702,5 @@ These are intentional deferrals with designed seams for future upgrade — not m
 **Revisit triggers:**
 - CI-grade guarantees required at workspace scope
 - Addition of a final validation pass (fresh session post-merge)
+
+</details>
