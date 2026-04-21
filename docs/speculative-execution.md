@@ -1,6 +1,6 @@
 # Speculative Execution for Code
 
-**Status:** Shipped — all 8 tools implemented and CI-tested (`TestSpeculativeSessions` in `test/speculative_test.go`)
+**Status:** Shipped — all 8 tools implemented and CI-tested across 8 languages (`TestSpeculativeSessions` in `test/speculative_test.go`: Go, TypeScript, Python, Rust, C++, C#, Dart, Java)
 **Tools:** `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`
 
 ---
@@ -356,7 +356,11 @@ Cross-file diagnostic propagation behavior by server:
 | gopls | High (re-typechecks importing packages) | 2-5s |
 | tsserver | Good (project-wide) | 1-3s |
 | rust-analyzer | High | 2-4s |
-| Others | Inconsistent | unknown |
+| pyright-langserver | High (project-wide type graph) | 1-3s |
+| clangd | Partial (single TU; cross-TU via rebuild) | 2-5s |
+| csharp-ls | Good (Roslyn workspace model) | 1-4s |
+| dart (analysis server) | High (full program analysis) | 1-3s |
+| jdtls | Good (Eclipse project model) | 3-8s |
 
 ### Chained mutations
 
