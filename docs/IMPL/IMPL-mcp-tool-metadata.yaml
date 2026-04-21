@@ -538,7 +538,7 @@ scaffolds:
         // Used for ToolAnnotations fields that are *bool (DestructiveHint, OpenWorldHint).
         func boolPtr(b bool) *bool { return &b }
       import_path: N/A (same package main)
-      status: pending
+      status: committed
 pre_mortem:
     overall_risk: low
     rows:
