@@ -34,7 +34,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - **Docker build ordering** — release workflow pre-builds and pushes the base image before GoReleaser starts, fixing parallel build race where language images couldn't find the base in the registry.
 - **Leaked agent constraint in `/lsp-generate`** — removed SAW agent brief instruction that leaked into the published SKILL.md.
 - **Install script archive extraction** — `install.sh` and `install.ps1` now handle GoReleaser's nested archive directory structure instead of assuming a flat layout.
-- **`agent-lsp init` Claude Code global path** — option 2 now writes to `~/.claude/.mcp.json` (Claude Code) instead of `claude_desktop_config.json` (Claude Desktop).
+- **`agent-lsp init` Claude Code global path** — option 2 now writes to `~/.claude/.mcp.json` (Claude Code) instead of `claude_desktop_config.json` (Claude Desktop). Menu label updated to match.
+- **`go install` path** — documented command was missing `/cmd/agent-lsp` suffix, causing "not a main package" error.
 
 ## [0.2.1] - 2026-04-20
 
