@@ -243,7 +243,7 @@ First-class cross-repo caller analysis. Given a symbol (file + position) and a l
 - **Nix integration test** — `nil` (Nix language server); fixture at `test/fixtures/nix/flake.nix` (9-line flake with `helper` binding at line 5 col 5, call site at line 7 col 21); `supportsFormatting: false`; dedicated `multi-lang-nix` CI job installing nil binary
 - **Dart integration test** — `dart language-server`; fixture at `test/fixtures/dart/` with `pubspec.yaml` (SDK `>=3.0.0 <4.0.0`), `lib/fixture.dart` (`Greeter` class at line 1 col 7, `greet` method at line 2 col 10), `lib/caller.dart` (imports and calls `Greeter`; `Greeter` at col 13, `greet` at col 11); dedicated `multi-lang-dart` CI job installing Dart SDK via apt; language count updated 26 → 29; see also MongoDB entry below
 
-### Added (2026-04-10) — Language expansion (26 languages)
+### Added (2026-04-09) — Language expansion (26 languages)
 - **SQL integration test** — `sqls` (`go install github.com/sqls-server/sqls@latest`); fixture at `test/fixtures/sql/` with `schema.sql` (CREATE TABLE person + post), `query.sql` (two SELECT statements, 18 lines, calibrated hover/completion/reference positions), `.sqls.yml` (postgresql DSN); `serverArgs: []string{"--config", filepath.Join(fixtureBase, "sql", ".sqls.yml")}` — config path is resolved at test time, not hardcoded; dedicated `multi-lang-sql` CI job with `postgres:16` service container, `pg_isready` health check, `psql` schema load step, and `PGPASSWORD` env for the load command; supportsFormatting/rename/inlayHints all false (sqls does not implement them); language count updated 25 → 26
 - **JSON-RPC string ID support** — `jsonrpcMsg.ID` changed from `*int` to `json.RawMessage`; dispatch now handles both integer and string IDs per JSON-RPC 2.0 spec; `sendResponse` echoes the raw ID bytes verbatim; `sendRequest` marshals integer IDs into RawMessage; fixes compatibility with servers that use string IDs (e.g. `prisma-language-server`)
 
@@ -308,8 +308,6 @@ First-class cross-repo caller analysis. Given a symbol (file + position) and a l
 - **Dry-run preview mode for `rename_symbol`** — `dry_run: true` returns a preview envelope `{ "workspace_edit": {...}, "preview": { "note": "..." } }` without writing to disk; existing behavior unchanged when `dry_run` is omitted or false
 - **Four agent-native skills** — `lsp-safe-edit`, `lsp-edit-export`, `lsp-rename`, `lsp-verify`; compose agent-lsp tools into single-command workflows for safe editing, exported-symbol refactoring, two-phase rename, and full diagnostic+build+test verification
 - **`skills/install.sh`** — executable install script for registering skills with MCP clients
-
-## [Unreleased]
 
 ### Fixed (2026-04-08)
 - **`run_build` and `run_tests` in Go workspaces** — both tools now unconditionally set `GOWORK=off` when running `go build` and `go test`; Go searches upward through parent directories for `go.work` files, and when found, `./...` patterns only match modules listed in the workspace file; setting `GOWORK=off` forces Go to build/test all modules in the directory, matching the tool's intent

@@ -38,7 +38,7 @@ workspace root at runtime.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `root_dir` | string | yes | Absolute path to the workspace root (directory containing `package.json`, `go.mod`, `go.work`, etc.) |
-| `language_id` | string | no | In multi-server mode, selects a specific configured server (e.g. `"go"` targets gopls, `"typescript"` targets tsserver). Without this, all configured servers are started. Use `get_server_capabilities` to diagnose which server is active. |
+| `language_id` | string | no | In multi-server mode, selects a specific configured server (e.g. `"go"` targets gopls, `"typescript"` targets typescript-language-server). Without this, all configured servers are started. Use `get_server_capabilities` to diagnose which server is active. |
 
 **Example call**
 

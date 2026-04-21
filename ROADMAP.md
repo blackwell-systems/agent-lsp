@@ -240,7 +240,7 @@ Each CI job writes `metrics/<language>.json`:
 |------------|-----------------|-------|-------------|-----------------|---------|------------|
 | Go         | gopls           | 1.2s  | 0.9s        | high            | 2.1s    | 1.8s       |
 | Rust       | rust-analyzer   | 2.1s  | 1.4s        | high            | 2.8s    | 2.2s       |
-| TypeScript | tsserver        | 0.8s  | 0.6s        | high            | 1.3s    | 1.1s       |
+| TypeScript | typescript-language-server | 0.8s  | 0.6s        | high            | 1.3s    | 1.1s       |
 | Python     | pyright         | 1.5s  | 1.1s        | high            | 2.4s    | —          |
 ```
 

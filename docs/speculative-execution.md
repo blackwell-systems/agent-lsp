@@ -572,18 +572,26 @@ type SessionExecutor interface {
     Release(session *SimulationSession)
 }
 
-// SerializedExecutor — V1 implementation. Per-server mutex.
+// SerializedExecutor serializes operations per-session using a per-session
+// channel semaphore map. Independent sessions do not block each other.
 type SerializedExecutor struct {
-    mu sync.Mutex
+    mu           sync.Mutex
+    sessionLocks map[string]chan struct{}
 }
 
 func (e *SerializedExecutor) Acquire(ctx context.Context, s *SimulationSession) error {
-    e.mu.Lock()
-    return nil
+    ch := e.lockFor(s)
+    select {
+    case ch <- struct{}{}:
+        return nil
+    case <-ctx.Done():
+        return ctx.Err()
+    }
 }
 
 func (e *SerializedExecutor) Release(s *SimulationSession) {
-    e.mu.Unlock()
+    // drain the per-session semaphore channel
+    <-e.sessionLocks[s.ID]
 }
 ```
 
@@ -633,9 +641,7 @@ Version must increment on each change. Tracked per open document on `SimulationS
 
 <details><summary>Design history: resolved questions</summary>
 
-## Open Questions
-
-### Resolved
+## Design History: Resolved Questions
 - ✅ **Baseline diagnostic timing** — lazy per-file settle. See **Baseline Stability**.
 - ✅ **Session lifecycle** — create / mutate / evaluate / commit / discard / destroy.
 - ✅ **Mutation vs evaluation separation** — `simulate_edit` mutates, `evaluate_session` observes.

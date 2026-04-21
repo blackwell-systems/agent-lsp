@@ -168,7 +168,7 @@ Each new language needs three things:
    - Follow the pattern of existing fixtures (hover target, definition cross-ref, completion context)
 
 3. **CI install step** in the appropriate `.github/workflows/ci.yml` job:
-   - JVM-based (Java, Kotlin) → `multi-lang-core` (Java already set up)
+   - JVM-based: Java → `multi-lang-java`, Kotlin → `multi-lang-core`
    - Lightweight npm/binary → `multi-lang-extended`
    - macOS-only → dedicated job with `runs-on: macos-latest`
    - Heavy/slow startup → dedicated job with `continue-on-error: true`
