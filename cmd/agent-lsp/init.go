@@ -145,7 +145,7 @@ func resolveTargetPath(choice int, customPath string) (string, error) {
 	case 1:
 		return filepath.Join(cwd, ".mcp.json"), nil
 	case 2:
-		return filepath.Join(homeDir, ".claude", "claude_desktop_config.json"), nil
+		return filepath.Join(homeDir, ".claude", ".mcp.json"), nil
 	case 3:
 		switch runtime.GOOS {
 		case "darwin":

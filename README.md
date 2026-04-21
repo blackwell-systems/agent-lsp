@@ -227,10 +227,10 @@ Each arg is `language:server-binary` (comma-separate server args).
 
 ```bash
 git clone https://github.com/blackwell-systems/agent-lsp.git /tmp/agent-lsp-skills
-cd /tmp/agent-lsp-skills/skills && ./install.sh
+cd /tmp/agent-lsp-skills/skills && ./install.sh --copy
 ```
 
-Skills are prompt files installed into your AI tool's configuration — they don't require the full repo.
+Skills are prompt files copied into your AI tool's configuration — `--copy` means the clone can be safely deleted afterward.
 
 Skills are multi-tool workflows that encode reliable procedures — blast-radius check before edit, speculative preview before write, test run after change. See [docs/skills.md](./docs/skills.md) for the full list.
 

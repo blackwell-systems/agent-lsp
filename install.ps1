@@ -59,9 +59,15 @@ try {
     Write-Host "Extracting..."
     Expand-Archive -Path $ZipPath -DestinationPath $TmpDir -Force
 
+    # Locate binary — GoReleaser may nest it in a subdirectory
+    $BinaryPath = Get-ChildItem -Path $TmpDir -Recurse -Filter $Binary | Select-Object -First 1
+    if (-not $BinaryPath) {
+        throw "Could not find $Binary in downloaded archive"
+    }
+
     # Install
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-    Copy-Item -Path (Join-Path $TmpDir $Binary) -Destination (Join-Path $InstallDir $Binary) -Force
+    Copy-Item -Path $BinaryPath.FullName -Destination (Join-Path $InstallDir $Binary) -Force
 } finally {
     Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
 }

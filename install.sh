@@ -51,13 +51,21 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 curl -fsSL "$ASSET_URL" -o "${TMP_DIR}/agent-lsp.tar.gz"
 tar -xzf "${TMP_DIR}/agent-lsp.tar.gz" -C "$TMP_DIR"
 
+# Locate binary — GoReleaser may nest it in a subdirectory
+BINARY_PATH=$(find "$TMP_DIR" -name "$BINARY" -type f | head -1)
+if [ -z "$BINARY_PATH" ]; then
+  echo "Error: could not find ${BINARY} in downloaded archive" >&2
+  exit 1
+fi
+
 # Install binary
 if [ -w "$INSTALL_DIR" ]; then
-  mv "${TMP_DIR}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+  mv "$BINARY_PATH" "${INSTALL_DIR}/${BINARY}"
+  chmod +x "${INSTALL_DIR}/${BINARY}"
 else
-  sudo mv "${TMP_DIR}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+  sudo mv "$BINARY_PATH" "${INSTALL_DIR}/${BINARY}"
+  sudo chmod +x "${INSTALL_DIR}/${BINARY}"
 fi
-chmod +x "${INSTALL_DIR}/${BINARY}"
 
 # Verify
 VERSION=$("${INSTALL_DIR}/${BINARY}" --version 2>/dev/null || echo "unknown")
