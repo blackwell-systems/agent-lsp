@@ -7,6 +7,17 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **`ready_timeout_seconds` on `start_lsp`** — optional parameter that blocks until all `$/progress` workspace-indexing tokens complete before returning, up to the specified timeout. Replaces fixed post-initialize sleeps for servers like jdtls that index asynchronously after `initialize`. Fires as soon as indexing completes rather than always waiting the full timeout. Also exports `WaitForWorkspaceReadyTimeout` on `LSPClient` for callers needing a configurable timeout beyond the default 60s cap.
+- **Error path integration tests** (`test/error_paths_test.go`) — 11 subtests covering deliberately bad input across `go_to_definition`, `get_diagnostics`, `simulate_edit`, `simulate_edit_atomic`, `get_references`, and `rename_symbol`. Asserts well-formed error responses, never nil results or crashes, without asserting specific message text.
+- **Cross-language consistency tests** (`test/consistency_test.go`) — parallel structural shape validation across Go, TypeScript, Python, and Rust for `get_document_symbols`, `go_to_definition`, `get_diagnostics`, and `get_info_on_location`. Verifies response shape contracts hold across all language servers.
+- **Dedicated `multi-lang-java` CI job** — jdtls isolated to its own runner to avoid OOM-induced SIGTERM when sharing memory with other language servers. Runs with `continue-on-error: true`, `-Xmx2G`, and a 15-minute timeout. `multi-lang-core` no longer installs jdtls and drops from 45m to 30m timeout.
+
+### Fixed
+
+- **jdtls `JAVA_HOME` on Linux CI** — `javaHome` in the Java `langConfig` was hardcoded to a macOS Homebrew path, causing jdtls to exit immediately on Linux runners. Now reads `JAVA_HOME` from the environment, resolving correctly on both platforms.
+- **TypeScript speculative test `discard_path` net_delta** — inserting a comment at line 1 of `example.ts` shifted 3 pre-existing error positions, producing a false-positive `net_delta=3`. Switched `safeEditFile` to `consumer.ts` (no pre-existing errors) and added a `get_diagnostics` flush after opening the file to ensure baseline is captured against steady-state diagnostics.
+- **Python speculative chain test** — chain test hardcoded `// chain step N` but `//` is floor division in Python. Now uses `lang.safeEditText` (language-appropriate comment syntax).
+
 - **MCP tool annotations** — all 50 tools now declare `ToolAnnotations` with `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, and `OpenWorldHint`. MCP clients can auto-approve read-only tools (~30 of 50) without human confirmation.
 - **JSON Schema parameter descriptions** — 171 `jsonschema` struct tags across all Args structs. Schema description coverage goes from 0% to 100%. Agents see parameter semantics (1-indexed positions, valid values, defaults) in the tool schema itself.
 - **Speculative session tests expanded to 8 languages** — `TestSpeculativeSessions` is now table-driven and covers Go (gopls), TypeScript (typescript-language-server), Python (pyright), Rust (rust-analyzer), C++ (clangd), C# (csharp-ls), Dart (dart analysis server), and Java (jdtls). Each language runs as a parallel subtest with its own MCP process. The `error_detection` subtest verifies `net_delta > 0` for a per-language type-breaking edit. Java uses a 300s extended timeout to accommodate jdtls JVM startup. CI `speculative-test` job updated to install all required LSP servers; timeout bumped to 20m.

@@ -4,7 +4,7 @@ Implementation details for contributors and maintainers about the language serve
 
 ## Per-language quirks
 
-**Java (jdtls):** Runs in a dedicated `multi-lang-java` job with `continue-on-error: true` and a 15-minute timeout. Isolated from other language servers to avoid OOM kills — jdtls under memory contention with other servers receives SIGTERM (exit status 15) from the runner. The dedicated job allocates `-Xmx2G` and the full runner memory budget. Tier 2 tools that require workspace indexing (go_to_definition, references, completions, format, semantic tokens, signature_help) need the full 240s initWait before they return results.
+**Java (jdtls):** Runs in a dedicated `multi-lang-java` job with `continue-on-error: true` and a 15-minute timeout. Isolated from other language servers to avoid OOM kills — jdtls under memory contention with other servers receives SIGTERM (exit status 15) from the runner. The dedicated job allocates `-Xmx2G` and the full runner memory budget. Uses `ready_timeout_seconds: 240` on `start_lsp` to block on `$/progress` completion rather than a fixed sleep — unblocks as soon as Maven workspace indexing finishes (typically 60–120s). Tier 2 tools that require workspace indexing (go_to_definition, references, completions, format, semantic tokens, signature_help) return results only after the index is complete.
 
 **Scala (metals):** Runs in a separate CI job with `continue-on-error: true` and a 30-minute timeout. metals requires sbt compilation on first start; results are informational.
 
@@ -38,6 +38,18 @@ Implementation details for contributors and maintainers about the language serve
 **Java quirk:** jdtls JVM cold-start requires a 120s `initWait` and a 300s per-language timeout. The CI job timeout is set to 20m. The jdtls workspace data dir (`/tmp/jdtls-workspace-speculative-test`) is separate from the one used by `multi-lang-core` (`/tmp/jdtls-workspace-lsp-mcp-test`) to prevent state collisions if both jobs run on the same runner.
 
 **C++ quirk:** clangd provides single translation-unit (TU) diagnostics only. Cross-file propagation requires a rebuild step not available in the session model. `error_detection` is still reliable for intra-file type errors.
+
+## Test file inventory
+
+| File | Job | What it tests |
+|---|---|---|
+| `test/multi_lang_test.go` | `multi-lang-core`, `multi-lang-extended`, + per-language jobs | Tier 1 + 34 Tier 2 tools across 30 language servers |
+| `test/speculative_test.go` | `speculative-test` | All 8 simulation tools across 8 languages in parallel |
+| `test/error_paths_test.go` | `unit-and-smoke` | 11 bad-input subtests (out-of-bounds positions, nonexistent files, invalid session IDs); asserts well-formed errors, not crashes |
+| `test/consistency_test.go` | `multi-lang-core` | Structural shape validation for 4 tools across Go, TypeScript, Python, Rust in parallel |
+| `test/build_tools_test.go` | `unit-and-smoke` | `run_build`, `run_tests`, `get_tests_for_file` |
+| `test/documentation_test.go` | `unit-and-smoke` | `get_symbol_documentation` |
+| `test/binary_test.go` | `unit-and-smoke` | Binary smoke tests (startup, missing args, help) |
 
 ## Tool-specific notes
 
