@@ -12,88 +12,88 @@ import (
 // Workspace/lifecycle tool arg types.
 
 type StartLspArgs struct {
-	RootDir    string `json:"root_dir" jsonschema:"description=Workspace root directory containing the project (e.g. directory with go.mod, package.json)"`
-	LanguageID string `json:"language_id,omitempty" jsonschema:"description=Language server to start (e.g. go, typescript, rust). Optional; auto-detected"`
+	RootDir    string `json:"root_dir" jsonschema:"Workspace root directory containing the project (e.g. directory with go.mod, package.json)"`
+	LanguageID string `json:"language_id,omitempty" jsonschema:"Language server to start (e.g. go, typescript, rust). Optional; auto-detected"`
 }
 
 type RestartLspArgs struct {
-	RootDir string `json:"root_dir,omitempty" jsonschema:"description=Optional new workspace root. If omitted, restarts with current root"`
+	RootDir string `json:"root_dir,omitempty" jsonschema:"Optional new workspace root. If omitted, restarts with current root"`
 }
 
 type WorkspaceFolderArgs struct {
-	Path string `json:"path" jsonschema:"description=Absolute path to the workspace folder to add/remove"`
+	Path string `json:"path" jsonschema:"Absolute path to the workspace folder to add/remove"`
 }
 
 type OpenDocumentArgs struct {
-	FilePath   string `json:"file_path" jsonschema:"description=Absolute path to the file to open in the LSP server"`
+	FilePath   string `json:"file_path" jsonschema:"Absolute path to the file to open in the LSP server"`
 	LanguageID string `json:"language_id,omitempty"`
-	Text       string `json:"text,omitempty" jsonschema:"description=Optional file content override. If omitted, reads from disk"`
+	Text       string `json:"text,omitempty" jsonschema:"Optional file content override. If omitted, reads from disk"`
 }
 
 type CloseDocumentArgs struct {
-	FilePath string `json:"file_path" jsonschema:"description=Absolute path to the file to close"`
+	FilePath string `json:"file_path" jsonschema:"Absolute path to the file to close"`
 }
 
 type GetDiagnosticsArgs struct {
-	FilePath string `json:"file_path,omitempty" jsonschema:"description=File path to get diagnostics for. If omitted, returns diagnostics for all open files"`
+	FilePath string `json:"file_path,omitempty" jsonschema:"File path to get diagnostics for. If omitted, returns diagnostics for all open files"`
 }
 
 type ApplyEditArgs struct {
-	Edit     map[string]interface{} `json:"workspace_edit,omitempty" jsonschema:"description=WorkspaceEdit object (as returned by rename_symbol or format_document)"`
-	FilePath string                 `json:"file_path,omitempty" jsonschema:"description=File path for text-match mode"`
-	OldText  string                 `json:"old_text,omitempty" jsonschema:"description=Text to find and replace (text-match mode)"`
-	NewText  string                 `json:"new_text,omitempty" jsonschema:"description=Replacement text (text-match mode)"`
+	Edit     map[string]interface{} `json:"workspace_edit,omitempty" jsonschema:"WorkspaceEdit object (as returned by rename_symbol or format_document)"`
+	FilePath string                 `json:"file_path,omitempty" jsonschema:"File path for text-match mode"`
+	OldText  string                 `json:"old_text,omitempty" jsonschema:"Text to find and replace (text-match mode)"`
+	NewText  string                 `json:"new_text,omitempty" jsonschema:"Replacement text (text-match mode)"`
 }
 
 type ExecuteCommandArgs struct {
-	Command   string                   `json:"command" jsonschema:"description=LSP command identifier (from code action's command field)"`
-	Arguments []map[string]interface{} `json:"arguments,omitempty" jsonschema:"description=Command arguments as array of JSON objects"`
+	Command   string                   `json:"command" jsonschema:"LSP command identifier (from code action's command field)"`
+	Arguments []map[string]interface{} `json:"arguments,omitempty" jsonschema:"Command arguments as array of JSON objects"`
 }
 
 type DidChangeWatchedFilesArgs struct {
-	Changes []map[string]interface{} `json:"changes" jsonschema:"description=Array of file change events: [{uri\\, type}] where type is 1=created\\, 2=changed\\, 3=deleted"`
+	Changes []map[string]interface{} `json:"changes" jsonschema:"Array of file change events: [{uri\\, type}] where type is 1=created\\, 2=changed\\, 3=deleted"`
 }
 
 type SetLogLevelArgs struct {
-	Level string `json:"level" jsonschema:"description=Log level: emergency\\, alert\\, critical\\, error\\, warning\\, notice\\, info\\, or debug"`
+	Level string `json:"level" jsonschema:"Log level: emergency\\, alert\\, critical\\, error\\, warning\\, notice\\, info\\, or debug"`
 }
 
 type FormatDocumentArgs struct {
-	FilePath     string `json:"file_path" jsonschema:"description=Absolute path to the file to format"`
+	FilePath     string `json:"file_path" jsonschema:"Absolute path to the file to format"`
 	LanguageID   string `json:"language_id,omitempty"`
-	TabSize      int    `json:"tab_size,omitempty" jsonschema:"description=Tab size in spaces. Default: 4"`
-	InsertSpaces *bool  `json:"insert_spaces,omitempty" jsonschema:"description=Use spaces instead of tabs. Default: true"`
+	TabSize      int    `json:"tab_size,omitempty" jsonschema:"Tab size in spaces. Default: 4"`
+	InsertSpaces *bool  `json:"insert_spaces,omitempty" jsonschema:"Use spaces instead of tabs. Default: true"`
 }
 
 type FormatRangeArgs struct {
-	FilePath    string `json:"file_path" jsonschema:"description=Absolute path to the file to format"`
+	FilePath    string `json:"file_path" jsonschema:"Absolute path to the file to format"`
 	LanguageID  string `json:"language_id,omitempty"`
-	StartLine   int    `json:"start_line" jsonschema:"description=Start line of the range to format (0-indexed)"`
-	StartColumn int    `json:"start_column" jsonschema:"description=Start column of the range to format (0-indexed)"`
-	EndLine     int    `json:"end_line" jsonschema:"description=End line of the range to format (0-indexed)"`
-	EndColumn   int    `json:"end_column" jsonschema:"description=End column of the range to format (0-indexed)"`
-	TabSize     int    `json:"tab_size,omitempty" jsonschema:"description=Tab size in spaces. Default: 4"`
-	InsertSpaces *bool `json:"insert_spaces,omitempty" jsonschema:"description=Use spaces instead of tabs. Default: true"`
+	StartLine   int    `json:"start_line" jsonschema:"Start line of the range to format (0-indexed)"`
+	StartColumn int    `json:"start_column" jsonschema:"Start column of the range to format (0-indexed)"`
+	EndLine     int    `json:"end_line" jsonschema:"End line of the range to format (0-indexed)"`
+	EndColumn   int    `json:"end_column" jsonschema:"End column of the range to format (0-indexed)"`
+	TabSize     int    `json:"tab_size,omitempty" jsonschema:"Tab size in spaces. Default: 4"`
+	InsertSpaces *bool `json:"insert_spaces,omitempty" jsonschema:"Use spaces instead of tabs. Default: true"`
 }
 
 type DetectLspServersArgs struct {
-	WorkspaceDir string `json:"workspace_dir" jsonschema:"description=Directory to scan for source languages and LSP server binaries"`
+	WorkspaceDir string `json:"workspace_dir" jsonschema:"Directory to scan for source languages and LSP server binaries"`
 }
 
 type RunBuildArgs struct {
-	WorkspaceDir string `json:"workspace_dir" jsonschema:"description=Workspace directory to build"`
-	Path         string `json:"path,omitempty" jsonschema:"description=Optional sub-path to narrow build scope"`
-	Language     string `json:"language,omitempty" jsonschema:"description=Optional language override (go\\, rust\\, typescript\\, python)"`
+	WorkspaceDir string `json:"workspace_dir" jsonschema:"Workspace directory to build"`
+	Path         string `json:"path,omitempty" jsonschema:"Optional sub-path to narrow build scope"`
+	Language     string `json:"language,omitempty" jsonschema:"Optional language override (go\\, rust\\, typescript\\, python)"`
 }
 
 type RunTestsArgs struct {
-	WorkspaceDir string `json:"workspace_dir" jsonschema:"description=Workspace directory to test"`
-	Path         string `json:"path,omitempty" jsonschema:"description=Optional sub-path to narrow test scope"`
-	Language     string `json:"language,omitempty" jsonschema:"description=Optional language override (go\\, rust\\, typescript\\, python)"`
+	WorkspaceDir string `json:"workspace_dir" jsonschema:"Workspace directory to test"`
+	Path         string `json:"path,omitempty" jsonschema:"Optional sub-path to narrow test scope"`
+	Language     string `json:"language,omitempty" jsonschema:"Optional language override (go\\, rust\\, typescript\\, python)"`
 }
 
 type GetTestsForFileArgs struct {
-	FilePath string `json:"file_path" jsonschema:"description=Source file path to find associated test files for"`
+	FilePath string `json:"file_path" jsonschema:"Source file path to find associated test files for"`
 }
 
 func registerWorkspaceTools(d toolDeps) {

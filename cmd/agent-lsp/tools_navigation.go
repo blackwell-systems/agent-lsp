@@ -10,79 +10,79 @@ import (
 // Navigation tool arg types.
 
 type GoToDefinitionArgs struct {
-	FilePath        string `json:"file_path" jsonschema:"description=Absolute path to the source file"`
-	LanguageID      string `json:"language_id,omitempty" jsonschema:"description=Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
-	Line            int    `json:"line" jsonschema:"description=1-indexed line number in the file"`
-	Column          int    `json:"column" jsonschema:"description=1-indexed column (character offset) in the line"`
-	PositionPattern string `json:"position_pattern,omitempty" jsonschema:"description=Alternative to line/column: use @@pattern@@ syntax to match text near the target position"`
+	FilePath        string `json:"file_path" jsonschema:"Absolute path to the source file"`
+	LanguageID      string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
+	Line            int    `json:"line" jsonschema:"1-indexed line number in the file"`
+	Column          int    `json:"column" jsonschema:"1-indexed column (character offset) in the line"`
+	PositionPattern string `json:"position_pattern,omitempty" jsonschema:"Alternative to line/column: use @@pattern@@ syntax to match text near the target position"`
 }
 
 type GoToTypeDefinitionArgs struct {
-	FilePath   string `json:"file_path" jsonschema:"description=Absolute path to the source file"`
-	LanguageID string `json:"language_id,omitempty" jsonschema:"description=Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
-	Line       int    `json:"line" jsonschema:"description=1-indexed line number in the file"`
-	Column     int    `json:"column" jsonschema:"description=1-indexed column (character offset) in the line"`
+	FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
+	LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
+	Line       int    `json:"line" jsonschema:"1-indexed line number in the file"`
+	Column     int    `json:"column" jsonschema:"1-indexed column (character offset) in the line"`
 }
 
 type GoToImplementationArgs struct {
-	FilePath   string `json:"file_path" jsonschema:"description=Absolute path to the source file"`
-	LanguageID string `json:"language_id,omitempty" jsonschema:"description=Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
-	Line       int    `json:"line" jsonschema:"description=1-indexed line number in the file"`
-	Column     int    `json:"column" jsonschema:"description=1-indexed column (character offset) in the line"`
+	FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
+	LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
+	Line       int    `json:"line" jsonschema:"1-indexed line number in the file"`
+	Column     int    `json:"column" jsonschema:"1-indexed column (character offset) in the line"`
 }
 
 type GoToDeclarationArgs struct {
-	FilePath   string `json:"file_path" jsonschema:"description=Absolute path to the source file"`
-	LanguageID string `json:"language_id,omitempty" jsonschema:"description=Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
-	Line       int    `json:"line" jsonschema:"description=1-indexed line number in the file"`
-	Column     int    `json:"column" jsonschema:"description=1-indexed column (character offset) in the line"`
+	FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
+	LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
+	Line       int    `json:"line" jsonschema:"1-indexed line number in the file"`
+	Column     int    `json:"column" jsonschema:"1-indexed column (character offset) in the line"`
 }
 
 type RenameSymbolArgs struct {
-	FilePath        string   `json:"file_path" jsonschema:"description=Absolute path to the source file"`
-	LanguageID      string   `json:"language_id,omitempty" jsonschema:"description=Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
-	Line            int      `json:"line,omitempty" jsonschema:"description=1-indexed line number in the file"`
-	Column          int      `json:"column,omitempty" jsonschema:"description=1-indexed column (character offset) in the line"`
-	NewName         string   `json:"new_name" jsonschema:"description=New name for the symbol"`
-	PositionPattern string   `json:"position_pattern,omitempty" jsonschema:"description=Alternative to line/column: use @@pattern@@ syntax to match text near the target position"`
-	DryRun          bool     `json:"dry_run,omitempty" jsonschema:"description=If true\\, return the edit without applying. Always true for this read-only tool"`
-	ExcludeGlobs    []string `json:"exclude_globs,omitempty" jsonschema:"description=Glob patterns for files to exclude from rename (e.g. vendor/**\\, *_gen.go)"`
+	FilePath        string   `json:"file_path" jsonschema:"Absolute path to the source file"`
+	LanguageID      string   `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
+	Line            int      `json:"line,omitempty" jsonschema:"1-indexed line number in the file"`
+	Column          int      `json:"column,omitempty" jsonschema:"1-indexed column (character offset) in the line"`
+	NewName         string   `json:"new_name" jsonschema:"New name for the symbol"`
+	PositionPattern string   `json:"position_pattern,omitempty" jsonschema:"Alternative to line/column: use @@pattern@@ syntax to match text near the target position"`
+	DryRun          bool     `json:"dry_run,omitempty" jsonschema:"If true\\, return the edit without applying. Always true for this read-only tool"`
+	ExcludeGlobs    []string `json:"exclude_globs,omitempty" jsonschema:"Glob patterns for files to exclude from rename (e.g. vendor/**\\, *_gen.go)"`
 }
 
 type PrepareRenameArgs struct {
-	FilePath   string `json:"file_path" jsonschema:"description=Absolute path to the source file"`
-	LanguageID string `json:"language_id,omitempty" jsonschema:"description=Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
-	Line       int    `json:"line" jsonschema:"description=1-indexed line number in the file"`
-	Column     int    `json:"column" jsonschema:"description=1-indexed column (character offset) in the line"`
+	FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
+	LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
+	Line       int    `json:"line" jsonschema:"1-indexed line number in the file"`
+	Column     int    `json:"column" jsonschema:"1-indexed column (character offset) in the line"`
 }
 
 type GoToSymbolArgs struct {
-	SymbolPath    string `json:"symbol_path" jsonschema:"description=Dot-notation symbol path (e.g. MyStruct.MyMethod\\, http.Handler)"`
-	WorkspaceRoot string `json:"workspace_root,omitempty" jsonschema:"description=Workspace root directory for symbol search. Optional; uses current workspace"`
-	Language      string `json:"language,omitempty" jsonschema:"description=Language filter for symbol search. Optional"`
+	SymbolPath    string `json:"symbol_path" jsonschema:"Dot-notation symbol path (e.g. MyStruct.MyMethod\\, http.Handler)"`
+	WorkspaceRoot string `json:"workspace_root,omitempty" jsonschema:"Workspace root directory for symbol search. Optional; uses current workspace"`
+	Language      string `json:"language,omitempty" jsonschema:"Language filter for symbol search. Optional"`
 }
 
 type GetDocumentHighlightsArgs struct {
-	FilePath   string `json:"file_path" jsonschema:"description=Absolute path to the source file"`
-	LanguageID string `json:"language_id,omitempty" jsonschema:"description=Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
-	Line       int    `json:"line" jsonschema:"description=1-indexed line number in the file"`
-	Column     int    `json:"column" jsonschema:"description=1-indexed column (character offset) in the line"`
+	FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
+	LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
+	Line       int    `json:"line" jsonschema:"1-indexed line number in the file"`
+	Column     int    `json:"column" jsonschema:"1-indexed column (character offset) in the line"`
 }
 
 type CallHierarchyArgs struct {
-	FilePath   string `json:"file_path" jsonschema:"description=Absolute path to the source file"`
-	LanguageID string `json:"language_id,omitempty" jsonschema:"description=Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
-	Line       int    `json:"line" jsonschema:"description=1-indexed line number in the file"`
-	Column     int    `json:"column" jsonschema:"description=1-indexed column (character offset) in the line"`
-	Direction  string `json:"direction,omitempty" jsonschema:"description=Direction: incoming\\, outgoing\\, or both (default: both)"`
+	FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
+	LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
+	Line       int    `json:"line" jsonschema:"1-indexed line number in the file"`
+	Column     int    `json:"column" jsonschema:"1-indexed column (character offset) in the line"`
+	Direction  string `json:"direction,omitempty" jsonschema:"Direction: incoming\\, outgoing\\, or both (default: both)"`
 }
 
 type TypeHierarchyArgs struct {
-	FilePath   string `json:"file_path" jsonschema:"description=Absolute path to the source file"`
-	LanguageID string `json:"language_id,omitempty" jsonschema:"description=Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
-	Line       int    `json:"line" jsonschema:"description=1-indexed line number in the file"`
-	Column     int    `json:"column" jsonschema:"description=1-indexed column (character offset) in the line"`
-	Direction  string `json:"direction,omitempty" jsonschema:"description=Direction: incoming\\, outgoing\\, or both (default: both)"`
+	FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
+	LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
+	Line       int    `json:"line" jsonschema:"1-indexed line number in the file"`
+	Column     int    `json:"column" jsonschema:"1-indexed column (character offset) in the line"`
+	Direction  string `json:"direction,omitempty" jsonschema:"Direction: incoming\\, outgoing\\, or both (default: both)"`
 }
 
 func registerNavigationTools(d toolDeps) {

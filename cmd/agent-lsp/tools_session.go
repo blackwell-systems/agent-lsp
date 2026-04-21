@@ -10,58 +10,58 @@ import (
 // Simulation/session tool arg types.
 
 type CreateSimulationSessionArgs struct {
-	WorkspaceRoot string `json:"workspace_root" jsonschema:"description=Workspace root directory for the simulation session"`
-	Language      string `json:"language" jsonschema:"description=Language identifier for the session (e.g. go, typescript)"`
+	WorkspaceRoot string `json:"workspace_root" jsonschema:"Workspace root directory for the simulation session"`
+	Language      string `json:"language" jsonschema:"Language identifier for the session (e.g. go, typescript)"`
 }
 
 type SimulateEditArgs struct {
-	SessionID   string `json:"session_id" jsonschema:"description=Session identifier returned by create_simulation_session"`
-	FilePath    string `json:"file_path" jsonschema:"description=Absolute path to the file to edit within the session"`
-	StartLine   int    `json:"start_line" jsonschema:"description=1-indexed start line of the range to replace"`
-	StartColumn int    `json:"start_column" jsonschema:"description=1-indexed start column of the range to replace"`
-	EndLine     int    `json:"end_line" jsonschema:"description=1-indexed end line of the range to replace"`
-	EndColumn   int    `json:"end_column" jsonschema:"description=1-indexed end column of the range to replace"`
-	NewText     string `json:"new_text" jsonschema:"description=Replacement text for the specified range"`
+	SessionID   string `json:"session_id" jsonschema:"Session identifier returned by create_simulation_session"`
+	FilePath    string `json:"file_path" jsonschema:"Absolute path to the file to edit within the session"`
+	StartLine   int    `json:"start_line" jsonschema:"1-indexed start line of the range to replace"`
+	StartColumn int    `json:"start_column" jsonschema:"1-indexed start column of the range to replace"`
+	EndLine     int    `json:"end_line" jsonschema:"1-indexed end line of the range to replace"`
+	EndColumn   int    `json:"end_column" jsonschema:"1-indexed end column of the range to replace"`
+	NewText     string `json:"new_text" jsonschema:"Replacement text for the specified range"`
 }
 
 type EvaluateSessionArgs struct {
-	SessionID string `json:"session_id" jsonschema:"description=Session identifier returned by create_simulation_session"`
-	Scope     string `json:"scope,omitempty" jsonschema:"description=Evaluation scope: file (fast, single file) or workspace (full, all files). Default: file"`
-	TimeoutMs int    `json:"timeout_ms,omitempty" jsonschema:"description=Timeout in milliseconds for LSP diagnostics collection. Default: 5000"`
+	SessionID string `json:"session_id" jsonschema:"Session identifier returned by create_simulation_session"`
+	Scope     string `json:"scope,omitempty" jsonschema:"Evaluation scope: file (fast, single file) or workspace (full, all files). Default: file"`
+	TimeoutMs int    `json:"timeout_ms,omitempty" jsonschema:"Timeout in milliseconds for LSP diagnostics collection. Default: 5000"`
 }
 
 type SimulateChainArgs struct {
-	SessionID string                   `json:"session_id" jsonschema:"description=Session identifier returned by create_simulation_session"`
-	Edits     []map[string]interface{} `json:"edits" jsonschema:"description=Array of edit objects, each with file_path, start_line, start_column, end_line, end_column, new_text"`
-	TimeoutMs int                      `json:"timeout_ms,omitempty" jsonschema:"description=Timeout in milliseconds for LSP diagnostics collection. Default: 5000"`
+	SessionID string                   `json:"session_id" jsonschema:"Session identifier returned by create_simulation_session"`
+	Edits     []map[string]interface{} `json:"edits" jsonschema:"Array of edit objects, each with file_path, start_line, start_column, end_line, end_column, new_text"`
+	TimeoutMs int                      `json:"timeout_ms,omitempty" jsonschema:"Timeout in milliseconds for LSP diagnostics collection. Default: 5000"`
 }
 
 type CommitSessionArgs struct {
-	SessionID string `json:"session_id" jsonschema:"description=Session identifier returned by create_simulation_session"`
-	Target    string `json:"target,omitempty" jsonschema:"description=Commit target: disk (write files) or patch (return unified diff). Default: patch"`
-	Apply     bool   `json:"apply,omitempty" jsonschema:"description=If true, write changes to disk and notify LSP. If false, return diff only"`
+	SessionID string `json:"session_id" jsonschema:"Session identifier returned by create_simulation_session"`
+	Target    string `json:"target,omitempty" jsonschema:"Commit target: disk (write files) or patch (return unified diff). Default: patch"`
+	Apply     bool   `json:"apply,omitempty" jsonschema:"If true, write changes to disk and notify LSP. If false, return diff only"`
 }
 
 type DiscardSessionArgs struct {
-	SessionID string `json:"session_id" jsonschema:"description=Session identifier returned by create_simulation_session"`
+	SessionID string `json:"session_id" jsonschema:"Session identifier returned by create_simulation_session"`
 }
 
 type DestroySessionArgs struct {
-	SessionID string `json:"session_id" jsonschema:"description=Session identifier returned by create_simulation_session"`
+	SessionID string `json:"session_id" jsonschema:"Session identifier returned by create_simulation_session"`
 }
 
 type SimulateEditAtomicArgs struct {
-	SessionID     string `json:"session_id,omitempty" jsonschema:"description=Session identifier returned by create_simulation_session"`
-	WorkspaceRoot string `json:"workspace_root,omitempty" jsonschema:"description=Workspace root directory for the simulation session"`
-	Language      string `json:"language,omitempty" jsonschema:"description=Language identifier for the session (e.g. go, typescript)"`
-	FilePath      string `json:"file_path" jsonschema:"description=Absolute path to the file to edit within the session"`
-	StartLine     int    `json:"start_line" jsonschema:"description=1-indexed start line of the range to replace"`
-	StartColumn   int    `json:"start_column" jsonschema:"description=1-indexed start column of the range to replace"`
-	EndLine       int    `json:"end_line" jsonschema:"description=1-indexed end line of the range to replace"`
-	EndColumn     int    `json:"end_column" jsonschema:"description=1-indexed end column of the range to replace"`
-	NewText       string `json:"new_text" jsonschema:"description=Replacement text for the specified range"`
-	Scope         string `json:"scope,omitempty" jsonschema:"description=Evaluation scope: file (fast, single file) or workspace (full, all files). Default: file"`
-	TimeoutMs     int    `json:"timeout_ms,omitempty" jsonschema:"description=Timeout in milliseconds for LSP diagnostics collection. Default: 5000"`
+	SessionID     string `json:"session_id,omitempty" jsonschema:"Session identifier returned by create_simulation_session"`
+	WorkspaceRoot string `json:"workspace_root,omitempty" jsonschema:"Workspace root directory for the simulation session"`
+	Language      string `json:"language,omitempty" jsonschema:"Language identifier for the session (e.g. go, typescript)"`
+	FilePath      string `json:"file_path" jsonschema:"Absolute path to the file to edit within the session"`
+	StartLine     int    `json:"start_line" jsonschema:"1-indexed start line of the range to replace"`
+	StartColumn   int    `json:"start_column" jsonschema:"1-indexed start column of the range to replace"`
+	EndLine       int    `json:"end_line" jsonschema:"1-indexed end line of the range to replace"`
+	EndColumn     int    `json:"end_column" jsonschema:"1-indexed end column of the range to replace"`
+	NewText       string `json:"new_text" jsonschema:"Replacement text for the specified range"`
+	Scope         string `json:"scope,omitempty" jsonschema:"Evaluation scope: file (fast, single file) or workspace (full, all files). Default: file"`
+	TimeoutMs     int    `json:"timeout_ms,omitempty" jsonschema:"Timeout in milliseconds for LSP diagnostics collection. Default: 5000"`
 }
 
 func registerSessionTools(d toolDeps) {
