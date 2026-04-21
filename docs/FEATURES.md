@@ -1,6 +1,6 @@
 # agent-lsp Features Dump
 
-Comprehensive feature inventory. Covers all tools, skills, and capabilities with CI verification status.
+Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. The 49→50 CI count reflects `set_log_level` verified in a separate test path.
 
 ---
 
