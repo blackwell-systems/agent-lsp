@@ -1,6 +1,9 @@
 package main_test
 
-import "path/filepath"
+import (
+	"os"
+	"path/filepath"
+)
 
 func buildLanguageConfigs(fixtureBase string) []langConfig {
 	return []langConfig{
@@ -133,7 +136,7 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			id:         "java",
 			binary:     "jdtls",
 			serverArgs: []string{"-data", "/tmp/jdtls-workspace-lsp-mcp-test"},
-			javaHome:   "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+			javaHome:   os.Getenv("JAVA_HOME"),
 			fixture:    filepath.Join(fixtureBase, "java"),
 			file: filepath.Join(fixtureBase, "java", "src", "main", "java", "com", "example",
 				"Person.java"),
