@@ -100,12 +100,23 @@ jobs:
 
       - name: Install jdtls
         run: |
-          wget -q "https://download.eclipse.org/jdtls/snapshots/jdt-language-server-latest.tar.gz" -O /tmp/jdtls.tar.gz
-          sudo mkdir -p /opt/jdtls /tmp/jdtls-data
+          # Resolve the latest snapshot URL via redirect and download with error checking
+          JDTLS_URL="https://download.eclipse.org/jdtls/snapshots/jdt-language-server-latest.tar.gz"
+          wget --no-verbose "$JDTLS_URL" -O /tmp/jdtls.tar.gz
+          # Verify the download is a valid gzip file before extracting
+          file /tmp/jdtls.tar.gz
+          sudo mkdir -p /opt/jdtls /tmp/jdtls-workspace-lsp-mcp-test
           sudo tar -xzf /tmp/jdtls.tar.gz -C /opt/jdtls
-          LAUNCHER=$(ls /opt/jdtls/plugins/org.eclipse.equinox.launcher_*.jar | head -1)
+          LAUNCHER=$(ls /opt/jdtls/plugins/org.eclipse.equinox.launcher_*.jar 2>/dev/null | head -1)
+          if [ -z "$LAUNCHER" ]; then
+            echo "ERROR: jdtls launcher JAR not found after extraction" >&2
+            ls /opt/jdtls/plugins/ | head -20 >&2
+            exit 1
+          fi
+          echo "Found launcher: $LAUNCHER"
           printf '#!/bin/bash\nexec java \\\n  -Declipse.application=org.eclipse.jdt.ls.core.id1 \\\n  -Dosgi.bundles.defaultStartLevel=4 \\\n  -Declipse.product=org.eclipse.jdt.ls.core.product \\\n  -Dlog.level=ERROR \\\n  -Xmx2G \\\n  --add-modules=ALL-SYSTEM \\\n  --add-opens java.base/java.util=ALL-UNNAMED \\\n  --add-opens java.base/java.lang=ALL-UNNAMED \\\n  -jar %s \\\n  -configuration /opt/jdtls/config_linux \\\n  -data /tmp/jdtls-workspace-lsp-mcp-test "$@"\n' "$LAUNCHER" | sudo tee /usr/local/bin/jdtls > /dev/null
           sudo chmod +x /usr/local/bin/jdtls
+          echo "jdtls installed at $(which jdtls)"
 
       - name: Run Java language tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Java$" ./test/ -timeout 15m
