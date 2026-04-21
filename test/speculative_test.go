@@ -23,6 +23,10 @@ type speculativeLangConfig struct {
 	timeout    time.Duration // overall test timeout; defaults to 120s if zero
 
 	// safeEdit inserts a comment at the given position — must produce net_delta=0.
+	// safeEditFile is the file to use for safe edits; defaults to file if empty.
+	// Use a file with no pre-existing diagnostics so comment insertions don't shift
+	// existing error positions and produce false-positive net_delta values.
+	safeEditFile string
 	safeEditLine int
 	safeEditCol  int
 	safeEditText string
@@ -63,6 +67,11 @@ func buildSpeculativeLangConfigs(fixtureBase string) []speculativeLangConfig {
 		{
 			// TypeScript: replace `return a + b;` in add() with `return "wrong";`.
 			// tsserver flags: Type 'string' is not assignable to type 'number'.
+			//
+			// safeEditFile uses consumer.ts (no pre-existing diagnostics) rather than
+			// example.ts, which intentionally contains 3 errors. Inserting a comment
+			// line into example.ts shifts all error line numbers by 1, causing the
+			// baseline diff to falsely report 3 new errors (net_delta=3).
 			name:             "TypeScript",
 			id:               "typescript",
 			binary:           "typescript-language-server",
@@ -70,6 +79,7 @@ func buildSpeculativeLangConfigs(fixtureBase string) []speculativeLangConfig {
 			fixture:          filepath.Join(fixtureBase, "typescript"),
 			file:             filepath.Join(fixtureBase, "typescript", "src", "example.ts"),
 			initWait:         8 * time.Second,
+			safeEditFile:     filepath.Join(fixtureBase, "typescript", "src", "consumer.ts"),
 			safeEditLine:     1,
 			safeEditCol:      1,
 			safeEditText:     "// speculative comment\n",
@@ -281,13 +291,28 @@ func runSpeculativeLanguageTest(t *testing.T, binaryPath string, lang speculativ
 	}
 	time.Sleep(3 * time.Second)
 
+	// If safe edits target a different file, open it too so the server has its state.
+	safeFile := lang.safeEditFile
+	if safeFile == "" {
+		safeFile = lang.file
+	}
+	if safeFile != lang.file {
+		if res, err = callTool(ctx, session, "open_document", map[string]any{
+			"file_path":   safeFile,
+			"language_id": lang.id,
+		}); err != nil || res.IsError {
+			t.Logf("[%s] open_document for safeEditFile failed (non-fatal): err=%v", lang.name, err)
+		}
+		time.Sleep(2 * time.Second)
+	}
+
 	t.Run("discard_path", func(t *testing.T) {
 		sessionID := createSession(t, ctx, session, lang)
 		if sessionID == "" {
 			return
 		}
 
-		applyComment(t, ctx, session, lang, sessionID)
+		applyComment(t, ctx, session, lang, safeFile, sessionID)
 		evaluateAndCheck(t, ctx, session, lang, sessionID, false)
 
 		res, err := callTool(ctx, session, "discard_session", map[string]any{"session_id": sessionID})
@@ -307,7 +332,7 @@ func runSpeculativeLanguageTest(t *testing.T, binaryPath string, lang speculativ
 			return
 		}
 
-		applyComment(t, ctx, session, lang, sessionID)
+		applyComment(t, ctx, session, lang, safeFile, sessionID)
 
 		// commit without apply=true — returns a unified diff only, does not write to disk.
 		res, err := callTool(ctx, session, "commit_session", map[string]any{
@@ -330,7 +355,7 @@ func runSpeculativeLanguageTest(t *testing.T, binaryPath string, lang speculativ
 		}
 		defer discardSession(ctx, session, sessionID)
 
-		applyComment(t, ctx, session, lang, sessionID)
+		applyComment(t, ctx, session, lang, safeFile, sessionID)
 		evaluateAndCheck(t, ctx, session, lang, sessionID, false)
 	})
 
@@ -366,25 +391,27 @@ func runSpeculativeLanguageTest(t *testing.T, binaryPath string, lang speculativ
 		}
 		defer discardSession(ctx, session, sessionID)
 
-		// Two-step comment chain — both steps must have cumulative_delta=0.
+		// Two-step comment chain using the language's own comment syntax (lang.safeEditText).
+		// Hardcoding "//" would break Python, Ruby, etc. where "//" is not a comment.
+		// Both steps insert at adjacent lines — cumulative_delta must remain 0.
 		res, err := callTool(ctx, session, "simulate_chain", map[string]any{
 			"session_id": sessionID,
 			"edits": []map[string]any{
 				{
-					"file_path":    lang.file,
+					"file_path":    safeFile,
 					"start_line":   lang.safeEditLine,
 					"start_column": lang.safeEditCol,
 					"end_line":     lang.safeEditLine,
 					"end_column":   lang.safeEditCol,
-					"new_text":     "// chain step 1\n",
+					"new_text":     lang.safeEditText,
 				},
 				{
-					"file_path":    lang.file,
+					"file_path":    safeFile,
 					"start_line":   lang.safeEditLine + 1,
 					"start_column": lang.safeEditCol,
 					"end_line":     lang.safeEditLine + 1,
 					"end_column":   lang.safeEditCol,
-					"new_text":     "// chain step 2\n",
+					"new_text":     lang.safeEditText,
 				},
 			},
 		})
@@ -421,7 +448,7 @@ func runSpeculativeLanguageTest(t *testing.T, binaryPath string, lang speculativ
 		res, err := callTool(ctx, session, "simulate_edit_atomic", map[string]any{
 			"workspace_root": lang.fixture,
 			"language":       lang.id,
-			"file_path":      lang.file,
+			"file_path":      safeFile,
 			"start_line":     lang.safeEditLine,
 			"start_column":   lang.safeEditCol,
 			"end_line":       lang.safeEditLine,
@@ -540,11 +567,12 @@ func createSession(t *testing.T, ctx context.Context, session *mcp.ClientSession
 }
 
 // applyComment applies a safe comment edit to sessionID and logs the result.
-func applyComment(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang speculativeLangConfig, sessionID string) {
+// file is the target file (use lang.safeEditFile if set, otherwise lang.file).
+func applyComment(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang speculativeLangConfig, file string, sessionID string) {
 	t.Helper()
 	res, err := callTool(ctx, session, "simulate_edit", map[string]any{
 		"session_id":   sessionID,
-		"file_path":    lang.file,
+		"file_path":    file,
 		"start_line":   lang.safeEditLine,
 		"start_column": lang.safeEditCol,
 		"end_line":     lang.safeEditLine,
