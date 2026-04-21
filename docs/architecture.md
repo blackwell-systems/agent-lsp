@@ -4,6 +4,36 @@ agent-lsp is a [Model Context Protocol](https://modelcontextprotocol.io/) server
 
 ---
 
+## System Overview
+
+At runtime, agent-lsp consists of two layers of processes communicating over pipes:
+
+```
+AI agent (Claude Code, Cursor, etc.)
+    │
+    │  JSON-RPC over stdio (or HTTP+SSE)
+    ▼
+agent-lsp process  (the MCP server — one long-lived Go binary)
+    │
+    │  JSON-RPC over stdin/stdout pipes  (one pipe pair per language)
+    ├──────────────────────────────────────────────────────────────────┐
+    ▼                                                                  ▼
+gopls subprocess                                         typescript-language-server subprocess
+(indexes .go files)                                      (indexes .ts/.tsx files)
+```
+
+**What agent-lsp does:**
+
+1. Speaks MCP to the AI agent — exposes 50 tools the agent can call.
+2. Translates each tool call into one or more LSP JSON-RPC requests, sent over stdin/stdout pipes to the appropriate language server subprocess.
+3. Maintains a persistent session: the language server index stays warm across all tool calls, all files, all packages. There is no cold-start on each request.
+4. Adds a speculative execution layer on top: edits can be applied in-memory to the live LSP state, evaluated for diagnostic impact, then committed to disk or discarded — without ever touching the file system until explicitly requested.
+5. Ships a skills layer — prompt documents that tell Claude how to orchestrate multi-step workflows using the tools correctly.
+
+The binary is a single statically-linked Go executable. No Node.js runtime. No per-request process spawn.
+
+---
+
 ## Package Structure
 
 ```
@@ -199,6 +229,74 @@ implementation evolves.
 - `internal/uri/` imports only from `internal/types/` — the canonical URI/path conversion layer
 - `internal/extensions/` imports from `internal/types/` only
 - `extensions/<language>/` imports from `internal/tools/` for re-exported utilities
+
+---
+
+## Process Model
+
+Understanding the process model is the most important prerequisite for reading the rest of this document.
+
+**MCP server process (agent-lsp binary):**
+
+- One process, long-lived, started once by the AI client.
+- Communicates with the AI via JSON-RPC over **stdio** (default) or **HTTP+SSE** (`--http` flag).
+- Owns all Go code in this repo: MCP server, LSP clients, session manager, tool handlers.
+
+**LSP subprocess(es):**
+
+- One subprocess per configured language server (e.g. `gopls`, `typescript-language-server`).
+- Spawned by `LSPClient.Initialize` via `exec.Command`. Each subprocess gets its own `stdin`/`stdout` pipe pair.
+- Communicate with the Go process using LSP JSON-RPC with **Content-Length framing** (the LSP wire format, not plain HTTP).
+- Remain running for the lifetime of the MCP session. The index stays warm; no subprocess is spawned per tool call.
+
+**Communication direction:**
+
+```
+AI agent ──MCP JSON-RPC──► agent-lsp ──LSP JSON-RPC──► gopls subprocess
+AI agent ◄──MCP JSON-RPC── agent-lsp ◄──LSP JSON-RPC── gopls subprocess
+```
+
+The Go process never opens sockets to the language servers. All LSP traffic goes through `os/exec` pipe pairs, which is what language servers expect.
+
+---
+
+## Tool Registration Model
+
+50 tools are exposed to the AI agent. They are defined in four files under `cmd/agent-lsp/` and dispatched through a shared pattern.
+
+### How a tool is defined
+
+Each tool is registered via `mcp.AddTool` with three arguments:
+
+1. A `*mcp.Tool` schema — name, description, and MCP annotations (read-only hint, idempotent hint, etc.)
+2. A typed args struct — Go struct with JSON tags and `jsonschema` annotations that generate the tool's JSON Schema for the AI
+3. A handler closure — receives the parsed args, calls an `internal/tools` handler, and converts the result to `*mcp.CallToolResult`
+
+```go
+mcp.AddTool(server, &mcp.Tool{
+    Name:        "go_to_definition",
+    Description: "...",
+}, func(ctx context.Context, req *mcp.CallToolRequest, args GoToDefinitionArgs) (*mcp.CallToolResult, any, error) {
+    client := d.clientForFileWithAutoInit(args.FilePath)
+    r, err := tools.HandleGoToDefinition(ctx, client, toolArgsToMap(args))
+    return makeCallToolResult(r), nil, err
+})
+```
+
+### The four registration files
+
+| File | Tools registered | Count |
+|------|-----------------|-------|
+| `tools_workspace.go` | Session lifecycle, build/test, workspace management | 19 |
+| `tools_navigation.go` | go_to_definition, references, call hierarchy, rename | 10 |
+| `tools_analysis.go` | hover, diagnostics, completions, symbols, change impact | 13 |
+| `tools_session.go` | Speculative execution (simulate, evaluate, commit) | 8 |
+
+All four registration functions are called from `Run()` in `server.go` via the `toolDeps` bundle, which carries shared dependencies: the MCP server, the client resolver, the session manager, and the `clientForFileWithAutoInit` closure.
+
+### Handler separation
+
+Tool registration (`cmd/agent-lsp/tools_*.go`) is separate from tool implementation (`internal/tools/*.go`). The `cmd/` layer owns schema definitions, MCP plumbing, and args-to-map conversion. The `internal/tools/` layer owns the actual LSP interaction logic, knows nothing about MCP, and is testable independently.
 
 ---
 
@@ -449,6 +547,18 @@ InitializedHandler: func(_ context.Context, req *mcp.InitializedRequest) {
 ---
 
 ## Skills Layer
+
+**Key distinction:** Skills are not Go code and are not part of the compiled binary. They are prompt documents — Markdown files that tell Claude how to orchestrate the MCP tools in the correct multi-step sequence. They live in the `skills/` directory of this repo and are installed separately into the AI client's skill directory (`~/.claude/skills/`).
+
+The boundary is clear:
+
+```
+Go binary (agent-lsp)         skills/ directory
+─────────────────────         ──────────────────
+Exposes 50 MCP tools          Encodes correct tool sequences
+Handles one tool call         Handles multi-step workflows
+Knows nothing about skills    Knows exactly which tools to call
+```
 
 The `skills/` directory contains Agent Skills — structured directories that Claude Code loads as slash commands. Each skill is a directory containing a `SKILL.md` file in the [AgentSkills](https://github.com/anthropics/agent-skills) format:
 
