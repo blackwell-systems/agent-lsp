@@ -4,7 +4,9 @@ agent-lsp ships 20 skills — named workflows that encode correct tool sequences
 multi-step operations happen reliably. This doc is a developer reference: what each
 skill does, when to reach for it, and what it does that raw tool calls miss.
 
-See the [Setup guide](getting-started/quickstart.md) for installation instructions. For the individual tools that skills compose, see [docs/tools.md](./tools.md).
+All 20 skills conform to the [Agent Skills](https://agentskills.io/) open standard — the cross-agent skill format adopted by Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and [30+ other tools](https://agentskills.io/clients). Each `SKILL.md` includes the required `name` and `description` frontmatter fields, plus `license`, `compatibility`, and `allowed-tools`. Skills work with any AgentSkills-compatible agent.
+
+See the [Setup guide](getting-started/quickstart.md) for installation instructions. For the individual tools that skills compose, see [docs/tools.md](./tools.md). For the full AgentSkills specification, see [agentskills.io/specification](https://agentskills.io/specification).
 
 ## Quick example
 
