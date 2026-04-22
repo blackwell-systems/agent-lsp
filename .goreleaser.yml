@@ -135,10 +135,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:go-amd64"
     goarch: amd64
     dockerfile: docker/Dockerfile.lang
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=LANG=go"
       - "--build-arg=LSP_PACKAGE=golang.org/x/tools/gopls@latest"
       - "--build-arg=PACKAGE_MGR=go"
@@ -152,10 +154,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:go-arm64"
     goarch: arm64
     dockerfile: docker/Dockerfile.lang
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=LANG=go"
       - "--build-arg=LSP_PACKAGE=golang.org/x/tools/gopls@latest"
       - "--build-arg=PACKAGE_MGR=go"
@@ -169,10 +173,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:typescript-amd64"
     goarch: amd64
     dockerfile: docker/Dockerfile.lang
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=LANG=typescript"
       - "--build-arg=LSP_PACKAGE=typescript-language-server typescript"
       - "--build-arg=PACKAGE_MGR=npm"
@@ -186,10 +192,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:typescript-arm64"
     goarch: arm64
     dockerfile: docker/Dockerfile.lang
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=LANG=typescript"
       - "--build-arg=LSP_PACKAGE=typescript-language-server typescript"
       - "--build-arg=PACKAGE_MGR=npm"
@@ -203,10 +211,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:python-amd64"
     goarch: amd64
     dockerfile: docker/Dockerfile.lang
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=LANG=python"
       - "--build-arg=LSP_PACKAGE=pyright"
       - "--build-arg=PACKAGE_MGR=npm"
@@ -220,10 +230,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:python-arm64"
     goarch: arm64
     dockerfile: docker/Dockerfile.lang
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=LANG=python"
       - "--build-arg=LSP_PACKAGE=pyright"
       - "--build-arg=PACKAGE_MGR=npm"
@@ -237,10 +249,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:ruby-amd64"
     goarch: amd64
     dockerfile: docker/Dockerfile.lang
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=LANG=ruby"
       - "--build-arg=LSP_PACKAGE=solargraph"
       - "--build-arg=PACKAGE_MGR=gem"
@@ -254,10 +268,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:ruby-arm64"
     goarch: arm64
     dockerfile: docker/Dockerfile.lang
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=LANG=ruby"
       - "--build-arg=LSP_PACKAGE=solargraph"
       - "--build-arg=PACKAGE_MGR=gem"
@@ -271,10 +287,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:cpp-amd64"
     goarch: amd64
     dockerfile: docker/Dockerfile.lang
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=LANG=cpp"
       - "--build-arg=LSP_PACKAGE=clangd"
       - "--build-arg=PACKAGE_MGR=apt"
@@ -288,10 +306,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:cpp-arm64"
     goarch: arm64
     dockerfile: docker/Dockerfile.lang
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=LANG=cpp"
       - "--build-arg=LSP_PACKAGE=clangd"
       - "--build-arg=PACKAGE_MGR=apt"
@@ -305,10 +325,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:php-amd64"
     goarch: amd64
     dockerfile: docker/Dockerfile.lang
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=LANG=php"
       - "--build-arg=LSP_PACKAGE=intelephense"
       - "--build-arg=PACKAGE_MGR=npm"
@@ -322,10 +344,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:php-arm64"
     goarch: arm64
     dockerfile: docker/Dockerfile.lang
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=LANG=php"
       - "--build-arg=LSP_PACKAGE=intelephense"
       - "--build-arg=PACKAGE_MGR=npm"
@@ -339,10 +363,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:web-amd64"
     goarch: amd64
     dockerfile: docker/Dockerfile.combo
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=NPM_PACKAGES=typescript-language-server typescript pyright"
       - "--build-arg=GO_PACKAGES="
       - "--cache-from=type=gha"
@@ -354,10 +380,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:web-arm64"
     goarch: arm64
     dockerfile: docker/Dockerfile.combo
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=NPM_PACKAGES=typescript-language-server typescript pyright"
       - "--build-arg=GO_PACKAGES="
       - "--cache-from=type=gha"
@@ -369,10 +397,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:backend-amd64"
     goarch: amd64
     dockerfile: docker/Dockerfile.combo
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=NPM_PACKAGES=pyright"
       - "--build-arg=GO_PACKAGES=golang.org/x/tools/gopls@latest"
       - "--cache-from=type=gha"
@@ -384,10 +414,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:backend-arm64"
     goarch: arm64
     dockerfile: docker/Dockerfile.combo
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=NPM_PACKAGES=pyright"
       - "--build-arg=GO_PACKAGES=golang.org/x/tools/gopls@latest"
       - "--cache-from=type=gha"
@@ -399,10 +431,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:fullstack-amd64"
     goarch: amd64
     dockerfile: docker/Dockerfile.combo
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=NPM_PACKAGES=typescript-language-server typescript pyright"
       - "--build-arg=GO_PACKAGES=golang.org/x/tools/gopls@latest"
       - "--cache-from=type=gha"
@@ -414,10 +448,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:fullstack-arm64"
     goarch: arm64
     dockerfile: docker/Dockerfile.combo
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=NPM_PACKAGES=typescript-language-server typescript pyright"
       - "--build-arg=GO_PACKAGES=golang.org/x/tools/gopls@latest"
       - "--cache-from=type=gha"
@@ -429,10 +465,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:full-amd64"
     goarch: amd64
     dockerfile: docker/Dockerfile.full
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base-amd64"
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 
@@ -442,10 +480,12 @@ dockers:
       - "{{ .Env.DOCKERHUB_USERNAME }}/agent-lsp:full-arm64"
     goarch: arm64
     dockerfile: docker/Dockerfile.full
+    extra_files:
+      - docker/entrypoint.sh
+      - docker/lsp-servers.yaml
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base-arm64"
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 

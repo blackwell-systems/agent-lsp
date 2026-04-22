@@ -4,11 +4,28 @@
 #
 # Pull: docker pull ghcr.io/blackwell-systems/agent-lsp:full
 
-ARG BASE_TAG=base
-FROM ghcr.io/blackwell-systems/agent-lsp:${BASE_TAG}
+FROM debian:bookworm-slim
 
-# Base image runs as nonroot — switch to root for package installation
-USER root
+# ── Base layer (inlined from Dockerfile.release to avoid registry pull race) ──
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY agent-lsp /usr/local/bin/agent-lsp
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY docker/lsp-servers.yaml /etc/agent-lsp/lsp-servers.yaml
+RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN mkdir -p /var/cache/lsp-servers
+RUN groupadd --gid 65532 nonroot \
+    && useradd --uid 65532 --gid 65532 --no-create-home --shell /usr/sbin/nologin nonroot \
+    && chown -R nonroot:nonroot /var/cache/lsp-servers
+
+EXPOSE 8080
+ENV HOME=/tmp
+RUN mkdir -p /workspace && chown nonroot:nonroot /workspace
+WORKDIR /workspace
+
+# ── Language servers ──────────────────────────────────────────────────────────
 
 # Install Node.js (needed for npm-based servers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -66,3 +83,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends clangd \
 LABEL org.opencontainers.image.description="agent-lsp with all supported language servers (~2-3 GB)"
 
 USER nonroot
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD []
