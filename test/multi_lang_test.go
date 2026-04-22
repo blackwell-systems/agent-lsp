@@ -1633,7 +1633,7 @@ func TestGetChangeImpact(t *testing.T) {
 		t.Skip("failed to build agent-lsp binary")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
 	goFixture := filepath.Join(testDir(t), "fixtures", "go")
@@ -1649,12 +1649,17 @@ func TestGetChangeImpact(t *testing.T) {
 	}
 	defer session.Close()
 
-	res, err := callTool(ctx, session, "start_lsp", map[string]any{"root_dir": goFixture})
+	// Use ready_timeout_seconds to block until gopls finishes workspace indexing
+	// instead of a fixed sleep. This prevents flakes on slow CI runners where
+	// indexing takes longer than a hardcoded wait.
+	res, err := callTool(ctx, session, "start_lsp", map[string]any{
+		"root_dir":              goFixture,
+		"ready_timeout_seconds": float64(120),
+	})
 	if err != nil || res.IsError {
 		t.Skipf("start_lsp failed for gopls: err=%v", err)
 		return
 	}
-	time.Sleep(8 * time.Second)
 
 	res, err = callTool(ctx, session, "open_document", map[string]any{
 		"file_path":   greeterFile,
@@ -1664,7 +1669,8 @@ func TestGetChangeImpact(t *testing.T) {
 		t.Skipf("open_document failed for greeter.go: err=%v", err)
 		return
 	}
-	time.Sleep(2 * time.Second)
+	// get_diagnostics as a readiness fence — ensures gopls has processed the file
+	callTool(ctx, session, "get_diagnostics", map[string]any{"file_path": greeterFile})
 
 	res, err = callTool(ctx, session, "get_change_impact", map[string]any{
 		"changed_files": []any{greeterFile},
@@ -1718,7 +1724,7 @@ func TestGetCrossRepoReferences(t *testing.T) {
 		t.Skip("failed to build agent-lsp binary")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
 	goFixture := filepath.Join(testDir(t), "fixtures", "go")
@@ -1734,12 +1740,15 @@ func TestGetCrossRepoReferences(t *testing.T) {
 	}
 	defer session.Close()
 
-	res, err := callTool(ctx, session, "start_lsp", map[string]any{"root_dir": goFixture})
+	// Use ready_timeout_seconds to block until gopls finishes workspace indexing
+	res, err := callTool(ctx, session, "start_lsp", map[string]any{
+		"root_dir":              goFixture,
+		"ready_timeout_seconds": float64(120),
+	})
 	if err != nil || res.IsError {
 		t.Skipf("start_lsp failed for gopls: err=%v", err)
 		return
 	}
-	time.Sleep(8 * time.Second)
 
 	res, err = callTool(ctx, session, "open_document", map[string]any{
 		"file_path":   mainFile,
@@ -1749,7 +1758,8 @@ func TestGetCrossRepoReferences(t *testing.T) {
 		t.Skipf("open_document failed for main.go: err=%v", err)
 		return
 	}
-	time.Sleep(2 * time.Second)
+	// get_diagnostics as a readiness fence
+	callTool(ctx, session, "get_diagnostics", map[string]any{"file_path": mainFile})
 
 	// Add the fixture dir as a consumer workspace folder.
 	res, err = callTool(ctx, session, "add_workspace_folder", map[string]any{
