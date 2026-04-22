@@ -18,7 +18,7 @@ See all [installation methods](getting-started/installation.md) or jump to the [
 
 ## How the pieces fit together
 
-[LSP](https://microsoft.github.io/language-server-protocol/) (Language Server Protocol) is how editors get code intelligence — completions, diagnostics, go-to-definition. [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) is the standard way AI tools like Claude Code discover and call external tools. agent-lsp bridges the two: language server intelligence, accessible to AI agents.
+[LSP](https://microsoft.github.io/language-server-protocol/) (Language Server Protocol) is how editors get code intelligence: completions, diagnostics, go-to-definition. [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) is the standard way AI tools like Claude Code discover and call external tools. agent-lsp bridges the two: language server intelligence, accessible to AI agents.
 
 ## How it works
 
@@ -53,13 +53,13 @@ Read more in the [speculative execution docs](speculative-execution.md).
 | Capability | Details |
 |------------|---------|
 | Tools | **50** |
-| Languages (CI-verified) | **30** — end-to-end integration tests on every push |
-| Agent workflows (skills) | **20** — named multi-step procedures |
-| Speculative execution | **8 tools** — simulate changes before writing to disk |
-| Connection model | **persistent** — warm index across files and projects |
+| Languages (CI-verified) | **30**, end-to-end integration tests on every push |
+| Agent workflows (skills) | **20**, named multi-step procedures |
+| Speculative execution | **8 tools**, simulate changes before writing to disk |
+| Connection model | **persistent**, warm index across files and projects |
 | Call hierarchy | single tool, direction param |
 | Type hierarchy | CI-verified |
 | Cross-repo references | multi-root workspace |
 | Auto-watch | always-on, debounced file watching |
 | HTTP+SSE transport | bearer token auth, non-root Docker |
-| Distribution | **single Go binary** — 8 install channels |
+| Distribution | **single Go binary**, 8 install channels |

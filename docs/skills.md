@@ -1,12 +1,12 @@
 # Skills Reference
 
-agent-lsp ships 20 skills — named workflows that encode correct tool sequences so
+agent-lsp ships 20 skills, named workflows that encode correct tool sequences so
 multi-step operations happen reliably. This doc is a developer reference: what each
 skill does, when to reach for it, and what it does that raw tool calls miss.
 
-All 20 skills conform to the [Agent Skills](https://agentskills.io/) open standard — the cross-agent skill format adopted by Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and [30+ other tools](https://agentskills.io/clients). Each `SKILL.md` includes the required `name` and `description` frontmatter fields, plus `license`, `compatibility`, and `allowed-tools`.
+All 20 skills conform to the [Agent Skills](https://agentskills.io/) open standard, the cross-agent skill format adopted by Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and [30+ other tools](https://agentskills.io/clients). Each `SKILL.md` includes the required `name` and `description` frontmatter fields, plus `license`, `compatibility`, and `allowed-tools`.
 
-**agent-lsp skills are not locked to any single AI provider.** Because they follow the AgentSkills open standard, they work with any conforming agent — Claude, Copilot, Cursor, Gemini, Codex, Roo Code, OpenHands, and the rest. The MCP server handles the LSP runtime; the skills are portable workflow definitions that any agent can load and execute.
+**agent-lsp skills are not locked to any single AI provider.** Because they follow the AgentSkills open standard, they work with any conforming agent: Claude, Copilot, Cursor, Gemini, Codex, Roo Code, OpenHands, and the rest. The MCP server handles the LSP runtime; the skills are portable workflow definitions that any agent can load and execute.
 
 See the [Setup guide](getting-started/quickstart.md) for installation instructions. For the individual tools that skills compose, see [docs/tools.md](./tools.md). For the full AgentSkills specification, see [agentskills.io/specification](https://agentskills.io/specification).
 
@@ -23,11 +23,11 @@ See the [Setup guide](getting-started/quickstart.md) for installation instructio
 ## Before you change anything
 
 Understanding blast radius before touching code prevents broken builds and missed
-callers. These three skills are read-only — they never modify files.
+callers. These three skills are read-only and never modify files.
 
 ### `/lsp-impact`
 
-Blast-radius analysis for a symbol or file — finds all direct references, callers
+Blast-radius analysis for a symbol or file. Finds all direct references, callers
 (via call hierarchy), and type relationships before you touch anything.
 
 **When to reach for it:**
@@ -36,7 +36,7 @@ Blast-radius analysis for a symbol or file — finds all direct references, call
 - You want to know whether a change is low-risk (1–5 files) or high-risk (> 20 files) before committing to it.
 
 **What it does that raw tools miss:**
-Raw `get_references` tells you reference count. lsp-impact runs references, call hierarchy, and type hierarchy together, then classifies the result with a risk level — so you get a decision recommendation, not just numbers. The file-level mode (`get_change_impact`) surfaces all exported symbols at once without a symbol-by-symbol loop.
+Raw `get_references` tells you reference count. lsp-impact runs references, call hierarchy, and type hierarchy together, then classifies the result with a risk level, so you get a decision recommendation, not just numbers. The file-level mode (`get_change_impact`) surfaces all exported symbols at once without a symbol-by-symbol loop.
 
 ---
 
@@ -50,7 +50,7 @@ Find every concrete type that implements an interface or extends an abstract typ
 - You are exploring an unfamiliar codebase and want to understand the full type hierarchy around a core interface.
 
 **What it does that raw tools miss:**
-Cross-references `go_to_implementation` with `type_hierarchy` to produce the union of all implementors — covering both explicit interface satisfaction and subtype relationships. Reports a risk level (0 implementors → likely internal-only; > 10 → breaking API change).
+Cross-references `go_to_implementation` with `type_hierarchy` to produce the union of all implementors, covering both explicit interface satisfaction and subtype relationships. Reports a risk level (0 implementors → likely internal-only; > 10 → breaking API change).
 
 ---
 
@@ -64,7 +64,7 @@ Enumerate exported symbols in a file and surface those with zero references acro
 - Checking whether a function you are about to delete has any hidden callers.
 
 **What it does that raw tools miss:**
-Doesn't just call `get_references` — it verifies indexing is complete before classifying anything (a common failure mode that produces false dead-code candidates), then cross-checks zero-reference results against grep for registration patterns that LSP cannot see (e.g., `router.Handle("/path", myHandler)`). The result is a classified report, not a raw list.
+Doesn't just call `get_references`. It verifies indexing is complete before classifying anything (a common failure mode that produces false dead-code candidates), then cross-checks zero-reference results against grep for registration patterns that LSP cannot see (e.g., `router.Handle("/path", myHandler)`). The result is a classified report, not a raw list.
 
 ---
 
@@ -82,16 +82,16 @@ speculatively before writing to disk, then diffs errors introduced vs. resolved.
 **When to reach for it:**
 - Any non-trivial edit where you want to confirm you haven't broken a type or import.
 - A multi-file change (e.g., changing a function signature and updating call sites) where you need to know the cumulative error delta before committing.
-- After an edit surfaces new errors — lsp-safe-edit automatically queries code actions at each error location.
+- After an edit surfaces new errors, lsp-safe-edit automatically queries code actions at each error location.
 
 **What it does that raw tools miss:**
-`simulate_edit_atomic` previews the error delta without touching disk — most agents skip this and apply edits blind. The `simulate_chain` path handles multi-step renames and signature changes: it evaluates each step in sequence and reports exactly how far through the chain is safe to apply.
+`simulate_edit_atomic` previews the error delta without touching disk. Most agents skip this and apply edits blind. The `simulate_chain` path handles multi-step renames and signature changes: it evaluates each step in sequence and reports exactly how far through the chain is safe to apply.
 
 ---
 
 ### `/lsp-simulate`
 
-Full speculative editing session — apply changes in memory, evaluate diagnostics,
+Full speculative editing session. Apply changes in memory, evaluate diagnostics,
 then commit or discard without touching any files.
 
 **When to reach for it:**
@@ -100,7 +100,7 @@ then commit or discard without touching any files.
 - Recovering a patch across an MCP server restart: `commit_session(apply: false)` returns a portable patch.
 
 **What it does that raw tools miss:**
-Unlike `simulate_edit_atomic` (single edit, atomic), lsp-simulate manages a full session lifecycle — create, apply multiple edits, evaluate, commit or discard. The `simulate_chain` tool evaluates diagnostics after every step, reporting exactly which step first introduces an error.
+Unlike `simulate_edit_atomic` (single edit, atomic), lsp-simulate manages a full session lifecycle: create, apply multiple edits, evaluate, commit or discard. The `simulate_chain` tool evaluates diagnostics after every step, reporting exactly which step first introduces an error.
 
 ---
 
@@ -120,7 +120,7 @@ Composes `get_workspace_symbols` → `get_document_symbols` → `apply_edit` to 
 
 ### `/lsp-edit-export`
 
-Safe workflow for editing exported symbols — finds all callers first, presents an
+Safe workflow for editing exported symbols. Finds all callers first, presents an
 impact summary, and requires confirmation before any edit is applied.
 
 **When to reach for it:**
@@ -129,7 +129,7 @@ impact summary, and requires confirmation before any edit is applied.
 - Any change to a symbol that is exported (uppercase Go, `export` TypeScript, `pub` Rust).
 
 **What it does that raw tools miss:**
-Enforces a mandatory confirmation gate — callers are listed and the user must say yes before any edit is applied. Also runs the build after the edit to confirm clean compilation. This gate exists even when LSP reports zero callers, because an incomplete index can silently miss usages.
+Enforces a mandatory confirmation gate: callers are listed and the user must say yes before any edit is applied. Also runs the build after the edit to confirm clean compilation. This gate exists even when LSP reports zero callers, because an incomplete index can silently miss usages.
 
 ---
 
@@ -144,7 +144,7 @@ confirm, then apply atomically via the language server.
 - Any rename where you want a preview of all changed lines before committing.
 
 **What it does that raw tools miss:**
-Uses `prepare_rename` as a safety gate — the language server validates the rename is legal at that position before anything is touched. The dry-run produces the full `workspace_edit` preview (all files and line numbers) before asking for confirmation. Atomically applies all changes in one `apply_edit` call rather than editing file by file.
+Uses `prepare_rename` as a safety gate. The language server validates the rename is legal at that position before anything is touched. The dry-run produces the full `workspace_edit` preview (all files and line numbers) before asking for confirmation. Atomically applies all changes in one `apply_edit` call rather than editing file by file.
 
 ---
 
@@ -155,7 +155,7 @@ a symbol or file's structure, dependencies, and callers.
 
 ### `/lsp-explore`
 
-"Tell me about this symbol" — hover, implementations, call hierarchy, and
+"Tell me about this symbol": hover, implementations, call hierarchy, and
 references in one pass.
 
 **When to reach for it:**
@@ -171,7 +171,7 @@ Runs hover, `go_to_implementation`, `call_hierarchy` (incoming), and `get_refere
 ### `/lsp-understand`
 
 Deep-dive Code Map for a symbol or file: type info, implementations, 2-level call
-hierarchy, all references, and source — synthesized into a dependency map.
+hierarchy, all references, and source, synthesized into a dependency map.
 
 **When to reach for it:**
 - You need to understand how an entire file works as a module (pass a file path, get a Code Map of all its exported symbols).
@@ -193,7 +193,7 @@ Three-tier documentation lookup: hover → offline toolchain doc → source defi
 - No LSP session is running but you need documentation for a symbol in the module cache.
 
 **What it does that raw tools miss:**
-Falls through tiers automatically: if LSP hover is empty, it calls `get_symbol_documentation` against the installed toolchain (`go doc`, `pydoc`, `cargo doc`) — no LSP session required. If the toolchain call fails, it falls back to `go_to_definition` + `get_symbol_source` to extract the raw source. The result is always the richest documentation available, not "hover returned empty."
+Falls through tiers automatically: if LSP hover is empty, it calls `get_symbol_documentation` against the installed toolchain (`go doc`, `pydoc`, `cargo doc`), with no LSP session required. If the toolchain call fails, it falls back to `go_to_definition` + `get_symbol_source` to extract the raw source. The result is always the richest documentation available, not "hover returned empty."
 
 ---
 
@@ -207,7 +207,7 @@ Find all callers of a library symbol across one or more consumer repositories.
 - Before deleting a symbol: verify no cross-repo dependents exist.
 
 **What it does that raw tools miss:**
-`get_cross_repo_references` adds each consumer as a workspace folder, waits for indexing, runs `get_references` across all roots, and returns results partitioned by repo — so you see `api-service: [main.go:14, app.go:31]` and `worker-service: [runner.go:8]` in one call rather than setting up multi-root workspaces manually. Warnings flag any consumer root that failed to index.
+`get_cross_repo_references` adds each consumer as a workspace folder, waits for indexing, runs `get_references` across all roots, and returns results partitioned by repo, so you see `api-service: [main.go:14, app.go:31]` and `worker-service: [runner.go:8]` in one call rather than setting up multi-root workspaces manually. Warnings flag any consumer root that failed to index.
 
 ---
 
@@ -217,12 +217,12 @@ File-scoped symbol analysis: list all symbols in a file, find usages within the
 file, and get type info at a position.
 
 **When to reach for it:**
-- "What functions and types are defined in this file?" — before reading the whole file.
+- "What functions and types are defined in this file?" Before reading the whole file.
 - Confirming a variable is only used once in a function before inlining it.
 - Getting the type signature of a symbol at a specific position without a workspace-wide search.
 
 **What it does that raw tools miss:**
-`get_document_highlights` is significantly faster than `get_references` for file-local queries — it doesn't scan the workspace index. This skill routes correctly: use highlights for file-local, escalate to `get_references` (lsp-impact) only when cross-file results are needed. Coordinates from `get_document_symbols` feed directly into highlights and hover without manual position math.
+`get_document_highlights` is significantly faster than `get_references` for file-local queries because it doesn't scan the workspace index. This skill routes correctly: use highlights for file-local, escalate to `get_references` (lsp-impact) only when cross-file results are needed. Coordinates from `get_document_symbols` feed directly into highlights and hover without manual position math.
 
 ---
 
@@ -242,7 +242,7 @@ ranked by severity.
 - When you want a single command that covers "does it type-check, compile, and pass tests."
 
 **What it does that raw tools miss:**
-Runs diagnostics first, then build, then tests — ordered by severity so the fastest signal comes first. When `changed_files` is provided, it pre-correlates test files so failures point directly to which tests cover the changed code. Code actions are surfaced for any diagnostic errors so quick fixes are visible immediately.
+Runs diagnostics first, then build, then tests, ordered by severity so the fastest signal comes first. When `changed_files` is provided, it pre-correlates test files so failures point directly to which tests cover the changed code. Code actions are surfaced for any diagnostic errors so quick fixes are visible immediately.
 
 ---
 
@@ -263,7 +263,7 @@ The correct fix-all loop re-collects diagnostics after every single `apply_edit`
 
 ### `/lsp-test-correlation`
 
-Find and run only the tests that cover a specific source file — without running
+Find and run only the tests that cover a specific source file, without running
 the full suite.
 
 **When to reach for it:**
@@ -272,14 +272,14 @@ the full suite.
 - Debugging a test failure: find which test file corresponds to a broken source file.
 
 **What it does that raw tools miss:**
-`get_tests_for_file` maps source files to test files without text search. The skill then uses `get_workspace_symbols` to enumerate specific test function names, so `run_tests` can be scoped to a filter rather than a package — faster than running `./...`. Falls back to symbol search for test function names when the mapping returns no results.
+`get_tests_for_file` maps source files to test files without text search. The skill then uses `get_workspace_symbols` to enumerate specific test function names, so `run_tests` can be scoped to a filter rather than a package, which is faster than running `./...`. Falls back to symbol search for test function names when the mapping returns no results.
 
 ---
 
 ### `/lsp-format-code`
 
-Format a file or selection using the language server's formatter — gofmt, prettier,
-rustfmt, black — without requiring those tools on PATH separately.
+Format a file or selection using the language server's formatter (gofmt, prettier,
+rustfmt, black) without requiring those tools on PATH separately.
 
 **When to reach for it:**
 - Before committing: apply consistent style to all edited files.
@@ -287,7 +287,7 @@ rustfmt, black — without requiring those tools on PATH separately.
 - After a refactor that shifted indentation levels by adding or removing blocks.
 
 **What it does that raw tools miss:**
-Uses the language server's `format_document` and `format_range` tools rather than shelling out to a formatter binary. Supports range-based formatting (format only a selected block) in addition to full-file. Verifies diagnostics after formatting — formatting should never introduce errors, and the skill reports immediately if it does.
+Uses the language server's `format_document` and `format_range` tools rather than shelling out to a formatter binary. Supports range-based formatting (format only a selected block) in addition to full-file. Verifies diagnostics after formatting. Formatting should never introduce errors, and the skill reports immediately if it does.
 
 ---
 
@@ -313,7 +313,7 @@ Routes to the language server's native generator actions via `get_code_actions` 
 
 ### `/lsp-extract-function`
 
-Extract a selected code block into a named function — using the language server's
+Extract a selected code block into a named function, using the language server's
 extract-function code action, with manual fallback when no action is available.
 
 **When to reach for it:**
@@ -322,7 +322,7 @@ extract-function code action, with manual fallback when no action is available.
 - Refactoring before adding a test: extract the logic under test into a named function first.
 
 **What it does that raw tools miss:**
-Uses the language server's `refactor.extract` code action when available (gopls, tsserver) — the server correctly identifies captured variables, return values, and scope boundaries. When no code action exists (common in Python), falls back to a structured manual extraction that requires user confirmation on the proposed signature before applying. Validates with diagnostics after extraction and formats the result.
+Uses the language server's `refactor.extract` code action when available (gopls, tsserver). The server correctly identifies captured variables, return values, and scope boundaries. When no code action exists (common in Python), falls back to a structured manual extraction that requires user confirmation on the proposed signature before applying. Validates with diagnostics after extraction and formats the result.
 
 ---
 
@@ -340,7 +340,7 @@ lsp-safe-edit, lsp-verify, and lsp-test-correlation in one coordinated sequence.
 - Any change where you want blast radius, simulation, apply, build, and test in one command.
 
 **What it does that raw tools miss:**
-Enforces gate conditions at each phase — Phase 1 halts on high blast radius (> 20 callers) unless confirmed; Phase 2 halts if simulation introduces errors; Phase 4 halts if the build fails. No phase executes if its predecessor fails. Individual skills can be used independently, but lsp-refactor is the correct choice when you want the entire sequence enforced without manual orchestration.
+Enforces gate conditions at each phase. Phase 1 halts on high blast radius (> 20 callers) unless confirmed; Phase 2 halts if simulation introduces errors; Phase 4 halts if the build fails. No phase executes if its predecessor fails. Individual skills can be used independently, but lsp-refactor is the correct choice when you want the entire sequence enforced without manual orchestration.
 
 ---
 
@@ -386,5 +386,5 @@ to gate the edit on diagnostic impact.
 
 ## See also
 
-- [docs/tools.md](./tools.md) — full tool reference with parameters and examples
-- [docs/language-support.md](./language-support.md) — language coverage matrix and per-language tool support
+- [docs/tools.md](./tools.md): full tool reference with parameters and examples
+- [docs/language-support.md](./language-support.md): language coverage matrix and per-language tool support

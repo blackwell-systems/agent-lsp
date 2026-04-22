@@ -148,18 +148,18 @@ Each new language needs three things:
    - `serverArgs` (e.g. `[]string{"--stdio"}`)
    - `fixture` directory path
    - `file` path (primary fixture file)
-   - `hoverLine/hoverColumn` — position of a named symbol in the primary file
-   - `definitionLine/definitionColumn` — position of a symbol whose definition is in secondFile
-   - `referenceLine/referenceColumn` — position to query for references
-   - `completionLine/completionColumn` — position inside a method call for completions
-   - `workspaceSymbol` — a symbol name that workspace symbol search should return
-   - `secondFile` — cross-file fixture (for definition + references across files)
-   - `supportsFormatting` — whether the server formats documents
-   - `declarationLine/declarationColumn` — optional, for C-style go_to_declaration
-   - `highlightLine/highlightColumn` — position for document highlight testing
-   - `inlayHintEndLine` — end line for inlay hint range
-   - `renameSymbolLine/renameSymbolColumn/renameSymbolName` — position and new name for rename testing (set to 0 to skip)
-   - `codeActionLine/codeActionEndLine` — line range for code action testing
+   - `hoverLine/hoverColumn`: position of a named symbol in the primary file
+   - `definitionLine/definitionColumn`: position of a symbol whose definition is in secondFile
+   - `referenceLine/referenceColumn`: position to query for references
+   - `completionLine/completionColumn`: position inside a method call for completions
+   - `workspaceSymbol`: a symbol name that workspace symbol search should return
+   - `secondFile`: cross-file fixture (for definition + references across files)
+   - `supportsFormatting`: whether the server formats documents
+   - `declarationLine/declarationColumn`: optional, for C-style go_to_declaration
+   - `highlightLine/highlightColumn`: position for document highlight testing
+   - `inlayHintEndLine`: end line for inlay hint range
+   - `renameSymbolLine/renameSymbolColumn/renameSymbolName`: position and new name for rename testing (set to 0 to skip)
+   - `codeActionLine/codeActionEndLine`: line range for code action testing
 
 2. **Fixture files** in `test/fixtures/<lang>/`:
    - A primary file with a `Person` class/struct (or similar named symbol)
@@ -176,21 +176,21 @@ Each new language needs three things:
 
 ---
 
-## Tier 3 — Next expansion candidates
+## Tier 3: next expansion candidates
 
 ### Bash (bash-language-server)
 - **Install:** `npm install -g bash-language-server`
 - **Binary:** `bash-language-server`, language ID `shellscript`
-- **Fixture:** `test/fixtures/bash/` — simple script with functions
+- **Fixture:** `test/fixtures/bash/`, simple script with functions
 - **Notes:** Good hover and completions. Definition/references limited.
 
 ### Haskell (haskell-language-server)
-- **Install:** `ghcup install hls` — slow and fragile in CI
+- **Install:** `ghcup install hls` (slow and fragile in CI)
 - **Blocker:** ghcup setup adds 5+ minutes; GHC version matrix complexity
 
 ---
 
-## Tier 4 — Complex / skip for now
+## Tier 4: complex / skip for now
 
 | Language | Server | Blocker |
 |---|---|---|

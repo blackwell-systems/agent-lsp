@@ -13,7 +13,7 @@ AI agent (Claude Code, Cursor, etc.)
     │
     │  JSON-RPC over stdio (or HTTP+SSE)
     ▼
-agent-lsp process  (the MCP server — one long-lived Go binary)
+agent-lsp process  (the MCP server, one long-lived Go binary)
     │
     │  JSON-RPC over stdin/stdout pipes  (one pipe pair per language)
     ├──────────────────────────────────────────────────────────────────┐
@@ -24,11 +24,11 @@ gopls subprocess                                         typescript-language-ser
 
 **What agent-lsp does:**
 
-1. Speaks MCP to the AI agent — exposes 50 tools the agent can call.
+1. Speaks MCP to the AI agent, exposing 50 tools the agent can call.
 2. Translates each tool call into one or more LSP JSON-RPC requests, sent over stdin/stdout pipes to the appropriate language server subprocess.
 3. Maintains a persistent session: the language server index stays warm across all tool calls, all files, all packages. There is no cold-start on each request.
-4. Adds a speculative execution layer on top: edits can be applied in-memory to the live LSP state, evaluated for diagnostic impact, then committed to disk or discarded — without ever touching the file system until explicitly requested.
-5. Ships a skills layer — prompt documents that tell Claude how to orchestrate multi-step workflows using the tools correctly.
+4. Adds a speculative execution layer on top: edits can be applied in-memory to the live LSP state, evaluated for diagnostic impact, then committed to disk or discarded, without ever touching the file system until explicitly requested.
+5. Ships a skills layer: prompt documents that tell Claude how to orchestrate multi-step workflows using the tools correctly.
 
 The binary is a single statically-linked Go executable. No Node.js runtime. No per-request process spawn.
 
@@ -207,7 +207,7 @@ public API without requiring callers to run the MCP server:
 | `pkg/session` | `github.com/blackwell-systems/agent-lsp/pkg/session` | `SessionManager`, session lifecycle types, speculative execution API |
 
 Every type in `pkg/` is a **type alias** of the corresponding `internal/`
-type. This means values are interchangeable — a `pkg/types.Position` can be
+type. This means values are interchangeable: a `pkg/types.Position` can be
 passed to any function expecting `internal/types.Position` without conversion.
 
 The `pkg/` packages contain no logic; they are purely re-export layers. All
@@ -223,10 +223,10 @@ implementation evolves.
 ### Layer rules
 
 - `cmd/agent-lsp/` owns the MCP server lifecycle and routes requests to handlers via the four tool files
-- `internal/tools/` and `internal/resources/` import from `internal/lsp/`, `internal/session/`, and `internal/types/` — they do not import from each other
-- `internal/lsp/` imports from `internal/types/`, `internal/logging/`, and `internal/uri/` — no upward dependencies
+- `internal/tools/` and `internal/resources/` import from `internal/lsp/`, `internal/session/`, and `internal/types/`. They do not import from each other
+- `internal/lsp/` imports from `internal/types/`, `internal/logging/`, and `internal/uri/` (no upward dependencies)
 - `internal/session/` imports from `internal/lsp/`, `internal/types/`, `internal/logging/`, and `internal/uri/`
-- `internal/uri/` imports only from `internal/types/` — the canonical URI/path conversion layer
+- `internal/uri/` imports only from `internal/types/`, serving as the canonical URI/path conversion layer
 - `internal/extensions/` imports from `internal/types/` only
 - `extensions/<language>/` imports from `internal/tools/` for re-exported utilities
 
@@ -268,9 +268,9 @@ The Go process never opens sockets to the language servers. All LSP traffic goes
 
 Each tool is registered via `mcp.AddTool` with three arguments:
 
-1. A `*mcp.Tool` schema — name, description, and MCP annotations (read-only hint, idempotent hint, etc.)
-2. A typed args struct — Go struct with JSON tags and `jsonschema` annotations that generate the tool's JSON Schema for the AI
-3. A handler closure — receives the parsed args, calls an `internal/tools` handler, and converts the result to `*mcp.CallToolResult`
+1. A `*mcp.Tool` schema: name, description, and MCP annotations (read-only hint, idempotent hint, etc.)
+2. A typed args struct: Go struct with JSON tags and `jsonschema` annotations that generate the tool's JSON Schema for the AI
+3. A handler closure: receives the parsed args, calls an `internal/tools` handler, and converts the result to `*mcp.CallToolResult`
 
 ```go
 mcp.AddTool(server, &mcp.Tool{
@@ -302,7 +302,7 @@ Tool registration (`cmd/agent-lsp/tools_*.go`) is separate from tool implementat
 
 ## Concurrency Model
 
-agent-lsp is a concurrent Go program. A single process manages multiple long-lived goroutines, channels, and synchronization primitives to handle parallel LSP communication, file watching, diagnostic tracking, and speculative execution — all without blocking the MCP request path.
+agent-lsp is a concurrent Go program. A single process manages multiple long-lived goroutines, channels, and synchronization primitives to handle parallel LSP communication, file watching, diagnostic tracking, and speculative execution, all without blocking the MCP request path.
 
 ### Goroutine Architecture
 
@@ -346,7 +346,7 @@ At steady state, agent-lsp runs the following goroutines per LSP subprocess:
                         └──────────────────────────────────────────────┘
 ```
 
-In multi-server mode, the readLoop/drainStderr/exit-monitor/watcher set is duplicated per language server subprocess. All goroutines are supervised — panics in `readLoop` and `startWatcher` are caught by `defer recover()`, logged with stack traces, and the server stays alive.
+In multi-server mode, the readLoop/drainStderr/exit-monitor/watcher set is duplicated per language server subprocess. All goroutines are supervised: panics in `readLoop` and `startWatcher` are caught by `defer recover()`, logged with stack traces, and the server stays alive.
 
 ### Channel Patterns
 
@@ -384,7 +384,7 @@ func (e *SerializedExecutor) Acquire(ctx context.Context, s *SimulationSession) 
 }
 ```
 
-This is more flexible than `sync.Mutex` because it respects context cancellation — a tool call that times out releases the caller immediately rather than deadlocking.
+This is more flexible than `sync.Mutex` because it respects context cancellation. A tool call that times out releases the caller immediately rather than deadlocking.
 
 **3. Non-Blocking Audit Logger (buffered producer/consumer)**
 
@@ -411,7 +411,7 @@ func (l *Logger) writeLoop() {
 }
 ```
 
-Tool handlers have zero-latency audit logging — they never wait for disk I/O. The `done` channel provides a clean shutdown signal: `Close()` closes `ch`, waits on `<-done`, then closes the file.
+Tool handlers have zero-latency audit logging; they never wait for disk I/O. The `done` channel provides a clean shutdown signal: `Close()` closes `ch`, waits on `<-done`, then closes the file.
 
 **4. Progress Token Coordination (sync.Cond)**
 
@@ -574,7 +574,7 @@ func WithDocument[T any](
 Internally it:
 1. Calls `ValidateFilePath` to resolve to an absolute path and reject path traversal
 2. Reads the file content from disk
-3. Calls `client.OpenDocument(ctx, fileURI, content, languageID)` — which sends `textDocument/didOpen` if the file is new or `textDocument/didChange` if already tracked
+3. Calls `client.OpenDocument(ctx, fileURI, content, languageID)`, which sends `textDocument/didOpen` if the file is new or `textDocument/didChange` if already tracked
 4. Invokes the callback with the `file://` URI
 
 Usage example:
@@ -595,7 +595,7 @@ locations, err := tools.WithDocument[[]types.Location](ctx, client, args.FilePat
 
 ## Speculative Execution Layer
 
-The speculative execution layer lets callers apply edits to files in an isolated LSP view, evaluate the diagnostic impact, and then commit or discard — without touching disk until explicitly requested.
+The speculative execution layer lets callers apply edits to files in an isolated LSP view, evaluate the diagnostic impact, and then commit or discard, without touching disk until explicitly requested.
 
 ### Package layout
 
@@ -651,11 +651,11 @@ The first `ApplyEdit` call for a given file URI within a session:
 
 ### Atomic variant
 
-`simulate_edit_atomic` (tool: `mcp__lsp__simulate_edit_atomic`) is a convenience wrapper that creates a session, applies one edit, evaluates, discards (to revert LSP state), and destroys — all in a single call. Useful for quick pre-flight checks before applying a real edit.
+`simulate_edit_atomic` (tool: `mcp__lsp__simulate_edit_atomic`) is a convenience wrapper that creates a session, applies one edit, evaluates, discards (to revert LSP state), and destroys, all in a single call. Useful for quick pre-flight checks before applying a real edit.
 
 ### Chained edits
 
-`simulate_chain` applies a sequence of edits and evaluates after each step. It returns a `ChainResult` with per-step `NetDelta` values and `SafeToApplyThroughStep` — the index of the last step where `NetDelta == 0`.
+`simulate_chain` applies a sequence of edits and evaluates after each step. It returns a `ChainResult` with per-step `NetDelta` values and `SafeToApplyThroughStep`, the index of the last step where `NetDelta == 0`.
 
 ### SerializedExecutor
 
@@ -722,7 +722,7 @@ InitializedHandler: func(_ context.Context, req *mcp.InitializedRequest) {
 
 ## Skills Layer
 
-**Key distinction:** Skills are not Go code and are not part of the compiled binary. They are prompt documents — Markdown files that tell Claude how to orchestrate the MCP tools in the correct multi-step sequence. They live in the `skills/` directory of this repo and are installed separately into the AI client's skill directory (`~/.claude/skills/`).
+**Key distinction:** Skills are not Go code and are not part of the compiled binary. They are prompt documents, Markdown files that tell Claude how to orchestrate the MCP tools in the correct multi-step sequence. They live in the `skills/` directory of this repo and are installed separately into the AI client's skill directory (`~/.claude/skills/`).
 
 The boundary is clear:
 
@@ -734,7 +734,7 @@ Handles one tool call         Handles multi-step workflows
 Knows nothing about skills    Knows exactly which tools to call
 ```
 
-The `skills/` directory contains Agent Skills — structured directories that Claude Code loads as slash commands. Each skill is a directory containing a `SKILL.md` file in the [AgentSkills](https://github.com/anthropics/agent-skills) format:
+The `skills/` directory contains Agent Skills, structured directories that Claude Code loads as slash commands. Each skill is a directory containing a `SKILL.md` file in the [AgentSkills](https://github.com/anthropics/agent-skills) format:
 
 ```
 skills/
@@ -759,7 +759,7 @@ allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build ...
 ...prompt body with instructions for the agent...
 ```
 
-Skills are not Go code — they are prompt documents that tell Claude how to orchestrate the MCP tools exposed by this server. They exist in this repo so they ship alongside the server binary and stay in sync with the tool API.
+Skills are not Go code. They are prompt documents that tell Claude how to orchestrate the MCP tools exposed by this server. They exist in this repo so they ship alongside the server binary and stay in sync with the tool API.
 
 **Installing skills:**
 
@@ -918,7 +918,7 @@ When the LSP subprocess exits:
 
 It resolves when:
 
-1. All target URIs have received at least one diagnostic notification *after* the initial snapshot (the first notification is excluded — it is the server's pre-existing state for that file)
+1. All target URIs have received at least one diagnostic notification *after* the initial snapshot (the first notification is excluded; it is the server's pre-existing state for that file)
 2. No further diagnostic notifications arrive for **500ms** (the stabilization window)
 3. OR the optional `timeoutMs` is exceeded
 
@@ -978,7 +978,7 @@ type Extension interface {
 }
 ```
 
-Extensions take precedence over core handlers in case of name conflicts. All features are namespaced by language ID automatically. Unlike dynamic plugin systems, Go extensions are registered at compile time — unused extensions have zero runtime cost and there is no filesystem scan or `dlopen`.
+Extensions take precedence over core handlers in case of name conflicts. All features are namespaced by language ID automatically. Unlike dynamic plugin systems, Go extensions are registered at compile time. Unused extensions have zero runtime cost and there is no filesystem scan or `dlopen`.
 
 `cmd/agent-lsp/main.go` calls `registry.Activate(languageID)` for each configured server after parsing arguments.
 
@@ -1005,7 +1005,7 @@ ANSI escape codes are stripped from output. A `Signature` field is extracted fro
 `HandleGetSymbolSource` (in `internal/tools/symbol_source.go`) extracts the full source text of the symbol at a given cursor position:
 
 1. Calls `client.GetDocumentSymbols` via `WithDocument` to get the normalized symbol tree
-2. Walks the tree with `findInnermostSymbol` — recursively finds the deepest symbol whose `Range` contains the 0-based cursor position
+2. Walks the tree with `findInnermostSymbol`, which recursively finds the deepest symbol whose `Range` contains the 0-based cursor position
 3. Reads the file from disk and slices the lines corresponding to `sym.Range.Start.Line` to `sym.Range.End.Line` (0-based, inclusive)
 4. Returns `SymbolSourceResult{SymbolName, SymbolKind, StartLine, EndLine, Source}` with 1-based line numbers
 
@@ -1015,7 +1015,7 @@ This is useful for agents that want to read a function body without manually cou
 
 ## See also
 
-- [Home](index.md) — project overview, setup, and quick start
-- [docs/tools.md](./tools.md) — full tool reference with parameters and examples
-- [docs/skills.md](./skills.md) — skill reference with workflows and composition patterns
-- [docs/language-support.md](./language-support.md) — language coverage matrix
+- [Home](index.md): project overview, setup, and quick start
+- [docs/tools.md](./tools.md): full tool reference with parameters and examples
+- [docs/skills.md](./skills.md): skill reference with workflows and composition patterns
+- [docs/language-support.md](./language-support.md): language coverage matrix

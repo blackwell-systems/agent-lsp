@@ -8,17 +8,17 @@ the 0-based values the LSP spec requires.
 
 ## Table of Contents
 
-- [Session tools](#session-tools) — `start_lsp`, `restart_lsp_server`, `open_document`, `close_document`, `add_workspace_folder`, `remove_workspace_folder`, `list_workspace_folders`
-- [Analysis tools](#analysis-tools) — `get_diagnostics`, `get_info_on_location`, `get_completions`, `get_signature_help`, `get_code_actions`, `get_document_symbols`, `get_workspace_symbols`, `get_change_impact`, `get_cross_repo_references`
-- [Navigation tools](#navigation-tools) — `get_references`, `go_to_definition`, `go_to_type_definition`, `go_to_implementation`, `go_to_declaration`
-- [Refactoring tools](#refactoring-tools) — `rename_symbol`, `prepare_rename`, `format_document`, `format_range`, `apply_edit`, `execute_command`
-- [Utilities](#utilities) — `did_change_watched_files`, `set_log_level`
-- [Code Intelligence tools](#code-intelligence-tools) — `call_hierarchy`, `type_hierarchy`, `get_inlay_hints`, `get_semantic_tokens`, `get_document_highlights`
-- [Build & Test tools](#build--test-tools) — `run_build`, `run_tests`, `get_tests_for_file`
-- [Server Introspection tools](#server-introspection-tools) — `get_server_capabilities`, `detect_lsp_servers`
-- [Simulation tools](#simulation-tools) — `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`
+- [Session tools](#session-tools): `start_lsp`, `restart_lsp_server`, `open_document`, `close_document`, `add_workspace_folder`, `remove_workspace_folder`, `list_workspace_folders`
+- [Analysis tools](#analysis-tools): `get_diagnostics`, `get_info_on_location`, `get_completions`, `get_signature_help`, `get_code_actions`, `get_document_symbols`, `get_workspace_symbols`, `get_change_impact`, `get_cross_repo_references`
+- [Navigation tools](#navigation-tools): `get_references`, `go_to_definition`, `go_to_type_definition`, `go_to_implementation`, `go_to_declaration`
+- [Refactoring tools](#refactoring-tools): `rename_symbol`, `prepare_rename`, `format_document`, `format_range`, `apply_edit`, `execute_command`
+- [Utilities](#utilities): `did_change_watched_files`, `set_log_level`
+- [Code Intelligence tools](#code-intelligence-tools): `call_hierarchy`, `type_hierarchy`, `get_inlay_hints`, `get_semantic_tokens`, `get_document_highlights`
+- [Build & Test tools](#build--test-tools): `run_build`, `run_tests`, `get_tests_for_file`
+- [Server Introspection tools](#server-introspection-tools): `get_server_capabilities`, `detect_lsp_servers`
+- [Simulation tools](#simulation-tools): `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`
 - [Startup and warm-up notes](#startup-and-warm-up-notes)
-- [Symbol lookup tools](#symbol-lookup-tools) — `go_to_symbol`, `get_symbol_source`, `get_symbol_documentation`
+- [Symbol lookup tools](#symbol-lookup-tools): `go_to_symbol`, `get_symbol_source`, `get_symbol_documentation`
 - [Skills](#skills)
 
 ---
@@ -56,7 +56,7 @@ LSP server initialized with root: /home/user/projects/agent-lsp/test/ts-project
 
 **Notes**
 
-- Shuts down the existing LSP process before starting the new one — no resource
+- Shuts down the existing LSP process before starting the new one, so there is no resource
   leak.
 - After `start_lsp` returns, the underlying language server is initialized but
   may not have finished indexing the workspace. For `get_references` on large
@@ -175,7 +175,7 @@ File successfully closed: /home/user/projects/agent-lsp/test/ts-project/src/cons
 ### `add_workspace_folder`
 
 Add a directory to the LSP workspace, enabling cross-repo references, definitions,
-and diagnostics. After adding a folder the language server re-indexes it — call
+and diagnostics. After adding a folder the language server re-indexes it, so call
 sites and symbol definitions in both repos become visible to each other.
 
 Useful pattern: `start_lsp` on a library repo, then `add_workspace_folder` for a
@@ -210,7 +210,7 @@ both projects.
 
 - Requires `start_lsp` to have been called first.
 - Supported by gopls, rust-analyzer, typescript-language-server. Servers that do not support multi-root workspaces silently ignore the notification.
-- Idempotent — adding a folder that is already present is a no-op.
+- Idempotent: adding a folder that is already present is a no-op.
 
 ---
 
@@ -230,7 +230,7 @@ Remove a directory from the LSP workspace. The server stops indexing that folder
 
 Return the current list of workspace folders the server is indexing.
 
-**Parameters** — none
+**Parameters:** none
 
 **Actual output**
 
@@ -258,7 +258,7 @@ language server to publish diagnostics, then returns them.
 |------|------|----------|-------------|
 | `file_path` | string | no | Absolute path to a specific file. Omit to get diagnostics for all open files. |
 
-**Example call — single file**
+**Example call (single file)**
 
 ```json
 {
@@ -266,7 +266,7 @@ language server to publish diagnostics, then returns them.
 }
 ```
 
-**Actual output — clean file**
+**Actual output (clean file)**
 
 ```json
 {
@@ -274,7 +274,7 @@ language server to publish diagnostics, then returns them.
 }
 ```
 
-**Actual output — all open files**
+**Actual output (all open files)**
 
 ```json
 {
@@ -283,7 +283,7 @@ language server to publish diagnostics, then returns them.
 }
 ```
 
-**Output shape — file with errors**
+**Output shape (file with errors)**
 
 ```json
 {
@@ -340,7 +340,7 @@ contextual detail that the language server provides on hover.
 }
 ```
 
-**Expected output — TypeScript function**
+**Expected output (TypeScript function)**
 
 ```
 function add(a: number, b: number): number
@@ -348,7 +348,7 @@ function add(a: number, b: number): number
 A simple function that adds two numbers
 ```
 
-**Expected output — TypeScript class**
+**Expected output (TypeScript class)**
 
 ```
 class Greeter
@@ -383,7 +383,7 @@ from a module, or valid identifiers in scope.
 | `line` | number | yes | Line number (1-based) |
 | `column` | number | yes | Column position (1-based), typically just after a `.` or at the start of a partial identifier |
 
-**Example call — after `greeter.`**
+**Example call (after `greeter.`)**
 
 ```json
 {
@@ -444,7 +444,7 @@ highlights the active parameter.
 | `line` | number | yes | Line of the call site (1-based) |
 | `column` | number | yes | Column inside the argument list (1-based) |
 
-**Example call** — cursor inside `add(1, ` on line 4 of consumer.ts
+**Example call** (cursor inside `add(1, ` on line 4 of consumer.ts)
 
 ```json
 {
@@ -505,7 +505,7 @@ diagnostics that overlap it, then returns a list of applicable actions.
 
 The range start must not be after the range end (validated by the schema).
 
-**Example call** — selection over `undefinedVariable` on line 44
+**Example call** (selection over `undefinedVariable` on line 44)
 
 ```json
 {
@@ -569,7 +569,7 @@ methods, etc.) via `textDocument/documentSymbol`. Returns a hierarchical
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
 | `language_id` | string | yes | Language identifier |
-| `format` | string | no | `"json"` (default) returns the full DocumentSymbol tree. `"outline"` returns a compact Markdown representation (`name [Kind] :line`, indented for children) — ~5x fewer tokens; useful for structural surveys before targeted navigation. |
+| `format` | string | no | `"json"` (default) returns the full DocumentSymbol tree. `"outline"` returns a compact Markdown representation (`name [Kind] :line`, indented for children), ~5x fewer tokens; useful for structural surveys before targeted navigation. |
 
 **Example call**
 
@@ -624,7 +624,7 @@ Symbol `kind` values: `4`=Constructor, `5`=Class, `6`=Method, `7`=Property,
 **Notes**
 
 - Returns `[]` if the server does not declare `documentSymbolProvider`.
-- Coordinates in the output are **1-based** — the tool shifts all `range` and `selectionRange` values by +1 before returning, including in nested `children`. Pass them directly to other tools without adjustment.
+- Coordinates in the output are **1-based**. The tool shifts all `range` and `selectionRange` values by +1 before returning, including in nested `children`. Pass them directly to other tools without adjustment.
 
 ---
 
@@ -643,13 +643,13 @@ name. Optionally enrich results with hover documentation for a paginated window.
 | `limit` | number | no | Number of symbols to enrich when `detail_level=hover`. Default `3`. |
 | `offset` | number | no | Pagination offset into results for enrichment. Default `0`. |
 
-**Example call — basic**
+**Example call (basic)**
 
 ```json
 { "query": "Greeter" }
 ```
 
-**Expected output — basic**
+**Expected output (basic)**
 
 ```json
 [
@@ -667,13 +667,13 @@ name. Optionally enrich results with hover documentation for a paginated window.
 ]
 ```
 
-**Example call — hover enriched**
+**Example call (hover enriched)**
 
 ```json
 { "query": "Greeter", "detail_level": "hover", "limit": 2, "offset": 0 }
 ```
 
-**Expected output — hover enriched**
+**Expected output (hover enriched)**
 
 ```json
 {
@@ -705,7 +705,7 @@ name. Optionally enrich results with hover documentation for a paginated window.
 - Returns `[]` if the server does not declare `workspaceSymbolProvider`. Some
   servers (e.g., tsserver) require at least one file to be open before workspace
   symbol search is available.
-- Unlike `get_document_symbols`, this tool does not take a `file_path` — it
+- Unlike `get_document_symbols`, this tool does not take a `file_path`. It
   queries the whole workspace index.
 - Result coordinates are 0-based (LSP native).
 - With `detail_level=hover`, `symbols[]` always contains the full result set.
@@ -854,13 +854,13 @@ Find all locations where a symbol is referenced across the workspace, via
 }
 ```
 
-**Actual output** (empty — tsserver not fully indexed in this session)
+**Actual output** (empty; tsserver not fully indexed in this session)
 
 ```json
 []
 ```
 
-**Expected output — when workspace is indexed**
+**Expected output (when workspace is indexed)**
 
 ```json
 [
@@ -914,7 +914,7 @@ Jump to where a symbol is defined, via `textDocument/definition`.
 | `line` | number | yes | Line of the symbol (1-based) |
 | `column` | number | yes | Column (1-based) |
 
-**Example call** — `add` usage in consumer.ts line 4
+**Example call** (`add` usage in consumer.ts line 4)
 
 ```json
 {
@@ -954,9 +954,9 @@ Jump to where a symbol is defined, via `textDocument/definition`.
 Navigate to the declaration of the *type* of a symbol, rather than the symbol
 itself, via `textDocument/typeDefinition`.
 
-**Parameters** — identical to `go_to_definition`
+**Parameters:** identical to `go_to_definition`
 
-**Example call** — `alice` variable in consumer.ts (type is `Person`)
+**Example call** (`alice` variable in consumer.ts, type is `Person`)
 
 ```json
 {
@@ -995,9 +995,9 @@ itself, via `textDocument/typeDefinition`.
 Find all concrete implementations of an interface or abstract method, via
 `textDocument/implementation`.
 
-**Parameters** — identical to `go_to_definition`
+**Parameters:** identical to `go_to_definition`
 
-**Example call** — on an interface method
+**Example call** (on an interface method)
 
 ```json
 {
@@ -1037,9 +1037,9 @@ Navigate to the *declaration* of a symbol, as distinct from its definition, via
 the same location. This tool is most useful for C/C++ where a function can be
 declared in a header and defined in a source file.
 
-**Parameters** — identical to `go_to_definition`
+**Parameters:** identical to `go_to_definition`
 
-**Example call** — C++ function declared in header
+**Example call** (C++ function declared in header)
 
 ```json
 {
@@ -1093,7 +1093,7 @@ is **not applied automatically**. Pass it to `apply_edit` to commit the changes.
 | `new_name` | string | yes | The replacement name |
 | `exclude_globs` | array of strings | no | Glob patterns for files to skip (e.g. ["vendor/**", "**/*_gen.go"]). Matching files are excluded from the returned WorkspaceEdit. Uses filepath.Match syntax; also matched against the file's basename. |
 
-**Example call** — rename `add` to `sum`
+**Example call** (rename `add` to `sum`)
 
 ```json
 {
@@ -1208,7 +1208,7 @@ would be renamed and a suggested placeholder name.
 
 Compute formatting edits for an entire file via `textDocument/formatting`.
 Returns `TextEdit[]` describing what the formatter would change. Edits are
-**not applied automatically** — pass the result to `apply_edit` if you want to
+**not applied automatically**. Pass the result to `apply_edit` if you want to
 write the formatted output to disk.
 
 **Parameters**
@@ -1237,7 +1237,7 @@ write the formatted output to disk.
 []
 ```
 
-**Expected output — file needing formatting**
+**Expected output (file needing formatting)**
 
 ```json
 [
@@ -1282,7 +1282,7 @@ scoped to specific lines.
 
 Range start must not be after range end (schema-validated).
 
-**Example call** — format only the `Greeter` class
+**Example call** (format only the `Greeter` class)
 
 ```json
 {
@@ -1328,7 +1328,7 @@ Pass the object returned by `rename_symbol`, `format_document`, or
 
 Use either `workspace_edit` (positional mode, for edits returned by `rename_symbol`/`format_document`) or the `file_path`+`old_text`+`new_text` triple (text-match mode, for AI-generated edits where exact line/column are unknown).
 
-**Example call** — applying a rename edit
+**Example call** (applying a rename edit)
 
 ```json
 {
@@ -1362,7 +1362,7 @@ Workspace edit applied successfully
   modified file to keep the language server in sync.
 - `documentChanges` (array of `TextDocumentEdit`) and `changes` (object) forms
   are both supported.
-- This tool writes to disk immediately — make sure the edit looks correct before
+- This tool writes to disk immediately. Make sure the edit looks correct before
   calling it.
 
 ---
@@ -1380,7 +1380,7 @@ may also be listed in the server's `executeCommandProvider.commands` capability.
 | `command` | string | yes | Command identifier (e.g., `_typescript.applyRefactoring`) |
 | `arguments` | array | no | Arguments to pass to the command |
 
-**Example call** — triggering a TypeScript refactoring command
+**Example call** (triggering a TypeScript refactoring command)
 
 ```json
 {
@@ -1394,7 +1394,7 @@ may also be listed in the server's `executeCommandProvider.commands` capability.
 }
 ```
 
-**Expected output — command with a result**
+**Expected output (command with a result)**
 
 ```json
 {
@@ -1407,7 +1407,7 @@ may also be listed in the server's `executeCommandProvider.commands` capability.
 }
 ```
 
-**Expected output — command with no result**
+**Expected output (command with no result)**
 
 ```
 Command executed successfully (no result returned)
@@ -1473,7 +1473,7 @@ Notified server of 2 file change(s)
   changes using fsnotify and forwards them to the LSP server via
   `workspace/didChangeWatchedFiles` with a 150ms debounce. For normal editing
   workflows, calling this tool manually is not required. Use it only for
-  explicit control — e.g., to notify the server of changes made by external
+  explicit control, e.g. to notify the server of changes made by external
   processes before the auto-watcher's debounce window has closed, or for files
   outside the workspace root.
 
@@ -1515,7 +1515,7 @@ Log level set to: warning
 - This affects the MCP server's own logging only, not the underlying language
   server's verbosity.
 - Log messages are delivered as MCP `notifications/message` events to the connected
-  client (not just stderr) — you will see LSP lifecycle events, tool dispatch errors,
+  client (not just stderr), so you will see LSP lifecycle events, tool dispatch errors,
   and indexing state directly in the session. Before session init, messages fall back
   to stderr.
 
@@ -1660,7 +1660,7 @@ subtypes (implementations/subclasses), via `textDocument/prepareTypeHierarchy`,
 
 Return inlay hints for a range within a document via `textDocument/inlayHint`.
 Inlay hints show inferred type annotations and parameter name labels inline with
-source code — the same annotations IDEs display in TypeScript, Rust, Go, and
+source code, the same annotations IDEs display in TypeScript, Rust, Go, and
 other languages with type inference.
 
 **Parameters**
@@ -1787,7 +1787,7 @@ decoded from the server's legend into human-readable strings.
 ### `get_document_highlights`
 
 Return all occurrences of the symbol at a position within the same file via
-`textDocument/documentHighlight`. Highlights are file-scoped and instant — they
+`textDocument/documentHighlight`. Highlights are file-scoped and instant; they
 do not trigger a workspace-wide reference search.
 
 **Parameters**
@@ -1837,7 +1837,7 @@ do not trigger a workspace-wide reference search.
 
 - Returns `[]` if the server does not declare `documentHighlightProvider`.
 - Use this instead of `get_references` when you only need occurrences within
-  the current file — it is faster and requires no workspace indexing.
+  the current file. It is faster and requires no workspace indexing.
 - Coordinates in the output are 0-based (LSP native).
 
 ---
@@ -1919,7 +1919,7 @@ corresponding LSP server binaries. Returns the detected languages, installed
 servers with their executable paths, and a `suggested_config` array ready to
 paste into the agent-lsp MCP server args.
 
-Does not require `start_lsp` to have been called — it works standalone.
+Does not require `start_lsp` to have been called; it works standalone.
 
 **Parameters**
 
@@ -1983,7 +1983,7 @@ Does not require `start_lsp` to have been called — it works standalone.
 ### `run_build`
 
 Compile the project using the detected workspace language. Language-specific
-dispatch — `go build ./...` (Go), `cargo build` (Rust), `tsc --noEmit`
+dispatch: `go build ./...` (Go), `cargo build` (Rust), `tsc --noEmit`
 (TypeScript), `mypy .` (Python typecheck proxy), `npm run build` (JavaScript),
 `dotnet build` (C#), `swift build` (Swift), `zig build` (Zig),
 `gradle build --quiet` (Kotlin). Does not require `start_lsp`.
@@ -2020,11 +2020,11 @@ dispatch — `go build ./...` (Go), `cargo build` (Rust), `tsc --noEmit`
 ### `run_tests`
 
 Run the test suite for the detected workspace language. Language-specific
-dispatch — `go test -json ./...` (Go), `cargo test --message-format=json`
+dispatch: `go test -json ./...` (Go), `cargo test --message-format=json`
 (Rust), `pytest --tb=json` (Python), `npm test` (JavaScript/TypeScript),
 `dotnet test` (C#), `swift test` (Swift), `zig build test` (Zig),
 `gradle test --quiet` (Kotlin). Test failure `location` fields are
-LSP-normalized (file URI + zero-based range) — paste directly into
+LSP-normalized (file URI + zero-based range). Paste directly into
 `go_to_definition`. Does not require `start_lsp`.
 
 **Parameters**
@@ -2067,7 +2067,7 @@ LSP-normalized (file URI + zero-based range) — paste directly into
 
 ### `get_tests_for_file`
 
-Return test files that exercise a given source file. Static lookup — no test
+Return test files that exercise a given source file. Static lookup, no test
 execution. Go: `*_test.go` in the same directory. Python: `test_*.py` /
 `*_test.py` in the same directory and a `tests/` sibling. TypeScript/JS:
 `*.test.ts`, `*.spec.ts`, `*.test.js`, `*.spec.js`, etc. Rust: returns the
@@ -2108,7 +2108,7 @@ Does not require `start_lsp`.
 
 ## Simulation tools
 
-Speculative code sessions let you apply hypothetical edits, evaluate their diagnostic impact, then commit or discard — without touching files on disk. See `docs/speculative-execution.md` for the full design.
+Speculative code sessions let you apply hypothetical edits, evaluate their diagnostic impact, then commit or discard, all without touching files on disk. See `docs/speculative-execution.md` for the full design.
 
 **Call `start_lsp` before using any simulation tool.** All simulation tools operate against the currently-running language server.
 
@@ -2148,7 +2148,7 @@ Create an isolated speculative session rooted at the current workspace state. Th
 **Notes**
 
 - Call `start_lsp` first; the session is attached to the running language server.
-- The session must be destroyed when done — call `destroy_session` to release resources.
+- The session must be destroyed when done. Call `destroy_session` to release resources.
 - Multiple sessions may exist simultaneously with independent state.
 
 ---
@@ -2196,7 +2196,7 @@ Apply an in-memory edit to an existing session. Does not modify files on disk. M
 **Notes**
 
 - Multiple `simulate_edit` calls may be made before calling `evaluate_session`; evaluation reflects the cumulative state.
-- Does not evaluate diagnostics — call `evaluate_session` separately to observe impact.
+- Does not evaluate diagnostics. Call `evaluate_session` separately to observe impact.
 
 ---
 
@@ -2239,7 +2239,7 @@ Compare the session's current diagnostic state against the baseline. Returns whi
 
 **Notes**
 
-- `net_delta: 0` means no new errors were introduced — safe to apply.
+- `net_delta: 0` means no new errors were introduced, safe to apply.
 - `confidence` values: `"high"` (file scope, settled within timeout), `"partial"` (timed out or snapshot incomplete), `"eventual"` (workspace scope, cross-file propagation may be incomplete).
 - Does not mutate session state.
 
@@ -2311,7 +2311,7 @@ Materialize the session's accumulated speculative state. By default returns a pa
 | `target` | string | no | Target path override for writing files |
 | `apply` | boolean | no | If `true`, write changes to disk. Default `false`. |
 
-**Example call — patch only (default)**
+**Example call (patch only, default)**
 
 ```json
 {
@@ -2319,7 +2319,7 @@ Materialize the session's accumulated speculative state. By default returns a pa
 }
 ```
 
-**Example call — write to disk**
+**Example call (write to disk)**
 
 ```json
 {
@@ -2375,7 +2375,7 @@ Revert all in-memory edits accumulated in the session. The session is reset to b
 
 **Notes**
 
-- Equivalent to rolling back a transaction — no side effects.
+- Equivalent to rolling back a transaction. No side effects.
 - Call `destroy_session` after discarding to release resources.
 
 ---
@@ -2409,7 +2409,7 @@ Clean up all resources associated with a session. Must be called after committin
 
 **Notes**
 
-- Must be called even on dirty sessions — this is the only valid cleanup path for a session in `dirty` state.
+- Must be called even on dirty sessions. This is the only valid cleanup path for a session in `dirty` state.
 - Sessions are in-memory only; session IDs become invalid on MCP server restart.
 
 ---
@@ -2426,7 +2426,7 @@ Two modes:
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `session_id` | string | no | Existing session ID — if provided, uses that session instead of creating a temporary one |
+| `session_id` | string | no | Existing session ID. If provided, uses that session instead of creating a temporary one |
 | `workspace_root` | string | no* | Absolute path to the workspace root (*required when `session_id` is omitted) |
 | `language` | string | no* | Language identifier (*required when `session_id` is omitted) |
 | `file_path` | string | yes | Absolute path to the file to edit |
@@ -2468,11 +2468,11 @@ Two modes:
 
 **Notes**
 
-- Easiest way to test a single edit — no session lifecycle management required.
+- Easiest way to test a single edit. No session lifecycle management required.
 - Call `start_lsp` first.
 - `net_delta: 0` means the edit is safe to apply (no new errors introduced).
 - Automatically discards and destroys the session; the file on disk is never modified.
-- Backed by the same session infrastructure as the full lifecycle tools — not a separate code path.
+- Backed by the same session infrastructure as the full lifecycle tools, not a separate code path.
 
 ---
 
@@ -2488,10 +2488,10 @@ indexing after `initialize`. During this period:
 The server handles three server-initiated requests that must be responded to
 before workspace loading completes:
 
-1. `window/workDoneProgress/create` — pre-registers a progress token.
-2. `workspace/configuration` — the server returns `null` for each requested
+1. `window/workDoneProgress/create`: pre-registers a progress token.
+2. `workspace/configuration`: the server returns `null` for each requested
    config item.
-3. `client/registerCapability` — acknowledged with `null`.
+3. `client/registerCapability`: acknowledged with `null`.
 
 agent-lsp handles all three automatically. For `get_references`, the client
 additionally waits for all `$/progress` end events before returning. tsserver
@@ -2505,7 +2505,7 @@ lines to confirm when the server is ready.
 
 ### `go_to_symbol`
 
-Navigate to a symbol's definition by dot-notation path — no file path or
+Navigate to a symbol's definition by dot-notation path, with no file path or
 line/column required. Useful when you know a symbol name but not its location.
 
 **Parameters**
@@ -2553,7 +2553,7 @@ line/column required. Useful when you know a symbol name but not its location.
 
 Return the source code of the innermost symbol (function, method, struct, class,
 etc.) whose range contains a given cursor position. Composes
-`textDocument/documentSymbol` + file read — no new LSP methods required.
+`textDocument/documentSymbol` + file read. No new LSP methods required.
 
 **Parameters**
 
@@ -2590,9 +2590,9 @@ etc.) whose range contains a given cursor position. Composes
 
 **Notes**
 
-- `findInnermostSymbol` walks the DocumentSymbol tree recursively and returns the deepest symbol whose range contains the cursor — so clicking inside a method body returns the method, not the enclosing class.
+- `findInnermostSymbol` walks the DocumentSymbol tree recursively and returns the deepest symbol whose range contains the cursor, so clicking inside a method body returns the method, not the enclosing class.
 - `start_line` and `end_line` are 1-based.
-- Provide `line`+`character`, or `position_pattern` with `@@` — at least one position input is required.
+- Provide `line`+`character`, or `position_pattern` with `@@`. At least one position input is required.
 - CI-verified across all 30 languages via `testGetSymbolSource`.
 
 ---
@@ -2609,8 +2609,8 @@ Works on transitive dependencies not indexed by the language server.
 |------|------|----------|-------------|
 | `symbol` | string | yes | Fully-qualified symbol name (e.g. `fmt.Println`, `std::vec::Vec::new`) |
 | `language_id` | string | yes | Language identifier: `go`, `rust`, `python` |
-| `file_path` | string | no | Absolute path to any file in the module/project — used to infer package context for Go |
-| `format` | string | no | `"text"` (default) or `"markdown"` — wraps signature in a fenced code block |
+| `file_path` | string | no | Absolute path to any file in the module/project, used to infer package context for Go |
+| `format` | string | no | `"text"` (default) or `"markdown"`. Wraps signature in a fenced code block |
 
 **Algorithm**
 
@@ -2648,13 +2648,13 @@ Dispatches to a per-language toolchain command based on `language_id`:
 
 - All dispatchers use a 10-second timeout. Cold module cache (first `go doc` call)
   may approach this limit; subsequent calls are fast.
-- Output is ANSI-stripped — safe for MCP transport.
+- Output is ANSI-stripped, safe for MCP transport.
 - When the toolchain command fails, `source` is `"error"` and `error` contains the
-  stderr. This is a structured result, not an MCP error — callers can detect it and
+  stderr. This is a structured result, not an MCP error. Callers can detect it and
   fall back to `get_info_on_location`.
 - TypeScript and JavaScript are not supported; returns `source: "error"` with an
   appropriate message.
-- `get_symbol_documentation` is used as Tier 2 in the `lsp-docs` skill — call it
+- `get_symbol_documentation` is used as Tier 2 in the `lsp-docs` skill. Call it
   after hover returns empty, before falling back to source navigation.
 
 ---
@@ -2681,7 +2681,7 @@ of the character immediately after `@@`.
 }
 ```
 
-This positions the cursor at the `D` in `GetDefinition` — equivalent to
+This positions the cursor at the `D` in `GetDefinition`, equivalent to
 passing the line/column manually, but resistant to line number drift.
 
 **Error cases**
@@ -2702,14 +2702,14 @@ passing the line/column manually, but resistant to line number drift.
 ### Glob exclusions for `rename_symbol`
 
 `rename_symbol` accepts an optional `exclude_globs` array. Files matching
-any pattern are excluded from the returned WorkspaceEdit — the rename
+any pattern are excluded from the returned WorkspaceEdit. The rename
 still executes on all other files.
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `exclude_globs` | array | no | Array of glob patterns (filepath.Match syntax). Matched against full path and basename. |
 
-**Example** — exclude generated files and vendor tree:
+**Example** (exclude generated files and vendor tree):
 
 ```json
 {
@@ -2727,12 +2727,12 @@ still executes on all other files.
 {
   "workspace_edit": { "...": "full WorkspaceEdit as usual" },
   "preview": {
-    "note": "Dry run — no files were modified. Call apply_edit with workspace_edit to commit."
+    "note": "Dry run, no files were modified. Call apply_edit with workspace_edit to commit."
   }
 }
 ```
 
-**Normal mode** (`dry_run` omitted or false): behavior unchanged — returns the
+**Normal mode** (`dry_run` omitted or false): behavior unchanged, returns the
 `WorkspaceEdit` directly, ready for `apply_edit`.
 
 ---
@@ -2745,25 +2745,25 @@ workflows. Install with `cd skills && ./install.sh`.
 | Skill | Tools used | Purpose |
 |-------|-----------|---------|
 | `/lsp-safe-edit` | `simulate_edit_atomic`, `get_diagnostics`, `get_code_actions`, `apply_edit` | Speculative preview before disk write (`simulate_edit_atomic`); before/after diagnostic diff; surfaces code actions on introduced errors; handles multi-file edits |
-| `/lsp-edit-export` | `get_references`, `get_info_on_location`, `simulate_edit_atomic` | Safe editing of exported symbols — finds all callers first, then validates the edit |
-| `/lsp-edit-symbol` | `get_workspace_symbols`, `get_document_symbols`, `apply_edit` | Edit a named symbol without knowing its file or position — resolves name to definition, retrieves full range, applies edit |
+| `/lsp-edit-export` | `get_references`, `get_info_on_location`, `simulate_edit_atomic` | Safe editing of exported symbols. Finds all callers first, then validates the edit |
+| `/lsp-edit-symbol` | `get_workspace_symbols`, `get_document_symbols`, `apply_edit` | Edit a named symbol without knowing its file or position. Resolves name to definition, retrieves full range, applies edit |
 | `/lsp-rename` | `prepare_rename`, `rename_symbol` (dry_run), `apply_edit`, `get_diagnostics` | Two-phase rename: `prepare_rename` validates position first, then preview all sites, confirm, apply atomically |
-| `/lsp-verify` | `get_diagnostics`, `run_build`, `run_tests` | Full three-layer check: LSP diagnostics + build + tests — summarizes pass/fail |
-| `/lsp-simulate` | `create_simulation_session`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session` | Speculative editing — test changes without touching the file; supports single edits, sessions, and chained multi-edit sequences |
-| `/lsp-impact` | `get_references`, `call_hierarchy`, `type_hierarchy` | Blast-radius analysis before renaming or deleting — maps all callers, implementors, and subtypes |
+| `/lsp-verify` | `get_diagnostics`, `run_build`, `run_tests` | Full three-layer check: LSP diagnostics + build + tests, summarizes pass/fail |
+| `/lsp-simulate` | `create_simulation_session`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session` | Speculative editing: test changes without touching the file; supports single edits, sessions, and chained multi-edit sequences |
+| `/lsp-impact` | `get_references`, `call_hierarchy`, `type_hierarchy` | Blast-radius analysis before renaming or deleting. Maps all callers, implementors, and subtypes |
 | `/lsp-dead-code` | `get_document_symbols`, `get_references` | Detect zero-reference exports and unreachable symbols across a file or workspace |
-| `/lsp-implement` | `go_to_implementation`, `type_hierarchy` | Find all concrete implementations of an interface or abstract type — capability pre-check, risk assessment (0 = likely unused, >10 = breaking API change) |
+| `/lsp-implement` | `go_to_implementation`, `type_hierarchy` | Find all concrete implementations of an interface or abstract type, with capability pre-check and risk assessment (0 = likely unused, >10 = breaking API change) |
 | `/lsp-docs` | `get_info_on_location`, `get_symbol_documentation`, `go_to_definition`, `get_symbol_source` | Three-tier documentation lookup: hover → offline toolchain doc → source definition |
-| `/lsp-cross-repo` | `add_workspace_folder`, `list_workspace_folders`, `get_references`, `go_to_implementation`, `call_hierarchy` | Multi-root cross-repo analysis — add a consumer repo and find all callers, references, and implementations of a library symbol across both repos |
-| `/lsp-local-symbols` | `get_document_symbols`, `get_document_highlights`, `get_info_on_location` | File-scoped analysis — list all symbols in a file, find all usages of a symbol within the file (faster than workspace search), get type info |
+| `/lsp-cross-repo` | `add_workspace_folder`, `list_workspace_folders`, `get_references`, `go_to_implementation`, `call_hierarchy` | Multi-root cross-repo analysis. Add a consumer repo and find all callers, references, and implementations of a library symbol across both repos |
+| `/lsp-local-symbols` | `get_document_symbols`, `get_document_highlights`, `get_info_on_location` | File-scoped analysis: list all symbols in a file, find all usages of a symbol within the file (faster than workspace search), get type info |
 | `/lsp-test-correlation` | `get_tests_for_file`, `get_workspace_symbols`, `run_tests` | Find and run only the tests covering an edited file; multi-file deduplication; fallback to workspace symbol search when mapping is absent |
 | `/lsp-format-code` | `format_document`, `format_range`, `apply_edit`, `get_diagnostics` | Format a file or selection via the language server formatter; full-file or range; verifies no diagnostics introduced after applying |
-| `/lsp-explore` | `go_to_symbol`, `get_info_on_location`, `go_to_implementation`, `call_hierarchy`, `get_references` | Symbol exploration: hover + implementations + call hierarchy + references in one pass — for navigating unfamiliar code |
-| `/lsp-understand` | `get_info_on_location`, `go_to_implementation`, `call_hierarchy`, `get_references`, `get_symbol_source`, `get_document_symbols`, `go_to_symbol` | Deep-dive exploration — builds a Code Map showing type info, implementations, call hierarchy, references, and source |
+| `/lsp-explore` | `go_to_symbol`, `get_info_on_location`, `go_to_implementation`, `call_hierarchy`, `get_references` | Symbol exploration: hover + implementations + call hierarchy + references in one pass, for navigating unfamiliar code |
+| `/lsp-understand` | `get_info_on_location`, `go_to_implementation`, `call_hierarchy`, `get_references`, `get_symbol_source`, `get_document_symbols`, `go_to_symbol` | Deep-dive exploration. Builds a Code Map showing type info, implementations, call hierarchy, references, and source |
 | `/lsp-refactor` | `get_change_impact`, `simulate_edit_atomic`, `simulate_chain`, `get_diagnostics`, `run_build`, `run_tests`, `get_tests_for_file`, `apply_edit`, `format_document` | End-to-end safe refactor: blast-radius analysis, speculative preview, apply, verify build, run affected tests |
 | `/lsp-extract-function` | `get_document_symbols`, `get_code_actions`, `execute_command`, `apply_edit`, `get_diagnostics`, `format_document` | Extract a code block into a named function; primary path uses LSP code action, falls back to manual extraction |
 | `/lsp-fix-all` | `get_diagnostics`, `get_code_actions`, `apply_edit`, `format_document` | Bulk-apply quick-fix code actions for all diagnostics in a file |
-| `/lsp-generate` | `get_code_actions`, `execute_command`, `apply_edit`, `format_document`, `get_diagnostics` | Trigger LSP code generation — implement interface stubs, generate test skeletons, add missing methods |
+| `/lsp-generate` | `get_code_actions`, `execute_command`, `apply_edit`, `format_document`, `get_diagnostics` | Trigger LSP code generation: implement interface stubs, generate test skeletons, add missing methods |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.
 
@@ -2771,5 +2771,5 @@ Skills work with any MCP client that supports tool use, not just Claude Code.
 
 ## See also
 
-- [docs/skills.md](./skills.md) — skill reference with workflows, use cases, and composition patterns
-- [docs/language-support.md](./language-support.md) — language coverage matrix and per-language tool support
+- [docs/skills.md](./skills.md): skill reference with workflows, use cases, and composition patterns
+- [docs/language-support.md](./language-support.md): language coverage matrix and per-language tool support

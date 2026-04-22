@@ -1,6 +1,6 @@
 # Speculative Execution for Code
 
-**Status:** Shipped — all 8 tools implemented and CI-tested across 8 languages (`TestSpeculativeSessions` in `test/speculative_test.go`: Go, TypeScript, Python, Rust, C++, C#, Dart, Java)
+**Status:** Shipped. All 8 tools implemented and CI-tested across 8 languages (`TestSpeculativeSessions` in `test/speculative_test.go`: Go, TypeScript, Python, Rust, C++, C#, Dart, Java)
 **Tools:** `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`
 
 ---
@@ -19,13 +19,13 @@ Simulation tools create sessions on the currently-running language server. If `s
 
 ## Position convention
 
-All `start_line`, `start_column`, `end_line`, and `end_column` parameters are **1-indexed** — the same as line numbers shown by `cat -n` and most editors. The `extractRange` helper in the codebase converts these to the 0-indexed values the LSP protocol requires. Do not subtract 1 before passing positions to simulation tools.
+All `start_line`, `start_column`, `end_line`, and `end_column` parameters are **1-indexed**, the same as line numbers shown by `cat -n` and most editors. The `extractRange` helper in the codebase converts these to the 0-indexed values the LSP protocol requires. Do not subtract 1 before passing positions to simulation tools.
 
 ---
 
 ## Quick start
 
-The simplest path: use `simulate_edit_atomic` for a single speculative edit. It handles the full session lifecycle internally — no session ID to track, file on disk is never modified.
+The simplest path: use `simulate_edit_atomic` for a single speculative edit. It handles the full session lifecycle internally. No session ID to track, file on disk is never modified.
 
 ```
 start_lsp(root_dir="/your/workspace")
@@ -44,15 +44,15 @@ simulate_edit_atomic(
 → {"errors_introduced": null, "errors_resolved": null, "net_delta": 0, "confidence": "high"}
 ```
 
-`net_delta: 0` means no new errors were introduced — safe to apply. A positive `net_delta` means the edit would break things; inspect `errors_introduced` for details.
+`net_delta: 0` means no new errors were introduced, safe to apply. A positive `net_delta` means the edit would break things; inspect `errors_introduced` for details.
 
 ---
 
 ## The Idea
 
-LSP today is a query engine — agents ask what exists and react to what they find. This makes AI-assisted editing inherently trial-and-error: edit, discover breakage, fix, repeat.
+LSP today is a query engine. Agents ask what exists and react to what they find. This makes AI-assisted editing inherently trial-and-error: edit, discover breakage, fix, repeat.
 
-Speculative code sessions turn LSP into a simulation engine. Create an isolated semantic workspace, apply hypothetical changes, evaluate the resulting diagnostic state, then commit or discard — without ever touching disk.
+Speculative code sessions turn LSP into a simulation engine. Create an isolated semantic workspace, apply hypothetical changes, evaluate the resulting diagnostic state, then commit or discard, without ever touching disk.
 
 ```
 Current workflow:    edit → discover breakage → fix → repeat
@@ -112,15 +112,15 @@ A `dirty` session must not be committed. Call `destroy_session` to clean up.
 
 A session holds:
 
-- **baseline_ref** — the workspace state at session creation (read-only within session)
-- **isolated LSP semantic state** — in-memory document buffers managed by the session
-- **document versions** — per-document version counter, monotonically increasing
-- **accumulated speculative edits** — ordered list of edits applied within the session
-- **diagnostics snapshot** — latest diagnostic state after most recent evaluation
-- **session status** — one of: `created`, `mutated`, `evaluating`, `evaluated`, `committed`, `discarded`, `dirty`, `destroyed`
-- **session_id** — UUID assigned at creation, used for tracing
+- **baseline_ref**: the workspace state at session creation (read-only within session)
+- **isolated LSP semantic state**: in-memory document buffers managed by the session
+- **document versions**: per-document version counter, monotonically increasing
+- **accumulated speculative edits**: ordered list of edits applied within the session
+- **diagnostics snapshot**: latest diagnostic state after most recent evaluation
+- **session status**: one of `created`, `mutated`, `evaluating`, `evaluated`, `committed`, `discarded`, `dirty`, `destroyed`
+- **session_id**: UUID assigned at creation, used for tracing
 
-The baseline is the code state at the moment `create_simulation_session` is called. It is immutable from the session's perspective — the session can only mutate its own overlay.
+The baseline is the code state at the moment `create_simulation_session` is called. It is immutable from the session's perspective; the session can only mutate its own overlay.
 
 ---
 
@@ -137,7 +137,7 @@ The baseline is the code state at the moment `create_simulation_session` is call
 
 This is the primary unresolved architectural tension.
 
-**Logical isolation (current design):** a single LSP server instance handles all sessions. Concurrent sessions on the same server are serialized — only one session may hold mutated in-memory state at a time. The mutex enforces ordering; sessions do not run truly in parallel against the same server.
+**Logical isolation (current design):** a single LSP server instance handles all sessions. Concurrent sessions on the same server are serialized; only one session may hold mutated in-memory state at a time. The mutex enforces ordering; sessions do not run truly in parallel against the same server.
 
 ```
 session_a and session_b on same server:
@@ -193,7 +193,7 @@ Mutation and observation are separate operations.
 
 **`simulate_edit(session_id, edit)` → edit_result**
 
-Mutates session state. Pushes `textDocument/didChange` to the language server's in-memory buffer. Does not evaluate diagnostics — returns only whether the edit was applied.
+Mutates session state. Pushes `textDocument/didChange` to the language server's in-memory buffer. Does not evaluate diagnostics. Returns only whether the edit was applied.
 
 ```json
 {
@@ -222,7 +222,7 @@ Observes current session state. Calls `WaitForDiagnostics`, diffs against baseli
 
 A caller may call `simulate_edit` multiple times before calling `evaluate_session`. The evaluation reflects the cumulative state.
 
-**Atomic convenience wrapper:** `simulate_edit_atomic` supports two modes. **Standalone** (`session_id` omitted): creates a temporary session, applies the edit, evaluates, then destroys — pass `workspace_root` + `language`. **Existing session** (`session_id` provided): applies the edit into an existing session and evaluates without destroying it. Returns an `EvaluationResult` directly. Useful for single-edit what-if checks without managing session IDs.
+**Atomic convenience wrapper:** `simulate_edit_atomic` supports two modes. **Standalone** (`session_id` omitted): creates a temporary session, applies the edit, evaluates, then destroys. Pass `workspace_root` + `language`. **Existing session** (`session_id` provided): applies the edit into an existing session and evaluates without destroying it. Returns an `EvaluationResult` directly. Useful for single-edit what-if checks without managing session IDs.
 
 ---
 
@@ -238,7 +238,7 @@ Two models, both supported:
 
 **Imperative (opt-in):** pass `apply: true` (or a `target` path) to write files to disk directly. Equivalent to calling `apply_edit` on the returned patch, but in one step.
 
-Default is **functional** — return patch only, no side effects. Callers opt into disk writes explicitly.
+Default is **functional**: return patch only, no side effects. Callers opt into disk writes explicitly.
 
 ```
 commit_session(session_id)                  # → WorkspaceEdit patch, no disk write
@@ -247,15 +247,15 @@ commit_session(session_id, target: "/path") # → writes to target path + return
 ```
 
 This matters for:
-- **CI** — inspect patch, validate, then decide whether to apply
-- **Multi-agent** — one agent commits a patch, orchestrator applies after comparing
-- **Safety** — patch-only commit cannot corrupt workspace state
+- **CI**: inspect patch, validate, then decide whether to apply
+- **Multi-agent**: one agent commits a patch, orchestrator applies after comparing
+- **Safety**: patch-only commit cannot corrupt workspace state
 
 **Commit constraints:**
 
 - Commit is only allowed from a session in `evaluated` or `mutated` state
-- Commit is prohibited on `dirty` sessions — the state may be corrupt
-- Commit is prohibited on `created` sessions — no edits have been applied
+- Commit is prohibited on `dirty` sessions because the state may be corrupt
+- Commit is prohibited on `created` sessions because no edits have been applied
 - A timed-out evaluation does not block commit, but the session carries `confidence: "partial"`
 
 **After commit:**
@@ -294,7 +294,7 @@ A session becomes `dirty` when:
 
 A dirty session:
 
-- Must not be committed — state may not reflect intended mutations
+- Must not be committed; state may not reflect intended mutations
 - Must be destroyed via `destroy_session` (forced cleanup)
 - Reports `session_dirty: true` on all subsequent operation calls
 
@@ -306,12 +306,12 @@ A dirty session:
 
 These must hold for every session, for every operation:
 
-1. **Isolation** — no other session may read or mutate this session's speculative state
-2. **Baseline immutability** — the baseline is read-only from the session's perspective; only the session's overlay is mutable
-3. **Monotonic versioning** — document versions are strictly increasing within a session; `N → N+1 → N+2 → ...`; version never rolls back
-4. **No silent corruption** — a session either holds valid state or is marked `dirty`; there is no in-between
-5. **Evaluation reflects session state only** — `evaluate_session` returns diagnostics caused by edits in this session, not external mutations
-6. **Commit requires valid state** — `dirty` sessions must not be committed under any circumstances
+1. **Isolation**: no other session may read or mutate this session's speculative state
+2. **Baseline immutability**: the baseline is read-only from the session's perspective; only the session's overlay is mutable
+3. **Monotonic versioning**: document versions are strictly increasing within a session; `N → N+1 → N+2 → ...`; version never rolls back
+4. **No silent corruption**: a session either holds valid state or is marked `dirty`; there is no in-between
+5. **Evaluation reflects session state only**: `evaluate_session` returns diagnostics caused by edits in this session, not external mutations
+6. **Commit requires valid state**: `dirty` sessions must not be committed under any circumstances
 
 ---
 
@@ -331,7 +331,7 @@ destroy_session(session_id) → ok
 
 ### Convenience alias
 
-`simulate_edit_atomic` is a thin wrapper — not a separate API, just a helper for callers that don't need session persistence:
+`simulate_edit_atomic` is a thin wrapper, not a separate API, just a helper for callers that don't need session persistence:
 
 ```go
 func SimulateEditAtomic(ctx, mgr, args) (ToolResult, error) {
@@ -342,7 +342,7 @@ func SimulateEditAtomic(ctx, mgr, args) (ToolResult, error) {
 }
 ```
 
-Exposed as an MCP tool for single-edit use cases. Backed by the same session infrastructure — no separate code path.
+Exposed as an MCP tool for single-edit use cases. Backed by the same session infrastructure, not a separate code path.
 
 ### Scope support
 
@@ -405,15 +405,15 @@ Two diagnostics are considered identical if all of the following match:
 - `range.end` (line + character)
 - `message` (exact string)
 - `severity` (error / warning / info / hint)
-- `source` (optional — ignored if absent in either)
+- `source` (optional, ignored if absent in either)
 
 The diff is computed as:
 
 - **introduced:** present in post-simulation diagnostics, not in baseline
 - **resolved:** present in baseline, not in post-simulation diagnostics
-- **unchanged:** present in both (not returned — reduces noise)
+- **unchanged:** present in both (not returned; reduces noise)
 
-Position matching uses post-edit coordinates. Baseline diagnostics reflect pre-edit positions by design — the delta communicates what changed, not where things moved to.
+Position matching uses post-edit coordinates. Baseline diagnostics reflect pre-edit positions by design. The delta communicates what changed, not where things moved to.
 
 ---
 
@@ -435,9 +435,9 @@ Position matching uses post-edit coordinates. Baseline diagnostics reflect pre-e
 ```
 
 `confidence` values (defined in `internal/session/types.go`):
-- `"high"` — single-file, diagnostics settled within timeout
-- `"partial"` — timed out, returned snapshot may be incomplete
-- `"eventual"` — workspace scope, cross-file propagation may be incomplete
+- `"high"`: single-file, diagnostics settled within timeout
+- `"partial"`: timed out, returned snapshot may be incomplete
+- `"eventual"`: workspace scope, cross-file propagation may be incomplete
 
 Note: `affected_symbols` and `edit_risk_score` were planned fields that were not implemented. The shipped `EvaluationResult` type contains only the fields shown above.
 
@@ -445,7 +445,7 @@ Note: `affected_symbols` and `edit_risk_score` were planned fields that were not
 
 ## Baseline Stability
 
-The diagnostic diff is only as trustworthy as the baseline. If the baseline is incomplete, errors that already exist appear in `errors_introduced` — false positives that corrupt the diff.
+The diagnostic diff is only as trustworthy as the baseline. If the baseline is incomplete, errors that already exist appear in `errors_introduced`, producing false positives that corrupt the diff.
 
 **The problem:** LSP diagnostic publication is asynchronous. After a document opens, the language server processes it and publishes via `textDocument/publishDiagnostics` over a window of milliseconds to seconds. Snapshotting before this window closes produces an incomplete baseline.
 
@@ -468,7 +468,7 @@ This is the correct strategy for all cases: pay per touched file, not per sessio
 
 Diagnostics are considered settled when no new `textDocument/publishDiagnostics` notification has arrived for the target file within a quiet window (default: 500ms). The existing `WaitForDiagnostics` implementation handles this.
 
-A settle timeout (default: 3000ms) caps the wait. If the server has not published anything within the timeout, use whatever is cached — and mark the baseline with `baseline_confidence: "partial"` to flag that the diff may contain false positives.
+A settle timeout (default: 3000ms) caps the wait. If the server has not published anything within the timeout, use whatever is cached, and mark the baseline with `baseline_confidence: "partial"` to flag that the diff may contain false positives.
 
 ---
 
@@ -478,7 +478,7 @@ If diagnostics do not settle within the timeout window:
 
 - Return the current diagnostic snapshot (whatever the server has published so far)
 - Set `confidence: "partial"` and `timeout: true` in the response
-- Internal revert still executes — timeout applies only to diagnostic collection, not session cleanup
+- Internal revert still executes; timeout applies only to diagnostic collection, not session cleanup
 - No automatic retry
 
 Default timeout: 3000ms (single-file), 8000ms (workspace scope). Configurable via `timeout_ms` argument.
@@ -527,7 +527,7 @@ These events flow through the existing `logging` package at `LevelDebug` (lifecy
 
 ## Cross-Language Limits
 
-In multi-server mode, a session operates on one language server at a time. A TypeScript change that breaks a Go caller (via a shared JSON contract) will not surface in the session — the Go server has no knowledge of the TypeScript edit.
+In multi-server mode, a session operates on one language server at a time. A TypeScript change that breaks a Go caller (via a shared JSON contract) will not surface in the session because the Go server has no knowledge of the TypeScript edit.
 
 This is an honest constraint, not a flaw. Single-language impact is the right scope.
 
@@ -537,7 +537,7 @@ This is an honest constraint, not a flaw. Single-language impact is the right sc
 
 When shipping:
 
-> "Simulate code changes before applying them. See exactly what breaks — without touching your files."
+> "Simulate code changes before applying them. See exactly what breaks, without touching your files."
 
 This is the correct message. It describes the behavior precisely and makes the agent-native value immediate.
 
@@ -642,13 +642,13 @@ Version must increment on each change. Tracked per open document on `SimulationS
 <details><summary>Design history: resolved questions</summary>
 
 ## Design History: Resolved Questions
-- ✅ **Baseline diagnostic timing** — lazy per-file settle. See **Baseline Stability**.
-- ✅ **Session lifecycle** — create / mutate / evaluate / commit / discard / destroy.
-- ✅ **Mutation vs evaluation separation** — `simulate_edit` mutates, `evaluate_session` observes.
-- ✅ **Diagnostic diff model** — range + message + severity + source equality. See **Diagnostic Diffing**.
-- ✅ **Versioning model** — monotonic, never rolls back. See **Document Versioning**.
-- ✅ **Commit semantics** — functional by default (patch only), imperative opt-in. See **Commit Semantics**.
-- ✅ **Failure surfacing** — dirty state, no silent corruption. See **Failure and Corruption Semantics**.
+- ✅ **Baseline diagnostic timing**: lazy per-file settle. See **Baseline Stability**.
+- ✅ **Session lifecycle**: create / mutate / evaluate / commit / discard / destroy.
+- ✅ **Mutation vs evaluation separation**: `simulate_edit` mutates, `evaluate_session` observes.
+- ✅ **Diagnostic diff model**: range + message + severity + source equality. See **Diagnostic Diffing**.
+- ✅ **Versioning model**: monotonic, never rolls back. See **Document Versioning**.
+- ✅ **Commit semantics**: functional by default (patch only), imperative opt-in. See **Commit Semantics**.
+- ✅ **Failure surfacing**: dirty state, no silent corruption. See **Failure and Corruption Semantics**.
 
 ### Open (ranked)
 
@@ -666,11 +666,11 @@ No session cap enforced. In-memory document buffers per touched file. Acceptable
 
 **4. Session storage** ✅ Resolved
 
-Sessions are in-memory only — IDs become invalid on MCP server restart. This is the correct design. `commit_session` returns a portable `WorkspaceEdit` that callers can persist independently.
+Sessions are in-memory only; IDs become invalid on MCP server restart. This is the correct design. `commit_session` returns a portable `WorkspaceEdit` that callers can persist independently.
 
 **5. Dirty state recovery** ✅ Resolved
 
-Dirty is terminal — destroy and reinitialize. No recovery path. Dirty means LSP state is unknown; replaying edits against uncertain base is worse than reinitializing.
+Dirty is terminal; destroy and reinitialize. No recovery path. Dirty means LSP state is unknown; replaying edits against uncertain base is worse than reinitializing.
 
 </details>
 
@@ -680,11 +680,11 @@ Dirty is terminal — destroy and reinitialize. No recovery path. Dirty means LS
 
 ## Deferred by Design
 
-These are intentional deferrals with designed seams for future upgrade — not missing features.
+These are intentional deferrals with designed seams for future upgrade, not missing features.
 
 ### Physical isolation (per-session LSP instances)
 
-**Deferred.** Serialized execution provides correctness. The `SessionExecutor` interface is the upgrade seam — swap `SerializedExecutor` for `IsolatedExecutor` without API changes.
+**Deferred.** Serialized execution provides correctness. The `SessionExecutor` interface is the upgrade seam; swap `SerializedExecutor` for `IsolatedExecutor` without API changes.
 
 **Revisit triggers:**
 - p95 queue wait > 1s
@@ -693,7 +693,7 @@ These are intentional deferrals with designed seams for future upgrade — not m
 
 ### Session persistence
 
-**Deferred.** Sessions are ephemeral compute artifacts. Durability is provided via returned patches — `commit_session` returns a portable `WorkspaceEdit` that callers can persist, store, or replay independently.
+**Deferred.** Sessions are ephemeral compute artifacts. Durability is provided via returned patches. `commit_session` returns a portable `WorkspaceEdit` that callers can persist, store, or replay independently.
 
 > Sessions are ephemeral; artifacts are durable.
 

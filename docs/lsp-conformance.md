@@ -74,18 +74,18 @@ Every LSP 3.17 method and its MCP surface. "Protocol only" means the method is c
 ## [Lifecycle](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#lifeCycleMessages) (§3.15.1–3.15.4)
 
 - Correct `initialize` → `initialized` → `shutdown` sequence
-- Graceful async shutdown via `SIGINT`/`SIGTERM` — the LSP subprocess is never orphaned on exit
+- Graceful async shutdown via `SIGINT`/`SIGTERM`. The LSP subprocess is never orphaned on exit
 - Client capabilities declared for every feature used: `hover`, `completion`, `references`, `definition`, `implementation`, `typeDefinition`, `declaration`, `codeAction`, `publishDiagnostics`, `window.workDoneProgress`, `workspace.configuration`, `workspace.didChangeWatchedFiles`
-- Server capabilities checked before sending requests — if a server doesn't declare `hoverProvider`, `completionProvider`, `referencesProvider`, or `codeActionProvider`, the request is skipped rather than being sent and silently returning empty results
+- Server capabilities checked before sending requests. If a server doesn't declare `hoverProvider`, `completionProvider`, `referencesProvider`, or `codeActionProvider`, the request is skipped rather than being sent and silently returning empty results
 - `initialize` timeout set to 300s to accommodate JVM-based servers (jdtls) that require 60-90s for cold OSGi container startup
-- LSP process crash immediately rejects all pending promises — callers fail fast rather than waiting for individual timeouts
+- LSP process crash immediately rejects all pending promises, so callers fail fast rather than waiting for individual timeouts
 
 ---
 
 ## [Progress Protocol](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#progress) (§3.18)
 
-- `window/workDoneProgress/create` — the progress token is pre-registered in `activeProgressTokens` before the response is sent, so subsequent `$/progress` notifications are always recognized
-- `$/progress` begin/report/end — all three `WorkDoneProgress` kinds are handled:
+- `window/workDoneProgress/create`: the progress token is pre-registered in `activeProgressTokens` before the response is sent, so subsequent `$/progress` notifications are always recognized
+- `$/progress` begin/report/end: all three `WorkDoneProgress` kinds are handled:
   - `begin`: token added to active set
   - `report`: logged at debug level
   - `end`: token removed; when active set reaches zero, workspace-ready resolvers are notified
@@ -123,9 +123,9 @@ All unrecognized server-initiated requests also receive a `null` response to unb
 
 ## [JSON-RPC 2.0](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#baseProtocol) (§3.3)
 
-- Request shape: `{ jsonrpc: "2.0", id, method, params? }` — correct
-- Response shape: `{ jsonrpc: "2.0", id, result? | error? }` — correct
-- Notification shape: `{ jsonrpc: "2.0", method, params? }` (no `id`) — correct
+- Request shape: `{ jsonrpc: "2.0", id, method, params? }` (correct)
+- Response shape: `{ jsonrpc: "2.0", id, result? | error? }` (correct)
+- Notification shape: `{ jsonrpc: "2.0", method, params? }` (no `id`) (correct)
 - IDs are monotonically incrementing integers
 
 ---
@@ -136,8 +136,8 @@ LSP-defined error codes are handled distinctly:
 
 | Code | Name | Handling |
 |------|------|----------|
-| `-32601` | MethodNotFound | Logged as `warning` — indicates an unsupported feature |
-| `-32002` | ServerNotInitialized | Logged as `warning` — indicates a sequencing issue |
+| `-32601` | MethodNotFound | Logged as `warning`, indicates an unsupported feature |
+| `-32002` | ServerNotInitialized | Logged as `warning`, indicates a sequencing issue |
 | All others | — | Logged at `debug` level |
 
 ---
@@ -148,15 +148,15 @@ LSP-defined error codes are handled distinctly:
 
 The `Hover.contents` field can be one of three shapes. All are handled in priority order:
 
-1. **`MarkupContent`** (current spec): `{ kind: "markdown" | "plaintext", value: string }` — `kind` is checked first to distinguish rendering intent
-2. **`MarkedString[]`** (deprecated): array of `string | { language, value }` — joined with newlines
+1. **`MarkupContent`** (current spec): `{ kind: "markdown" | "plaintext", value: string }`. `kind` is checked first to distinguish rendering intent
+2. **`MarkedString[]`** (deprecated): array of `string | { language, value }`, joined with newlines
 3. **Plain string** (deprecated MarkedString): returned as-is
 
 ### [`textDocument/completion`](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_completion) (§3.15.13)
 
 Both response shapes are handled:
-- `CompletionItem[]` — returned directly
-- `CompletionList` (`{ isIncomplete: boolean, items: CompletionItem[] }`) — `items` extracted
+- `CompletionItem[]`: returned directly
+- `CompletionList` (`{ isIncomplete: boolean, items: CompletionItem[] }`): `items` extracted
 
 ### [`textDocument/codeAction`](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_codeAction) (§3.15.22)
 
@@ -164,7 +164,7 @@ Both response shapes are handled:
 
 ### [`textDocument/publishDiagnostics`](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics) (§3.17.1)
 
-- `versionSupport: false` declared in client capabilities — server omits the optional `version` field
+- `versionSupport: false` declared in client capabilities, so the server omits the optional `version` field
 - `uri` and `diagnostics` destructured correctly; `uri` validated as a string before processing
 - Diagnostics stored per-URI and used to populate `codeAction` context and `waitForFileIndexed` readiness detection
 
@@ -178,9 +178,9 @@ These issues were identified via spec audit and corrected:
 |-------|---------------|-----|
 | `notifications/resources/update` (wrong method name) | MCP spec | Corrected to `notifications/resources/updated` |
 | `UnsubscribeRequest.params.context` (field doesn't exist in MCP schema) | MCP spec | Subscription contexts now tracked server-side in a `Map<uri, context>` |
-| `process.on('exit', async)` — await never completes | §3.15.4 | Replaced with SIGINT/SIGTERM handlers |
+| `process.on('exit', async)`, await never completes | §3.15.4 | Replaced with SIGINT/SIGTERM handlers |
 | `workspace/configuration` not responded to | §3.16.14 | Added handler; this was blocking gopls workspace loading |
 | `window/workDoneProgress/create` response in wrong code path | §3.18 | Moved to server-initiated request handler block |
-| `rootPath` sent in `initialize` params | §3.15.1 | Removed — deprecated in favour of `rootUri`; `rootUri` itself deprecated in favour of `workspaceFolders` (also sent) |
+| `rootPath` sent in `initialize` params | §3.15.1 | Removed. Deprecated in favour of `rootUri`; `rootUri` itself deprecated in favour of `workspaceFolders` (also sent) |
 | Empty `diagnostics: []` in `codeAction` context | §3.15.22 | Replaced with overlapping diagnostics filter |
 | `MarkupContent.kind` ignored in hover response | §3.15.11 | `kind` now checked before accessing `value` |

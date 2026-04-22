@@ -36,13 +36,13 @@ Detects amd64/arm64, downloads the matching zip from GitHub Releases, installs t
 scoop bucket add blackwell-systems https://github.com/blackwell-systems/agent-lsp
 scoop install blackwell-systems/agent-lsp
 ```
-Manifest at `bucket/agent-lsp.json` in this repo (the repo doubles as the Scoop bucket). `autoupdate` is configured — `scoop update agent-lsp` picks up new releases automatically.
+Manifest at `bucket/agent-lsp.json` in this repo (the repo doubles as the Scoop bucket). `autoupdate` is configured, so `scoop update agent-lsp` picks up new releases automatically.
 
 ### Winget (Windows)
 ```powershell
 winget install BlackwellSystems.agent-lsp
 ```
-Manifests at `winget/manifests/b/BlackwellSystems/agent-lsp/`. Submit new versions as a PR to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) — copy the `winget/manifests/` directory structure, update version and hashes.
+Manifests at `winget/manifests/b/BlackwellSystems/agent-lsp/`. Submit new versions as a PR to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs). Copy the `winget/manifests/` directory structure, update version and hashes.
 
 ### npm
 ```bash
@@ -53,7 +53,7 @@ Uses the optionalDependencies pattern (same as esbuild): a root package with a J
 Published automatically by the `npm-publish` CI job after GoReleaser completes.
 
 **Packages:**
-- `@blackwell-systems/agent-lsp` — root (install this)
+- `@blackwell-systems/agent-lsp` (root; install this)
 - `@blackwell-systems/agent-lsp-darwin-arm64`
 - `@blackwell-systems/agent-lsp-darwin-x64`
 - `@blackwell-systems/agent-lsp-linux-arm64`
@@ -81,7 +81,7 @@ docker pull ghcr.io/blackwell-systems/agent-lsp:python
 docker pull ghcr.io/blackwell-systems/agent-lsp:fullstack
 ```
 
-All images are multi-arch (`linux/amd64` + `linux/arm64`) via Docker manifest lists. Native performance on Apple Silicon and AWS Graviton — no Rosetta/QEMU emulation. Built and pushed to both registries automatically by GoReleaser on every `v*` tag. Tags: `latest`, `base`, semver (`0.1.2`, `0.1`), and per-language (`go`, `typescript`, `python`, `ruby`, `cpp`, `php`, `web`, `backend`, `fullstack`, `full`).
+All images are multi-arch (`linux/amd64` + `linux/arm64`) via Docker manifest lists. Native performance on Apple Silicon and AWS Graviton, with no Rosetta/QEMU emulation. Built and pushed to both registries automatically by GoReleaser on every `v*` tag. Tags: `latest`, `base`, semver (`0.1.2`, `0.1`), and per-language (`go`, `typescript`, `python`, `ruby`, `cpp`, `php`, `web`, `backend`, `fullstack`, `full`).
 
 ## MCP registries
 
@@ -89,14 +89,14 @@ All images are multi-arch (`linux/amd64` + `linux/arm64`) via Docker manifest li
 Published automatically via `mcp-publisher` in CI using GitHub OIDC (no secrets required). PulseMCP ingests from the official registry weekly.
 
 **Server name:** `io.github.blackwell-systems/agent-lsp`
-**Status:** Live as of v0.1.2 — verified at `registry.modelcontextprotocol.io`
+**Status:** Live as of v0.1.2, verified at `registry.modelcontextprotocol.io`
 
 ```bash
 curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.blackwell-systems/agent-lsp"
 ```
 
 ### Glama
-Listed at [glama.ai/mcp/servers/blackwell-systems/agent-lsp](https://glama.ai/mcp/servers/blackwell-systems/agent-lsp). Profile managed via `glama.json` in repo root. Score badge: A grade. Build verified — server passes Glama's automated inspection checks.
+Listed at [glama.ai/mcp/servers/blackwell-systems/agent-lsp](https://glama.ai/mcp/servers/blackwell-systems/agent-lsp). Profile managed via `glama.json` in repo root. Score badge: A grade. Build verified; server passes Glama's automated inspection checks.
 
 ### Smithery
 `smithery.yaml` in the repo root enables auto-indexing on Smithery. Auto-discovered from GitHub.

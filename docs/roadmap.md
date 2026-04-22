@@ -14,7 +14,7 @@ title: Roadmap
 
 Extensions add language-specific tools beyond what LSP exposes. The core 50 tools cover everything the language server protocol provides; extensions run arbitrary toolchain logic for a specific language.
 
-### Go extension (Wave 1 — test + module intelligence)
+### Go extension (Wave 1: test + module intelligence)
 
 | Tool | Description |
 |------|-------------|
@@ -25,25 +25,25 @@ Extensions add language-specific tools beyond what LSP exposes. The core 50 tool
 | `go.mod_graph` | Full dependency tree as structured data |
 | `go.mod_why` | Why is this package in go.mod? (`go mod why`) |
 | `go.mod_outdated` | List deps with available upgrades |
-| `go.vulncheck` | `govulncheck` scan — CVEs with affected symbols |
+| `go.vulncheck` | `govulncheck` scan, CVEs with affected symbols |
 
-### Go extension (Wave 2 — build + quality)
+### Go extension (Wave 2: build + quality)
 
 | Tool | Description |
 |------|-------------|
-| `go.escape_analysis` | `gcflags="-m"` output for a function — what allocates and why |
+| `go.escape_analysis` | `gcflags="-m"` output for a function: what allocates and why |
 | `go.cross_compile` | Try cross-compiling for a target OS/arch, return errors |
 | `go.lint` | `staticcheck` or `golangci-lint` output for a file |
 | `go.deadcode` | Find exported symbols with no callers (`go tool deadcode`) |
 | `go.vet_all` | `go vet ./...` with structured output |
 
-### Go extension (Wave 3 — generation + docs)
+### Go extension (Wave 3: generation + docs)
 
 | Tool | Description |
 |------|-------------|
 | `go.generate` | Run `go generate` on a file, return output |
 | `go.generate_status` | Which `//go:generate` directives are stale |
-| `go.doc` | `go doc` output for any symbol — richer than hover |
+| `go.doc` | `go doc` output for any symbol, richer than hover |
 | `go.examples` | Find `Example*` test functions for a symbol |
 
 ### TypeScript extension
@@ -75,11 +75,11 @@ Python has the largest gap between what `pyright-langserver` gives an agent and 
 | `python.audit` | `pip-audit` CVE scan on installed packages |
 | `python.security` | `bandit` security scan for a file |
 | `python.deadcode` | `vulture` dead code detection |
-| `python.imports` | `isort` check — unsorted or missing imports |
+| `python.imports` | `isort` check for unsorted or missing imports |
 
 ### C / C++ extension
 
-The gap between what clangd provides and what the broader toolchain offers is larger than any other language — sanitizers and profiling are completely outside LSP scope.
+The gap between what clangd provides and what the broader toolchain offers is larger than any other language. Sanitizers and profiling are completely outside LSP scope.
 
 | Tool | Description |
 |------|-------------|
@@ -97,7 +97,7 @@ The gap between what clangd provides and what the broader toolchain offers is la
 | `java.test_run` | Run a specific JUnit test, return output |
 | `java.coverage` | JaCoCo coverage report for a class |
 | `java.build` | Maven/Gradle build with structured error output |
-| `java.deps` | `jdeps` dependency analysis — what packages does this class use? |
+| `java.deps` | `jdeps` dependency analysis: what packages does this class use? |
 | `java.checkstyle` | Checkstyle violations for a file |
 | `java.spotbugs` | SpotBugs static analysis findings |
 
@@ -106,7 +106,7 @@ The gap between what clangd provides and what the broader toolchain offers is la
 | Tool | Description |
 |------|-------------|
 | `elixir.test_run` | Run a specific ExUnit test, return output |
-| `elixir.dialyzer` | Dialyzer type analysis — unique to Elixir, finds type errors without annotations |
+| `elixir.dialyzer` | Dialyzer type analysis, unique to Elixir; finds type errors without annotations |
 | `elixir.credo` | Credo static analysis findings |
 | `elixir.audit` | `mix deps.audit` CVE scan |
 
@@ -149,18 +149,18 @@ Skills calling other skills. `/lsp-refactor` is already composed from `/lsp-impa
 
 ## Skill Schema Specification
 
-Skills are currently prose — markdown prompts the agent follows. The inputs and outputs are implicit and unvalidatable. A schema layer would make contracts explicit — what goes in, what comes out — enabling validation and eventual skill composition with typed interfaces.
+Skills are currently prose, markdown prompts the agent follows. The inputs and outputs are implicit and unvalidatable. A schema layer would make contracts explicit (what goes in, what comes out), enabling validation and eventual skill composition with typed interfaces.
 
 The case for machine-readable skill contracts:
 - Tooling can validate that an agent invoked a skill correctly
-- Clearer interface between the agent and the skill — what goes in, what comes out
+- Clearer interface between the agent and the skill: what goes in, what comes out
 - Enables skill composition with type safety (skill A's output feeds skill B's input)
 - Documentation that can be auto-generated and kept in sync
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Skill input/output schema** | Planned | JSON Schema definitions for each skill's expected inputs and guaranteed outputs — machine-readable contracts alongside the prose skill files |
-| **Schema validation tooling** | Planned | Validate agent skill invocations against the schema at runtime or in CI — surfaces misuse before it causes silent failures |
+| **Skill input/output schema** | Planned | JSON Schema definitions for each skill's expected inputs and guaranteed outputs, machine-readable contracts alongside the prose skill files |
+| **Schema validation tooling** | Planned | Validate agent skill invocations against the schema at runtime or in CI, surfacing misuse before it causes silent failures |
 
 ## IDE Integration
 
@@ -230,12 +230,12 @@ Each CI job writes `metrics/<language>.json`:
 
 | File | Change |
 |------|--------|
-| `test/metrics.go` | New — timing harness, JSON serialization, `WriteMetrics(path string)` |
-| `test/multi_lang_test.go` | Instrument `TestMultiLanguage` — wrap each tool call with `time.Since`, collect into `LanguageMetrics` struct |
+| `test/metrics.go` | New: timing harness, JSON serialization, `WriteMetrics(path string)` |
+| `test/multi_lang_test.go` | Instrument `TestMultiLanguage`: wrap each tool call with `time.Since`, collect into `LanguageMetrics` struct |
 | `test/speculative_test.go` | Expand to all supported languages (currently Go only); record `speculative_confidence` and `speculative_round_trip_ms` per language |
 | `.github/workflows/ci.yml` | Add `upload-artifact` step per language job; add `collect-metrics` job that runs after all language jobs, downloads all artifacts, and commits merged `metrics.json` to a `metrics` branch |
-| `scripts/generate-metrics.py` | New — reads `metrics/<language>.json` files, computes p50/p95 after 5+ runs from `metrics/history.json`, renders `docs/metrics.md` |
-| `docs/metrics.md` | Generated output — markdown table with one row per language |
+| `scripts/generate-metrics.py` | New: reads `metrics/<language>.json` files, computes p50/p95 after 5+ runs from `metrics/history.json`, renders `docs/metrics.md` |
+| `docs/metrics.md` | Generated output, markdown table with one row per language |
 
 ### Public dashboard format
 
@@ -254,9 +254,9 @@ After 5+ CI runs, `generate-metrics.py` reads `metrics/history.json` on the `met
 
 ### Implementation notes
 
-- The timing harness must not fail the test on timeout — capture what is available and write `-1` for unresolvable metrics.
+- The timing harness must not fail the test on timeout. Capture what is available and write `-1` for unresolvable metrics.
 - Cross-file propagation requires multi-file test fixtures; Go and TypeScript already have them in `test/testdata`; Python and Rust need new fixtures.
-- Speculative confidence for languages without `high` confidence is expected — record the actual value, not a failure.
+- Speculative confidence for languages without `high` confidence is expected. Record the actual value, not a failure.
 - The `collect-metrics` CI job should only run on the `main` branch to avoid polluting the metrics branch with PR data.
 
 ## Control Plane
@@ -266,12 +266,12 @@ The agent-local pipeline (blast-radius → simulate → apply → verify → tes
 | Feature | Status | Description |
 |---------|--------|-------------|
 | **Audit trail** | **Shipped** | JSONL log of every `apply_edit`, `rename_symbol`, and `commit_session` call with timestamp, affected files, edit summary, pre/post diagnostic state, and net_delta. Configure via `--audit-log` flag or `AGENT_LSP_AUDIT_LOG` env var. |
-| **Change plan output** | Planned | Materialize `simulate_chain` output as a structured, human-reviewable artifact before apply — files, edits, per-step diagnostic delta, safe-to-apply watermark. Three community members have independently requested this. |
+| **Change plan output** | Planned | Materialize `simulate_chain` output as a structured, human-reviewable artifact before apply: files, edits, per-step diagnostic delta, safe-to-apply watermark. Three community members have independently requested this. |
 | **Policy gates** | Planned | Configurable rules that block apply based on blast-radius thresholds, public API changes, or path patterns. Evaluate at apply time using the audit record. |
-| **Cross-session coordination** | Planned | Shared state between concurrent MCP sessions — symbol-level lock registry to prevent overlapping renames/refactors. Requires a sidecar daemon or file-based coordination. The hardest piece. |
+| **Cross-session coordination** | Planned | Shared state between concurrent MCP sessions, specifically a symbol-level lock registry to prevent overlapping renames/refactors. Requires a sidecar daemon or file-based coordination. The hardest piece. |
 
 ## Bigger Bets
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Observability** | Planned | Metrics (requests/sec, latency per tool, error rate) for production deployments — valuable for teams running agent-lsp as shared infrastructure |
+| **Observability** | Planned | Metrics (requests/sec, latency per tool, error rate) for production deployments, valuable for teams running agent-lsp as shared infrastructure |
