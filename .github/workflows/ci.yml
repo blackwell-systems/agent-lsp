@@ -650,7 +650,7 @@ jobs:
         run: go install golang.org/x/tools/gopls@latest
 
       - name: Run get_change_impact test
-        run: GOWORK=off go test -v -run TestGetChangeImpact ./test/ -timeout 5m
+        run: GOWORK=off go test -v -run TestGetChangeImpact ./test/ -timeout 8m
 
   cross-repo-references-test:
     runs-on: ubuntu-latest

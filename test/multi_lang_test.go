@@ -1633,11 +1633,12 @@ func TestGetChangeImpact(t *testing.T) {
 		t.Skip("failed to build agent-lsp binary")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 240*time.Second)
 	defer cancel()
 
 	goFixture := filepath.Join(testDir(t), "fixtures", "go")
 	greeterFile := filepath.Join(goFixture, "greeter.go")
+	mainFile := filepath.Join(goFixture, "main.go")
 
 	cmd := exec.Command(binaryPath, "go", lspBinaryPath)
 	client := mcp.NewClient(&mcp.Implementation{Name: "change-impact-test", Version: "1.0"}, nil)
@@ -1649,9 +1650,6 @@ func TestGetChangeImpact(t *testing.T) {
 	}
 	defer session.Close()
 
-	// Use ready_timeout_seconds to block until gopls finishes workspace indexing
-	// instead of a fixed sleep. This prevents flakes on slow CI runners where
-	// indexing takes longer than a hardcoded wait.
 	res, err := callTool(ctx, session, "start_lsp", map[string]any{
 		"root_dir":              goFixture,
 		"ready_timeout_seconds": float64(120),
@@ -1661,16 +1659,35 @@ func TestGetChangeImpact(t *testing.T) {
 		return
 	}
 
+	// Open both files so gopls indexes the workspace fully.
 	res, err = callTool(ctx, session, "open_document", map[string]any{
-		"file_path":   greeterFile,
-		"language_id": "go",
+		"file_path": greeterFile, "language_id": "go",
 	})
 	if err != nil || res.IsError {
 		t.Skipf("open_document failed for greeter.go: err=%v", err)
 		return
 	}
-	// get_diagnostics as a readiness fence — ensures gopls has processed the file
-	callTool(ctx, session, "get_diagnostics", map[string]any{"file_path": greeterFile})
+	callTool(ctx, session, "open_document", map[string]any{
+		"file_path": mainFile, "language_id": "go",
+	})
+
+	// Warmup probe: poll get_references on a known symbol (Person at main.go:6:5)
+	// until gopls returns results. This confirms workspace indexing is complete —
+	// $/progress and get_diagnostics are not reliable readiness signals for gopls.
+	t.Log("waiting for gopls indexing (warmup probe)...")
+	warmupDeadline := time.Now().Add(120 * time.Second)
+	for time.Now().Before(warmupDeadline) {
+		probeRes, probeErr := callTool(ctx, session, "get_references", map[string]any{
+			"file_path": mainFile, "line": float64(6), "column": float64(6),
+		})
+		if probeErr == nil && !probeRes.IsError {
+			if text, _ := textFromResult(probeRes); strings.Contains(text, "greeter.go") {
+				t.Log("gopls indexing confirmed ready")
+				break
+			}
+		}
+		time.Sleep(2 * time.Second)
+	}
 
 	res, err = callTool(ctx, session, "get_change_impact", map[string]any{
 		"changed_files": []any{greeterFile},
