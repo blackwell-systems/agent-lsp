@@ -138,7 +138,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=LANG=go"
       - "--build-arg=LSP_PACKAGE=golang.org/x/tools/gopls@latest"
       - "--build-arg=PACKAGE_MGR=go"
@@ -155,7 +155,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=LANG=go"
       - "--build-arg=LSP_PACKAGE=golang.org/x/tools/gopls@latest"
       - "--build-arg=PACKAGE_MGR=go"
@@ -172,7 +172,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=LANG=typescript"
       - "--build-arg=LSP_PACKAGE=typescript-language-server typescript"
       - "--build-arg=PACKAGE_MGR=npm"
@@ -189,7 +189,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=LANG=typescript"
       - "--build-arg=LSP_PACKAGE=typescript-language-server typescript"
       - "--build-arg=PACKAGE_MGR=npm"
@@ -206,7 +206,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=LANG=python"
       - "--build-arg=LSP_PACKAGE=pyright"
       - "--build-arg=PACKAGE_MGR=npm"
@@ -223,7 +223,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=LANG=python"
       - "--build-arg=LSP_PACKAGE=pyright"
       - "--build-arg=PACKAGE_MGR=npm"
@@ -240,7 +240,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=LANG=ruby"
       - "--build-arg=LSP_PACKAGE=solargraph"
       - "--build-arg=PACKAGE_MGR=gem"
@@ -257,7 +257,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=LANG=ruby"
       - "--build-arg=LSP_PACKAGE=solargraph"
       - "--build-arg=PACKAGE_MGR=gem"
@@ -274,7 +274,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=LANG=cpp"
       - "--build-arg=LSP_PACKAGE=clangd"
       - "--build-arg=PACKAGE_MGR=apt"
@@ -291,7 +291,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=LANG=cpp"
       - "--build-arg=LSP_PACKAGE=clangd"
       - "--build-arg=PACKAGE_MGR=apt"
@@ -308,7 +308,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=LANG=php"
       - "--build-arg=LSP_PACKAGE=intelephense"
       - "--build-arg=PACKAGE_MGR=npm"
@@ -325,7 +325,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=LANG=php"
       - "--build-arg=LSP_PACKAGE=intelephense"
       - "--build-arg=PACKAGE_MGR=npm"
@@ -342,7 +342,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=NPM_PACKAGES=typescript-language-server typescript pyright"
       - "--build-arg=GO_PACKAGES="
       - "--cache-from=type=gha"
@@ -357,7 +357,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=NPM_PACKAGES=typescript-language-server typescript pyright"
       - "--build-arg=GO_PACKAGES="
       - "--cache-from=type=gha"
@@ -372,7 +372,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=NPM_PACKAGES=pyright"
       - "--build-arg=GO_PACKAGES=golang.org/x/tools/gopls@latest"
       - "--cache-from=type=gha"
@@ -387,7 +387,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=NPM_PACKAGES=pyright"
       - "--build-arg=GO_PACKAGES=golang.org/x/tools/gopls@latest"
       - "--cache-from=type=gha"
@@ -402,7 +402,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-amd64"
       - "--build-arg=NPM_PACKAGES=typescript-language-server typescript pyright"
       - "--build-arg=GO_PACKAGES=golang.org/x/tools/gopls@latest"
       - "--cache-from=type=gha"
@@ -417,7 +417,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-arm64"
       - "--build-arg=NPM_PACKAGES=typescript-language-server typescript pyright"
       - "--build-arg=GO_PACKAGES=golang.org/x/tools/gopls@latest"
       - "--cache-from=type=gha"
@@ -432,7 +432,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-amd64"
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 
@@ -445,7 +445,7 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--build-arg=BASE_TAG=base"
+      - "--build-arg=BASE_TAG=base-arm64"
       - "--cache-from=type=gha"
       - "--cache-to=type=gha,mode=max"
 

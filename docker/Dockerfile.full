@@ -28,7 +28,8 @@ RUN npm install -g \
 
 # Go + gopls (bookworm's golang-go is too old for gopls; install from go.dev)
 RUN LATEST_GO=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -1) \
-    && curl -fsSL "https://dl.google.com/go/${LATEST_GO}.linux-amd64.tar.gz" -o /tmp/go.tar.gz \
+    && GOARCH=$(dpkg --print-architecture) \
+    && curl -fsSL "https://dl.google.com/go/${LATEST_GO}.linux-${GOARCH}.tar.gz" -o /tmp/go.tar.gz \
     && tar -C /usr/local -xzf /tmp/go.tar.gz \
     && rm /tmp/go.tar.gz \
     && GOPATH=/usr/local /usr/local/go/bin/go install golang.org/x/tools/gopls@latest
