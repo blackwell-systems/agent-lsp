@@ -105,7 +105,7 @@ jobs:
           wget --no-verbose "$JDTLS_URL" -O /tmp/jdtls.tar.gz
           # Verify the download is a valid gzip file before extracting
           file /tmp/jdtls.tar.gz
-          sudo mkdir -p /opt/jdtls /tmp/jdtls-workspace-lsp-mcp-test
+          sudo mkdir -p /opt/jdtls
           sudo tar -xzf /tmp/jdtls.tar.gz -C /opt/jdtls
           LAUNCHER=$(ls /opt/jdtls/plugins/org.eclipse.equinox.launcher_*.jar 2>/dev/null | head -1)
           if [ -z "$LAUNCHER" ]; then
@@ -114,14 +114,17 @@ jobs:
             exit 1
           fi
           echo "Found launcher: $LAUNCHER"
-          printf '#!/bin/bash\nexec java \\\n  -Declipse.application=org.eclipse.jdt.ls.core.id1 \\\n  -Dosgi.bundles.defaultStartLevel=4 \\\n  -Declipse.product=org.eclipse.jdt.ls.core.product \\\n  -Dlog.level=ERROR \\\n  -Xmx2G \\\n  --add-modules=ALL-SYSTEM \\\n  --add-opens java.base/java.util=ALL-UNNAMED \\\n  --add-opens java.base/java.lang=ALL-UNNAMED \\\n  -jar %s \\\n  -configuration /opt/jdtls/config_linux \\\n  -data /tmp/jdtls-workspace-lsp-mcp-test "$@"\n' "$LAUNCHER" | sudo tee /usr/local/bin/jdtls > /dev/null
+          # Wrapper script passes "$@" so tests control -data dir via serverArgs.
+          # Do NOT hardcode -data here — the test's serverArgs provide it.
+          printf '#!/bin/bash\nexec java \\\n  -Declipse.application=org.eclipse.jdt.ls.core.id1 \\\n  -Dosgi.bundles.defaultStartLevel=4 \\\n  -Declipse.product=org.eclipse.jdt.ls.core.product \\\n  -Dlog.level=ERROR \\\n  -Xmx2G \\\n  --add-modules=ALL-SYSTEM \\\n  --add-opens java.base/java.util=ALL-UNNAMED \\\n  --add-opens java.base/java.lang=ALL-UNNAMED \\\n  -jar %s \\\n  -configuration /opt/jdtls/config_linux \\\n  "$@"\n' "$LAUNCHER" | sudo tee /usr/local/bin/jdtls > /dev/null
           sudo chmod +x /usr/local/bin/jdtls
           echo "jdtls installed at $(which jdtls)"
 
       - name: Smoke-test jdtls startup
         run: |
+          mkdir -p /tmp/jdtls-smoke-test
           echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}' \
-            | timeout 10 jdtls 2>&1 | head -20 || true
+            | timeout 10 jdtls -data /tmp/jdtls-smoke-test 2>&1 | head -20 || true
 
       - name: Run Java language tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Java$" ./test/ -timeout 15m
@@ -443,10 +446,10 @@ jobs:
         continue-on-error: true
         run: |
           wget -q "https://download.eclipse.org/jdtls/snapshots/jdt-language-server-latest.tar.gz" -O /tmp/jdtls.tar.gz
-          sudo mkdir -p /opt/jdtls /tmp/jdtls-workspace-speculative-test
+          sudo mkdir -p /opt/jdtls
           sudo tar -xzf /tmp/jdtls.tar.gz -C /opt/jdtls
           LAUNCHER=$(ls /opt/jdtls/plugins/org.eclipse.equinox.launcher_*.jar | head -1)
-          printf '#!/bin/bash\nexec java \\\n  -Declipse.application=org.eclipse.jdt.ls.core.id1 \\\n  -Dosgi.bundles.defaultStartLevel=4 \\\n  -Declipse.product=org.eclipse.jdt.ls.core.product \\\n  -Dlog.level=ERROR \\\n  -Xmx1G \\\n  --add-modules=ALL-SYSTEM \\\n  --add-opens java.base/java.util=ALL-UNNAMED \\\n  --add-opens java.base/java.lang=ALL-UNNAMED \\\n  -jar %s \\\n  -configuration /opt/jdtls/config_linux \\\n  -data /tmp/jdtls-workspace-speculative-test "$@"\n' "$LAUNCHER" | sudo tee /usr/local/bin/jdtls > /dev/null
+          printf '#!/bin/bash\nexec java \\\n  -Declipse.application=org.eclipse.jdt.ls.core.id1 \\\n  -Dosgi.bundles.defaultStartLevel=4 \\\n  -Declipse.product=org.eclipse.jdt.ls.core.product \\\n  -Dlog.level=ERROR \\\n  -Xmx1G \\\n  --add-modules=ALL-SYSTEM \\\n  --add-opens java.base/java.util=ALL-UNNAMED \\\n  --add-opens java.base/java.lang=ALL-UNNAMED \\\n  -jar %s \\\n  -configuration /opt/jdtls/config_linux \\\n  "$@"\n' "$LAUNCHER" | sudo tee /usr/local/bin/jdtls > /dev/null
           sudo chmod +x /usr/local/bin/jdtls
 
       - name: Run speculative session tests
