@@ -300,6 +300,180 @@ Tool registration (`cmd/agent-lsp/tools_*.go`) is separate from tool implementat
 
 ---
 
+## Concurrency Model
+
+agent-lsp is a concurrent Go program. A single process manages multiple long-lived goroutines, channels, and synchronization primitives to handle parallel LSP communication, file watching, diagnostic tracking, and speculative execution — all without blocking the MCP request path.
+
+### Goroutine Architecture
+
+At steady state, agent-lsp runs the following goroutines per LSP subprocess:
+
+```
+                        ┌──────────────────────────────────────────────┐
+                        │          agent-lsp process (Go)              │
+                        │                                              │
+  MCP tool call ───────►│  main goroutine (MCP server dispatch)        │
+                        │      │                                       │
+                        │      ├─► tool handler goroutine (per call)   │
+                        │      │       │                               │
+                        │      │       ▼                               │
+                        │      │   SendRequest ──► pendingRequest{ch}  │
+                        │      │       │              ▲                │
+                        │      │       │ blocks       │ unblocks      │
+                        │      │       ▼              │                │
+                        │  ┌───┴───────────────────────┴──────────┐    │
+                        │  │  Per-LSP-client goroutines            │    │
+                        │  │                                       │    │
+                        │  │  readLoop ◄──── stdout pipe ◄── gopls │    │
+                        │  │    │  parses JSON-RPC frames          │    │
+                        │  │    │  dispatches responses → pending   │    │
+                        │  │    │  dispatches notifications →       │    │
+                        │  │    │    diagnostics / progress         │    │
+                        │  │                                       │    │
+                        │  │  drainStderr ◄── stderr pipe          │    │
+                        │  │    buffers last 4KB for crash reports  │    │
+                        │  │                                       │    │
+                        │  │  exit-monitor                         │    │
+                        │  │    calls rejectPending on crash        │    │
+                        │  │                                       │    │
+                        │  │  file watcher (fsnotify)              │    │
+                        │  │    debounce 150ms → didChangeWatched  │    │
+                        │  └───────────────────────────────────────┘    │
+                        │                                              │
+                        │  audit writeLoop ◄── chan Record (buffered)  │
+                        │    non-blocking JSONL writer                  │
+                        │                                              │
+                        └──────────────────────────────────────────────┘
+```
+
+In multi-server mode, the readLoop/drainStderr/exit-monitor/watcher set is duplicated per language server subprocess. All goroutines are supervised — panics in `readLoop` and `startWatcher` are caught by `defer recover()`, logged with stack traces, and the server stays alive.
+
+### Channel Patterns
+
+agent-lsp uses four distinct channel patterns for different coordination needs:
+
+**1. Request/Response Correlation (one-shot channels)**
+
+Every outgoing LSP request gets a unique ID and a pair of buffered channels:
+
+```go
+type pendingRequest struct {
+    ch  chan json.RawMessage  // buffered(1): response payload
+    err chan error            // buffered(1): error (timeout, crash)
+}
+```
+
+`SendRequest` creates the channels, stores them in `pending[id]`, writes the JSON-RPC frame to stdin, then blocks on `select { case resp := <-ch; case err := <-errCh; case <-ctx.Done() }`. When `readLoop` parses a response with that ID, it sends on `ch` and the caller unblocks. This gives O(1) dispatch with no polling.
+
+**2. Per-Session Semaphore (channel as mutex)**
+
+The `SerializedExecutor` uses a `chan struct{}` with buffer size 1 as a per-session mutex:
+
+```go
+// Independent sessions never block each other.
+// Only concurrent operations on the SAME session serialize.
+sessionLocks map[string]chan struct{}  // session ID → semaphore
+
+func (e *SerializedExecutor) Acquire(ctx context.Context, s *SimulationSession) error {
+    select {
+    case ch <- struct{}{}:  // acquired
+        return nil
+    case <-ctx.Done():      // cancelled
+        return ctx.Err()
+    }
+}
+```
+
+This is more flexible than `sync.Mutex` because it respects context cancellation — a tool call that times out releases the caller immediately rather than deadlocking.
+
+**3. Non-Blocking Audit Logger (buffered producer/consumer)**
+
+The audit trail uses a buffered channel as a non-blocking queue between tool handlers (producers) and the disk writer (consumer):
+
+```go
+type Logger struct {
+    ch   chan Record     // buffered(256): tool handlers send here
+    done chan struct{}   // closed when writeLoop exits
+}
+
+// Tool handler (hot path) — never blocks
+func (l *Logger) Log(r Record) {
+    select {
+    case l.ch <- r:    // enqueued
+    default:           // channel full — drop silently (non-blocking guarantee)
+    }
+}
+
+// Background goroutine — drains to disk
+func (l *Logger) writeLoop() {
+    defer close(l.done)
+    for r := range l.ch { enc.Encode(r) }
+}
+```
+
+Tool handlers have zero-latency audit logging — they never wait for disk I/O. The `done` channel provides a clean shutdown signal: `Close()` closes `ch`, waits on `<-done`, then closes the file.
+
+**4. Progress Token Coordination (sync.Cond)**
+
+Workspace readiness tracking uses `sync.Cond` instead of channels because the signal is level-triggered (not edge-triggered): any number of goroutines may be waiting, and they should all wake when the condition becomes true.
+
+```go
+progressMu     sync.Mutex
+progressTokens map[string]bool
+progressCond   *sync.Cond    // broadcast when progressTokens becomes empty
+
+// waitForWorkspaceReady blocks until all $/progress tokens complete
+func (c *LSPClient) waitForWorkspaceReady(timeout time.Duration) {
+    c.progressMu.Lock()
+    defer c.progressMu.Unlock()
+    deadline := time.Now().Add(timeout)
+    for len(c.progressTokens) > 0 && time.Now().Before(deadline) {
+        c.progressCond.Wait()  // releases lock, sleeps, reacquires on signal
+    }
+}
+```
+
+When `readLoop` dispatches a `$/progress end` notification, it removes the token and calls `progressCond.Broadcast()`. All waiters (potentially multiple concurrent `start_lsp` or `get_references` calls) wake up and re-check.
+
+### Concurrency Safety Summary
+
+| Resource | Protection | Why not the other |
+|---|---|---|
+| `pending` request map | `sync.Mutex` | Simple map guard; no context-aware blocking needed |
+| Per-session LSP state | Channel semaphore | Must respect `ctx.Done()` for timeout; `sync.Mutex` would deadlock |
+| Progress tokens | `sync.Cond` | Multiple waiters need broadcast wake; channels are one-shot |
+| Diagnostic callbacks | `sync.Mutex` on slice | Append-only during subscribe; iterate during publish |
+| Session manager map | `sync.RWMutex` | Reads (evaluate) vastly outnumber writes (create/destroy) |
+| Audit log | Buffered channel | Non-blocking producer guarantee; no mutex contention on hot path |
+| File watcher state | `sync.Mutex` | Guards `watcherStop` channel to prevent data race on reinit |
+
+### Process Orchestration on Crash
+
+When a language server subprocess crashes, the recovery sequence cascades across goroutines:
+
+```
+gopls exits unexpectedly
+    │
+    ▼
+exit-monitor goroutine detects cmd.Wait() error
+    │
+    ├──► rejectPending(err)
+    │       iterates all pending[id] channels
+    │       sends error on each errCh
+    │       clears the pending map
+    │       → all blocked SendRequest callers unblock with error
+    │
+    ├──► sets initialized = false
+    │       → subsequent tool calls fail fast with "not initialized"
+    │
+    └──► logs last 4KB of stderr at error level
+            → crash diagnostics visible in MCP log stream
+```
+
+No goroutine leaks. No orphaned subprocesses. All callers fail fast rather than hanging until timeout.
+
+---
+
 ## Request Lifecycle
 
 A typical MCP tool call flows as follows:
