@@ -26,6 +26,9 @@ type ParseResult struct {
 	HTTPToken      string
 	HTTPListenAddr string // bind address; defaults to 127.0.0.1
 	HTTPNoAuth     bool   // explicit opt-in to unauthenticated HTTP mode
+
+	// Audit log path (--audit-log flag)
+	AuditLogPath string
 }
 
 // extensionMap maps language IDs to their file extensions.
@@ -70,6 +73,7 @@ func ParseArgs(args []string) (ParseResult, error) {
 	var httpTokenFromFlag bool // tracks whether token came from --token flag
 	httpListenAddr := "127.0.0.1"
 	var httpNoAuth bool
+	var auditLogPath string
 	remainder := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -99,6 +103,12 @@ func ParseArgs(args []string) (ParseResult, error) {
 			httpListenAddr = args[i]
 		case "--no-auth":
 			httpNoAuth = true
+		case "--audit-log":
+			if i+1 >= len(args) {
+				return ParseResult{}, fmt.Errorf("--audit-log requires a value")
+			}
+			i++
+			auditLogPath = args[i]
 		case "--token":
 			if i+1 >= len(args) {
 				return ParseResult{}, fmt.Errorf("--token requires a value")
@@ -128,6 +138,7 @@ func ParseArgs(args []string) (ParseResult, error) {
 		r.HTTPToken = httpToken
 		r.HTTPListenAddr = httpListenAddr
 		r.HTTPNoAuth = httpNoAuth
+		r.AuditLogPath = auditLogPath
 		return r
 	}
 

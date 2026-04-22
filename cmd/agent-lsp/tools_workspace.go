@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"time"
 
+	"github.com/blackwell-systems/agent-lsp/internal/audit"
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/tools"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
@@ -326,7 +328,48 @@ func registerWorkspaceTools(d toolDeps) {
 			OpenWorldHint:   boolPtr(false),
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args ApplyEditArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleApplyEdit(ctx, d.cs.get(), toolArgsToMap(args))
+		startTime := time.Now()
+		client := d.cs.get()
+
+		// Determine affected files and build edit summary.
+		var files []string
+		var summary audit.EditSummary
+		if args.FilePath != "" && args.OldText != "" {
+			files = []string{args.FilePath}
+			summary = audit.EditSummary{
+				Mode:           "text-match",
+				FilePath:       args.FilePath,
+				OldTextPreview: audit.Truncate(args.OldText, 200),
+				NewTextPreview: audit.Truncate(args.NewText, 200),
+			}
+		} else if args.Edit != nil {
+			files = extractFilesFromWorkspaceEdit(args.Edit)
+			summary = audit.EditSummary{Mode: "workspace-edit"}
+		}
+
+		diagsBefore := snapshotDiagnostics(client, files)
+
+		r, err := tools.HandleApplyEdit(ctx, client, toolArgsToMap(args))
+
+		diagsAfter := snapshotDiagnostics(client, files)
+		delta := computeDelta(diagsBefore, diagsAfter)
+
+		record := audit.Record{
+			Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
+			Tool:              "apply_edit",
+			Files:             files,
+			EditSummary:       &summary,
+			DiagnosticsBefore: diagsBefore,
+			DiagnosticsAfter:  diagsAfter,
+			NetDelta:          delta,
+			Success:           !isToolResultError(r),
+			DurationMs:        time.Since(startTime).Milliseconds(),
+		}
+		if isToolResultError(r) {
+			record.ErrorMessage = toolResultErrorMsg(r)
+		}
+		d.auditLogger.Log(record)
+
 		return makeCallToolResult(r), nil, err
 	})
 

@@ -122,14 +122,14 @@ func main() {
 	}()
 
 	// Run the MCP server with panic recovery.
-	if err := runWithRecovery(ctx, resolver, registry, serverPath, serverArgs, parsed.HTTPMode, parsed.HTTPPort, parsed.HTTPToken, parsed.HTTPListenAddr, parsed.HTTPNoAuth); err != nil {
+	if err := runWithRecovery(ctx, resolver, registry, serverPath, serverArgs, parsed.HTTPMode, parsed.HTTPPort, parsed.HTTPToken, parsed.HTTPListenAddr, parsed.HTTPNoAuth, parsed.AuditLogPath); err != nil {
 		logging.Log(logging.LevelError, fmt.Sprintf("server error: %v", err))
 		os.Exit(1)
 	}
 }
 
 // runWithRecovery wraps server.Run with a deferred recover to catch panics.
-func runWithRecovery(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string, httpMode bool, httpPort int, httpToken string, httpListenAddr string, httpNoAuth bool) (runErr error) {
+func runWithRecovery(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string, httpMode bool, httpPort int, httpToken string, httpListenAddr string, httpNoAuth bool, auditLogPath string) (runErr error) {
 	defer func() {
 		if r := recover(); r != nil {
 			logging.Log(logging.LevelError, fmt.Sprintf("panic recovered: %v", r))
@@ -143,5 +143,5 @@ func runWithRecovery(ctx context.Context, resolver lsp.ClientResolver, registry 
 			_ = resolver.Shutdown(shutdownCtx)
 		}
 	}()
-	return Run(ctx, resolver, registry, serverPath, serverArgs, httpMode, httpPort, httpToken, httpListenAddr, httpNoAuth)
+	return Run(ctx, resolver, registry, serverPath, serverArgs, httpMode, httpPort, httpToken, httpListenAddr, httpNoAuth, auditLogPath)
 }

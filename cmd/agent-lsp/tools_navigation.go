@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"time"
 
+	"github.com/blackwell-systems/agent-lsp/internal/audit"
 	"github.com/blackwell-systems/agent-lsp/internal/tools"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -166,7 +168,36 @@ func registerNavigationTools(d toolDeps) {
 			OpenWorldHint:   boolPtr(false),
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args RenameSymbolArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleRenameSymbol(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+		startTime := time.Now()
+		client := d.clientForFileWithAutoInit(args.FilePath)
+
+		diagsBefore := snapshotDiagnostics(client, []string{args.FilePath})
+
+		r, err := tools.HandleRenameSymbol(ctx, client, toolArgsToMap(args))
+
+		// Snapshot diagnostics on the input file after rename.
+		diagsAfter := snapshotDiagnostics(client, []string{args.FilePath})
+		delta := computeDelta(diagsBefore, diagsAfter)
+
+		record := audit.Record{
+			Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
+			Tool:              "rename_symbol",
+			Files:             []string{args.FilePath},
+			EditSummary:       &audit.EditSummary{
+				Mode:    "rename",
+				NewName: args.NewName,
+			},
+			DiagnosticsBefore: diagsBefore,
+			DiagnosticsAfter:  diagsAfter,
+			NetDelta:          delta,
+			Success:           !isToolResultError(r),
+			DurationMs:        time.Since(startTime).Milliseconds(),
+		}
+		if isToolResultError(r) {
+			record.ErrorMessage = toolResultErrorMsg(r)
+		}
+		d.auditLogger.Log(record)
+
 		return makeCallToolResult(r), nil, err
 	})
 

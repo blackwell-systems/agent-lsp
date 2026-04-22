@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"time"
 
+	"github.com/blackwell-systems/agent-lsp/internal/audit"
 	"github.com/blackwell-systems/agent-lsp/internal/tools"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -131,7 +133,42 @@ func registerSessionTools(d toolDeps) {
 			OpenWorldHint:   boolPtr(false),
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args CommitSessionArgs) (*mcp.CallToolResult, any, error) {
+		startTime := time.Now()
+		client := d.cs.get()
+
+		diagsBefore := snapshotAllDiagnostics(client)
+
 		r, err := tools.HandleCommitSession(ctx, d.sessionMgr, toolArgsToMap(args))
+
+		diagsAfter := snapshotAllDiagnostics(client)
+		delta := computeDelta(diagsBefore, diagsAfter)
+
+		var filesChecked []string
+		if diagsAfter != nil {
+			filesChecked = diagsAfter.FilesChecked
+		}
+
+		record := audit.Record{
+			Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
+			Tool:              "commit_session",
+			SessionID:         args.SessionID,
+			Files:             filesChecked,
+			EditSummary:       &audit.EditSummary{
+				Mode:   "commit",
+				Target: args.Target,
+				Apply:  args.Apply,
+			},
+			DiagnosticsBefore: diagsBefore,
+			DiagnosticsAfter:  diagsAfter,
+			NetDelta:          delta,
+			Success:           !isToolResultError(r),
+			DurationMs:        time.Since(startTime).Milliseconds(),
+		}
+		if isToolResultError(r) {
+			record.ErrorMessage = toolResultErrorMsg(r)
+		}
+		d.auditLogger.Log(record)
+
 		return makeCallToolResult(r), nil, err
 	})
 

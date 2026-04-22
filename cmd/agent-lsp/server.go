@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blackwell-systems/agent-lsp/internal/audit"
 	"github.com/blackwell-systems/agent-lsp/internal/config"
 	"github.com/blackwell-systems/agent-lsp/internal/extensions"
 	"github.com/blackwell-systems/agent-lsp/internal/httpauth"
@@ -227,10 +228,11 @@ type toolDeps struct {
 	sessionMgr               *session.SessionManager
 	serverPath               string
 	serverArgs               []string
+	auditLogger              *audit.Logger
 }
 
 // Run creates and starts the MCP server.
-func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string, httpMode bool, httpPort int, httpToken string, httpListenAddr string, httpNoAuth bool) error {
+func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string, httpMode bool, httpPort int, httpToken string, httpListenAddr string, httpNoAuth bool, auditLogPath string) error {
 	cs := &clientState{client: resolver.DefaultClient()}
 	var initMu sync.Mutex
 	// clientForFileWithAutoInit extends clientForFile with auto-init behavior.
@@ -242,6 +244,12 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		return autoInitClient(ctx, resolver, cs, &initMu, filePath)
 	}
 	sessionMgr := session.NewSessionManager(&csResolver{cs: cs, delegate: resolver})
+
+	auditLogger, err := audit.NewLogger(audit.ResolvePath(auditLogPath), 256)
+	if err != nil {
+		return fmt.Errorf("audit logger: %w", err)
+	}
+	defer auditLogger.Close()
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "agent-lsp",
@@ -262,6 +270,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		sessionMgr:               sessionMgr,
 		serverPath:               serverPath,
 		serverArgs:               serverArgs,
+		auditLogger:              auditLogger,
 	}
 
 	registerWorkspaceTools(deps)
