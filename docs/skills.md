@@ -4,7 +4,9 @@ agent-lsp ships 20 skills — named workflows that encode correct tool sequences
 multi-step operations happen reliably. This doc is a developer reference: what each
 skill does, when to reach for it, and what it does that raw tool calls miss.
 
-All 20 skills conform to the [Agent Skills](https://agentskills.io/) open standard — the cross-agent skill format adopted by Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and [30+ other tools](https://agentskills.io/clients). Each `SKILL.md` includes the required `name` and `description` frontmatter fields, plus `license`, `compatibility`, and `allowed-tools`. Skills work with any AgentSkills-compatible agent.
+All 20 skills conform to the [Agent Skills](https://agentskills.io/) open standard — the cross-agent skill format adopted by Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and [30+ other tools](https://agentskills.io/clients). Each `SKILL.md` includes the required `name` and `description` frontmatter fields, plus `license`, `compatibility`, and `allowed-tools`.
+
+**agent-lsp skills are not locked to any single AI provider.** Because they follow the AgentSkills open standard, they work with any conforming agent — Claude, Copilot, Cursor, Gemini, Codex, Roo Code, OpenHands, and the rest. The MCP server handles the LSP runtime; the skills are portable workflow definitions that any agent can load and execute.
 
 See the [Setup guide](getting-started/quickstart.md) for installation instructions. For the individual tools that skills compose, see [docs/tools.md](./tools.md). For the full AgentSkills specification, see [agentskills.io/specification](https://agentskills.io/specification).
 
