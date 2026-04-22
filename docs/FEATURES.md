@@ -1,6 +1,6 @@
 # agent-lsp Features Dump
 
-Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. The 49→50 CI count reflects `set_log_level` verified in a separate test path.
+Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. The 49→50 CI count reflects `set_log_level` verified in a separate test path. All 50 tools have `ToolAnnotations` (Title, ReadOnlyHint, DestructiveHint, IdempotentHint, OpenWorldHint) and 171 `jsonschema` struct tags providing parameter semantics in the schema itself.
 
 ---
 
@@ -10,7 +10,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `start_lsp` | Initialize LSP server with workspace root | `root_dir` (string, req), `language_id` (string, opt) |
+| `start_lsp` | Initialize LSP server with workspace root | `root_dir` (string, req), `language_id` (string, opt), `ready_timeout_seconds` (int, opt) |
 | `restart_lsp_server` | Restart current LSP server process | `root_dir` (string, opt) |
 | `open_document` | Register file with language server | `file_path` (string, req), `language_id` (string, opt), `text` (string, opt) |
 | `close_document` | Unregister file from language server | `file_path` (string, req) |
@@ -22,6 +22,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 **`start_lsp` notes:**
 - Shuts down existing LSP process before starting new one — no resource leak
 - Language server initialized but may not have finished indexing on return
+- `ready_timeout_seconds` — blocks until all `$/progress` workspace-indexing tokens complete before returning, up to the specified timeout; fires as soon as indexing completes (does not always wait the full timeout); grace period for late-emitting servers; also exports `WaitForWorkspaceReadyTimeout` on `LSPClient` for programmatic use beyond the default 60s cap
 - `get_references` waits for all `$/progress end` events before returning on large projects
 - `language_id` selects specific server in multi-server mode; omit to start all
 
@@ -211,6 +212,8 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 
 **Total: 50 tools**
 - **CI-verified: 50** (including `set_log_level`, which is verified separately across all 30 languages)
+- **ToolAnnotations:** All 50 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
+- **jsonschema struct tags:** 171 tags across all Args structs; 100% parameter description coverage
 - **1-indexed coordinates:** All line/column parameters are 1-based (editor convention)
 - **0-based conversion:** `extractRange` helper converts to 0-based for LSP protocol internally
 
@@ -687,6 +690,7 @@ GoReleaser (inside release job):
 | `full` | Go, TypeScript, Python, Ruby, C/C++, PHP | ~1–2 GB |
 
 **Registries:** `ghcr.io/blackwell-systems/agent-lsp` (primary), `blackwellsystems/agent-lsp` (mirror)
+**Architecture:** All 11 image tags publish as multi-arch manifest lists (`linux/amd64` + `linux/arm64`). Native performance on Apple Silicon and AWS Graviton without Rosetta/QEMU emulation.
 **Tags:** `latest` and `base` are the same image; semver tags (`0.1.2`, `0.1`) also pushed for the base image
 **Trigger:** Release tags (`v*`) only
 **Build:** `docker/Dockerfile` (base/latest, multi-stage), `docker/Dockerfile.release` (GoReleaser, pre-compiled binary), `docker/Dockerfile.lang` (per-language), `docker/Dockerfile.combo` (web/backend/fullstack), `docker/Dockerfile.full` (full); source-build Dockerfiles use two-stage — Go builder + `debian:bookworm-slim`; static binary; no Go runtime in final image
@@ -1010,6 +1014,7 @@ type Extension interface {
 | `agent-lsp doctor` | Probe each configured language server; report version + capabilities; exit 1 on failure |
 | `agent-lsp init` | Interactive setup wizard |
 | `agent-lsp init --non-interactive` | CI/scripted setup |
+| `agent-lsp --help` / `-h` / `help` | Print usage summary with all modes and subcommands |
 | `agent-lsp --version` | Print version and exit |
 
 **Argument format:** `language:server-binary[,--arg1][,--arg2]`
@@ -1021,6 +1026,8 @@ type Extension interface {
 | `--http` | off | Enable HTTP+SSE transport instead of stdio |
 | `--port N` | `8080` | TCP port to listen on (1–65535) |
 | `AGENT_LSP_TOKEN` (env) | — | Bearer token for auth; empty = unauthenticated (warns on start) |
+
+| `--audit-log PATH` | off | JSONL audit log path (or `AGENT_LSP_AUDIT_LOG` env var) |
 
 Auth token must be set via environment variable — not `--token` flag — to avoid credential exposure in the process list.
 
@@ -1079,14 +1086,29 @@ locs, err := client.GetDefinition(ctx, fileURI, lsp.Position{Line: 10, Character
 | `multi-lang-clojure` | Clojure | ubuntu-latest | |
 | `multi-lang-nix` | Nix | ubuntu-latest | DeterminateSystems/nix-installer-action@v16 required |
 | `multi-lang-dart` | Dart | ubuntu-latest | |
+| `multi-lang-java` | Java | ubuntu-latest | continue-on-error; `-Xmx2G`; 15min timeout; isolated from `multi-lang-core` to avoid OOM |
 | `multi-lang-mongodb` | MongoDB | ubuntu-latest | continue-on-error; mongo:7 service container; mongosh health check |
-| `speculative-test` | session lifecycle (gopls) | ubuntu-latest | `TestSpeculativeSessions` in `test/speculative_test.go` |
+| `speculative-test` | session lifecycle (8 languages: Go, TypeScript, Python, Rust, C++, C#, Dart, Java) | ubuntu-latest | `TestSpeculativeSessions` table-driven in `test/speculative_test.go`; 20min timeout; Java 300s extended timeout for JVM startup |
 
 **Test files:**
 - `test/multi_lang_test.go` — `TestMultiLanguage` (1573 lines after extraction)
 - `test/lang_configs_test.go` — `buildLanguageConfigs()` (840 lines; extracted from multi_lang_test.go)
-- `test/speculative_test.go` — `TestSpeculativeSessions`
+- `test/speculative_test.go` — `TestSpeculativeSessions` (table-driven, 8 languages)
+- `test/error_paths_test.go` — 11 subtests covering bad input across `go_to_definition`, `get_diagnostics`, `simulate_edit`, `simulate_edit_atomic`, `get_references`, `rename_symbol`; asserts well-formed error responses, never nil/crashes
+- `test/consistency_test.go` — parallel structural shape validation across Go, TypeScript, Python, Rust for `get_document_symbols`, `go_to_definition`, `get_diagnostics`, `get_info_on_location`; verifies response shape contracts hold across language servers
 - `test/fixtures/<lang>/` — per-language fixture files
+
+---
+
+## Audit Trail
+
+- **JSONL logging** for mutating operations: `apply_edit`, `rename_symbol`, `commit_session`
+- **Configurable:** `--audit-log /path/to/file.jsonl` flag or `AGENT_LSP_AUDIT_LOG` env var
+- **Non-blocking:** channel-buffered writer; tool handlers never block on I/O
+- **Record fields:** timestamp, files touched, edit summary, pre/post diagnostic state, `net_delta`
+- **Implementation:** `internal/audit/audit.go`
+
+---
 
 **Speculative test coverage:**
 - `discard_path` — applies edit via `simulate_edit`, discards session
