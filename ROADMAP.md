@@ -255,6 +255,17 @@ After 5+ CI runs, `generate-metrics.py` reads `metrics/history.json` on the `met
 - Speculative confidence for languages without `high` confidence is expected — record the actual value, not a failure.
 - The `collect-metrics` CI job should only run on the `main` branch to avoid polluting the metrics branch with PR data.
 
+## Control Plane
+
+The agent-local pipeline (blast-radius → simulate → apply → verify → test) handles correctness for a single session. The control plane adds organizational primitives for teams running agents at scale.
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Audit trail** | **Shipped** | JSONL log of every `apply_edit`, `rename_symbol`, and `commit_session` call with timestamp, affected files, edit summary, pre/post diagnostic state, and net_delta. Configure via `--audit-log` flag or `AGENT_LSP_AUDIT_LOG` env var. |
+| **Change plan output** | Planned | Materialize `simulate_chain` output as a structured, human-reviewable artifact before apply — files, edits, per-step diagnostic delta, safe-to-apply watermark. Three community members have independently requested this. |
+| **Policy gates** | Planned | Configurable rules that block apply based on blast-radius thresholds, public API changes, or path patterns. Evaluate at apply time using the audit record. |
+| **Cross-session coordination** | Planned | Shared state between concurrent MCP sessions — symbol-level lock registry to prevent overlapping renames/refactors. Requires a sidecar daemon or file-based coordination. The hardest piece. |
+
 ## Bigger Bets
 
 | Feature | Status | Description |
