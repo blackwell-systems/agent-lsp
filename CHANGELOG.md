@@ -5,6 +5,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-22
+
 ### Added
 
 - **`ready_timeout_seconds` on `start_lsp`** — optional parameter that blocks until all `$/progress` workspace-indexing tokens complete before returning, up to the specified timeout. Replaces fixed post-initialize sleeps for servers like jdtls that index asynchronously after `initialize`. Fires as soon as indexing completes rather than always waiting the full timeout. Also exports `WaitForWorkspaceReadyTimeout` on `LSPClient` for callers needing a configurable timeout beyond the default 60s cap.
