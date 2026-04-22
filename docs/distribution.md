@@ -110,6 +110,12 @@ Manually submitted. Free listing.
 ### Awesome MCP Servers
 PR submitted ([punkpeye/awesome-mcp-servers#5145](https://github.com/punkpeye/awesome-mcp-servers/pull/5145)). Pending maintainer review.
 
+## Documentation site
+
+**URL:** [agent-lsp.com](https://agent-lsp.com)
+
+Built with mkdocs-material from the `docs/` folder. Deployed to GitHub Pages automatically on every push to `main` via `.github/workflows/docs.yml`. Custom domain via Cloudflare DNS (CNAME → `blackwell-systems.github.io`).
+
 ## Release pipeline
 
 Every `git tag v*` push triggers three sequential CI jobs:
