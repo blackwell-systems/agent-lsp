@@ -122,6 +122,9 @@ jobs:
           sudo chmod +x /usr/local/bin/jdtls
           echo "jdtls installed at $(which jdtls)"
 
+      - name: Compile Java fixture (jdtls needs target/classes)
+        run: cd test/fixtures/java && mvn -q compile
+
       - name: Create jdtls workspace dirs
         run: |
           mkdir -p /tmp/jdtls-workspace-lsp-mcp-test
@@ -459,6 +462,9 @@ jobs:
           LAUNCHER=$(ls /opt/jdtls/plugins/org.eclipse.equinox.launcher_*.jar | head -1)
           printf '#!/bin/bash\nexec java \\\n  -Declipse.application=org.eclipse.jdt.ls.core.id1 \\\n  -Dosgi.bundles.defaultStartLevel=4 \\\n  -Declipse.product=org.eclipse.jdt.ls.core.product \\\n  -Dlog.level=ERROR \\\n  -Xmx1G \\\n  --add-modules=ALL-SYSTEM \\\n  --add-opens java.base/java.util=ALL-UNNAMED \\\n  --add-opens java.base/java.lang=ALL-UNNAMED \\\n  -jar %s \\\n  -configuration /opt/jdtls/config_linux \\\n  "$@"\n' "$LAUNCHER" | sudo tee /usr/local/bin/jdtls > /dev/null
           sudo chmod +x /usr/local/bin/jdtls
+
+      - name: Compile Java fixture (jdtls needs target/classes)
+        run: cd test/fixtures/java && mvn -q compile
 
       - name: Create jdtls workspace dir
         run: mkdir -p /tmp/jdtls-workspace-speculative-test
