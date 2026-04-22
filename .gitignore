@@ -35,3 +35,6 @@ saw.config.json
 # Inspector output (generated; canonical location is docs/inspections/)
 /inspections/
 .idea/
+
+# mkdocs build output
+/site/

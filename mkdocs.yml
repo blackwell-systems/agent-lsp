@@ -1,0 +1,65 @@
+site_name: agent-lsp
+site_url: https://agent-lsp.com
+site_description: LSP-powered code intelligence for AI agents
+repo_url: https://github.com/blackwell-systems/agent-lsp
+repo_name: blackwell-systems/agent-lsp
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.action.edit
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+  - Tools: tools.md
+  - Skills: skills.md
+  - Architecture: architecture.md
+  - Speculative Execution: speculative-execution.md
+  - Language Support: language-support.md
+  - Distribution: distribution.md
+  - CI Notes: ci-notes.md
+  - Changelog: changelog.md
+  - Roadmap: roadmap.md

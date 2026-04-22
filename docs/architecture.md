@@ -841,7 +841,7 @@ This is useful for agents that want to read a function body without manually cou
 
 ## See also
 
-- [README](../README.md) — project overview, setup, and quick start
+- [Home](index.md) — project overview, setup, and quick start
 - [docs/tools.md](./tools.md) — full tool reference with parameters and examples
 - [docs/skills.md](./skills.md) — skill reference with workflows and composition patterns
 - [docs/language-support.md](./language-support.md) — language coverage matrix
