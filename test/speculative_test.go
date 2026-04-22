@@ -198,6 +198,7 @@ func buildSpeculativeLangConfigs(fixtureBase string) []speculativeLangConfig {
 			file:             filepath.Join(fixtureBase, "java", "src", "main", "java", "com", "example", "Person.java"),
 			initWait:         120 * time.Second,
 			timeout:          300 * time.Second,
+			safeEditFile:     filepath.Join(fixtureBase, "java", "src", "main", "java", "com", "example", "Greeter.java"),
 			safeEditLine:     1,
 			safeEditCol:      1,
 			safeEditText:     "// speculative comment\n",
