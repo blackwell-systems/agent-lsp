@@ -118,6 +118,10 @@ func registerWorkspaceTools(d toolDeps) {
 					return makeCallToolResult(types.ErrorResult(err.Error())), nil, nil
 				}
 				d.cs.set(client)
+				// Block until workspace indexing completes if requested.
+				if args.ReadyTimeoutSeconds > 0 {
+					client.WaitForWorkspaceReadyTimeout(ctx, time.Duration(args.ReadyTimeoutSeconds)*time.Second)
+				}
 				return makeCallToolResult(types.TextResult("LSP server started successfully")), nil, nil
 			}
 			if err := sm.StartAll(ctx, args.RootDir); err != nil {
@@ -125,6 +129,14 @@ func registerWorkspaceTools(d toolDeps) {
 			}
 			if c := d.resolver.DefaultClient(); c != nil {
 				d.cs.set(c)
+			}
+			// Block until workspace indexing completes if requested.
+			// Servers like jdtls emit $/progress tokens during Maven/Gradle
+			// import; waiting here lets start_lsp return only when ready.
+			if args.ReadyTimeoutSeconds > 0 {
+				if c := d.resolver.DefaultClient(); c != nil {
+					c.WaitForWorkspaceReadyTimeout(ctx, time.Duration(args.ReadyTimeoutSeconds)*time.Second)
+				}
 			}
 			return makeCallToolResult(types.TextResult("LSP server started successfully")), nil, nil
 		}

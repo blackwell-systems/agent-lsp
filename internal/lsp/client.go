@@ -307,16 +307,25 @@ func (c *LSPClient) dispatch(raw []byte) {
 			c.sendResponse(msg.ID, nil)
 		}
 	case "workspace/configuration":
-		// Respond with array of nulls.
+		// Respond with an array of empty objects (one per requested item).
+		// Using {} instead of null is critical for servers like jdtls that
+		// interpret null as "no configuration available" and skip project
+		// import, while {} means "use defaults" and triggers Maven/Gradle
+		// import with default settings.
 		if msg.ID != nil {
 			var p struct {
-				Items []interface{} `json:"items"`
+				Items []struct {
+					Section string `json:"section"`
+				} `json:"items"`
 			}
 			if err := json.Unmarshal(msg.Params, &p); err != nil {
 				logging.Log(logging.LevelDebug, fmt.Sprintf("workspace/configuration: unmarshal params: %v", err))
 			}
-			nulls := make([]interface{}, len(p.Items))
-			c.sendResponse(msg.ID, nulls)
+			results := make([]interface{}, len(p.Items))
+			for i := range results {
+				results[i] = map[string]interface{}{}
+			}
+			c.sendResponse(msg.ID, results)
 		}
 	case "workspace/applyEdit":
 		// Apply the workspace edit and respond with ApplyWorkspaceEditResult.
@@ -596,6 +605,14 @@ func (c *LSPClient) IsInitialized() bool {
 	return c.initialized
 }
 
+// isJDTLS reports whether the server binary appears to be Eclipse jdtls.
+// Checks the binary name for "jdtls" (covers /usr/local/bin/jdtls and
+// wrapper scripts named jdtls).
+func (c *LSPClient) isJDTLS() bool {
+	base := filepath.Base(c.serverPath)
+	return strings.Contains(strings.ToLower(base), "jdtls")
+}
+
 // Initialize starts the LSP process and performs the LSP handshake.
 func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	if err := c.start(); err != nil {
@@ -717,6 +734,42 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 		"workspaceFolders": []map[string]interface{}{
 			{"uri": rootURI, "name": rootDir},
 		},
+	}
+
+	// jdtls (Java) needs initializationOptions with settings and
+	// extendedClientCapabilities to trigger Maven/Gradle project import
+	// and emit $/progress tokens during workspace indexing. Without these,
+	// jdtls starts but silently skips project import and never indexes.
+	if c.isJDTLS() {
+		initParams["initializationOptions"] = map[string]interface{}{
+			"settings": map[string]interface{}{
+				"java": map[string]interface{}{
+					"import": map[string]interface{}{
+						"maven": map[string]interface{}{
+							"enabled": true,
+						},
+						"gradle": map[string]interface{}{
+							"enabled": true,
+						},
+					},
+					"autobuild": map[string]interface{}{
+						"enabled": true,
+					},
+				},
+			},
+			"extendedClientCapabilities": map[string]interface{}{
+				"progressReportProvider":    true,
+				"classFileContentsSupport":  true,
+				"overrideMethodsPromptSupport": true,
+				"hashCodeEqualsPromptSupport":  true,
+				"advancedOrganizeImportsSupport": true,
+				"generateToStringPromptSupport": true,
+				"advancedGenerateAccessorsSupport": true,
+				"generateConstructorsPromptSupport": true,
+				"generateDelegateMethodsPromptSupport": true,
+				"advancedExtractRefactoringSupport": true,
+			},
+		}
 	}
 
 	result, err := c.sendRequest(ctx, "initialize", initParams)

@@ -361,7 +361,9 @@ func TestLSPClient_RequestResponse(t *testing.T) {
 }
 
 // TestLSPClient_WorkspaceConfiguration verifies that workspace/configuration
-// requests are answered with an array of nulls.
+// requests are answered with an array of empty objects (one per item).
+// Empty objects ({}) instead of null are critical for servers like jdtls
+// that interpret null as "no configuration" and skip project import.
 func TestLSPClient_WorkspaceConfiguration(t *testing.T) {
 	c, serverW, clientR := newTestClient(t)
 	_ = c
@@ -392,7 +394,17 @@ func TestLSPClient_WorkspaceConfiguration(t *testing.T) {
 		t.Fatalf("expected array result, got %T: %v", resp["result"], resp["result"])
 	}
 	if len(result) != 2 {
-		t.Errorf("expected 2 nulls, got %d", len(result))
+		t.Errorf("expected 2 items, got %d", len(result))
+	}
+	for i, item := range result {
+		obj, ok := item.(map[string]interface{})
+		if !ok {
+			t.Errorf("result[%d]: expected empty object, got %T: %v", i, item, item)
+			continue
+		}
+		if len(obj) != 0 {
+			t.Errorf("result[%d]: expected empty object, got %v", i, obj)
+		}
 	}
 }
 
