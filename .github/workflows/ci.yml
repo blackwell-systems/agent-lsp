@@ -120,9 +120,13 @@ jobs:
           sudo chmod +x /usr/local/bin/jdtls
           echo "jdtls installed at $(which jdtls)"
 
+      - name: Create jdtls workspace dirs
+        run: |
+          mkdir -p /tmp/jdtls-workspace-lsp-mcp-test
+          mkdir -p /tmp/jdtls-smoke-test
+
       - name: Smoke-test jdtls startup
         run: |
-          mkdir -p /tmp/jdtls-smoke-test
           echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}' \
             | timeout 10 jdtls -data /tmp/jdtls-smoke-test 2>&1 | head -20 || true
 
@@ -451,6 +455,9 @@ jobs:
           LAUNCHER=$(ls /opt/jdtls/plugins/org.eclipse.equinox.launcher_*.jar | head -1)
           printf '#!/bin/bash\nexec java \\\n  -Declipse.application=org.eclipse.jdt.ls.core.id1 \\\n  -Dosgi.bundles.defaultStartLevel=4 \\\n  -Declipse.product=org.eclipse.jdt.ls.core.product \\\n  -Dlog.level=ERROR \\\n  -Xmx1G \\\n  --add-modules=ALL-SYSTEM \\\n  --add-opens java.base/java.util=ALL-UNNAMED \\\n  --add-opens java.base/java.lang=ALL-UNNAMED \\\n  -jar %s \\\n  -configuration /opt/jdtls/config_linux \\\n  "$@"\n' "$LAUNCHER" | sudo tee /usr/local/bin/jdtls > /dev/null
           sudo chmod +x /usr/local/bin/jdtls
+
+      - name: Create jdtls workspace dir
+        run: mkdir -p /tmp/jdtls-workspace-speculative-test
 
       - name: Run speculative session tests
         run: GOWORK=off go test -v -run TestSpeculativeSessions ./test/ -timeout 20m
