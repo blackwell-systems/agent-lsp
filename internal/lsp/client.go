@@ -426,11 +426,38 @@ func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
 // WaitForWorkspaceReadyTimeout blocks until all active $/progress tokens are
 // done or the given timeout elapses. Use this when the default 60s cap is
 // insufficient (e.g. jdtls Maven workspace indexing).
+//
+// If no progress tokens are active yet, waits up to 10 seconds for the first
+// $/progress begin to arrive. Servers like jdtls emit progress tokens
+// asynchronously after initialize — without this grace period, the wait
+// returns immediately before indexing has even started.
 func (c *LSPClient) WaitForWorkspaceReadyTimeout(ctx context.Context, timeout time.Duration) {
 	c.progressMu.Lock()
-	defer c.progressMu.Unlock()
-	if len(c.progressTokens) == 0 {
-		return
+
+	// Grace period: if no progress tokens yet and caller requested an extended
+	// wait (>60s), wait briefly for the first token. Avoids 10s delay for
+	// default-timeout callers (GetReferences, etc.) on servers that never emit progress.
+	if len(c.progressTokens) == 0 && timeout > 60*time.Second {
+		grace := make(chan struct{})
+		go func() {
+			select {
+			case <-time.After(10 * time.Second):
+				c.progressCond.Broadcast()
+			case <-ctx.Done():
+				c.progressCond.Broadcast()
+			case <-grace:
+			}
+		}()
+		graceDeadline := time.Now().Add(10 * time.Second)
+		for len(c.progressTokens) == 0 {
+			if time.Now().After(graceDeadline) || ctx.Err() != nil {
+				close(grace)
+				c.progressMu.Unlock()
+				return
+			}
+			c.progressCond.Wait()
+		}
+		close(grace)
 	}
 
 	// Guarantee a wakeup at the deadline so the cond var doesn't block forever
