@@ -369,6 +369,9 @@ jobs:
           wget -q "https://github.com/gleam-lang/gleam/releases/download/v${GLEAM_VERSION}/gleam-v${GLEAM_VERSION}-x86_64-unknown-linux-musl.tar.gz" -O /tmp/gleam.tar.gz
           sudo tar -xzf /tmp/gleam.tar.gz -C /usr/local/bin
 
+      - name: Build Gleam fixture
+        run: cd test/fixtures/gleam && gleam build
+
       - name: Run Gleam tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Gleam$" ./test/ -timeout 10m
 

@@ -221,6 +221,8 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		initWait = 120 * time.Second
 	case "kotlin", "scala":
 		initWait = 30 * time.Second
+	case "gleam":
+		initWait = 15 * time.Second
 	default:
 		initWait = 8 * time.Second
 	}
