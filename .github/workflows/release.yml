@@ -40,26 +40,12 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Pre-build and push base Docker image
-        # GoReleaser builds all Docker images in parallel. Language images pull
-        # from ghcr.io/.../agent-lsp:base, so base must exist in the registry
-        # before GoReleaser starts. Build and push it here first.
-        run: |
-          docker buildx build \
-            --platform linux/amd64 \
-            --push \
-            --cache-from type=gha \
-            --cache-to type=gha,mode=max \
-            -t ghcr.io/blackwell-systems/agent-lsp:base \
-            -f docker/Dockerfile \
-            .
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: "~> v2"
-          args: release --clean
+          args: release --clean --timeout 120m
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
