@@ -3,6 +3,8 @@ name: lsp-test-correlation
 description: Find and run the tests that cover a source file. Use after editing a file to discover exactly which test files and test functions need to run — without running the entire test suite.
 argument-hint: "[file-path] [optional: run=true]"
 allowed-tools: mcp__lsp__get_tests_for_file mcp__lsp__get_workspace_symbols mcp__lsp__open_document mcp__lsp__run_tests
+license: MIT
+compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 ---
 
 > Requires the agent-lsp MCP server.

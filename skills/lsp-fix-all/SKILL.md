@@ -3,6 +3,8 @@ name: lsp-fix-all
 description: Apply available quick-fix code actions for all current diagnostics in a file, one at a time with re-collection between each fix. Use to bulk-resolve errors and warnings the language server can fix automatically.
 argument-hint: "[file-path]"
 allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__get_code_actions mcp__lsp__apply_edit mcp__lsp__open_document mcp__lsp__format_document
+license: MIT
+compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 ---
 
 > Requires the agent-lsp MCP server.

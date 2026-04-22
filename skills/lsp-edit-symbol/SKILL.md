@@ -6,6 +6,8 @@ allowed-tools:
   - mcp__lsp__get_workspace_symbols
   - mcp__lsp__get_document_symbols
   - mcp__lsp__apply_edit
+license: MIT
+compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 ---
 
 # lsp-edit-symbol

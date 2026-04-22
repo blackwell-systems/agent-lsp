@@ -3,6 +3,8 @@ name: lsp-format-code
 description: Format a file or selection using the language server's formatter. Use before committing to apply consistent style, or after generating code to clean up indentation and spacing. Supports full-file and range-based formatting.
 argument-hint: "[file-path] [optional: start_line-end_line]"
 allowed-tools: mcp__lsp__open_document mcp__lsp__format_document mcp__lsp__format_range mcp__lsp__apply_edit mcp__lsp__get_diagnostics mcp__lsp__get_server_capabilities
+license: MIT
+compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 ---
 
 > Requires the agent-lsp MCP server.

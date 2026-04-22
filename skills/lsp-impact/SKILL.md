@@ -3,6 +3,8 @@ name: lsp-impact
 description: Blast-radius analysis for a symbol or file — shows all callers, type supertypes/subtypes, and reference count before you change it. Use when refactoring, deleting, or changing the signature of any function, type, or method. Also accepts a file path to surface all exported-symbol impact in one shot.
 argument-hint: "[symbol-name | file-path]"
 allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__call_hierarchy mcp__lsp__type_hierarchy mcp__lsp__get_references mcp__lsp__get_server_capabilities mcp__lsp__get_change_impact
+license: MIT
+compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 ---
 
 > Requires the agent-lsp MCP server.
