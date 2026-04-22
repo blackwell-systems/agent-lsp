@@ -107,6 +107,8 @@ jobs:
           file /tmp/jdtls.tar.gz
           sudo mkdir -p /opt/jdtls
           sudo tar -xzf /tmp/jdtls.tar.gz -C /opt/jdtls
+          # jdtls writes log files to config_linux/ — must be writable by runner user
+          sudo chmod -R a+w /opt/jdtls/config_linux
           LAUNCHER=$(ls /opt/jdtls/plugins/org.eclipse.equinox.launcher_*.jar 2>/dev/null | head -1)
           if [ -z "$LAUNCHER" ]; then
             echo "ERROR: jdtls launcher JAR not found after extraction" >&2
@@ -452,6 +454,8 @@ jobs:
           wget -q "https://download.eclipse.org/jdtls/snapshots/jdt-language-server-latest.tar.gz" -O /tmp/jdtls.tar.gz
           sudo mkdir -p /opt/jdtls
           sudo tar -xzf /tmp/jdtls.tar.gz -C /opt/jdtls
+          # jdtls writes log files to config_linux/ — must be writable by runner user
+          sudo chmod -R a+w /opt/jdtls/config_linux
           LAUNCHER=$(ls /opt/jdtls/plugins/org.eclipse.equinox.launcher_*.jar | head -1)
           printf '#!/bin/bash\nexec java \\\n  -Declipse.application=org.eclipse.jdt.ls.core.id1 \\\n  -Dosgi.bundles.defaultStartLevel=4 \\\n  -Declipse.product=org.eclipse.jdt.ls.core.product \\\n  -Dlog.level=ERROR \\\n  -Xmx1G \\\n  --add-modules=ALL-SYSTEM \\\n  --add-opens java.base/java.util=ALL-UNNAMED \\\n  --add-opens java.base/java.lang=ALL-UNNAMED \\\n  -jar %s \\\n  -configuration /opt/jdtls/config_linux \\\n  "$@"\n' "$LAUNCHER" | sudo tee /usr/local/bin/jdtls > /dev/null
           sudo chmod +x /usr/local/bin/jdtls
