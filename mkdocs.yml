@@ -59,6 +59,7 @@ nav:
   - Architecture: architecture.md
   - Speculative Execution: speculative-execution.md
   - Language Support: language-support.md
+  - LSP Conformance: lsp-conformance.md
   - Distribution: distribution.md
   - CI Notes: ci-notes.md
   - Changelog: changelog.md
