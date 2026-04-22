@@ -122,50 +122,45 @@ else
     if [[ $errors -gt 0 ]]; then exit 1; fi
 fi
 
-# Update CLAUDE.md with managed skills table (Claude Code only)
-# Skip this step when installing to a non-Claude destination.
-if [[ "$DEST_DIR" != "${HOME}/.claude/skills" ]]; then
-    exit 0
-fi
-# Finds ~/.claude/CLAUDE.md and replaces content between sentinel comments.
-# If sentinels don't exist, appends the block at the end of the file.
-CLAUDE_MD="${HOME}/.claude/CLAUDE.md"
+# ── Update agent instruction files with managed skills table ─────────────────
+# Supports the three major agent instruction file formats.
+# Each file gets the same managed block (skills table between sentinel comments).
+# Files that don't exist are silently skipped — only existing files are updated.
 
-if [[ ! -f "$CLAUDE_MD" ]]; then
-    if [[ "$DRY_RUN" == false ]]; then
-        echo ""
-        echo "No ~/.claude/CLAUDE.md found — skipping skills table update."
+# Build the skills table rows from SKILL.md frontmatter (shared across all files)
+table_rows=""
+while IFS= read -r skillmd; do
+    skill_dir="${skillmd%/SKILL.md}"
+    skill_name="$(basename "$skill_dir")"
+    desc="$(grep '^description:' "$skillmd" | head -1 | sed 's/^description: *//' | tr -d '"')"
+    if [[ -n "$desc" ]]; then
+        table_rows+="| \`/${skill_name}\` | ${desc} |"$'\n'
     fi
-else
-    # Build the skills table rows from SKILL.md frontmatter
-    table_rows=""
-    while IFS= read -r skillmd; do
-        skill_dir="${skillmd%/SKILL.md}"
-        skill_name="$(basename "$skill_dir")"
-        # Extract description from frontmatter (first line starting with 'description:')
-        desc="$(grep '^description:' "$skillmd" | head -1 | sed 's/^description: *//' | tr -d '"')"
-        if [[ -n "$desc" ]]; then
-            table_rows+="| \`/${skill_name}\` | ${desc} |"$'\n'
-        fi
-    done < <(find "$SCRIPT_DIR" -maxdepth 2 -name "SKILL.md" | sort)
+done < <(find "$SCRIPT_DIR" -maxdepth 2 -name "SKILL.md" | sort)
 
-    # Build the full managed block
-    managed_block="<!-- agent-lsp:skills:start -->"$'\n'
-    managed_block+="| Skill | When to use |"$'\n'
-    managed_block+="|-------|-------------|"$'\n'
-    managed_block+="${table_rows}"
-    managed_block+="<!-- agent-lsp:skills:end -->"
+managed_block="<!-- agent-lsp:skills:start -->"$'\n'
+managed_block+="| Skill | When to use |"$'\n'
+managed_block+="|-------|-------------|"$'\n'
+managed_block+="${table_rows}"
+managed_block+="<!-- agent-lsp:skills:end -->"
 
-    START_SENTINEL="<!-- agent-lsp:skills:start -->"
-    END_SENTINEL="<!-- agent-lsp:skills:end -->"
+START_SENTINEL="<!-- agent-lsp:skills:start -->"
+END_SENTINEL="<!-- agent-lsp:skills:end -->"
 
-    if grep -qF "$START_SENTINEL" "$CLAUDE_MD"; then
-        # Replace between sentinels (inclusive)
+# update_instruction_file FILE LABEL
+# Updates a single agent instruction file with the managed skills block.
+update_instruction_file() {
+    local file="$1"
+    local label="$2"
+
+    if [[ ! -f "$file" ]]; then
+        return
+    fi
+
+    if grep -qF "$START_SENTINEL" "$file"; then
         if [[ "$DRY_RUN" == true ]]; then
-            echo "[dry-run] Would update agent-lsp skills block in $CLAUDE_MD"
+            echo "[dry-run] Would update agent-lsp skills block in $label"
         else
-            # Write managed block to a temp file — avoids passing multi-line
-            # strings via awk -v, which BSD awk (macOS) does not support.
             _block_file=$(mktemp)
             printf '%s' "$managed_block" > "$_block_file"
             awk -v start="$START_SENTINEL" \
@@ -178,17 +173,25 @@ else
                  }
                  $0==end{skip=0; next}
                  !skip{print}' \
-                "$CLAUDE_MD" > "${CLAUDE_MD}.tmp" && mv "${CLAUDE_MD}.tmp" "$CLAUDE_MD"
+                "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
             rm -f "$_block_file"
-            echo "  updated  ~/.claude/CLAUDE.md skills table"
+            echo "  updated  $label skills table"
         fi
     else
-        # Append managed block at end of file
         if [[ "$DRY_RUN" == true ]]; then
-            echo "[dry-run] Would append agent-lsp skills block to $CLAUDE_MD"
+            echo "[dry-run] Would append agent-lsp skills block to $label"
         else
-            printf '\n## LSP Skills\n\n%s\n' "$managed_block" >> "$CLAUDE_MD"
-            echo "  appended  agent-lsp skills block to ~/.claude/CLAUDE.md"
+            printf '\n## LSP Skills\n\n%s\n' "$managed_block" >> "$file"
+            echo "  appended  agent-lsp skills block to $label"
         fi
     fi
-fi
+}
+
+# Claude Code: ~/.claude/CLAUDE.md
+update_instruction_file "${HOME}/.claude/CLAUDE.md" "~/.claude/CLAUDE.md"
+
+# OpenAI Codex: AGENTS.md in current working directory
+update_instruction_file "$(pwd)/AGENTS.md" "AGENTS.md"
+
+# Gemini CLI: GEMINI.md in current working directory
+update_instruction_file "$(pwd)/GEMINI.md" "GEMINI.md"
