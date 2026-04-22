@@ -10,9 +10,6 @@ pub fn greet(person: Person) -> String {
   "Hello, " <> person.name
 }
 
-pub fn validate(person: Person) -> Result(Person, String) {
-  case person.age >= 0 {
-    True -> Ok(person)
-    False -> Error("Invalid age")
-  }
+pub fn name(person: Person) -> String {
+  person.name
 }
