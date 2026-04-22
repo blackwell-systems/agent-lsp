@@ -1,4 +1,4 @@
-import fixture/person
+import person
 
 pub fn create_and_greet() -> String {
   let p = person.new("Alice", 30)
