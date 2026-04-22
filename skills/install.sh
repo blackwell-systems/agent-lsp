@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # agent-lsp skills installer
-# Installs Agent Skills directories to ~/.claude/skills/
+# Installs AgentSkills-conformant skill directories to any agent's skill folder.
+# Default: ~/.claude/skills/ (Claude Code). Use --dest for other agents.
 # macOS/Linux: full support. Windows WSL: use --copy. Windows native: not supported.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,28 +16,32 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Install agent-lsp skills to ~/.claude/skills/
+Install agent-lsp skills (AgentSkills format) to an agent's skill directory.
 
-Each skill is a directory containing a SKILL.md file (Agent Skills format).
+Each skill is a directory containing a SKILL.md file conforming to the
+AgentSkills open standard (https://agentskills.io/specification).
 Skills are installed as symlinks by default (idempotent, non-destructive).
 
 Options:
+  --dest DIR  Install to DIR instead of ~/.claude/skills/
   --copy      Copy directories instead of creating symlinks
   --force     Overwrite existing links/directories
   --dry-run   Show what would be done without making changes
   --help      Show this help message
 
 Examples:
-  $(basename "$0")              # Symlink all skills
-  $(basename "$0") --copy       # Copy all skills
-  $(basename "$0") --dry-run    # Preview what would happen
-  $(basename "$0") --force      # Replace existing links/directories
+  $(basename "$0")                          # Claude Code (default)
+  $(basename "$0") --dest ~/.cursor/skills  # Cursor
+  $(basename "$0") --dest ~/.config/gemini-cli/skills  # Gemini CLI
+  $(basename "$0") --copy                   # Copy instead of symlink
+  $(basename "$0") --dry-run                # Preview what would happen
 EOF
 }
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --dest)   DEST_DIR="$2"; shift 2 ;;
         --copy)   USE_COPY=true; shift ;;
         --force)  FORCE=true; shift ;;
         --dry-run) DRY_RUN=true; shift ;;
@@ -117,7 +122,11 @@ else
     if [[ $errors -gt 0 ]]; then exit 1; fi
 fi
 
-# Update CLAUDE.md with managed skills table
+# Update CLAUDE.md with managed skills table (Claude Code only)
+# Skip this step when installing to a non-Claude destination.
+if [[ "$DEST_DIR" != "${HOME}/.claude/skills" ]]; then
+    exit 0
+fi
 # Finds ~/.claude/CLAUDE.md and replaces content between sentinel comments.
 # If sentinels don't exist, appends the block at the end of the file.
 CLAUDE_MD="${HOME}/.claude/CLAUDE.md"
