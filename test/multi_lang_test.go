@@ -218,7 +218,7 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 	var initWait time.Duration
 	switch lang.id {
 	case "java":
-		initWait = 0
+		initWait = 30 * time.Second
 	case "kotlin", "scala":
 		initWait = 30 * time.Second
 	default:
