@@ -45,11 +45,140 @@ jobs:
         with:
           distribution: goreleaser
           version: "~> v2"
-          args: release --clean --timeout 120m
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+  # ── Language / combo / full Docker images ─────────────────────────────────
+  # Each image builds on its own runner in parallel. Manifests are created
+  # after all images in a group complete.
+  docker-images:
+    needs: release
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Per-language images (Dockerfile.lang)
+          - tag: go
+            dockerfile: docker/Dockerfile.lang
+            platforms: linux/amd64,linux/arm64
+            build_args: |
+              LANG=go
+              LSP_PACKAGE=golang.org/x/tools/gopls@latest
+              PACKAGE_MGR=go
+              LSP_BINARY=gopls
+          - tag: typescript
+            dockerfile: docker/Dockerfile.lang
+            platforms: linux/amd64,linux/arm64
+            build_args: |
+              LANG=typescript
+              LSP_PACKAGE=typescript-language-server typescript
+              PACKAGE_MGR=npm
+              LSP_BINARY=typescript-language-server
+          - tag: python
+            dockerfile: docker/Dockerfile.lang
+            platforms: linux/amd64,linux/arm64
+            build_args: |
+              LANG=python
+              LSP_PACKAGE=pyright
+              PACKAGE_MGR=npm
+              LSP_BINARY=pyright-langserver
+          - tag: ruby
+            dockerfile: docker/Dockerfile.lang
+            platforms: linux/amd64,linux/arm64
+            build_args: |
+              LANG=ruby
+              LSP_PACKAGE=solargraph
+              PACKAGE_MGR=gem
+              LSP_BINARY=solargraph
+          - tag: cpp
+            dockerfile: docker/Dockerfile.lang
+            platforms: linux/amd64,linux/arm64
+            build_args: |
+              LANG=cpp
+              LSP_PACKAGE=clangd
+              PACKAGE_MGR=apt
+              LSP_BINARY=clangd
+          - tag: php
+            dockerfile: docker/Dockerfile.lang
+            platforms: linux/amd64,linux/arm64
+            build_args: |
+              LANG=php
+              LSP_PACKAGE=intelephense
+              PACKAGE_MGR=npm
+              LSP_BINARY=intelephense
+          # Combo images (Dockerfile.combo)
+          - tag: web
+            dockerfile: docker/Dockerfile.combo
+            platforms: linux/amd64,linux/arm64
+            build_args: |
+              NPM_PACKAGES=typescript-language-server typescript pyright
+              GO_PACKAGES=
+          - tag: backend
+            dockerfile: docker/Dockerfile.combo
+            platforms: linux/amd64,linux/arm64
+            build_args: |
+              NPM_PACKAGES=pyright
+              GO_PACKAGES=golang.org/x/tools/gopls@latest
+          - tag: fullstack
+            dockerfile: docker/Dockerfile.combo
+            platforms: linux/amd64,linux/arm64
+            build_args: |
+              NPM_PACKAGES=typescript-language-server typescript pyright
+              GO_PACKAGES=golang.org/x/tools/gopls@latest
+          # Full image (Dockerfile.full)
+          - tag: full
+            dockerfile: docker/Dockerfile.full
+            platforms: linux/amd64,linux/arm64
+            build_args: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build binary
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          CGO_ENABLED=0 GOWORK=off go build \
+            -ldflags "-s -w -X main.Version=${VERSION}" \
+            -o agent-lsp ./cmd/agent-lsp
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platforms }}
+          push: true
+          build-args: ${{ matrix.build_args }}
+          tags: |
+            ghcr.io/blackwell-systems/agent-lsp:${{ matrix.tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/agent-lsp:${{ matrix.tag }}
+          cache-from: type=gha,scope=${{ matrix.tag }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.tag }}
 
   winget:
     name: Publish to winget
