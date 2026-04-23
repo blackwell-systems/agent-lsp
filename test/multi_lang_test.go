@@ -47,6 +47,12 @@ type langConfig struct {
 	typeHierarchyColumn int // Java and TypeScript only
 
 	// Fields for Tier 2 expansion tools.
+	typeDefLine        int    // for go_to_type_definition; uses referenceLine if 0
+	typeDefColumn      int    // for go_to_type_definition; uses referenceColumn if 0
+	typeDefFile        string // for go_to_type_definition; uses file if empty
+	signatureHelpLine   int   // for get_signature_help; uses completionLine if 0
+	signatureHelpColumn int   // for get_signature_help; uses completionColumn if 0
+	signatureHelpFile   string // for get_signature_help; uses completionFile if empty
 	highlightLine      int    // for get_document_highlights; uses hoverLine if 0
 	highlightColumn    int    // for get_document_highlights; uses hoverColumn if 0
 	inlayHintEndLine   int    // end line for get_inlay_hints range; computed from hoverLine if 0
@@ -530,10 +536,18 @@ func testGetCompletions(t *testing.T, ctx context.Context, session *mcp.ClientSe
 		return toolResult{tool: "get_completions", status: "fail",
 			detail: fmt.Sprintf("failed to parse get_completions response: %v", err)}
 	}
+	// Response may be a raw array or a CompletionList object with an "items" field.
 	var items []any
 	if err := json.Unmarshal([]byte(text), &items); err != nil {
-		return toolResult{tool: "get_completions", status: "fail",
-			detail: fmt.Sprintf("failed to parse get_completions response: %s", text)}
+		// Try CompletionList shape: {"items": [...], "isIncomplete": bool}
+		var cl struct {
+			Items []any `json:"items"`
+		}
+		if err2 := json.Unmarshal([]byte(text), &cl); err2 != nil {
+			return toolResult{tool: "get_completions", status: "fail",
+				detail: fmt.Sprintf("failed to parse get_completions response: %s", text)}
+		}
+		items = cl.Items
 	}
 	if len(items) == 0 {
 		return toolResult{tool: "get_completions", status: "fail", detail: "empty completion list"}
@@ -829,18 +843,27 @@ func testGetSemanticTokens(t *testing.T, ctx context.Context, session *mcp.Clien
 // signature help is likely to trigger.
 func testGetSignatureHelp(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
 	t.Helper()
-	if lang.completionLine == 0 {
+	line := lang.signatureHelpLine
+	col := lang.signatureHelpColumn
+	file := lang.signatureHelpFile
+	if line == 0 {
+		line = lang.completionLine
+		col = lang.completionColumn
+	}
+	if line == 0 {
 		return toolResult{tool: "get_signature_help", status: "skip", detail: "no position configured"}
 	}
-	completionFile := lang.completionFile
-	if completionFile == "" {
-		completionFile = lang.file
+	if file == "" {
+		file = lang.completionFile
+	}
+	if file == "" {
+		file = lang.file
 	}
 	res, err := callTool(ctx, session, "get_signature_help", map[string]any{
-		"file_path":   completionFile,
+		"file_path":   file,
 		"language_id": lang.id,
-		"line":        lang.completionLine,
-		"column":      lang.completionColumn,
+		"line":        line,
+		"column":      col,
 	})
 	if err != nil {
 		return toolResult{tool: "get_signature_help", status: "fail", detail: err.Error()}
@@ -1212,13 +1235,21 @@ func testWorkspaceFolders(t *testing.T, ctx context.Context, session *mcp.Client
 // reference rather than its definition to exercise the type-jump behavior.
 func testGoToTypeDefinition(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
 	t.Helper()
-	line := lang.referenceLine
-	col := lang.referenceColumn
+	line := lang.typeDefLine
+	col := lang.typeDefColumn
+	file := lang.typeDefFile
 	if line == 0 {
-		return toolResult{tool: "go_to_type_definition", status: "skip", detail: "no reference position configured"}
+		line = lang.referenceLine
+		col = lang.referenceColumn
+	}
+	if file == "" {
+		file = lang.file
+	}
+	if line == 0 {
+		return toolResult{tool: "go_to_type_definition", status: "skip", detail: "no position configured"}
 	}
 	res, err := callTool(ctx, session, "go_to_type_definition", map[string]any{
-		"file_path":   lang.file,
+		"file_path":   file,
 		"language_id": lang.id,
 		"line":        line,
 		"column":      col,
