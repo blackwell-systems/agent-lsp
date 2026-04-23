@@ -4,6 +4,20 @@ agent-lsp is a [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) 
 
 ---
 
+## Key Terms
+
+| Term | Definition |
+|------|-----------|
+| **Workspace root** | The top-level directory of a project (containing `go.mod`, `package.json`, `Cargo.toml`, etc.). The LSP server indexes files relative to this path. |
+| **Language ID** | A short string identifying a programming language (`"go"`, `"typescript"`, `"python"`, etc.). Used when opening documents so the LSP server applies the correct grammar and analysis. |
+| **Diagnostic** | An error, warning, or hint reported by the language server for a specific location in a file. Diagnostics arrive asynchronously via `textDocument/publishDiagnostics` notifications. |
+| **Code action** | A suggested fix or refactor offered by the language server for a given diagnostic or cursor range (e.g. "add missing import", "extract function"). |
+| **Symbol** | A named code element: function, type, variable, constant, method, interface, etc. LSP exposes symbols at document scope (`textDocument/documentSymbol`) and workspace scope (`workspace/symbol`). |
+| **Workspace edit** | A structured set of text edits across one or more files, returned by LSP operations like rename or code actions. |
+| **URI** | A `file://` identifier for a source file (e.g. `file:///home/user/project/main.go`). LSP uses URIs instead of bare file paths in all requests and responses. |
+
+---
+
 ## System Overview
 
 At runtime, agent-lsp consists of two layers of processes communicating over pipes (JSON-RPC messages framed with `Content-Length` headers, the standard LSP wire format):
@@ -265,6 +279,51 @@ The Go process never opens sockets to the language servers. All LSP traffic goes
 
 ---
 
+## HTTP Transport Mode
+
+By default, agent-lsp communicates with the AI client over stdio. The `--http` flag switches to an HTTP+SSE transport using the MCP SDK's `StreamableHTTPHandler`, suitable for containerized deployments and remote access.
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--http` | off | Enable HTTP transport instead of stdio |
+| `--port <N>` | `8080` | TCP port to listen on (1--65535) |
+| `--listen-addr <IP>` | `127.0.0.1` | Bind address; must be a valid IP |
+| `--token <S>` | (none) | Bearer token for authentication (prefer `AGENT_LSP_TOKEN` env var to avoid process-list exposure) |
+| `--no-auth` | off | Run without authentication; only permitted on loopback addresses |
+
+### Authentication
+
+When a token is configured (via `AGENT_LSP_TOKEN` env var or `--token` flag), every request except `/health` must include an `Authorization: Bearer <token>` header. The comparison uses `crypto/subtle.ConstantTimeCompare` to prevent timing side-channels. Mismatched tokens receive HTTP 401 with `{"error":"unauthorized"}`.
+
+When no token is configured and `--no-auth` is not set, the server refuses to start. `--no-auth` is only permitted with a loopback bind address (`127.0.0.1`).
+
+### Endpoints
+
+| Path | Auth | Description |
+|------|------|-------------|
+| `/` | Bearer token | MCP Streamable HTTP endpoint (JSON-RPC + SSE) |
+| `/health` | None | Health check; returns `{"status":"ok"}` (for container orchestration probes) |
+
+### Timeouts and limits
+
+| Parameter | Value |
+|-----------|-------|
+| Read header timeout | 10s |
+| Read timeout | 30s |
+| Write timeout | 60s |
+| Idle timeout | 120s |
+| Max request body | 4 MB |
+
+Security headers (`X-Content-Type-Options: nosniff`, `Cache-Control: no-store`) are applied to all responses.
+
+### Graceful shutdown
+
+When the context is cancelled (signal received), the HTTP server calls `Shutdown` with a 5-second deadline, draining in-flight requests before exiting.
+
+---
+
 ## Tool Registration Model
 
 50 MCP tools are exposed to the AI agent. In MCP, a "tool" is a named function with a JSON Schema for its arguments that the AI can invoke via a JSON-RPC `tools/call` request. Tools are defined in four files under `cmd/agent-lsp/` and dispatched through a shared pattern.
@@ -484,6 +543,48 @@ No goroutine leaks. No orphaned subprocesses. All callers fail fast rather than 
 
 ---
 
+## Audit Trail
+
+The audit subsystem (`internal/audit/`) writes a structured log of every tool invocation as a JSONL file, providing a complete record of what the agent did, when, and whether it succeeded.
+
+### Configuration
+
+The audit log path is resolved in priority order:
+
+1. `--audit-log <path>` flag
+2. `AGENT_LSP_AUDIT_LOG` environment variable
+3. `~/.agent-lsp/audit.jsonl` (default)
+
+If the resolved path is empty (no flag, no env var, and `$HOME` is unset), the logger runs in no-op mode: all `Log` calls are discarded with zero overhead.
+
+### Record structure
+
+Each JSONL line is a `Record` with these fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | string | ISO 8601 timestamp of the tool invocation |
+| `tool` | string | MCP tool name (e.g. `"go_to_definition"`, `"simulate_edit_atomic"`) |
+| `session_id` | string | Speculative session ID, if applicable |
+| `files` | string[] | File paths involved in the operation |
+| `edit_summary` | object | For mutating tools: mode, file path, old/new text preview, rename details |
+| `diagnostics_before` | object | Error/warning counts and files checked before the operation |
+| `diagnostics_after` | object | Error/warning counts and files checked after the operation |
+| `net_delta` | object | Change in error and warning counts |
+| `success` | bool | Whether the tool call succeeded |
+| `error_message` | string | Error description on failure |
+| `duration_ms` | int | Wall-clock duration of the tool call in milliseconds |
+
+### Concurrency design
+
+The logger uses a buffered channel (capacity 256) as a non-blocking queue between tool handlers (producers) and a single background goroutine (consumer) that encodes records to disk. Tool handlers never block on disk I/O. If the buffer fills (sustained burst faster than disk throughput), records are dropped with a warning rather than blocking the hot path. See the [Concurrency Model](#concurrency-model) section for the channel implementation details.
+
+### Shutdown
+
+`Close()` closes the channel, waits for the background goroutine to drain all remaining records via the `done` channel, then closes the file. The parent directory is created automatically (`os.MkdirAll`) on first open.
+
+---
+
 ## Request Lifecycle
 
 A typical MCP tool call flows as follows:
@@ -541,6 +642,33 @@ agent-lsp --config /path/to/agent-lsp.json
 # Auto-detect: scans PATH for known language server binaries
 agent-lsp
 ```
+
+### Config file format
+
+The `--config` flag accepts a JSON file with a single `servers` array. Each entry specifies the file extensions it handles, the command to launch, and an optional language ID (inferred from the first extension when omitted):
+
+```json
+{
+  "servers": [
+    {
+      "extensions": ["go"],
+      "command": ["gopls"],
+      "language_id": "go"
+    },
+    {
+      "extensions": ["ts", "tsx", "js", "jsx"],
+      "command": ["typescript-language-server", "--stdio"],
+      "language_id": "typescript"
+    },
+    {
+      "extensions": ["py"],
+      "command": ["pylsp"]
+    }
+  ]
+}
+```
+
+`extensions` values are without the leading dot. `command` is `[binary, arg1, arg2, ...]`, matching the `exec.Command` calling convention.
 
 ### ClientResolver interface
 
