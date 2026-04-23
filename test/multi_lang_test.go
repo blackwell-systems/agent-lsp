@@ -1393,6 +1393,17 @@ func testApplyEdit(t *testing.T, ctx context.Context, session *mcp.ClientSession
 	text2, _ := textFromResult(res)
 	var edits2 []map[string]any
 	if err := json.Unmarshal([]byte(text2), &edits2); err == nil && len(edits2) > 0 {
+		// Some formatters (e.g. Gleam) always return a full-file replacement
+		// TextEdit even when nothing changed. Check if the edit content matches
+		// the current file content; if so, it's a no-op and the write succeeded.
+		if len(edits2) == 1 {
+			if newText, ok := edits2[0]["newText"].(string); ok {
+				fileContent, readErr := os.ReadFile(lang.file)
+				if readErr == nil && strings.TrimSpace(newText) == strings.TrimSpace(string(fileContent)) {
+					return toolResult{tool: "apply_edit", status: "pass"}
+				}
+			}
+		}
 		return toolResult{tool: "apply_edit", status: "fail",
 			detail: fmt.Sprintf("re-format returned %d edits after apply — file write may not have persisted", len(edits2))}
 	}

@@ -648,7 +648,7 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			typeDefColumn:      7,
 			typeDefFile:        filepath.Join(fixtureBase, "gleam", "src", "greeter.gleam"),
 			signatureHelpLine:   4,
-			signatureHelpColumn: 22,
+			signatureHelpColumn: 33,
 			signatureHelpFile:   filepath.Join(fixtureBase, "gleam", "src", "greeter.gleam"),
 			highlightLine:      5,
 			highlightColumn:    8,
