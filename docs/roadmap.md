@@ -324,6 +324,109 @@ The agent-local pipeline (blast-radius → simulate → apply → verify → tes
 | **Policy gates** | Planned | Configurable rules that block apply based on blast-radius thresholds, public API changes, or path patterns. Evaluate at apply time using the audit record. |
 | **Cross-session coordination** | Planned | Shared state between concurrent MCP sessions, specifically a symbol-level lock registry to prevent overlapping renames/refactors. Requires a sidecar daemon or file-based coordination. The hardest piece. |
 
+## Agent Evaluation Framework
+
+Inspired by [Anthropic's eval framework for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents). agent-lsp already has the primitives for rigorous agent evaluation: speculative execution is a built-in code grader, the audit trail is a transcript, and the CI test matrix is a capability eval suite. This section formalizes those into a structured evaluation framework.
+
+### Skill evals (regression suite)
+
+Each skill has a deterministic correct sequence. Skill evals verify that agents follow the sequence consistently, not just once. This is the `pass^k` metric from the eval literature: does the agent follow the protocol every time?
+
+**Task format:**
+
+```yaml
+# test/evals/lsp-rename/rename_type.yaml
+task: "Rename the Person type to Entity in the Go fixture"
+language: go
+fixture: test/fixtures/go
+graders:
+  - type: transcript
+    assert: tool_called("prepare_rename") before tool_called("rename_symbol")
+  - type: transcript
+    assert: tool_called("rename_symbol", dry_run=true) before tool_called("apply_edit")
+  - type: transcript
+    assert: tool_called("get_diagnostics") after tool_called("apply_edit")
+  - type: outcome
+    assert: file_contains("greeter.go", "Entity")
+  - type: outcome
+    assert: net_delta == 0
+```
+
+**Coverage target:** 3-5 tasks per skill, covering the happy path, the halt-on-error path (e.g., high blast radius should stop `/lsp-refactor`), and edge cases (zero references, already-renamed symbol).
+
+```
+test/evals/
+  lsp-rename/
+    rename_type.yaml           # standard rename across files
+    rename_function.yaml       # rename with many callers
+    rename_no_prepare.yaml     # server doesn't support prepare_rename
+  lsp-refactor/
+    refactor_safe.yaml         # full pipeline, net_delta == 0
+    refactor_high_blast.yaml   # > 20 callers, should halt at gate
+    refactor_breaking.yaml     # net_delta > 0, should discard
+  lsp-safe-edit/
+    safe_edit_clean.yaml       # edit introduces no errors
+    safe_edit_breaking.yaml    # edit introduces errors, should surface code actions
+  lsp-impact/
+    impact_file.yaml           # file-level blast radius
+    impact_symbol.yaml         # symbol-level with call hierarchy
+    impact_no_hierarchy.yaml   # server lacks callHierarchyProvider
+```
+
+**When to run:** On every new model release (Claude, GPT, Gemini). On every skill change. The eval suite answers: "do agents still use our tools correctly after this update?"
+
+### Speculative execution as a built-in grader
+
+`simulate_edit_atomic` is a code-based grader for edit quality. `net_delta == 0` means the edit is safe. `net_delta > 0` means the agent introduced errors. This is unique to agent-lsp: the tool itself is the eval.
+
+**Metric to track:** First-attempt success rate. What percentage of agent edits produce `net_delta == 0` on first attempt, without a retry? Track this across:
+
+| Dimension | Why it matters |
+|-----------|---------------|
+| By model | Does Claude produce cleaner first-attempt edits than GPT? |
+| By language | Are Go edits safer than Python edits? (Stronger type system = more diagnostic coverage) |
+| By skill vs. freestyle | Do skills improve first-attempt success rate vs. raw tool usage? |
+| By edit type | Are renames safer than signature changes? Are comment edits always clean? |
+
+This data comes from the audit trail. No new infrastructure needed, just a script that aggregates `net_delta` values from the JSONL log.
+
+### Capability evals (the CI test matrix)
+
+The existing CI test matrix is a capability eval suite. Each language has a set of tools tested against real fixtures. The eval framework from the Anthropic article provides terminology for what we already do:
+
+| CI concept | Eval terminology |
+|---|---|
+| Language test passing at < 100% | Capability eval (driving improvement) |
+| Language test passing at 100% | Regression eval (protecting against backsliding) |
+| Adding a new tool test | Expanding capability coverage |
+| Test that starts flaking | Eval degradation (investigate, don't ignore) |
+
+**Graduation rule:** When a language reaches 100% on its capability matrix for 5+ consecutive CI runs, it graduates to a regression eval. Any drop below 100% on a regression eval is a blocking failure, not a flake to be skipped.
+
+### Audit trail graders (production monitoring)
+
+The audit trail (`--audit-log`) is a transcript. Post-session graders analyze the JSONL log for protocol compliance and quality signals:
+
+| Grader | What it checks | Type |
+|--------|---------------|------|
+| **Blast-radius-first** | Was `get_change_impact` or `get_references` called before any `apply_edit` on an exported symbol? | Transcript |
+| **Simulate-before-apply** | Was `simulate_edit_atomic` called before `apply_edit` when a skill was active? | Transcript |
+| **Rename protocol** | Was `prepare_rename` called before `rename_symbol`? | Transcript |
+| **Uncaught regression** | Did any `apply_edit` produce `net_delta > 0` without a subsequent `discard_session` or fix? | Outcome |
+| **Tool error rate** | What percentage of tool calls returned `IsError: true`? High rates indicate misconfiguration or model confusion. | Metric |
+| **Session hygiene** | Was every `create_simulation_session` followed by `destroy_session`? Leaked sessions waste memory. | Transcript |
+
+**Implementation:** A CLI subcommand `agent-lsp eval --audit-log /path/to/audit.jsonl` that runs all graders against a log file and produces a report. Useful for post-incident review ("what did the agent actually do?") and for continuous monitoring in team deployments.
+
+### Implementation priority
+
+| Phase | What | Effort | Impact |
+|---|---|---|---|
+| **Phase 1** | Reframe the CI test matrix as capability/regression evals. Add graduation rule. | Documentation only | Free. Changes how we talk about testing. |
+| **Phase 2** | Build 3-5 skill eval YAML tasks per skill. Run against real Claude Code sessions. Grade transcripts for step ordering. | 1-2 days per skill | Proves skills work. Catches regressions on model updates. |
+| **Phase 3** | Audit trail aggregation script. Track `net_delta` first-attempt success rates by model/language/skill. | 1 day | Data-driven skill improvement. Marketing ammunition. |
+| **Phase 4** | `agent-lsp eval` CLI subcommand with full grader suite. | 2-3 days | Production monitoring for deployed instances. |
+
 ## Bigger Bets
 
 | Feature | Status | Description |
