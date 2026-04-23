@@ -229,6 +229,8 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		initWait = 30 * time.Second
 	case "gleam":
 		initWait = 15 * time.Second
+	case "elixir":
+		initWait = 20 * time.Second
 	default:
 		initWait = 8 * time.Second
 	}

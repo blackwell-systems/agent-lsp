@@ -666,10 +666,10 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			serverArgs:         []string{},
 			fixture:            filepath.Join(fixtureBase, "elixir"),
 			file:               filepath.Join(fixtureBase, "elixir", "lib", "person.ex"),
-			hoverLine:          1,
-			hoverColumn:        11,
-			definitionLine:     1,
-			definitionColumn:   11,
+			hoverLine:          4,
+			hoverColumn:        7,
+			definitionLine:     4,
+			definitionColumn:   7,
 			callSiteLine:       3,
 			callSiteColumn:     21,
 			callSiteFile:       filepath.Join(fixtureBase, "elixir", "lib", "greeter.ex"),
@@ -686,8 +686,8 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			highlightColumn:    11,
 			inlayHintEndLine:   0, // ElixirLS does not support inlay hints
 			renameSymbolLine:   0, // ElixirLS rename is unreliable
-			codeActionLine:     1,
-			codeActionEndLine:  3,
+			codeActionLine:     4,
+			codeActionEndLine:  6,
 		},
 		{
 			name:               "Prisma",

@@ -1,5 +1,5 @@
 defmodule Person do
-  defstruct [:name, :age]
+  defstruct [:name, :age]  
 
   def new(name, age) do
     %Person{name: name, age: age}
