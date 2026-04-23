@@ -326,9 +326,82 @@ The agent-local pipeline (blast-radius → simulate → apply → verify → tes
 
 ## Agent Evaluation Framework
 
-Inspired by [Anthropic's eval framework for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents). agent-lsp already has the primitives for rigorous agent evaluation: speculative execution is a built-in code grader, the audit trail is a transcript, and the CI test matrix is a capability eval suite. This section formalizes those into a structured evaluation framework.
+### Why existing eval frameworks don't fit
 
-### Skill evals (regression suite)
+Every major agent eval framework ([Strands Evals](https://github.com/strands-agents/evals), [Braintrust](https://braintrust.dev), [LangSmith](https://docs.langchain.com/langsmith), [AgentBench](https://github.com/THUDM/AgentBench), [SWE-bench](https://github.com/SWE-bench/SWE-bench), [BFCL/Gorilla](https://github.com/ShishirPatil/gorilla)) evaluates from the **agent/model perspective**: "did the model call the right tool?" agent-lsp needs the **tool provider perspective**: "did the tool return the right answer?"
+
+When `get_references` is called on line 42 of a Go file, the correct answer is a deterministic set of locations. No LLM-as-judge is needed. The tool either returns the right locations or it does not. This is a fundamental inversion from how every eval framework thinks about evaluation.
+
+The only framework with native MCP integration is [Inspect AI](https://github.com/UKGovernmentBEIS/inspect_ai) (1,900+ stars, UK AI Safety Institute). It can serve MCP tools to an evaluated model and score the results. This is useful for Layer 2 (skill workflow testing) but unnecessary for Layer 1 (tool correctness), which is 80% of the work.
+
+### Two-layer architecture
+
+| Layer | What it tests | Requires LLM? | Grading | Priority |
+|---|---|---|---|---|
+| **Layer 1: Tool Correctness** | Does each tool return correct results for known inputs? | No | Deterministic (expected output comparison) | High (80% of eval value) |
+| **Layer 2: Skill Workflow** | Do agents follow skill protocols correctly? | Yes (agent orchestrates) | Trajectory matching + outcome verification | Medium (20% of eval value) |
+
+**Layer 1** is formalized integration testing: call the MCP tool directly with known inputs against real fixture repos, compare output against expected results. No model variability. No flakiness. This is what the CI test matrix already does, expanded to cover every tool x language combination with richer assertions.
+
+**Layer 2** requires an LLM to orchestrate (skills are agent-driven). Capture the tool call trace, compare against expected sequences. This layer is inherently noisy because model behavior varies. Use it for regression detection, not pass/fail gating.
+
+### Patterns borrowed from existing frameworks
+
+| Source | Pattern | Applied to |
+|---|---|---|
+| [SWE-bench](https://github.com/SWE-bench/SWE-bench) | Docker-isolated execution, real codebases as fixtures, deterministic grading | Layer 1: Docker eval harness, fixture repos per language |
+| [Strands Evals](https://github.com/strands-agents/evals) | Trajectory scorers (`in_order_match_scorer`, `any_order_match_scorer`) | Layer 2: skill step ordering verification |
+| [BFCL/Gorilla](https://github.com/ShishirPatil/gorilla) | AST-based tool call argument comparison | Layer 2: verify tool call arguments match expected values |
+| [Inspect AI](https://github.com/UKGovernmentBEIS/inspect_ai) | MCP-aware eval harness with custom `@scorer` decorators | Layer 2: end-to-end skill evaluation through a model |
+| [mcp-server-evaluations](https://github.com/mcp-com-ai/mcp-server-evaluations-skills) | 5-dimension MCP server quality rubric (discovery, functionality, error handling, accuracy, performance) | Layer 1: quality dimensions for tool evaluation |
+
+### Layer 1: Tool Correctness (deterministic, no LLM)
+
+For each of 50 tools across N languages, maintain test fixtures with expected outputs. Call the MCP tool directly, compare output against expected results. Organized as Go table-driven tests with per-language, per-tool coverage tracking.
+
+**What this looks like in practice:**
+
+```go
+// test/evals/tool_correctness_test.go
+func TestToolCorrectness(t *testing.T) {
+    cases := []struct {
+        tool     string
+        language string
+        fixture  string
+        input    map[string]any
+        assert   func(t *testing.T, result string)
+    }{
+        {
+            tool: "get_references", language: "go",
+            fixture: "test/fixtures/go",
+            input: map[string]any{
+                "file_path": "greeter.go", "line": 10, "column": 6,
+            },
+            assert: func(t *testing.T, result string) {
+                // Person type should be referenced in main.go and greeter.go
+                assert.Contains(t, result, "main.go")
+                assert.Contains(t, result, "greeter.go")
+                assert.JSONFieldCount(t, result, "locations", 3)
+            },
+        },
+        {
+            tool: "get_references", language: "gleam",
+            fixture: "test/fixtures/gleam",
+            input: map[string]any{
+                "file_path": "src/person.gleam", "line": 1, "column": 10,
+            },
+            assert: func(t *testing.T, result string) {
+                assert.Contains(t, result, "greeter.gleam")
+            },
+        },
+        // ... 50 tools x 30 languages
+    }
+}
+```
+
+**Coverage tracking:** A generated `docs/eval-coverage.md` table shows pass/fail per tool per language, replacing the manually-maintained CI coverage matrix.
+
+### Skill evals (Layer 2: regression suite)
 
 Each skill has a deterministic correct sequence. Skill evals verify that agents follow the sequence consistently, not just once. This is the `pass^k` metric from the eval literature: does the agent follow the protocol every time?
 
