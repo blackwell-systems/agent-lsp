@@ -1132,6 +1132,25 @@ locs, err := client.GetDefinition(ctx, fileURI, lsp.Position{Line: 10, Character
 
 ---
 
+---
+
+## Protocol-Level Testing (mcp-assert)
+
+agent-lsp is tested through the MCP protocol layer using [mcp-assert](https://github.com/blackwell-systems/mcp-assert), a deterministic correctness testing framework for MCP servers. No LLM-as-judge; all grading is assertion-based.
+
+**CI job:** `mcp-assert` runs on every push and PR. 7 assertions test hover, definition, references, diagnostics, symbols, completions, and speculative execution against real gopls via MCP stdio.
+
+**Assertion files:** `examples/mcp-assert/go/*.yaml`
+
+**What this tests that Go integration tests don't:**
+- MCP JSON-RPC serialization/deserialization
+- JSON Schema parameter validation
+- MCP protocol negotiation (initialize/initialized handshake)
+- Tool response format through the transport layer
+- The exact path agents use in production
+
+---
+
 **Speculative test coverage:**
 - `discard_path` — applies edit via `simulate_edit`, discards session
 - `evaluate_session` — asserts `net_delta == 0` for comment-only edits

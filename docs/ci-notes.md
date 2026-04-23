@@ -26,6 +26,30 @@ Implementation details for contributors and maintainers about the language serve
 
 **Clojure (clojure-lsp), Nix (nil), Dart (dart language-server), MongoDB (mongodb-language-server):** CI-verified as of the `ci-coverage-expansion` IMPL.
 
+## mcp-assert: protocol-level assertions
+
+The `mcp-assert` CI job runs deterministic assertions against agent-lsp through the MCP stdio transport layer, testing the same path agents use in production. This complements the Go integration tests which call internal functions directly.
+
+**How it works:** [mcp-assert](https://github.com/blackwell-systems/mcp-assert) starts agent-lsp as an MCP server subprocess, sends tool calls over JSON-RPC, and checks the responses against YAML-defined assertions. No LLM involved; all grading is deterministic.
+
+**Assertions:** 7 YAML files in `examples/mcp-assert/go/` test against the Go fixtures (`test/fixtures/go/`):
+
+| Assertion | Tool tested | What it verifies |
+|---|---|---|
+| hover | `get_info_on_location` | Returns type info for `Person` at definition site |
+| definition | `go_to_definition` | Resolves `Person` reference in greeter.go to main.go |
+| references | `get_references` | Finds cross-file callers (main.go + greeter.go), min 2 results |
+| diagnostics | `get_diagnostics` | Clean diagnostics for a valid file |
+| symbols | `get_document_symbols` | Lists `Person` type and `Greet` method |
+| completions | `get_completions` | Returns non-empty completions at a method call site |
+| speculative | `simulate_edit_atomic` | Detects type error (`return 42` in `string` method), returns `net_delta` |
+
+**Warmup pattern:** The `references` and `speculative` assertions include `get_diagnostics` setup steps to give gopls time to index the workspace before the actual assertion. Without this, gopls may not have cross-file relationships indexed and returns incomplete results.
+
+**Timeout:** Each assertion has a 120s timeout. The references assertion typically takes ~27s (gopls indexing time). Total job runtime is ~2 minutes.
+
+**Adding new assertions:** Create a YAML file in `examples/mcp-assert/go/` following the existing format. Use `{{fixture}}` for fixture directory substitution. Add warmup steps (`get_diagnostics` or `get_references`) if the assertion depends on cross-file indexing.
+
 ## Speculative session test job
 
 `speculative-test` runs `TestSpeculativeSessions` across 8 languages in parallel. Each language subtest gets its own MCP process; subtests within a language run sequentially.
@@ -56,6 +80,7 @@ Implementation details for contributors and maintainers about the language serve
 | `test/build_tools_test.go` | `unit-and-smoke` | `run_build`, `run_tests`, `get_tests_for_file` |
 | `test/documentation_test.go` | `unit-and-smoke` | `get_symbol_documentation` |
 | `test/binary_test.go` | `unit-and-smoke` | Binary smoke tests (startup, missing args, help) |
+| `examples/mcp-assert/go/*.yaml` | `mcp-assert` | 7 protocol-level assertions via MCP stdio (hover, definition, references, diagnostics, symbols, completions, speculative) |
 
 ## Tool-specific notes
 
