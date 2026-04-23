@@ -19,7 +19,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - **Capability metadata in skills** — all 20 SKILL.md files now declare `required-capabilities` and `optional-capabilities` in frontmatter metadata. Agents can check `get_server_capabilities` against a skill's requirements before activation. 5 skills have zero required capabilities (work with any LSP); `referencesProvider` is the most common requirement (8 skills); `callHierarchyProvider` and `typeHierarchyProvider` are always optional, never required.
 - **Zig coverage maximization** — upgraded zls from 0.13.0 to 0.14.0 in CI; 21 verified capabilities (up from 18). signature_help now passes (call site position in main.zig), apply_edit now passes (trailing whitespace in fixture), symbol_source now passes (likely zls 0.14 improvement). workspace_symbols fails (zls 0.14.0 advertises support but may need specific query format).
 - **`user-invocable` on all skills** — all 20 SKILL.md files now declare `user-invocable: true` in frontmatter, making them available as `/lsp-*` slash commands in Claude Code and other AgentSkills-conforming agents.
-- **mcp-assert CI job** — new `mcp-assert` job in CI runs 7 deterministic protocol-level assertions against real agent-lsp + gopls on every push and PR. Tests hover, definition, references, diagnostics, symbols, completions, and speculative execution through the MCP transport layer.
+- **mcp-assert CI job** — new `mcp-assert` job in CI runs 7 deterministic protocol-level assertions against real agent-lsp + gopls on every push and PR. Tests hover, definition, references, diagnostics, symbols, completions, and speculative execution through the MCP transport layer. Outputs JUnit XML artifact and shields.io badge JSON.
 
 ### Fixed
 

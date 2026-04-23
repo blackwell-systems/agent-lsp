@@ -659,7 +659,28 @@ jobs:
           cd /tmp/mcp-assert && go install ./cmd/mcp-assert
 
       - name: Run assertions against Go fixtures
-        run: mcp-assert ci --suite examples/mcp-assert/go --fixture ${{ github.workspace }}/test/fixtures/go --timeout 120s --threshold 100
+        run: |
+          mcp-assert ci \
+            --suite examples/mcp-assert/go \
+            --fixture ${{ github.workspace }}/test/fixtures/go \
+            --timeout 120s \
+            --threshold 100 \
+            --junit results.xml \
+            --badge badge.json
+
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-assert-results
+          path: results.xml
+
+      - name: Upload badge
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-assert-badge
+          path: badge.json
 
   change-impact-test:
     runs-on: ubuntu-latest
