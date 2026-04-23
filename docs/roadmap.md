@@ -328,11 +328,50 @@ The agent-local pipeline (blast-radius → simulate → apply → verify → tes
 
 ### Why existing eval frameworks don't fit
 
-Every major agent eval framework ([Strands Evals](https://github.com/strands-agents/evals), [Braintrust](https://braintrust.dev), [LangSmith](https://docs.langchain.com/langsmith), [AgentBench](https://github.com/THUDM/AgentBench), [SWE-bench](https://github.com/SWE-bench/SWE-bench), [BFCL/Gorilla](https://github.com/ShishirPatil/gorilla)) evaluates from the **agent/model perspective**: "did the model call the right tool?" agent-lsp needs the **tool provider perspective**: "did the tool return the right answer?"
+Two categories of eval frameworks exist, and neither addresses what agent-lsp needs:
 
-When `get_references` is called on line 42 of a Go file, the correct answer is a deterministic set of locations. No LLM-as-judge is needed. The tool either returns the right locations or it does not. This is a fundamental inversion from how every eval framework thinks about evaluation.
+**Agent eval frameworks** ([Strands Evals](https://github.com/strands-agents/evals), [Braintrust](https://braintrust.dev), [LangSmith](https://docs.langchain.com/langsmith), [AgentBench](https://github.com/THUDM/AgentBench), [SWE-bench](https://github.com/SWE-bench/SWE-bench), [BFCL/Gorilla](https://github.com/ShishirPatil/gorilla)) evaluate from the **agent/model perspective**: "did the model call the right tool?" They test agents, not tool providers.
+
+**MCP eval frameworks** ([mcp-evals](https://github.com/mclenhard/mcp-evals) 129 stars, [alpic-ai/mcp-eval](https://github.com/alpic-ai/mcp-eval) 21 stars, [lastmile-ai/mcp-eval](https://github.com/lastmile-ai/mcp-eval) 20 stars, [dylibso/mcpx-eval](https://github.com/dylibso/mcpx-eval) 22 stars, [gleanwork/mcp-server-tester](https://github.com/gleanwork/mcp-server-tester) 13 stars) test MCP servers directly, but every one uses **LLM-as-judge** scoring. They send a prompt, get a response, and ask an LLM "was this good?" on a 1-5 rubric. This makes sense for subjective tool outputs (e.g., "summarize this document") but is the wrong approach for deterministic tools.
+
+When `get_references` is called on line 42 of a Go file, the correct answer is a deterministic set of locations. No LLM-as-judge is needed. The tool either returns the right locations or it does not. Paying for GPT-4 API calls to grade a response that can be verified with `assert.Equal` is wasteful and introduces false variance.
+
+**The gap:** No framework combines deterministic tool correctness testing with MCP server evaluation. No framework tests across multiple languages or programming environments. No framework measures tool reliability (`pass^k`) or skill protocol compliance (trajectory matching).
 
 The only framework with native MCP integration is [Inspect AI](https://github.com/UKGovernmentBEIS/inspect_ai) (1,900+ stars, UK AI Safety Institute). It can serve MCP tools to an evaluated model and score the results. This is useful for Layer 2 (skill workflow testing) but unnecessary for Layer 1 (tool correctness), which is 80% of the work.
+
+### mcp-eval: potential sister project
+
+The gap identified above is not specific to agent-lsp. Every MCP server author needs to prove their tools work. A standalone `mcp-eval` framework would serve the entire MCP ecosystem:
+
+**What it would be:** A Go-based, deterministic-first eval framework for MCP servers. Given an MCP server binary, run its tools against fixture inputs and grade the outputs. No LLM required for correctness testing. Fast, CI-native, zero API costs.
+
+**How it differs from existing MCP eval tools:**
+
+| Dimension | Existing MCP evals | mcp-eval |
+|---|---|---|
+| Grading | LLM-as-judge (subjective, costly) | Deterministic assertions (exact, free) |
+| Language | Node.js / Python | Go (single binary, fast CI) |
+| Multi-language | Not supported | Test same tool across multiple language server backends |
+| Reliability metrics | Not measured | `pass@k` and `pass^k` per tool per language |
+| Skill/workflow testing | Not supported | Trajectory matchers for tool call ordering |
+| Docker isolation | Not supported | Per-trial container execution via existing Docker images |
+
+**Relationship to agent-lsp:** agent-lsp is the reference implementation that scores highest on mcp-eval. The eval framework validates the tool server. The tool server demonstrates the eval framework. Sister projects that feed each other.
+
+```bash
+# Evaluate any MCP server
+mcp-eval run --server "agent-lsp go:gopls" --suite evals/go/
+mcp-eval run --server "other-mcp-server" --suite evals/basic/
+
+# Cross-language matrix
+mcp-eval matrix --server "agent-lsp" --languages go,typescript,python,gleam
+
+# CI integration
+mcp-eval ci --server "agent-lsp" --threshold 95 --fail-on-regression
+```
+
+This is a separate repo (`blackwell-systems/mcp-eval`), not embedded in agent-lsp. It evaluates any MCP server, not just agent-lsp. The open-source framing positions it as infrastructure for the MCP ecosystem.
 
 ### Two-layer architecture
 
