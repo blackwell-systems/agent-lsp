@@ -1,0 +1,34 @@
+# Trajectory assertion: validates the /lsp-refactor skill protocol.
+# The refactor skill requires blast radius analysis BEFORE any edits.
+# get_references (or get_change_impact) must come before simulate_edit_atomic.
+# The protocol must NOT proceed directly to apply_edit without simulation.
+name: lsp-refactor performs blast radius analysis before editing
+trace:
+  - tool: get_references
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+  - tool: simulate_edit_atomic
+    args:
+      file_path: "fixtures/go/main.go"
+      workspace_root: "fixtures/go"
+      language: go
+      start_line: 6
+      start_column: 1
+      end_line: 9
+      end_column: 2
+      new_text: "type Entity struct {\n\tName string\n\tAge  int\n}\n"
+  - tool: apply_edit
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: get_diagnostics
+    args:
+      file_path: "fixtures/go/main.go"
+trajectory:
+  - type: order
+    tools: ["get_references", "simulate_edit_atomic", "apply_edit"]
+  - type: presence
+    tools: ["get_references", "simulate_edit_atomic", "get_diagnostics"]
+  - type: absence
+    tools: ["rename_symbol"]

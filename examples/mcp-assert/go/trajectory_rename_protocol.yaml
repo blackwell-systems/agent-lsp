@@ -1,0 +1,40 @@
+# Trajectory assertion: validates the /lsp-rename skill protocol.
+# The skill MUST call prepare_rename before rename_symbol (validation gate).
+# get_diagnostics must follow rename_symbol (verify no errors introduced).
+# apply_edit must NOT appear (rename_symbol handles writes internally).
+#
+# This assertion uses an inline trace — no live server needed.
+# To test real agent behavior, use audit_log: path/to/agent.jsonl instead.
+name: lsp-rename follows skill protocol
+trace:
+  - tool: get_references
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+  - tool: prepare_rename
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+  - tool: rename_symbol
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+      new_name: "Entity"
+      dry_run: false
+  - tool: get_diagnostics
+    args:
+      file_path: "fixtures/go/main.go"
+trajectory:
+  - type: order
+    tools: ["prepare_rename", "rename_symbol", "get_diagnostics"]
+  - type: presence
+    tools: ["prepare_rename", "rename_symbol", "get_diagnostics"]
+  - type: absence
+    tools: ["apply_edit"]
+  - type: args_contain
+    tool: rename_symbol
+    args:
+      new_name: "Entity"
