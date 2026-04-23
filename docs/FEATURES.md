@@ -402,7 +402,7 @@ warnings: [roots that failed indexing]
 | Kotlin | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
 | Lua | pass | — | — | pass | pass | pass | — | — | pass | pass | pass | pass |
 | Swift | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
-| Zig | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
+| Zig | pass | pass | pass | pass | fail | pass | — | — | pass | — | pass | pass |
 | CSS | pass | — | — | pass | pass | pass | — | — | pass | — | — | — |
 | HTML | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
 | Terraform | pass | pass | — | pass | pass | pass | — | — | pass | — | — | — |
