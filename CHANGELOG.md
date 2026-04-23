@@ -5,6 +5,24 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **AgentSkills spec conformity** — all 20 skills now include `license` and `compatibility` frontmatter fields per the [AgentSkills specification](https://agentskills.io/specification). Skills work with any conforming agent: Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and 30+ others.
+- **Provider-agnostic skill installer** — `install.sh --dest DIR` installs skills to any agent's skill directory, not just Claude Code. Updates CLAUDE.md, AGENTS.md (Codex), and GEMINI.md instruction files when present.
+- **Architecture documentation** — concurrency model section (goroutine architecture, four channel patterns, crash recovery), speculative execution sequence diagram, error handling section (three-layer propagation), Key Terms glossary, HTTP transport mode details, audit trail section, config file example.
+- **LSP Conformance page** added to docs site navigation.
+- **Gleam fixture improvements** — enriched with Result type, pattern matching, and pre-build step in CI for full LSP type information.
+- **Documentation site** — agent-lsp.com live on GitHub Pages with Cloudflare DNS.
+
+### Fixed
+
+- **change-impact-test CI flake** — replaced fixed `time.Sleep` with `ready_timeout_seconds` and warmup probe that polls `get_references` until gopls returns cross-file results. Skips on persistent timeout instead of failing.
+- **Docker release pipeline** — inlined base layer into all Dockerfiles to eliminate build race; split language/combo/full images into parallel matrix job (10 runners) to avoid 60m GoReleaser timeout; fixed hardcoded `linux-amd64` Go download URL for ARM64 builds.
+
+### Changed
+
+- **Prose cleanup** — removed em dashes across 10 documentation files (284 replacements).
+
 ## [0.3.0] - 2026-04-22
 
 ### Added
