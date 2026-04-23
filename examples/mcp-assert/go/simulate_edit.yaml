@@ -1,0 +1,25 @@
+name: simulate_edit rejects invalid session ID
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+assert:
+  tool: simulate_edit
+  args:
+    session_id: "nonexistent-session"
+    file_path: "{{fixture}}/main.go"
+    start_line: 5
+    start_column: 1
+    end_line: 5
+    end_column: 1
+    new_text: "// comment\n"
+  expect:
+    is_error: true
+timeout: 30s

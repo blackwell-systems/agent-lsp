@@ -1,0 +1,15 @@
+name: commit_session rejects invalid session ID
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+assert:
+  tool: commit_session
+  args:
+    session_id: "nonexistent-session"
+  expect:
+    is_error: true
+timeout: 30s

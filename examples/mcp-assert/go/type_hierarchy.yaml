@@ -1,0 +1,24 @@
+name: type_hierarchy returns hierarchy for Person struct
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
+assert:
+  tool: type_hierarchy
+  args:
+    file_path: "{{fixture}}/main.go"
+    line: 6
+    column: 6
+  expect:
+    not_error: true
+timeout: 30s

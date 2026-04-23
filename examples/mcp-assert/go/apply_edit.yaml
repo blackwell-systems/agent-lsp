@@ -1,0 +1,21 @@
+name: apply_edit adds a comment via text-match mode
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+assert:
+  tool: apply_edit
+  args:
+    file_path: "{{fixture}}/main.go"
+    old_text: "// Person represents a person with a name and age."
+    new_text: "// Person represents a person with a name and age.\n// Updated by mcp-assert test."
+  expect:
+    not_error: true
+timeout: 120s

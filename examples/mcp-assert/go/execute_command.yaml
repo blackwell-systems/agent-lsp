@@ -1,0 +1,21 @@
+name: execute_command runs a gopls workspace command
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+assert:
+  tool: execute_command
+  args:
+    command: "gopls.list_known_packages"
+    arguments:
+      - URI: "file://{{fixture}}/main.go"
+  expect:
+    not_error: true
+timeout: 30s

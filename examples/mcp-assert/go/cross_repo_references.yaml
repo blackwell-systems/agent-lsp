@@ -1,0 +1,25 @@
+name: get_cross_repo_references responds with empty consumer results
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
+assert:
+  tool: get_cross_repo_references
+  args:
+    symbol_file: "{{fixture}}/main.go"
+    line: 6
+    column: 6
+    consumer_roots: []
+  expect:
+    not_error: true
+timeout: 120s
