@@ -795,9 +795,139 @@ The first `ApplyEdit` call for a given file URI within a session:
 
 `simulate_chain` applies a sequence of edits and evaluates after each step. It returns a `ChainResult` with per-step `NetDelta` values and `SafeToApplyThroughStep`, the index of the last step where `NetDelta == 0`.
 
+### Sequence diagram
+
+A full speculative execution cycle, showing how the session layer interacts with the LSP client and file system:
+
+```
+Agent                    SessionManager              LSP Client              Disk
+  │                           │                          │                     │
+  │  create_simulation_session│                          │                     │
+  │──────────────────────────►│                          │                     │
+  │          session_id       │                          │                     │
+  │◄──────────────────────────│                          │                     │
+  │                           │                          │                     │
+  │  simulate_edit(file, range, text)                    │                     │
+  │──────────────────────────►│                          │                     │
+  │                           │  (first edit for file)   │                     │
+  │                           │  WaitForDiagnostics      │                     │
+  │                           │─────────────────────────►│                     │
+  │                           │  baseline snapshot       │                     │
+  │                           │◄─────────────────────────│                     │
+  │                           │                          │                     │
+  │                           │  read file content       │                     │  
+  │                           │────────────────────────────────────────────────►│
+  │                           │  original content        │                     │
+  │                           │◄────────────────────────────────────────────────│
+  │                           │                          │                     │
+  │                           │  apply edit in memory    │                     │
+  │                           │  didChange (new content) │                     │
+  │                           │─────────────────────────►│                     │
+  │        edit_applied       │                          │                     │
+  │◄──────────────────────────│                          │                     │
+  │                           │                          │                     │
+  │  evaluate_session         │                          │                     │
+  │──────────────────────────►│                          │                     │
+  │                           │  WaitForDiagnostics      │                     │
+  │                           │─────────────────────────►│                     │
+  │                           │  current diagnostics     │                     │
+  │                           │◄─────────────────────────│                     │
+  │                           │                          │                     │
+  │                           │  DiffDiagnostics         │                     │
+  │                           │  (baseline vs current)   │                     │
+  │   { net_delta, errors_introduced, confidence }       │                     │
+  │◄──────────────────────────│                          │                     │
+  │                           │                          │                     │
+  │  ┌─── if net_delta == 0 ──┐                          │                     │
+  │  │                        │                          │                     │
+  │  │  commit_session(apply: true)                      │                     │
+  │  │───────────────────────►│                          │                     │
+  │  │                        │  write files             │                     │
+  │  │                        │────────────────────────────────────────────────►│
+  │  │                        │  didChange (disk content)│                     │
+  │  │                        │─────────────────────────►│                     │
+  │  │  { files_written }     │                          │                     │
+  │  │◄──────────────────────-│                          │                     │
+  │  │                        │                          │                     │
+  │  └─── if net_delta > 0 ───┐                          │                     │
+  │  │                        │                          │                     │
+  │  │  discard_session       │                          │                     │
+  │  │───────────────────────►│                          │                     │
+  │  │                        │  revert to original      │                     │
+  │  │                        │  didChange (orig content)│                     │
+  │  │                        │─────────────────────────►│                     │
+  │  │  { discarded }         │                          │                     │
+  │  │◄──────────────────────-│                          │       (untouched)   │
+  │  └────────────────────────┘                          │                     │
+  │                           │                          │                     │
+  │  destroy_session          │                          │                     │
+  │──────────────────────────►│                          │                     │
+  │        { destroyed }      │                          │                     │
+  │◄──────────────────────────│                          │                     │
+```
+
+Key points from the diagram:
+- **Disk is never touched until `commit_session(apply: true)`**. The discard path leaves the file system unchanged.
+- **Lazy baseline**: the first `simulate_edit` for a file triggers a `WaitForDiagnostics` snapshot and file read. Subsequent edits to the same file within the session skip this.
+- **Two `WaitForDiagnostics` calls**: one for the baseline (before edit), one for evaluation (after edit). The diff between these two snapshots produces `net_delta`.
+- **`didChange` notifications** keep the LSP server in sync with in-memory state at every step, including revert on discard.
+
 ### SerializedExecutor
 
 `SerializedExecutor` ensures that only one goroutine operates on a session's LSP state at a time. `Acquire` blocks until the session is available; `Release` frees it. This prevents interleaved `didChange` / `publishDiagnostics` from different concurrent tool calls corrupting the diagnostic snapshot.
+
+---
+
+## Error Handling
+
+Errors in agent-lsp propagate through three layers. Understanding this flow is important for agents interpreting tool responses and for contributors debugging issues.
+
+### Layer 1: LSP errors
+
+The language server may return JSON-RPC error responses (e.g., method not found, invalid params) or crash entirely.
+
+| Scenario | Behavior |
+|---|---|
+| JSON-RPC error `-32601` (MethodNotFound) | Warning logged; tool returns `IsError: true` with the error message |
+| JSON-RPC error `-32002` (ServerNotInitialized) | Warning logged; usually means `start_lsp` was not called |
+| Subprocess crash | Exit-monitor goroutine calls `rejectPending`; all pending tool calls receive the exit error; `initialized` set to false |
+| Request timeout | Context deadline exceeded; tool returns `IsError: true` |
+
+### Layer 2: Tool handler errors
+
+Each tool handler in `internal/tools/` returns a `types.ToolResult`. Two constructors control what the agent sees:
+
+```go
+// Success: agent receives the JSON payload
+types.TextResult(`{"references": [...]}`)
+
+// Error: agent receives IsError=true with the message
+types.ErrorResult("LSP client not initialized; call start_lsp first")
+```
+
+Common error patterns in tool handlers:
+
+| Check | When | Error message |
+|---|---|---|
+| `CheckInitialized(client)` | Every tool that needs an LSP session | "LSP client not initialized; call start_lsp first" |
+| `ValidateFilePath(path, rootDir)` | Any tool with a `file_path` param | "path traversal not allowed" or "file not found" |
+| Line/column validation | Navigation and analysis tools | "line must be >= 1" / "column must be >= 1" |
+| Capability check | Before calling unsupported LSP methods | "server does not support [method]" |
+
+### Layer 3: MCP response
+
+`makeCallToolResult` in `server.go` converts `types.ToolResult` to `*mcp.CallToolResult`. The conversion preserves the `IsError` flag, so the AI agent sees:
+
+```json
+{
+  "content": [{ "type": "text", "text": "LSP client not initialized; call start_lsp first" }],
+  "isError": true
+}
+```
+
+When `IsError` is `true`, well-behaved agents treat this as a recoverable error and adjust (e.g., calling `start_lsp` first). When `IsError` is `false`, the `content` text is the tool's JSON response payload.
+
+If the Go handler itself returns a non-nil `error` (third return value from the handler closure), the MCP framework converts it to an internal error response before it reaches the agent. This path is reserved for unexpected panics or serialization failures, not normal tool errors.
 
 ---
 
