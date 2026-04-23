@@ -2,6 +2,7 @@
 name: lsp-cross-repo
 description: Cross-repository analysis — find all callers of a library symbol in one or more consumer repos. Use when refactoring a shared library and need to understand how consumers use it.
 argument-hint: "[symbol-name] in [library-file:line:col] used by [consumer-root ...]"
+user-invocable: true
 allowed-tools: mcp__lsp__start_lsp mcp__lsp__get_workspace_symbols mcp__lsp__get_cross_repo_references mcp__lsp__add_workspace_folder mcp__lsp__list_workspace_folders mcp__lsp__go_to_implementation mcp__lsp__call_hierarchy mcp__lsp__get_info_on_location
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)

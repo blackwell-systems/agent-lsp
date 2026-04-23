@@ -1,0 +1,31 @@
+name: get_change_impact analyzes exported symbols in main.go
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/greeter.go"
+      language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/greeter.go"
+assert:
+  tool: get_change_impact
+  args:
+    changed_files:
+      - "{{fixture}}/main.go"
+  expect:
+    not_error: true
+    not_empty: true
+timeout: 120s

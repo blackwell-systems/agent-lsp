@@ -2,6 +2,7 @@
 name: lsp-edit-symbol
 description: "Edit a named symbol without knowing its file or position. Use when you want to change a function, type, or variable by name and don't have exact coordinates. Resolves the symbol to its definition, retrieves its full range, and applies the edit."
 argument-hint: "[symbol-name] [new-body-or-signature]"
+user-invocable: true
 allowed-tools:
   - mcp__lsp__get_workspace_symbols
   - mcp__lsp__get_document_symbols

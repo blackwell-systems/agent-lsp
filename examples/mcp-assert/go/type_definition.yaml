@@ -1,0 +1,26 @@
+name: go_to_type_definition resolves variable to its type
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
+assert:
+  tool: go_to_type_definition
+  args:
+    file_path: "{{fixture}}/main.go"
+    line: 21
+    column: 2
+  expect:
+    not_error: true
+    not_empty: true
+    contains: ["main.go"]
+timeout: 90s

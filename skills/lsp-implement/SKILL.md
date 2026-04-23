@@ -2,6 +2,7 @@
 name: lsp-implement
 description: Find all concrete implementations of an interface or abstract type. Use when you need to know what types satisfy an interface, or what subtypes exist before changing a base type.
 argument-hint: "[interface-or-type-name]"
+user-invocable: true
 allowed-tools: mcp__lsp__start_lsp mcp__lsp__get_server_capabilities mcp__lsp__go_to_symbol mcp__lsp__go_to_implementation mcp__lsp__type_hierarchy mcp__lsp__open_document
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)

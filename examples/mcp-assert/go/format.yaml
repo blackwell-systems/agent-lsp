@@ -1,0 +1,19 @@
+name: format_document returns formatting for main.go
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+assert:
+  tool: format_document
+  args:
+    file_path: "{{fixture}}/main.go"
+  expect:
+    not_error: true
+timeout: 30s

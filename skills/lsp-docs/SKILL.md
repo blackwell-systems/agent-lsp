@@ -2,6 +2,7 @@
 name: lsp-docs
 description: Three-tier documentation lookup for any symbol — hover → offline toolchain doc → source definition. Use when hover text is absent, insufficient, or the symbol is in an unindexed dependency.
 argument-hint: "[symbol-name]"
+user-invocable: true
 allowed-tools: mcp__lsp__get_info_on_location mcp__lsp__get_symbol_documentation mcp__lsp__go_to_definition mcp__lsp__get_symbol_source
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)

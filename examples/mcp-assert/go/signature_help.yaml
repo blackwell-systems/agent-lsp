@@ -1,0 +1,22 @@
+name: get_signature_help shows add function parameters
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+assert:
+  tool: get_signature_help
+  args:
+    file_path: "{{fixture}}/main.go"
+    line: 23
+    column: 17
+  expect:
+    not_error: true
+    contains: ["int"]
+timeout: 30s

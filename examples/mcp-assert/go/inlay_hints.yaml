@@ -1,0 +1,23 @@
+name: get_inlay_hints returns hints for main.go
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+assert:
+  tool: get_inlay_hints
+  args:
+    file_path: "{{fixture}}/main.go"
+    start_line: 1
+    start_column: 1
+    end_line: 25
+    end_column: 1
+  expect:
+    not_error: true
+timeout: 30s

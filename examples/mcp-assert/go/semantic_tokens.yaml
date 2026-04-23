@@ -1,0 +1,24 @@
+name: get_semantic_tokens returns tokens for main.go
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+assert:
+  tool: get_semantic_tokens
+  args:
+    file_path: "{{fixture}}/main.go"
+    start_line: 1
+    start_column: 1
+    end_line: 25
+    end_column: 1
+  expect:
+    not_error: true
+    not_empty: true
+timeout: 30s

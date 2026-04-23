@@ -2,6 +2,7 @@
 name: lsp-edit-export
 description: Safe workflow for editing exported symbols or public APIs. Use when changing a function signature, modifying a public type, or altering any symbol used outside its own package — finds all callers first so nothing breaks silently.
 argument-hint: "[symbol-name]"
+user-invocable: true
 allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__open_document mcp__lsp__get_references mcp__lsp__get_diagnostics mcp__lsp__run_build Edit Write
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)

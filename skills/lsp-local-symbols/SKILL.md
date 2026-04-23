@@ -2,6 +2,7 @@
 name: lsp-local-symbols
 description: Fast file-scoped symbol analysis — find all usages of a symbol within the current file, list all symbols defined in the file, and get type info at a position. Use when you need local-scope analysis without a workspace-wide search.
 argument-hint: "[symbol-name] in [file-path]"
+user-invocable: true
 allowed-tools: mcp__lsp__open_document mcp__lsp__get_document_symbols mcp__lsp__get_info_on_location mcp__lsp__get_document_highlights
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
