@@ -26,11 +26,11 @@ setup:
     args:
       session_id: "{{session_id}}"
       file_path: "{{fixture}}/main.go"
-      start_line: 5
+      start_line: 13
       start_column: 1
-      end_line: 5
+      end_line: 13
       end_column: 1
-      new_text: "// committed\n"
+      new_text: "\t// committed\n"
   - tool: commit_session
     args:
       session_id: "{{session_id}}"
@@ -39,8 +39,8 @@ assert:
   tool: get_symbol_source
   args:
     file_path: "{{fixture}}/main.go"
-    line: 6
-    column: 6
+    line: 12
+    column: 17
   expect:
     not_error: true
     contains: ["committed"]

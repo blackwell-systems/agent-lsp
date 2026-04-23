@@ -25,13 +25,13 @@ setup:
   - tool: get_references
     args:
       file_path: "{{fixture}}/main.go"
-      line: 17
+      line: 16
       column: 6
 assert:
   tool: rename_symbol
   args:
     file_path: "{{fixture}}/main.go"
-    line: 17
+    line: 16
     column: 6
     new_name: "sum"
     dry_run: true

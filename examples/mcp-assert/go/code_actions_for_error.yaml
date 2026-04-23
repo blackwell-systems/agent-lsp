@@ -18,11 +18,8 @@ setup:
   - tool: apply_edit
     args:
       file_path: "{{fixture}}/main.go"
-      start_line: 5
-      start_column: 1
-      end_line: 5
-      end_column: 1
-      new_text: "var unused int\n"
+      old_text: "// Person represents a person with a name and age."
+      new_text: "var unused int\n// Person represents a person with a name and age."
 assert:
   tool: get_code_actions
   args:
