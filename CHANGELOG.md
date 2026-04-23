@@ -19,10 +19,6 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - **change-impact-test CI flake** — replaced fixed `time.Sleep` with `ready_timeout_seconds` and warmup probe that polls `get_references` until gopls returns cross-file results. Skips on persistent timeout instead of failing.
 - **Docker release pipeline** — inlined base layer into all Dockerfiles to eliminate build race; split language/combo/full images into parallel matrix job (10 runners) to avoid 60m GoReleaser timeout; fixed hardcoded `linux-amd64` Go download URL for ARM64 builds.
 
-### Changed
-
-- **Prose cleanup** — removed em dashes across 10 documentation files (284 replacements).
-
 ## [0.3.0] - 2026-04-22
 
 ### Added

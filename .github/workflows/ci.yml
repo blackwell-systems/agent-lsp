@@ -370,7 +370,7 @@ jobs:
           sudo tar -xzf /tmp/gleam.tar.gz -C /usr/local/bin
 
       - name: Build Gleam fixture
-        run: cd test/fixtures/gleam && gleam build
+        run: cd test/fixtures/gleam && gleam build --target javascript
 
       - name: Run Gleam tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Gleam$" ./test/ -timeout 10m
