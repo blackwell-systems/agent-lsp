@@ -1,0 +1,36 @@
+# Introduce an unused variable via apply_edit, then get_code_actions on the area.
+# Tests that the LSP surfaces code actions (or at least does not error).
+name: code actions for error — unused variable diagnostic
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
+  - tool: apply_edit
+    args:
+      file_path: "{{fixture}}/main.go"
+      start_line: 5
+      start_column: 1
+      end_line: 5
+      end_column: 1
+      new_text: "var unused int\n"
+assert:
+  tool: get_code_actions
+  args:
+    file_path: "{{fixture}}/main.go"
+    start_line: 5
+    start_column: 1
+    end_line: 6
+    end_column: 1
+  expect:
+    not_error: true
+timeout: 120s

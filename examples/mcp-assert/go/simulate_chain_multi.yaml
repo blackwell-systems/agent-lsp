@@ -1,0 +1,44 @@
+# Multi-step simulate_chain: safe edit + type error in one chain.
+# Captures session_id from create_simulation_session, passes to simulate_chain.
+name: simulate_chain — two edits with cumulative delta
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
+  - tool: create_simulation_session
+    args:
+      workspace_root: "{{fixture}}"
+      language: go
+    capture:
+      session_id: "$.session_id"
+assert:
+  tool: simulate_chain
+  args:
+    session_id: "{{session_id}}"
+    edits:
+      - file_path: "{{fixture}}/main.go"
+        start_line: 5
+        start_column: 1
+        end_line: 5
+        end_column: 1
+        new_text: "// safe comment\n"
+      - file_path: "{{fixture}}/main.go"
+        start_line: 14
+        start_column: 2
+        end_line: 14
+        end_column: 43
+        new_text: "return 42"
+  expect:
+    not_error: true
+    contains: ["cumulative_delta"]
+timeout: 120s

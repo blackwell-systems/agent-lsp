@@ -1,0 +1,40 @@
+# Introduce a type error via simulate_edit, then evaluate_session to detect it.
+# Captures session_id and verifies evaluate_session reports the error delta.
+name: diagnostics after error — simulate type error and evaluate
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
+  - tool: create_simulation_session
+    args:
+      workspace_root: "{{fixture}}"
+      language: go
+    capture:
+      session_id: "$.session_id"
+  - tool: simulate_edit
+    args:
+      session_id: "{{session_id}}"
+      file_path: "{{fixture}}/main.go"
+      start_line: 14
+      start_column: 2
+      end_line: 14
+      end_column: 43
+      new_text: "return 42"
+assert:
+  tool: evaluate_session
+  args:
+    session_id: "{{session_id}}"
+  expect:
+    not_error: true
+    contains: ["net_delta", "errors_introduced"]
+timeout: 120s

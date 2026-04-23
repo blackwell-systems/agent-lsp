@@ -1,0 +1,24 @@
+# Document lifecycle: open → close → reopen to verify LSP handles it cleanly.
+name: open close reopen — document lifecycle
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+  - tool: close_document
+    args:
+      file_path: "{{fixture}}/main.go"
+assert:
+  tool: open_document
+  args:
+    file_path: "{{fixture}}/main.go"
+    language_id: go
+  expect:
+    not_error: true
+timeout: 30s
