@@ -63,7 +63,7 @@ Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`)
 | HTML | pass | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
 | Terraform | pass | pass | pass | — | pass | pass | pass | — | — | pass | — | — | — |
 | Scala | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
-| Gleam | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
+| Gleam | pass | pass | pass | pass | fail | pass | pass | — | — | pass | — | — | — |
 | Elixir | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
 | Prisma | pass | pass | pass | pass | — | — | pass | — | — | pass | — | — | — |
 | SQL | pass | pass | pass | pass | pass | pass | — | — | — | pass | — | — | — |

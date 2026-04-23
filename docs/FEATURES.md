@@ -385,7 +385,7 @@ warnings: [roots that failed indexing]
 | HTML | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
 | Terraform | pass | pass | — | pass | pass | pass | — | — | pass | — | — | — |
 | Scala | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
-| Gleam | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
+| Gleam | pass | pass | pass | fail | pass | pass | — | — | pass | — | — | — |
 | Elixir | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
 | Prisma | pass | pass | pass | — | — | pass | — | — | pass | — | — | — |
 | SQL | pass | pass | pass | pass | pass | — | — | — | pass | — | — | — |

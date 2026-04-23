@@ -18,6 +18,8 @@ Implementation details for contributors and maintainers about the language serve
 
 **MongoDB:** The language server is extracted from the `mongodb-js/vscode` VS Code extension VSIX at `dist/languageServer.js`. The CI job has `continue-on-error: true` since the extracted server may behave differently outside a VS Code extension host context. Requires a live `mongo:7` service container provisioned automatically.
 
+**Gleam:** Requires `gleam build --target javascript` before tests (no Erlang on CI runners). The import path in fixtures uses `person` (not `fixture/person`). The built-in LSP (`gleam lsp`) passes 14 capabilities: Tier 1 (start_lsp, open_document, get_diagnostics, hover), symbols, definition, references, format, code_actions, prepare_rename, rename, server_capabilities, workspace_folders, format_range, detect_servers, close_document, did_change_watched, and symbol_source. Completions and apply_edit fail. Declaration, type_hierarchy, call_hierarchy, semantic_tokens, signature_help, highlights, inlay_hints, type_definition, and go_to_implementation skip (server does not advertise support).
+
 **Clojure (clojure-lsp), Nix (nil), Dart (dart language-server), MongoDB (mongodb-language-server):** CI-verified as of the `ci-coverage-expansion` IMPL.
 
 ## Speculative session test job
