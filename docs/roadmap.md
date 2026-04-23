@@ -418,14 +418,85 @@ The audit trail (`--audit-log`) is a transcript. Post-session graders analyze th
 
 **Implementation:** A CLI subcommand `agent-lsp eval --audit-log /path/to/audit.jsonl` that runs all graders against a log file and produces a report. Useful for post-incident review ("what did the agent actually do?") and for continuous monitoring in team deployments.
 
+### Negative evals
+
+Eval tasks should cover cases where the skill should correctly refuse to act:
+
+| Skill | Negative eval | Expected behavior |
+|---|---|---|
+| `/lsp-rename` | User says "rename the file" (file rename, not symbol) | Skill does not activate or asks for clarification |
+| `/lsp-refactor` | Blast radius > 20 callers | Halts at gate, reports risk, does not proceed |
+| `/lsp-safe-edit` | `net_delta > 0` after simulation | Does not write to disk; surfaces errors and code actions |
+| `/lsp-impact` | File path does not exist | Returns clear error, does not crash |
+| `/lsp-rename` | Cursor on a keyword or built-in type | `prepare_rename` rejects; skill stops |
+
+Negative evals prevent the most dangerous failure mode: an agent that confidently does the wrong thing. A skill that correctly refuses is more valuable than one that blindly proceeds.
+
+### Docker-isolated eval harness
+
+Each eval task runs in an isolated Docker container using the existing agent-lsp Docker images. This guarantees clean state, prevents cross-trial contamination, and provides reproducible environments with language servers pre-installed.
+
+**Architecture:**
+
+```
+agent-lsp eval run \
+  --task test/evals/lsp-rename/rename_type.yaml \
+  --image ghcr.io/blackwell-systems/agent-lsp:go \
+  --agent claude \
+  --trials 5
+```
+
+```
+Per trial:
+┌──────────────────────────────────────────────┐
+│  Docker container (ghcr.io/.../agent-lsp:go) │
+│                                              │
+│  1. Copy fixture into /workspace             │
+│  2. Place skills in agent's skill directory   │
+│  3. Start agent-lsp with --audit-log          │
+│  4. Agent receives task prompt                │
+│  5. Agent discovers skills organically        │
+│  6. Agent executes (tool calls logged)        │
+│  7. Container stops                           │
+│                                              │
+│  Output: audit.jsonl + workspace state        │
+└──────────────────────────────────────────────┘
+         │
+         ▼
+  Graders run against audit.jsonl + workspace:
+  - Deterministic: file state, net_delta, tool ordering
+  - LLM rubric: code quality, architectural choices
+  - Negative: skill correctly refused when it should have
+         │
+         ▼
+  Aggregate across trials:
+  - pass@k (capability: did it work at least once?)
+  - pass^k (reliability: did it work every time?)
+  - First-attempt net_delta success rate
+  - Token usage, duration, command count
+```
+
+**Why Docker:** The existing Docker images (`ghcr.io/blackwell-systems/agent-lsp:go`, `:typescript`, `:python`, etc.) already contain agent-lsp + the language server. The eval harness reuses these images rather than building separate eval infrastructure. Each trial starts from the same base image with the same toolchain version, eliminating "works on my machine" variance.
+
+**Multi-language eval matrix:** Run the same eval task across multiple language images to measure whether skills degrade across languages:
+
+```
+agent-lsp eval matrix \
+  --task test/evals/lsp-rename/rename_type.yaml \
+  --images go,typescript,python,rust,gleam \
+  --trials 5
+```
+
+This produces a table showing pass rates per language per skill, directly answering: "which skills need capability gating for which languages?"
+
 ### Implementation priority
 
 | Phase | What | Effort | Impact |
 |---|---|---|---|
-| **Phase 1** | Reframe the CI test matrix as capability/regression evals. Add graduation rule. | Documentation only | Free. Changes how we talk about testing. |
-| **Phase 2** | Build 3-5 skill eval YAML tasks per skill. Run against real Claude Code sessions. Grade transcripts for step ordering. | 1-2 days per skill | Proves skills work. Catches regressions on model updates. |
-| **Phase 3** | Audit trail aggregation script. Track `net_delta` first-attempt success rates by model/language/skill. | 1 day | Data-driven skill improvement. Marketing ammunition. |
-| **Phase 4** | `agent-lsp eval` CLI subcommand with full grader suite. | 2-3 days | Production monitoring for deployed instances. |
+| **Phase 1** | Reframe the CI test matrix as capability/regression evals. Add graduation rule. Maximize niche language coverage (Gleam, Zig, Elixir, Clojure, Nix, Dart). | 1-2 weeks | Immediate coverage gains. Community distribution via niche language posts. |
+| **Phase 2** | Build 3-5 skill eval YAML tasks per skill including negative evals. Run against real Claude Code sessions. Grade transcripts for step ordering and refusal correctness. | 1-2 days per skill | Proves skills work. Catches regressions on model updates. |
+| **Phase 3** | Docker-isolated eval harness using existing images. `agent-lsp eval run` and `agent-lsp eval matrix` CLI subcommands. Multi-trial execution with pass@k/pass^k metrics. | 1 week | Reproducible, containerized evaluation. Cross-language skill reliability data. |
+| **Phase 4** | Audit trail aggregation and production graders. Track `net_delta` first-attempt success rates by model/language/skill. `agent-lsp eval --audit-log` for post-session analysis. | 2-3 days | Production monitoring. Data-driven skill improvement. Marketing ammunition. |
 
 ## Bigger Bets
 
