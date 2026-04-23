@@ -348,7 +348,7 @@ warnings: [roots that failed indexing]
 | Terraform | `terraform-ls` | passing | releases.hashicorp.com |
 | Scala | `metals` | best-effort | cold-start; continue-on-error; `cs install metals` via Coursier |
 | Gleam | `gleam` | passing | built-in LSP (`serverArgs: ["lsp"]`) |
-| Elixir | `elixir-ls` | best-effort | continue-on-error; `language_server.sh` symlinked as `elixir-ls` |
+| Elixir | `elixir-ls` | best-effort | continue-on-error; `language_server.sh` symlinked as `elixir-ls`; 16 verified capabilities |
 | Prisma | `prisma-language-server` | investigating | requires VS Code extension host; `npm i -g @prisma/language-server` |
 | SQL | `sqls` | passing | postgres:16 service container; `go install github.com/sqls-server/sqls@latest` |
 | Clojure | `clojure-lsp` | passing | native binary from GitHub releases |
@@ -386,7 +386,7 @@ warnings: [roots that failed indexing]
 | Terraform | pass | pass | — | pass | pass | pass | — | — | pass | — | — | — |
 | Scala | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
 | Gleam | pass | pass | pass | pass | fail | pass | — | — | pass | — | — | — |
-| Elixir | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
+| Elixir | fail | pass | pass | pass | pass | pass | — | — | pass | pass | — | pass |
 | Prisma | pass | pass | pass | — | — | pass | — | — | pass | — | — | — |
 | SQL | pass | pass | pass | pass | pass | — | — | — | pass | — | — | — |
 | Clojure | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |

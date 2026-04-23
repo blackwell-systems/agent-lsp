@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **Elixir: 16 verified capabilities** (up from 13). Fixed definition, call_hierarchy, and apply_edit. Symbols (get_document_symbols) now correctly marked as failing due to ElixirLS needing more compile time than the 20s init wait provides.
 - **AgentSkills spec conformity** — all 20 skills now include `license` and `compatibility` frontmatter fields per the [AgentSkills specification](https://agentskills.io/specification). Skills work with any conforming agent: Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and 30+ others.
 - **Provider-agnostic skill installer** — `install.sh --dest DIR` installs skills to any agent's skill directory, not just Claude Code. Updates CLAUDE.md, AGENTS.md (Codex), and GEMINI.md instruction files when present.
 - **Architecture documentation** — concurrency model section (goroutine architecture, four channel patterns, crash recovery), speculative execution sequence diagram, error handling section (three-layer propagation), Key Terms glossary, HTTP transport mode details, audit trail section, config file example.
