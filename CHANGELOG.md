@@ -27,6 +27,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - **Docker release pipeline** — inlined base layer into all Dockerfiles to eliminate build race; split language/combo/full images into parallel matrix job (10 runners) to avoid 60m GoReleaser timeout; fixed hardcoded `linux-amd64` Go download URL for ARM64 builds.
 - **Completions test** — handles both raw array and CompletionList object response shapes (fixes Gleam and other servers that return the full CompletionList).
 - **apply_edit test** — detects whole-file replacement formatters (Gleam always returns a full-file TextEdit) by comparing edit content against current file content.
+- **Parameter naming consistency** — `get_symbol_source` renamed `character` to `column` in JSON Schema to match all other position-taking tools. Implementation accepts both for backward compatibility. `format_range` schema descriptions corrected from "0-indexed" to "1-indexed" (the implementation already validated `>= 1`). Both found by dogfooding mcp-assert.
 
 ## [0.3.0] - 2026-04-22
 
