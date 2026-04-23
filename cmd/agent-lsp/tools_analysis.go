@@ -84,8 +84,8 @@ type GetSymbolSourceArgs struct {
 	FilePath        string `json:"file_path" jsonschema:"Absolute path to the source file"`
 	LanguageID      string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go, typescript, python). Optional; auto-detected from file extension"`
 	Line            int    `json:"line,omitempty" jsonschema:"1-indexed line number of the cursor position"`
-	Character       int    `json:"character,omitempty" jsonschema:"1-indexed character offset of the cursor position (defaults to 1)"`
-	PositionPattern string `json:"position_pattern,omitempty" jsonschema:"Alternative to line/character: use @@pattern@@ syntax to match text near the target position"`
+	Column          int    `json:"column,omitempty" jsonschema:"1-indexed column (character offset) in the line (defaults to 1)"`
+	PositionPattern string `json:"position_pattern,omitempty" jsonschema:"Alternative to line/column: use @@pattern@@ syntax to match text near the target position"`
 }
 
 type GetSymbolDocumentationArgs struct {

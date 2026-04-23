@@ -71,10 +71,10 @@ type FormatDocumentArgs struct {
 type FormatRangeArgs struct {
 	FilePath    string `json:"file_path" jsonschema:"Absolute path to the file to format"`
 	LanguageID  string `json:"language_id,omitempty"`
-	StartLine   int    `json:"start_line" jsonschema:"Start line of the range to format (0-indexed)"`
-	StartColumn int    `json:"start_column" jsonschema:"Start column of the range to format (0-indexed)"`
-	EndLine     int    `json:"end_line" jsonschema:"End line of the range to format (0-indexed)"`
-	EndColumn   int    `json:"end_column" jsonschema:"End column of the range to format (0-indexed)"`
+	StartLine   int    `json:"start_line" jsonschema:"1-indexed start line of the range to format"`
+	StartColumn int    `json:"start_column" jsonschema:"1-indexed start column of the range to format"`
+	EndLine     int    `json:"end_line" jsonschema:"1-indexed end line of the range to format"`
+	EndColumn   int    `json:"end_column" jsonschema:"1-indexed end column of the range to format"`
 	TabSize     int    `json:"tab_size,omitempty" jsonschema:"Tab size in spaces. Default: 4"`
 	InsertSpaces *bool `json:"insert_spaces,omitempty" jsonschema:"Use spaces instead of tabs. Default: true"`
 }
