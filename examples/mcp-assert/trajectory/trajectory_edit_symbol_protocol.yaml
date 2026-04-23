@@ -1,0 +1,24 @@
+# Trajectory assertion: validates the /lsp-edit-symbol skill protocol.
+# The skill resolves the symbol via get_workspace_symbols first.
+# get_document_symbols is used to get the full range before apply_edit.
+# apply_edit must follow symbol resolution — not precede it.
+name: lsp-edit-symbol follows skill protocol
+trace:
+  - tool: get_workspace_symbols
+    args:
+      query: "Item"
+  - tool: get_document_symbols
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: apply_edit
+    args:
+      file_path: "fixtures/go/main.go"
+      old_text: "type Item struct {"
+      new_text: "type Item struct { // updated"
+trajectory:
+  - type: order
+    tools: ["get_workspace_symbols", "apply_edit"]
+  - type: presence
+    tools: ["get_workspace_symbols", "apply_edit"]
+  - type: absence
+    tools: ["rename_symbol"]

@@ -1,0 +1,25 @@
+# Trajectory assertion: validates the /lsp-format-code skill protocol.
+# open_document must come before format_document (file must be loaded in LSP).
+# format_document returns TextEdit[] — apply_edit must follow to write to disk.
+# get_diagnostics is optional but should follow if verifying no errors introduced.
+# Read-only tools (get_server_capabilities) may appear first for capability check.
+name: lsp-format-code follows skill protocol
+trace:
+  - tool: open_document
+    args:
+      file_path: "fixtures/go/main.go"
+      language_id: "go"
+  - tool: format_document
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: apply_edit
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: get_diagnostics
+    args:
+      file_path: "fixtures/go/main.go"
+trajectory:
+  - type: order
+    tools: ["open_document", "format_document", "apply_edit"]
+  - type: presence
+    tools: ["open_document", "format_document", "apply_edit"]

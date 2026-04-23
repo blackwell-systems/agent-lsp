@@ -1,0 +1,25 @@
+# Trajectory assertion: validates the /lsp-verify skill protocol.
+# Three layers must all appear: get_diagnostics, run_build, run_tests.
+# get_tests_for_file must precede run_tests when changed_files is known.
+# All three layers can run in parallel — no strict ordering among them,
+# but get_diagnostics must precede run_build in the severity ranking output.
+# apply_edit is only used for optional code-action quick fixes after errors.
+name: lsp-verify follows skill protocol
+trace:
+  - tool: get_tests_for_file
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: get_diagnostics
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: run_build
+    args:
+      workspace_dir: "fixtures/go"
+  - tool: run_tests
+    args:
+      workspace_dir: "fixtures/go"
+trajectory:
+  - type: presence
+    tools: ["get_diagnostics", "run_build", "run_tests"]
+  - type: order
+    tools: ["get_tests_for_file", "run_tests"]

@@ -1,0 +1,21 @@
+# Trajectory assertion: validates the /lsp-test-correlation skill protocol.
+# get_tests_for_file must be called first (primary correlation step).
+# get_workspace_symbols follows for test function enumeration or fallback.
+# run_tests must follow correlation — not precede it (must know what to run first).
+name: lsp-test-correlation follows skill protocol
+trace:
+  - tool: get_tests_for_file
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: get_workspace_symbols
+    args:
+      query: "Test"
+  - tool: run_tests
+    args:
+      workspace_dir: "fixtures/go"
+      test_filter: "TestItem"
+trajectory:
+  - type: order
+    tools: ["get_tests_for_file", "run_tests"]
+  - type: presence
+    tools: ["get_tests_for_file"]

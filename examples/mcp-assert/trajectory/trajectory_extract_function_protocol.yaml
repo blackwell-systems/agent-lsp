@@ -1,0 +1,36 @@
+# Trajectory assertion: validates the /lsp-extract-function skill protocol.
+# open_document must precede get_document_symbols (name collision check).
+# get_server_capabilities must be called before get_code_actions (capability gate).
+# get_diagnostics must follow the extraction (validate no errors introduced).
+# format_document must be the final step (clean up indentation after extraction).
+name: lsp-extract-function follows skill protocol
+trace:
+  - tool: open_document
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: get_document_symbols
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: get_server_capabilities
+    args: {}
+  - tool: get_code_actions
+    args:
+      file_path: "fixtures/go/main.go"
+      start_line: 10
+      start_column: 1
+      end_line: 14
+      end_column: 999
+  - tool: apply_edit
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: get_diagnostics
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: format_document
+    args:
+      file_path: "fixtures/go/main.go"
+trajectory:
+  - type: order
+    tools: ["open_document", "get_document_symbols", "get_code_actions", "get_diagnostics", "format_document"]
+  - type: presence
+    tools: ["open_document", "get_document_symbols", "get_code_actions", "get_diagnostics", "format_document"]

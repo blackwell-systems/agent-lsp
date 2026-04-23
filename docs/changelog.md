@@ -9,6 +9,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- **mcp-assert CI split into two jobs** — the single `mcp-assert` job is replaced by two focused jobs. `mcp-assert-trajectory` validates all 20 skill protocols using inline traces with no live server required; each of the 20 assertions runs in 0ms and the job completes in under 60 seconds. `mcp-assert` retains the tool correctness job (full MCP stdio transport against real gopls, 120s per assertion). Trajectory assertion files live in `examples/mcp-assert/trajectory/` (20 files, one per skill).
+
 ## [0.3.0] - 2026-04-22
 
 ### Added

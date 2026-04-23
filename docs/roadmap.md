@@ -326,6 +326,10 @@ The agent-local pipeline (blast-radius → simulate → apply → verify → tes
 
 ## Agent Evaluation Framework
 
+### Shipped: deterministic trajectory assertions (skill protocol CI)
+
+All 20 skills now have deterministic trajectory assertions in `examples/mcp-assert/trajectory/`. These run in the `mcp-assert-trajectory` CI job on every push and PR: 20 inline-trace assertions, no server needed, 0ms each, under 60 seconds total. They validate `presence`, `absence`, `order`, and `args_contain` rules for each skill's required tool call sequence. This is the deterministic subset of Layer 2 skill workflow testing — not LLM-driven, but covering the structural protocol requirements that can be verified without a running agent. The LLM-driven pass@k/pass^k regression suite (below) remains planned.
+
 ### Why existing eval frameworks don't fit
 
 Two categories of eval frameworks exist, and neither addresses what agent-lsp needs:

@@ -28,11 +28,61 @@ Implementation details for contributors and maintainers about the language serve
 
 ## mcp-assert: protocol-level assertions
 
-The `mcp-assert` CI job runs deterministic assertions against agent-lsp through the MCP stdio transport layer, testing the same path agents use in production. This complements the Go integration tests which call internal functions directly.
+mcp-assert runs two separate CI jobs against agent-lsp. Together they cover both tool correctness (does each tool return the right response through the MCP transport?) and skill protocol compliance (does an agent follow the correct tool call sequence for a given skill?).
+
+### Job 1: `mcp-assert-trajectory` (fast, no server needed)
+
+Validates that agent skills follow correct tool call sequences using inline traces embedded in YAML files. No live language server is required; all assertions run against pre-recorded traces and complete in 0ms each. Total job runtime is under 60 seconds.
+
+**Assertion files:** `examples/mcp-assert/trajectory/` (20 files, one per skill)
+
+**What trajectory assertions verify:** Each `trajectory_*.yaml` file declares an `inline` trace (a sequence of tool calls with arguments) and a set of trajectory rules:
+
+| Rule type | What it checks |
+|-----------|----------------|
+| `presence` | Required tools appear in the trace |
+| `absence` | Forbidden tools do not appear |
+| `order` | Tools appear in the correct sequence |
+| `args_contain` | A specific tool call includes expected argument values |
+
+**Skills covered:** All 20 skills have trajectory assertions.
+
+| Skill | Assertion file |
+|-------|---------------|
+| `/lsp-cross-repo` | `trajectory_cross_repo_protocol.yaml` |
+| `/lsp-dead-code` | `trajectory_dead_code_protocol.yaml` |
+| `/lsp-docs` | `trajectory_docs_protocol.yaml` |
+| `/lsp-edit-export` | `trajectory_edit_export_protocol.yaml` |
+| `/lsp-edit-symbol` | `trajectory_edit_symbol_protocol.yaml` |
+| `/lsp-explore` | `trajectory_explore_protocol.yaml` |
+| `/lsp-extract-function` | `trajectory_extract_function_protocol.yaml` |
+| `/lsp-fix-all` | `trajectory_fix_all_protocol.yaml` |
+| `/lsp-format-code` | `trajectory_format_code_protocol.yaml` |
+| `/lsp-generate` | `trajectory_generate_protocol.yaml` |
+| `/lsp-impact` | `trajectory_impact_protocol.yaml` |
+| `/lsp-implement` | `trajectory_implement_protocol.yaml` |
+| `/lsp-local-symbols` | `trajectory_local_symbols_protocol.yaml` |
+| `/lsp-refactor` | `trajectory_refactor_protocol.yaml` |
+| `/lsp-rename` | `trajectory_rename_protocol.yaml` |
+| `/lsp-safe-edit` | `trajectory_safe_edit_protocol.yaml` |
+| `/lsp-simulate` | `trajectory_simulate_protocol.yaml` |
+| `/lsp-test-correlation` | `trajectory_test_correlation_protocol.yaml` |
+| `/lsp-understand` | `trajectory_understand_protocol.yaml` |
+| `/lsp-verify` | `trajectory_verify_protocol.yaml` |
+
+**Why trajectory runs separately:** Trajectory assertions use inline traces, so they require no running agent-lsp binary and no gopls. They are purely structural: given a tool call sequence, do the ordering and presence rules hold? This lets them run earlier and faster than the tool correctness job, providing immediate feedback on skill protocol regressions without waiting for language server startup.
+
+**Adding trajectory assertions:** Create a YAML file in `examples/mcp-assert/trajectory/` (and a matching copy in `examples/mcp-assert/go/` for the full suite). Use `trace:` to define the inline sequence and `trajectory:` for the rules.
+
+### Job 2: `mcp-assert` (tool correctness, requires gopls)
+
+Runs deterministic assertions against agent-lsp through the MCP stdio transport layer, testing the same path agents use in production. This complements the Go integration tests which call internal functions directly.
 
 **How it works:** [mcp-assert](https://github.com/blackwell-systems/mcp-assert) starts agent-lsp as an MCP server subprocess, sends tool calls over JSON-RPC, and checks the responses against YAML-defined assertions. No LLM involved; all grading is deterministic.
 
-**Assertions:** 7 YAML files in `examples/mcp-assert/go/` test against the Go fixtures (`test/fixtures/go/`):
+**Assertion suite:** `examples/mcp-assert/go/` — tool correctness assertions plus multi-step workflow assertions (including trajectory files which are also tested here as part of the full suite).
+
+**Tool correctness assertions include:**
 
 | Assertion | Tool tested | What it verifies |
 |---|---|---|
@@ -48,7 +98,7 @@ The `mcp-assert` CI job runs deterministic assertions against agent-lsp through 
 
 **Timeout:** Each assertion has a 120s timeout. The references assertion typically takes ~27s (gopls indexing time). Total job runtime is ~2 minutes.
 
-**Adding new assertions:** Create a YAML file in `examples/mcp-assert/go/` following the existing format. Use `{{fixture}}` for fixture directory substitution. Add warmup steps (`get_diagnostics` or `get_references`) if the assertion depends on cross-file indexing.
+**Adding new tool correctness assertions:** Create a YAML file in `examples/mcp-assert/go/` following the existing format. Use `{{fixture}}` for fixture directory substitution. Add warmup steps (`get_diagnostics` or `get_references`) if the assertion depends on cross-file indexing.
 
 ## Speculative session test job
 
@@ -80,7 +130,8 @@ The `mcp-assert` CI job runs deterministic assertions against agent-lsp through 
 | `test/build_tools_test.go` | `unit-and-smoke` | `run_build`, `run_tests`, `get_tests_for_file` |
 | `test/documentation_test.go` | `unit-and-smoke` | `get_symbol_documentation` |
 | `test/binary_test.go` | `unit-and-smoke` | Binary smoke tests (startup, missing args, help) |
-| `examples/mcp-assert/go/*.yaml` | `mcp-assert` | 7 protocol-level assertions via MCP stdio (hover, definition, references, diagnostics, symbols, completions, speculative) |
+| `examples/mcp-assert/go/*.yaml` | `mcp-assert` | Protocol-level assertions via MCP stdio: tool correctness (hover, definition, references, diagnostics, symbols, completions, speculative) plus multi-step workflow assertions |
+| `examples/mcp-assert/trajectory/*.yaml` | `mcp-assert-trajectory` | 20 trajectory assertions (one per skill); inline traces, no server needed, 0ms each |
 
 ## Tool-specific notes
 

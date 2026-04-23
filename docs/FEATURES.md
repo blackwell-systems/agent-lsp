@@ -1111,6 +1111,8 @@ locs, err := client.GetDefinition(ctx, fileURI, lsp.Position{Line: 10, Character
 | `multi-lang-java` | Java | ubuntu-latest | continue-on-error; `-Xmx2G`; 15min timeout; isolated from `multi-lang-core` to avoid OOM |
 | `multi-lang-mongodb` | MongoDB | ubuntu-latest | continue-on-error; mongo:7 service container; mongosh health check |
 | `speculative-test` | session lifecycle (8 languages: Go, TypeScript, Python, Rust, C++, C#, Dart, Java) | ubuntu-latest | `TestSpeculativeSessions` table-driven in `test/speculative_test.go`; 20min timeout; Java 300s extended timeout for JVM startup |
+| `mcp-assert-trajectory` | (skill protocols, all 20 skills) | ubuntu-latest | inline traces, no server needed, 0ms per assertion; total under 60s |
+| `mcp-assert` | Go (tool correctness via gopls) | ubuntu-latest | full MCP stdio transport; 120s per assertion; ~2min total |
 
 **Test files:**
 - `test/multi_lang_test.go` — `TestMultiLanguage` (1573 lines after extraction)
@@ -1138,16 +1140,19 @@ locs, err := client.GetDefinition(ctx, fileURI, lsp.Position{Line: 10, Character
 
 agent-lsp is tested through the MCP protocol layer using [mcp-assert](https://github.com/blackwell-systems/mcp-assert), a deterministic correctness testing framework for MCP servers. No LLM-as-judge; all grading is assertion-based.
 
-**CI job:** `mcp-assert` runs on every push and PR. 7 assertions test hover, definition, references, diagnostics, symbols, completions, and speculative execution against real gopls via MCP stdio.
+**Two CI jobs run mcp-assert on every push and PR:**
 
-**Assertion files:** `examples/mcp-assert/go/*.yaml`
+**`mcp-assert-trajectory`** — validates that all 20 skills follow correct tool call sequences. Uses inline traces embedded in YAML files; no live language server needed. Each assertion completes in 0ms. Total job runtime under 60 seconds. Assertion files: `examples/mcp-assert/trajectory/` (20 files, one per skill). Trajectory assertions check `presence` (required tools appear), `absence` (forbidden tools do not appear), `order` (correct sequence), and `args_contain` (specific argument values).
 
-**What this tests that Go integration tests don't:**
+**`mcp-assert`** — tests tool correctness through the full MCP stdio transport against real gopls. Assertion files: `examples/mcp-assert/go/*.yaml`. 120s per-assertion timeout; total runtime ~2 minutes.
+
+**What mcp-assert tests that Go integration tests don't:**
 - MCP JSON-RPC serialization/deserialization
 - JSON Schema parameter validation
 - MCP protocol negotiation (initialize/initialized handshake)
 - Tool response format through the transport layer
 - The exact path agents use in production
+- Skill protocol compliance: correct ordering, presence, and absence of tool calls
 
 ---
 

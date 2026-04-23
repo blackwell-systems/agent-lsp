@@ -636,9 +636,48 @@ jobs:
       - name: Run MongoDB tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^MongoDB$" ./test/ -timeout 10m
 
-  # mcp-assert: deterministic MCP protocol-level assertions against real gopls
+  # mcp-assert-trajectory: validates skill protocol correctness via inline traces.
+  # Uses trajectory assertions only — no live server or gopls needed.
+  # Each assertion runs in 0ms; total job completes in under 60 seconds.
+  mcp-assert-trajectory:
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: "off"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Install mcp-assert
+        run: |
+          git clone --depth 1 https://github.com/blackwell-systems/mcp-assert.git /tmp/mcp-assert
+          cd /tmp/mcp-assert && GOWORK=off go install ./cmd/mcp-assert
+
+      - name: Run trajectory assertions
+        run: |
+          mcp-assert ci \
+            --suite examples/mcp-assert/trajectory \
+            --timeout 5s \
+            --threshold 100 \
+            --junit trajectory-results.xml
+
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-assert-trajectory-results
+          path: trajectory-results.xml
+
+  # mcp-assert: deterministic MCP protocol-level assertions against real gopls.
+  # Tests all tool correctness and multi-step workflow assertions.
+  # Trajectory assertions are excluded (run separately in mcp-assert-trajectory).
   mcp-assert:
     runs-on: ubuntu-latest
+    env:
+      GOWORK: "off"
     steps:
       - uses: actions/checkout@v4
 
@@ -656,9 +695,9 @@ jobs:
       - name: Install mcp-assert
         run: |
           git clone --depth 1 https://github.com/blackwell-systems/mcp-assert.git /tmp/mcp-assert
-          cd /tmp/mcp-assert && go install ./cmd/mcp-assert
+          cd /tmp/mcp-assert && GOWORK=off go install ./cmd/mcp-assert
 
-      - name: Run assertions against Go fixtures
+      - name: Run tool correctness assertions against Go fixtures
         run: |
           mcp-assert ci \
             --suite examples/mcp-assert/go \

@@ -1,0 +1,32 @@
+# Trajectory assertion: validates the /lsp-edit-export skill protocol.
+# The skill MUST call get_references before any edit (safety gate).
+# get_diagnostics must appear BEFORE the edit (baseline capture) and AFTER.
+# run_build must follow the edit (final verification).
+# The critical safety rule: get_references must precede any file write.
+name: lsp-edit-export calls get_references before editing
+trace:
+  - tool: go_to_symbol
+    args:
+      symbol_path: "main.Item"
+  - tool: get_references
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+      include_declaration: false
+  - tool: get_diagnostics
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: get_diagnostics
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: run_build
+    args:
+      workspace_root: "fixtures/go"
+trajectory:
+  - type: order
+    tools: ["go_to_symbol", "get_references", "get_diagnostics", "run_build"]
+  - type: presence
+    tools: ["go_to_symbol", "get_references", "get_diagnostics", "run_build"]
+  - type: absence
+    tools: ["rename_symbol"]
