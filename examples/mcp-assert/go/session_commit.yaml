@@ -1,0 +1,39 @@
+# Session commit path: create → edit → commit → destroy.
+# Tests that commit_session applies changes successfully.
+name: session commit — create, edit, commit, destroy
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
+  - tool: create_simulation_session
+    args:
+      workspace_root: "{{fixture}}"
+      language: go
+    capture:
+      session_id: "$.session_id"
+  - tool: simulate_edit
+    args:
+      session_id: "{{session_id}}"
+      file_path: "{{fixture}}/main.go"
+      start_line: 5
+      start_column: 1
+      end_line: 5
+      end_column: 1
+      new_text: "// commit test\n"
+assert:
+  tool: commit_session
+  args:
+    session_id: "{{session_id}}"
+  expect:
+    not_error: true
+timeout: 120s
