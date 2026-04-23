@@ -17,7 +17,7 @@ assert:
   tool: get_symbol_source
   args:
     file_path: "{{fixture}}/main.go"
-    line: 6
+    line: 7
     character: 6
   expect:
     not_error: true

@@ -14,8 +14,8 @@ assert:
   tool: get_signature_help
   args:
     file_path: "{{fixture}}/main.go"
-    line: 23
-    column: 17
+    line: 24
+    column: 18
   expect:
     not_error: true
     contains: ["int"]

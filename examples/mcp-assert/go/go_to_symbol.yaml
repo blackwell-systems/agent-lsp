@@ -10,11 +10,21 @@ setup:
     args:
       file_path: "{{fixture}}/main.go"
       language_id: go
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/greeter.go"
+      language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/greeter.go"
 assert:
   tool: go_to_symbol
   args:
-    symbol_path: Person
+    symbol_path: Greeter
   expect:
     not_error: true
-    contains: ["main.go"]
+    contains: ["greeter.go"]
 timeout: 30s

@@ -24,7 +24,7 @@ assert:
   tool: get_references
   args:
     file_path: "{{fixture}}/main.go"
-    line: 6
+    line: 7
     column: 6
   expect:
     not_error: true

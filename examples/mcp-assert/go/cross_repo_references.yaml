@@ -1,4 +1,4 @@
-name: get_cross_repo_references responds with empty consumer results
+name: get_cross_repo_references rejects empty consumer_roots
 server:
   command: agent-lsp
   args: ["go:gopls"]
@@ -17,9 +17,10 @@ assert:
   tool: get_cross_repo_references
   args:
     symbol_file: "{{fixture}}/main.go"
-    line: 6
+    line: 7
     column: 6
     consumer_roots: []
   expect:
-    not_error: true
+    is_error: true
+    contains: ["consumer_roots"]
 timeout: 120s

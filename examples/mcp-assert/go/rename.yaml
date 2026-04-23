@@ -17,7 +17,7 @@ assert:
   tool: rename_symbol
   args:
     file_path: "{{fixture}}/main.go"
-    line: 16
+    line: 17
     column: 6
     new_name: "sum"
     dry_run: true

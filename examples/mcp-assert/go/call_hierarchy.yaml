@@ -24,7 +24,7 @@ assert:
   tool: call_hierarchy
   args:
     file_path: "{{fixture}}/main.go"
-    line: 12
+    line: 13
     column: 18
   expect:
     not_error: true

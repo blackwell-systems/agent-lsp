@@ -10,6 +10,9 @@ setup:
     args:
       file_path: "{{fixture}}/main.go"
       language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
 assert:
   tool: execute_command
   args:

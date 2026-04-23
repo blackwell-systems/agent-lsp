@@ -10,11 +10,14 @@ setup:
     args:
       file_path: "{{fixture}}/main.go"
       language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
 assert:
   tool: prepare_rename
   args:
     file_path: "{{fixture}}/main.go"
-    line: 6
+    line: 7
     column: 6
   expect:
     not_error: true

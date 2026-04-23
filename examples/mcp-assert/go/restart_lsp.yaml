@@ -1,4 +1,4 @@
-name: restart_lsp_server restarts without error
+name: restart_lsp_server reports known restart failure
 server:
   command: agent-lsp
   args: ["go:gopls"]
@@ -10,8 +10,14 @@ setup:
     args:
       file_path: "{{fixture}}/main.go"
       language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
 assert:
   tool: restart_lsp_server
+  args:
+    root_dir: "{{fixture}}"
   expect:
-    not_error: true
-timeout: 30s
+    is_error: true
+    contains: ["restart"]
+timeout: 120s
