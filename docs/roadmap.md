@@ -147,9 +147,63 @@ Current skills are oriented around modifying existing code. These skills target 
 
 Skills calling other skills. `/lsp-refactor` is already composed from `/lsp-impact` + `/lsp-safe-edit` + `/lsp-verify` + `/lsp-test-correlation`. Formal runtime support for skill-to-skill invocation would enable arbitrary composition.
 
+## Capability-Gated Skills
+
+### The problem
+
+Not every language server supports the same capabilities. gopls supports call hierarchy, type hierarchy, and semantic tokens. Gleam's LSP does not. But `/lsp-impact` calls all three. Currently, skills handle this at runtime: if a tool returns `IsError` or empty, the agent skips the step or improvises. This works but is fragile and depends on the agent reading prose instructions correctly.
+
+The 30 CI-verified languages expose different capability profiles. A skill that works perfectly with gopls may produce partial or misleading results with a less capable server, and the agent has no way to know this before activating the skill.
+
+### The solution: capability metadata in SKILL.md frontmatter
+
+Each skill declares which LSP server capabilities it requires and which are optional enhancements. Agents (or a skill runner) check these against `get_server_capabilities` before activation.
+
+```yaml
+---
+name: lsp-impact
+description: Blast-radius analysis for a symbol or file.
+license: MIT
+compatibility: Requires the agent-lsp MCP server
+metadata:
+  required-capabilities: referencesProvider documentSymbolProvider
+  optional-capabilities: callHierarchyProvider typeHierarchyProvider
+allowed-tools: mcp__lsp__get_references mcp__lsp__call_hierarchy ...
+---
+```
+
+**Behavior when a required capability is missing:** The agent receives a warning before activation: "This skill requires `referencesProvider` which the current language server does not support. The skill may produce incomplete results." The agent can decide whether to proceed.
+
+**Behavior when an optional capability is missing:** The skill activates normally. Steps that use the optional capability skip cleanly. The agent sees which steps were skipped in the output.
+
+### Capability profiles by language
+
+Based on CI testing across 30 languages, the capability landscape clusters into tiers:
+
+| Tier | Capabilities | Languages |
+|------|-------------|-----------|
+| Full | All 50 tools viable | Go (gopls), TypeScript, Rust, C/C++ (clangd), C# |
+| Strong | Most tools; missing call/type hierarchy | Python, Ruby, PHP, Kotlin, Swift, Dart, Gleam, Elixir |
+| Basic | Navigation + diagnostics; limited refactoring | YAML, JSON, Dockerfile, CSS, HTML, Terraform, SQL |
+
+Skills that target the "Strong" tier should avoid hard dependencies on `callHierarchyProvider` and `typeHierarchyProvider`. Skills that require these should declare them so agents know the limitation upfront.
+
+### Implementation plan
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **`required-capabilities` metadata** | Planned | Space-separated list of LSP server capability keys in SKILL.md frontmatter `metadata` field. Checked against `get_server_capabilities` before skill activation. |
+| **`optional-capabilities` metadata** | Planned | Same format. Steps using these capabilities skip cleanly when unavailable. No warning on activation. |
+| **Capability check tool** | Planned | A new tool or skill (`/lsp-check-capabilities`) that reports which of the 20 skills are fully viable, partially viable, or unavailable for the current language server. One call shows the agent what it can and cannot do. |
+| **Degraded-mode skill variants** | Planned | For high-value skills like `/lsp-impact`, define a degraded path in the skill body that uses only `get_references` when call/type hierarchy are unavailable. Explicit in the prose, not a separate skill file. |
+
+### Fits the AgentSkills spec
+
+The `metadata` field in the AgentSkills specification is an arbitrary key-value mapping. `required-capabilities` and `optional-capabilities` are custom keys that conforming agents can read. Agents that don't understand these keys ignore them, falling back to the current runtime behavior. No spec extension needed.
+
 ## Skill Schema Specification
 
-Skills are currently prose, markdown prompts the agent follows. The inputs and outputs are implicit and unvalidatable. A schema layer would make contracts explicit (what goes in, what comes out), enabling validation and eventual skill composition with typed interfaces.
+Skills are currently prose: markdown prompts the agent follows. The inputs and outputs are implicit and unvalidatable. A schema layer would make contracts explicit (what goes in, what comes out), enabling validation and eventual skill composition with typed interfaces.
 
 The case for machine-readable skill contracts:
 - Tooling can validate that an agent invoked a skill correctly
