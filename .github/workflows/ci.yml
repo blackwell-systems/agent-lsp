@@ -653,7 +653,8 @@ jobs:
 
       - name: Install mcp-assert
         run: |
-          GOWORK=off go install github.com/blackwell-systems/mcp-assert/cmd/mcp-assert@latest
+          git clone --depth 1 https://github.com/blackwell-systems/mcp-assert.git /tmp/mcp-assert
+          cd /tmp/mcp-assert && GOWORK=off go install ./cmd/mcp-assert
 
       - name: Run trajectory assertions
         run: |
@@ -693,7 +694,8 @@ jobs:
 
       - name: Install mcp-assert
         run: |
-          GOWORK=off go install github.com/blackwell-systems/mcp-assert/cmd/mcp-assert@latest
+          git clone --depth 1 https://github.com/blackwell-systems/mcp-assert.git /tmp/mcp-assert
+          cd /tmp/mcp-assert && GOWORK=off go install ./cmd/mcp-assert
 
       - name: Run tool correctness assertions against Go fixtures
         run: |
