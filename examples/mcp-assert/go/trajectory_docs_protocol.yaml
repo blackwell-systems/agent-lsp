@@ -1,0 +1,32 @@
+# Trajectory assertion: validates the /lsp-docs skill protocol.
+# Tier 1: get_info_on_location must be called first (hover lookup).
+# Tier 2: get_symbol_documentation is the fallback for empty hover.
+# Tier 3: go_to_definition + get_symbol_source is the last-resort path.
+# Read-only — apply_edit must NOT appear.
+name: lsp-docs follows skill protocol
+trace:
+  - tool: get_info_on_location
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 8
+  - tool: get_symbol_documentation
+    args:
+      symbol: "fmt.Println"
+      language_id: "go"
+  - tool: go_to_definition
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 8
+  - tool: get_symbol_source
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+trajectory:
+  - type: order
+    tools: ["get_info_on_location", "get_symbol_documentation"]
+  - type: presence
+    tools: ["get_info_on_location"]
+  - type: absence
+    tools: ["apply_edit", "rename_symbol"]

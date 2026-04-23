@@ -1,0 +1,39 @@
+# Trajectory assertion: validates the /lsp-simulate skill protocol.
+# create_simulation_session must precede simulate_edit (session must exist first).
+# evaluate_session must follow simulate_edit (check diagnostics before commit).
+# destroy_session must be the final call — always, even after discard.
+# commit_session and discard_session are alternatives — only one path taken.
+# apply_edit must NOT appear — simulation uses its own commit mechanism.
+name: lsp-simulate follows skill protocol
+trace:
+  - tool: create_simulation_session
+    args:
+      workspace_root: "fixtures/go"
+      language: "go"
+  - tool: simulate_edit
+    args:
+      session_id: "abc123"
+      file_path: "fixtures/go/main.go"
+      start_line: 6
+      start_column: 1
+      end_line: 9
+      end_column: 2
+      new_text: "type Item struct {\n\tName string\n}\n"
+  - tool: evaluate_session
+    args:
+      session_id: "abc123"
+      scope: "file"
+  - tool: commit_session
+    args:
+      session_id: "abc123"
+      apply: true
+  - tool: destroy_session
+    args:
+      session_id: "abc123"
+trajectory:
+  - type: order
+    tools: ["create_simulation_session", "simulate_edit", "evaluate_session", "destroy_session"]
+  - type: presence
+    tools: ["create_simulation_session", "simulate_edit", "evaluate_session", "destroy_session"]
+  - type: absence
+    tools: ["apply_edit"]

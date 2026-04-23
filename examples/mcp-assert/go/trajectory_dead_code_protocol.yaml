@@ -1,0 +1,29 @@
+# Trajectory assertion: validates the /lsp-dead-code skill protocol.
+# open_document must be called before get_document_symbols (indexing prerequisite).
+# get_references must follow get_document_symbols (one call per exported symbol).
+# Read-only — apply_edit and rename_symbol must NOT appear.
+name: lsp-dead-code follows skill protocol
+trace:
+  - tool: open_document
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: get_document_symbols
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: get_references
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+      include_declaration: false
+trajectory:
+  - type: order
+    tools: ["open_document", "get_document_symbols", "get_references"]
+  - type: presence
+    tools: ["open_document", "get_document_symbols", "get_references"]
+  - type: absence
+    tools: ["apply_edit", "rename_symbol"]
+  - type: args_contain
+    tool: get_references
+    args:
+      include_declaration: false

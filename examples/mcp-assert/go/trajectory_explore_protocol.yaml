@@ -1,0 +1,40 @@
+# Trajectory assertion: validates the /lsp-explore skill protocol.
+# Phase 1: go_to_symbol + open_document must come first (locate and open).
+# Phase 2: get_info_on_location (hover) follows open.
+# Phase 3: get_server_capabilities gates go_to_implementation.
+# Phase 4: call_hierarchy and get_references run last (parallel, but after hover).
+# Read-only — apply_edit and rename_symbol must NOT appear.
+name: lsp-explore follows skill protocol
+trace:
+  - tool: go_to_symbol
+    args:
+      symbol_path: "main.Item"
+  - tool: open_document
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: get_info_on_location
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+  - tool: get_server_capabilities
+    args: {}
+  - tool: call_hierarchy
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+      direction: "incoming"
+  - tool: get_references
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+      include_declaration: false
+trajectory:
+  - type: order
+    tools: ["go_to_symbol", "open_document", "get_info_on_location", "get_references"]
+  - type: presence
+    tools: ["go_to_symbol", "open_document", "get_info_on_location"]
+  - type: absence
+    tools: ["apply_edit", "rename_symbol"]

@@ -1,0 +1,35 @@
+# Trajectory assertion: validates the /lsp-impact skill protocol.
+# For symbol-level: go_to_symbol must precede get_references (locate before querying).
+# get_server_capabilities must be called to gate call_hierarchy and type_hierarchy.
+# For file-level: get_change_impact is the entry point (single-call shortcut).
+# Read-only — apply_edit and rename_symbol must NOT appear.
+name: lsp-impact follows skill protocol
+trace:
+  - tool: get_server_capabilities
+    args: {}
+  - tool: go_to_symbol
+    args:
+      symbol_path: "main.Item"
+  - tool: get_references
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+      include_declaration: false
+  - tool: call_hierarchy
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+      direction: "incoming"
+trajectory:
+  - type: order
+    tools: ["go_to_symbol", "get_references"]
+  - type: presence
+    tools: ["go_to_symbol", "get_references"]
+  - type: absence
+    tools: ["apply_edit", "rename_symbol"]
+  - type: args_contain
+    tool: get_references
+    args:
+      include_declaration: false
