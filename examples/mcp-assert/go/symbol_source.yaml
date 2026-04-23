@@ -18,7 +18,7 @@ assert:
   args:
     file_path: "{{fixture}}/main.go"
     line: 7
-    character: 6
+    column: 6
   expect:
     not_error: true
     not_empty: true
