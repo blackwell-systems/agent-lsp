@@ -8,14 +8,14 @@ setup:
       root_dir: "{{fixture}}"
   - tool: open_document
     args:
-      file_path: "{{fixture}}/main.go"
+      file_path: "{{fixture}}/apply_edit_fixture.go"
       language_id: go
 assert:
   tool: apply_edit
   args:
-    file_path: "{{fixture}}/main.go"
-    old_text: "// Person represents a person with a name and age."
-    new_text: "// Person represents a person with a name and age.\n// Updated by mcp-assert test."
+    file_path: "{{fixture}}/apply_edit_fixture.go"
+    old_text: "// apply_edit_fixture: dedicated target for apply_edit assertions."
+    new_text: "// apply_edit_fixture: dedicated target for apply_edit assertions.\n// Updated by mcp-assert test."
   expect:
     not_error: true
 timeout: 120s

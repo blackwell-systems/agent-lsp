@@ -17,7 +17,7 @@ assert:
   tool: go_to_type_definition
   args:
     file_path: "{{fixture}}/main.go"
-    line: 22
+    line: 21
     column: 2
   expect:
     not_error: true

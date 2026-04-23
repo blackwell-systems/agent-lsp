@@ -1,6 +1,6 @@
 # Commit a simulated edit then verify the change is visible via get_symbol_source.
-# Captures session_id, adds a comment, commits to disk, then checks the result.
-# NOTE: This modifies the fixture file — run after other tests or use a copy.
+# Uses commit_fixture.go to avoid contaminating main.go for other tests.
+# Inserts a comment inside CommitFunc body, then checks the committed source.
 name: commit session — verify file modified via get_symbol_source
 server:
   command: agent-lsp
@@ -11,11 +11,11 @@ setup:
       root_dir: "{{fixture}}"
   - tool: open_document
     args:
-      file_path: "{{fixture}}/main.go"
+      file_path: "{{fixture}}/commit_fixture.go"
       language_id: go
   - tool: get_diagnostics
     args:
-      file_path: "{{fixture}}/main.go"
+      file_path: "{{fixture}}/commit_fixture.go"
   - tool: create_simulation_session
     args:
       workspace_root: "{{fixture}}"
@@ -25,10 +25,10 @@ setup:
   - tool: simulate_edit
     args:
       session_id: "{{session_id}}"
-      file_path: "{{fixture}}/main.go"
-      start_line: 13
+      file_path: "{{fixture}}/commit_fixture.go"
+      start_line: 5
       start_column: 1
-      end_line: 13
+      end_line: 5
       end_column: 1
       new_text: "\t// committed\n"
   - tool: commit_session
@@ -38,9 +38,9 @@ setup:
 assert:
   tool: get_symbol_source
   args:
-    file_path: "{{fixture}}/main.go"
-    line: 12
-    column: 17
+    file_path: "{{fixture}}/commit_fixture.go"
+    line: 4
+    column: 6
   expect:
     not_error: true
     contains: ["committed"]
