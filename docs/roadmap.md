@@ -12,7 +12,7 @@ title: Roadmap
 
 ## Extensions
 
-Extensions add language-specific tools beyond what LSP exposes. The core 50 tools cover everything the language server protocol provides; extensions run arbitrary toolchain logic for a specific language.
+Extensions add language-specific tools beyond what LSP exposes. The core 50 tools cover 26 of the most agent-relevant LSP 3.17 methods (navigation, analysis, refactoring, diagnostics, formatting) plus 24 tools that go beyond the LSP spec (speculative execution, build/test, change impact analysis, cross-repo references, audit). Three low-value LSP methods are intentionally omitted: `selectionRange`, `foldingRange`, and `codeLens`. Extensions run arbitrary toolchain logic for a specific language.
 
 ### Go extension (Wave 1: test + module intelligence)
 
