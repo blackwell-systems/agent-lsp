@@ -1,12 +1,12 @@
 # Architecture
 
-agent-lsp is a [Model Context Protocol](https://modelcontextprotocol.io/) server that wraps one or more Language Server Protocol subprocesses. This document describes the package structure, key patterns, and internal design decisions.
+agent-lsp is a [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that wraps one or more [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) (LSP) subprocesses. MCP is a standard for exposing tools to AI agents; LSP is a standard for code intelligence (completions, go-to-definition, diagnostics, etc.) backed by language-specific servers like `gopls` or `typescript-language-server`. Both protocols use [JSON-RPC 2.0](https://www.jsonrpc.org/specification) as their wire format. This document describes the package structure, key patterns, and internal design decisions.
 
 ---
 
 ## System Overview
 
-At runtime, agent-lsp consists of two layers of processes communicating over pipes:
+At runtime, agent-lsp consists of two layers of processes communicating over pipes (JSON-RPC messages framed with `Content-Length` headers, the standard LSP wire format):
 
 ```
 AI agent (Claude Code, Cursor, etc.)
@@ -77,6 +77,11 @@ internal/config/
   parse.go         ← Argument parsing (single-server, multi-server, --config, auto-detect)
   infer.go         ← InferWorkspaceRoot: walks up from a file to find go.mod/package.json/etc.
   autodetect.go    ← AutodetectServers: scans PATH for known language server binaries
+
+internal/audit/
+  audit.go         ← Logger: buffered JSONL audit trail writer; Record types; ResolvePath
+                     (--audit-log flag → AGENT_LSP_AUDIT_LOG env → ~/.agent-lsp/audit.jsonl)
+  audit_test.go    ← tests for audit logger
 
 internal/httpauth/
   auth.go          ← BearerTokenMiddleware: HTTP middleware enforcing Bearer token authentication
@@ -162,12 +167,12 @@ pkg/
     session_test.go ← smoke tests verifying alias targets are non-nil
     doc.go         ← package-level doc comment
   types/
-    doc.go         ← package-level doc comment + all 29 type aliases, 5 constants, 2 constructor vars
+    doc.go         ← package-level doc comment + all 32 type aliases, 5 constants, 2 constructor vars
     types_test.go  ← smoke tests verifying alias targets are non-nil
 
-All 8 non-config internal packages (`lsp`, `session`, `tools`, `resources`, `types`, `uri`,
-`logging`, `extensions`) have a `doc.go` with a package-level doc comment. `internal/config`
-uses inline file-level comments instead.
+Eight internal packages (`lsp`, `session`, `tools`, `resources`, `types`, `uri`,
+`logging`, `extensions`) have a `doc.go` with a package-level doc comment. `internal/config`,
+`internal/audit`, and `internal/httpauth` use inline file-level comments instead.
 
 skills/            ← Agent Skills (SKILL.md directories)
   install.sh       ← Installer: symlinks or copies skill dirs to ~/.claude/skills/
@@ -228,7 +233,7 @@ implementation evolves.
 - `internal/session/` imports from `internal/lsp/`, `internal/types/`, `internal/logging/`, and `internal/uri/`
 - `internal/uri/` imports only from `internal/types/`, serving as the canonical URI/path conversion layer
 - `internal/extensions/` imports from `internal/types/` only
-- `extensions/<language>/` imports from `internal/tools/` for re-exported utilities
+- `extensions/<language>/` (when present) imports from `internal/tools/` for re-exported utilities
 
 ---
 
@@ -246,7 +251,7 @@ Understanding the process model is the most important prerequisite for reading t
 
 - One subprocess per configured language server (e.g. `gopls`, `typescript-language-server`).
 - Spawned by `LSPClient.Initialize` via `exec.Command`. Each subprocess gets its own `stdin`/`stdout` pipe pair.
-- Communicate with the Go process using LSP JSON-RPC with **Content-Length framing** (the LSP wire format, not plain HTTP).
+- Communicate with the Go process using LSP JSON-RPC with **Content-Length framing** (each message is preceded by a `Content-Length: N\r\n\r\n` header giving the byte length of the JSON body; this is the standard LSP wire format, not HTTP).
 - Remain running for the lifetime of the MCP session. The index stays warm; no subprocess is spawned per tool call.
 
 **Communication direction:**
@@ -262,23 +267,27 @@ The Go process never opens sockets to the language servers. All LSP traffic goes
 
 ## Tool Registration Model
 
-50 tools are exposed to the AI agent. They are defined in four files under `cmd/agent-lsp/` and dispatched through a shared pattern.
+50 MCP tools are exposed to the AI agent. In MCP, a "tool" is a named function with a JSON Schema for its arguments that the AI can invoke via a JSON-RPC `tools/call` request. Tools are defined in four files under `cmd/agent-lsp/` and dispatched through a shared pattern.
 
 ### How a tool is defined
 
 Each tool is registered via `mcp.AddTool` with three arguments:
 
-1. A `*mcp.Tool` schema: name, description, and MCP annotations (read-only hint, idempotent hint, etc.)
+1. A `*mcp.Tool` schema: name, description, and MCP annotations (hints like `ReadOnlyHint` and `DestructiveHint` that tell the AI client whether the tool modifies state)
 2. A typed args struct: Go struct with JSON tags and `jsonschema` annotations that generate the tool's JSON Schema for the AI
 3. A handler closure: receives the parsed args, calls an `internal/tools` handler, and converts the result to `*mcp.CallToolResult`
 
 ```go
-mcp.AddTool(server, &mcp.Tool{
+mcp.AddTool(d.server, &mcp.Tool{
     Name:        "go_to_definition",
     Description: "...",
+    Annotations: &mcp.ToolAnnotations{
+        Title:           "Go to Definition",
+        ReadOnlyHint:    true,
+        DestructiveHint: boolPtr(false),
+    },
 }, func(ctx context.Context, req *mcp.CallToolRequest, args GoToDefinitionArgs) (*mcp.CallToolResult, any, error) {
-    client := d.clientForFileWithAutoInit(args.FilePath)
-    r, err := tools.HandleGoToDefinition(ctx, client, toolArgsToMap(args))
+    r, err := tools.HandleGoToDefinition(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
     return makeCallToolResult(r), nil, err
 })
 ```
@@ -317,7 +326,7 @@ At steady state, agent-lsp runs the following goroutines per LSP subprocess:
                         │      ├─► tool handler goroutine (per call)   │
                         │      │       │                               │
                         │      │       ▼                               │
-                        │      │   SendRequest ──► pendingRequest{ch}  │
+                        │      │   sendRequest ──► pendingRequest{ch}  │
                         │      │       │              ▲                │
                         │      │       │ blocks       │ unblocks      │
                         │      │       ▼              │                │
@@ -363,7 +372,7 @@ type pendingRequest struct {
 }
 ```
 
-`SendRequest` creates the channels, stores them in `pending[id]`, writes the JSON-RPC frame to stdin, then blocks on `select { case resp := <-ch; case err := <-errCh; case <-ctx.Done() }`. When `readLoop` parses a response with that ID, it sends on `ch` and the caller unblocks. This gives O(1) dispatch with no polling.
+`sendRequest` creates the channels, stores them in `pending[id]`, writes the JSON-RPC frame to stdin, then blocks on a four-arm `select`: response received (`<-ch`), error received (`<-errCh`), per-method timeout via `time.NewTimer` (`<-timer.C`), or context cancellation (`<-ctx.Done()`). When `readLoop` parses a response with that ID, it sends on `ch` and the caller unblocks. This gives O(1) dispatch with no polling.
 
 **2. Per-Session Semaphore (channel as mutex)**
 
@@ -375,6 +384,7 @@ The `SerializedExecutor` uses a `chan struct{}` with buffer size 1 as a per-sess
 sessionLocks map[string]chan struct{}  // session ID → semaphore
 
 func (e *SerializedExecutor) Acquire(ctx context.Context, s *SimulationSession) error {
+    ch := e.lockFor(s)
     select {
     case ch <- struct{}{}:  // acquired
         return nil
@@ -392,44 +402,44 @@ The audit trail uses a buffered channel as a non-blocking queue between tool han
 
 ```go
 type Logger struct {
-    ch   chan Record     // buffered(256): tool handlers send here
+    ch   chan Record     // buffered (256 in practice): tool handlers send here
+    file *os.File
     done chan struct{}   // closed when writeLoop exits
+    noop bool           // true when no audit path is configured (discard all records)
 }
 
 // Tool handler (hot path) — never blocks
 func (l *Logger) Log(r Record) {
+    if l.noop { return }
     select {
     case l.ch <- r:    // enqueued
-    default:           // channel full — drop silently (non-blocking guarantee)
+    default:           // channel full — log warning, drop record (non-blocking guarantee)
     }
 }
 
-// Background goroutine — drains to disk
+// Background goroutine — drains to disk as JSONL
 func (l *Logger) writeLoop() {
     defer close(l.done)
+    enc := json.NewEncoder(l.file)
     for r := range l.ch { enc.Encode(r) }
 }
 ```
 
-Tool handlers have zero-latency audit logging; they never wait for disk I/O. The `done` channel provides a clean shutdown signal: `Close()` closes `ch`, waits on `<-done`, then closes the file.
+Tool handlers have zero-latency audit logging; they never wait for disk I/O. The `done` channel provides a clean shutdown signal: `Close()` closes `ch`, waits on `<-done`, then closes the file. When no audit path is configured (empty `--audit-log` flag and no `AGENT_LSP_AUDIT_LOG` env var), `NewLogger` returns a no-op logger that discards all records with zero overhead.
 
 **4. Progress Token Coordination (sync.Cond)**
 
-Workspace readiness tracking uses `sync.Cond` instead of channels because the signal is level-triggered (not edge-triggered): any number of goroutines may be waiting, and they should all wake when the condition becomes true.
+Language servers report long-running work (like indexing a workspace) via `$/progress` notifications, each tagged with a token. agent-lsp tracks active tokens to know when the server is ready. Workspace readiness tracking uses `sync.Cond` instead of channels because the signal is level-triggered (not edge-triggered): any number of goroutines may be waiting, and they should all wake when the condition becomes true.
 
 ```go
 progressMu     sync.Mutex
-progressTokens map[string]bool
-progressCond   *sync.Cond    // broadcast when progressTokens becomes empty
+progressTokens map[interface{}]struct{} // active begin tokens
+progressCond   *sync.Cond              // signalled when progressTokens becomes empty
 
-// waitForWorkspaceReady blocks until all $/progress tokens complete
-func (c *LSPClient) waitForWorkspaceReady(timeout time.Duration) {
-    c.progressMu.Lock()
-    defer c.progressMu.Unlock()
-    deadline := time.Now().Add(timeout)
-    for len(c.progressTokens) > 0 && time.Now().Before(deadline) {
-        c.progressCond.Wait()  // releases lock, sleeps, reacquires on signal
-    }
+// waitForWorkspaceReady blocks until all $/progress tokens complete or 60s elapses.
+// WaitForWorkspaceReadyTimeout(ctx, timeout) is the variant with a configurable deadline.
+func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
+    c.WaitForWorkspaceReadyTimeout(ctx, 60*time.Second)
 }
 ```
 
@@ -442,7 +452,7 @@ When `readLoop` dispatches a `$/progress end` notification, it removes the token
 | `pending` request map | `sync.Mutex` | Simple map guard; no context-aware blocking needed |
 | Per-session LSP state | Channel semaphore | Must respect `ctx.Done()` for timeout; `sync.Mutex` would deadlock |
 | Progress tokens | `sync.Cond` | Multiple waiters need broadcast wake; channels are one-shot |
-| Diagnostic callbacks | `sync.Mutex` on slice | Append-only during subscribe; iterate during publish |
+| Diagnostic callbacks | `sync.RWMutex` on slice | Write-lock to subscribe/unsubscribe; read-lock to iterate during publish |
 | Session manager map | `sync.RWMutex` | Reads (evaluate) vastly outnumber writes (create/destroy) |
 | Audit log | Buffered channel | Non-blocking producer guarantee; no mutex contention on hot path |
 | File watcher state | `sync.Mutex` | Guards `watcherStop` channel to prevent data race on reinit |
@@ -461,7 +471,7 @@ exit-monitor goroutine detects cmd.Wait() error
     │       iterates all pending[id] channels
     │       sends error on each errCh
     │       clears the pending map
-    │       → all blocked SendRequest callers unblock with error
+    │       → all blocked sendRequest callers unblock with error
     │
     ├──► sets initialized = false
     │       → subsequent tool calls fail fast with "not initialized"
@@ -574,7 +584,7 @@ func WithDocument[T any](
 Internally it:
 1. Calls `ValidateFilePath` to resolve to an absolute path and reject path traversal
 2. Reads the file content from disk
-3. Calls `client.OpenDocument(ctx, fileURI, content, languageID)`, which sends `textDocument/didOpen` if the file is new or `textDocument/didChange` if already tracked
+3. Calls `client.OpenDocument(ctx, fileURI, content, languageID)`, which sends `textDocument/didOpen` (LSP notification telling the server to start tracking a file) if the file is new, or `textDocument/didChange` (LSP notification with updated content) if already tracked
 4. Invokes the callback with the `file://` URI
 
 Usage example:
@@ -610,12 +620,12 @@ internal/session/
 ### Session state machine
 
 ```
-created → mutated → evaluating → evaluated → committed
-                                           ↘ discarded
-                ↘ dirty (on LSP error)
+created → mutated → evaluating → evaluated → committed → destroyed
+                                           ↘ discarded → destroyed
+                ↘ dirty (on LSP error)     → destroyed
 ```
 
-`committed` and `discarded` are terminal states. `dirty` means the LSP state diverged from the in-memory content (e.g., `OpenDocument` failed mid-edit) and the session must be destroyed.
+`committed`, `discarded`, `destroyed`, and `dirty` are terminal states. `dirty` means the LSP state diverged from the in-memory content (e.g., `OpenDocument` failed mid-edit) and the session must be destroyed. `destroyed` is the final state after `Destroy()` removes the session from the manager.
 
 ### Session lifecycle
 
@@ -665,7 +675,7 @@ The first `ApplyEdit` call for a given file URI within a session:
 
 ## File Watcher
 
-When `start_lsp` initializes the LSP client, `startWatcher(rootDir)` is called automatically. A goroutine watches the workspace root recursively using [fsnotify](https://github.com/fsnotify/fsnotify), which uses the platform-native mechanism (`inotify` on Linux, `kqueue` on BSD/macOS, `FSEvents` on macOS for Go 1.23+). File system events are:
+When `start_lsp` initializes the LSP client, `startWatcher(rootDir)` is called automatically. A goroutine watches the workspace root recursively using [fsnotify](https://github.com/fsnotify/fsnotify) (a cross-platform Go file-system notification library), which uses the platform-native mechanism (`inotify` on Linux, `kqueue` on BSD/macOS, `FSEvents` on macOS for Go 1.23+). File system events are:
 
 1. Deduplicated per path into a `map[string]fsnotify.Op` (pending set)
 2. Flushed as a single `workspace/didChangeWatchedFiles` notification after a **150ms debounce** (`time.AfterFunc`)
@@ -847,6 +857,7 @@ client → resources/subscribe { uri: "lsp-diagnostics:///path/to/file.go" }
                               callback stored in DiagnosticUpdateCallback slice
                                           ↓
           later: LSP subprocess sends textDocument/publishDiagnostics
+                          (LSP notification: the server pushes diagnostic updates to the client)
                                           ↓
                           LSPClient.handlePublishDiagnostics → fires all callbacks
                                           ↓
@@ -882,13 +893,13 @@ exec.Command(lspServerPath, lspServerArgs...)
     ↓  spawns subprocess; connects stdin/stdout/stderr pipes
     ↓  starts readLoop goroutine, drainStderr goroutine, exit-monitor goroutine
     ↓
-SendRequest("initialize", {capabilities, rootUri, workspaceFolders})
+sendRequest("initialize", {capabilities, rootUri, workspaceFolders})
     ↓  server may send window/workDoneProgress/create, workspace/configuration here
     ↓  these are handled in dispatch() → handleServerRequest before initialize returns
 receive initialize response
     ↓  captures serverCapabilities, semantic token legend
 client.initialized = true
-SendNotification("initialized", {})
+sendNotification("initialized", {})
     ↓
 startWatcher(rootDir)
     ↓
@@ -901,7 +912,7 @@ tool calls now available
 
 Each outgoing request is assigned a monotonically-increasing integer ID. A `pendingRequest` struct holding `ch chan json.RawMessage` and `err chan error` is stored in `c.pending[id]`. `readLoop` calls `dispatch()` on every incoming frame; when `dispatch` sees a response message (has `id`, no `method`), it resolves the pending channel.
 
-Per-method timeouts are applied to each `SendRequest` call. `textDocument/references` gets 120s (full workspace indexing); `initialize` gets 300s (cold-start JVM servers).
+Per-method timeouts are applied to each `sendRequest` call. `textDocument/references` gets 120s (full workspace indexing); `initialize` gets 300s (cold-start JVM servers).
 
 ### Crash recovery
 
