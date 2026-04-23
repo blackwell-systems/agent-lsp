@@ -255,16 +255,38 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 
 **CLAUDE.md sync:** `install.sh` maintains managed skills table in `~/.claude/CLAUDE.md` between sentinel comments (`<!-- agent-lsp:skills:start/end -->`). Auto-discovers skills from SKILL.md frontmatter — re-running keeps CLAUDE.md in sync without touching surrounding content.
 
-**SKILL.md format:**
+**SKILL.md format ([AgentSkills](https://agentskills.io/specification) conformant):**
 ```markdown
 ---
 name: lsp-verify
 description: <one-line description for skill discovery>
 argument-hint: "[optional-args]"    # optional
+license: MIT
+compatibility: Requires the agent-lsp MCP server
 allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build ...
+metadata:
+  required-capabilities: referencesProvider
+  optional-capabilities: callHierarchyProvider typeHierarchyProvider
 ---
 # skill body (prompt for agent)
 ```
+
+**Capability metadata:** All 20 skills declare `required-capabilities` and `optional-capabilities` in frontmatter. Maps directly to LSP server capability keys from `get_server_capabilities`. Agents can check before activation whether the current language server supports the skill's requirements. Skills with zero required capabilities (lsp-safe-edit, lsp-simulate, lsp-verify, lsp-test-correlation) work with any language server.
+
+| Capability | Skills that require it | Skills that optionally use it |
+|---|---|---|
+| `referencesProvider` | lsp-rename, lsp-impact, lsp-dead-code, lsp-edit-export, lsp-cross-repo, lsp-refactor | lsp-explore, lsp-understand |
+| `codeActionProvider` | lsp-fix-all, lsp-extract-function, lsp-generate | lsp-safe-edit, lsp-verify |
+| `workspaceSymbolProvider` | lsp-rename, lsp-edit-symbol | lsp-impact, lsp-implement, lsp-cross-repo, lsp-generate, lsp-understand, lsp-test-correlation, lsp-edit-export |
+| `hoverProvider` | lsp-docs, lsp-explore, lsp-understand | lsp-local-symbols |
+| `documentSymbolProvider` | lsp-dead-code, lsp-local-symbols | lsp-extract-function, lsp-understand |
+| `implementationProvider` | lsp-implement | lsp-cross-repo, lsp-explore, lsp-understand |
+| `documentFormattingProvider` | lsp-format-code | lsp-safe-edit, lsp-verify, lsp-fix-all, lsp-refactor, lsp-extract-function, lsp-generate |
+| `renameProvider` | lsp-rename | (none) |
+| `callHierarchyProvider` | (none) | lsp-impact, lsp-cross-repo, lsp-explore, lsp-understand |
+| `typeHierarchyProvider` | (none) | lsp-impact, lsp-implement |
+
+**Provider-agnostic:** Skills conform to the AgentSkills open standard and work with any conforming agent (Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and 30+ others). The `--dest` flag on `install.sh` installs to any agent's skill directory. The installer updates CLAUDE.md, AGENTS.md (Codex), and GEMINI.md instruction files when present.
 
 ### Skill Workflow Details
 
