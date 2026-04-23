@@ -1,0 +1,22 @@
+name: completions suggest methods after Person dot
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+assert:
+  tool: get_completions
+  args:
+    file_path: "{{fixture}}/main.go"
+    line: 22
+    column: 19
+  expect:
+    not_error: true
+    not_empty: true
+timeout: 30s

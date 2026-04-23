@@ -1,0 +1,22 @@
+name: go_to_definition resolves Person to main.go
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/greeter.go"
+      language_id: go
+assert:
+  tool: go_to_definition
+  args:
+    file_path: "{{fixture}}/greeter.go"
+    line: 10
+    column: 25
+  expect:
+    not_error: true
+    contains: ["main.go"]
+timeout: 30s

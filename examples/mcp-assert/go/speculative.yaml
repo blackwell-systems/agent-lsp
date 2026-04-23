@@ -1,0 +1,30 @@
+name: speculative edit detects type error with net_delta > 0
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
+assert:
+  tool: simulate_edit_atomic
+  args:
+    file_path: "{{fixture}}/main.go"
+    workspace_root: "{{fixture}}"
+    language: go
+    start_line: 13
+    start_column: 2
+    end_line: 13
+    end_column: 43
+    new_text: "return 42"
+  expect:
+    not_error: true
+    contains: ["net_delta"]
+timeout: 120s

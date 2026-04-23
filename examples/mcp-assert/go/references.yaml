@@ -1,0 +1,33 @@
+name: get_references finds cross-file callers of Person
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/greeter.go"
+      language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/greeter.go"
+assert:
+  tool: get_references
+  args:
+    file_path: "{{fixture}}/main.go"
+    line: 6
+    column: 6
+  expect:
+    not_error: true
+    contains: ["greeter.go"]
+    min_results: 2
+timeout: 120s

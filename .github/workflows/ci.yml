@@ -636,6 +636,31 @@ jobs:
       - name: Run MongoDB tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^MongoDB$" ./test/ -timeout 10m
 
+  # mcp-assert: deterministic MCP protocol-level assertions against real gopls
+  mcp-assert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build agent-lsp
+        run: GOWORK=off go build -o /usr/local/bin/agent-lsp ./cmd/agent-lsp
+
+      - name: Install gopls
+        run: go install golang.org/x/tools/gopls@latest
+
+      - name: Install mcp-assert
+        run: |
+          git clone --depth 1 https://github.com/blackwell-systems/mcp-assert.git /tmp/mcp-assert
+          cd /tmp/mcp-assert && go install ./cmd/mcp-assert
+
+      - name: Run assertions against Go fixtures
+        run: mcp-assert ci --suite examples/mcp-assert/go --fixture ${{ github.workspace }}/test/fixtures/go --timeout 120s --threshold 100
+
   change-impact-test:
     runs-on: ubuntu-latest
     steps:

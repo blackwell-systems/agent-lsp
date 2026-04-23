@@ -14,10 +14,12 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - **LSP Conformance page** added to docs site navigation.
 - **Gleam: 17 verified capabilities** (up from 6 skipping). Added `gleam build --target javascript` pre-build step, fixed module import path (`person` not `fixture/person`), enriched fixture with Result type and pattern matching. New dedicated `typeDefLine`/`signatureHelpLine` test config fields for independent positioning.
 - **Documentation site** — agent-lsp.com live on GitHub Pages with Cloudflare DNS.
-- **mcp-assert** — sister project launched ([github.com/blackwell-systems/mcp-assert](https://github.com/blackwell-systems/mcp-assert)). Deterministic correctness testing for MCP servers. No LLM-as-judge.
+- **mcp-assert** — sister project launched ([github.com/blackwell-systems/mcp-assert](https://github.com/blackwell-systems/mcp-assert)). Deterministic correctness testing for MCP servers. No LLM-as-judge. Now end-to-end verified: 7 assertions (hover, definition, references, diagnostics, symbols, completions, speculative execution) pass against real agent-lsp + gopls. 13 assertion types, 27 unit tests, `--server` CLI override.
 - **Agent evaluation framework** on roadmap — two-layer architecture (deterministic tool correctness + skill workflow trajectory matching), Docker-isolated eval harness, negative evals, capability-gated skills.
 - **Capability metadata in skills** — all 20 SKILL.md files now declare `required-capabilities` and `optional-capabilities` in frontmatter metadata. Agents can check `get_server_capabilities` against a skill's requirements before activation. 5 skills have zero required capabilities (work with any LSP); `referencesProvider` is the most common requirement (8 skills); `callHierarchyProvider` and `typeHierarchyProvider` are always optional, never required.
 - **Zig coverage maximization** — upgraded zls from 0.13.0 to 0.14.0 in CI; 21 verified capabilities (up from 18). signature_help now passes (call site position in main.zig), apply_edit now passes (trailing whitespace in fixture), symbol_source now passes (likely zls 0.14 improvement). workspace_symbols fails (zls 0.14.0 advertises support but may need specific query format).
+- **`user-invocable` on all skills** — all 20 SKILL.md files now declare `user-invocable: true` in frontmatter, making them available as `/lsp-*` slash commands in Claude Code and other AgentSkills-conforming agents.
+- **mcp-assert CI job** — new `mcp-assert` job in CI runs 7 deterministic protocol-level assertions against real agent-lsp + gopls on every push and PR. Tests hover, definition, references, diagnostics, symbols, completions, and speculative execution through the MCP transport layer.
 
 ### Fixed
 
