@@ -5,6 +5,9 @@ argument-hint: "[symbol-name]"
 allowed-tools: mcp__lsp__get_info_on_location mcp__lsp__get_symbol_documentation mcp__lsp__go_to_definition mcp__lsp__get_symbol_source
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  required-capabilities: hoverProvider
+  optional-capabilities: definitionProvider
 ---
 
 > Requires the agent-lsp MCP server.

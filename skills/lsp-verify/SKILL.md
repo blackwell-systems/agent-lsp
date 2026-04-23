@@ -4,6 +4,8 @@ description: Full three-layer verification after any change — LSP diagnostics 
 allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__get_code_actions mcp__lsp__format_document mcp__lsp__apply_edit
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  optional-capabilities: codeActionProvider documentFormattingProvider
 ---
 
 > Requires the agent-lsp MCP server.

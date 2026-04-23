@@ -5,6 +5,9 @@ argument-hint: "[interface-or-type-name]"
 allowed-tools: mcp__lsp__start_lsp mcp__lsp__get_server_capabilities mcp__lsp__go_to_symbol mcp__lsp__go_to_implementation mcp__lsp__type_hierarchy mcp__lsp__open_document
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  required-capabilities: implementationProvider
+  optional-capabilities: typeHierarchyProvider workspaceSymbolProvider
 ---
 
 > Requires the agent-lsp MCP server.

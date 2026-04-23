@@ -5,6 +5,9 @@ argument-hint: "[file-path] [optional: start_line-end_line]"
 allowed-tools: mcp__lsp__open_document mcp__lsp__format_document mcp__lsp__format_range mcp__lsp__apply_edit mcp__lsp__get_diagnostics mcp__lsp__get_server_capabilities
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  required-capabilities: documentFormattingProvider
+  optional-capabilities: documentRangeFormattingProvider
 ---
 
 > Requires the agent-lsp MCP server.

@@ -5,6 +5,9 @@ argument-hint: "[file-path]"
 allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__get_code_actions mcp__lsp__apply_edit mcp__lsp__open_document mcp__lsp__format_document
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  required-capabilities: codeActionProvider
+  optional-capabilities: documentFormattingProvider
 ---
 
 > Requires the agent-lsp MCP server.

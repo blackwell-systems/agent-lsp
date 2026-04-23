@@ -5,6 +5,9 @@ argument-hint: "[symbol-name] in [file-path]"
 allowed-tools: mcp__lsp__open_document mcp__lsp__get_document_symbols mcp__lsp__get_info_on_location mcp__lsp__get_document_highlights
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  required-capabilities: documentSymbolProvider
+  optional-capabilities: documentHighlightProvider hoverProvider
 ---
 
 > Requires the agent-lsp MCP server.

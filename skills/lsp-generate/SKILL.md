@@ -5,6 +5,9 @@ argument-hint: "[file-path:line:col] [generation-intent]"
 allowed-tools: mcp__lsp__get_code_actions mcp__lsp__execute_command mcp__lsp__apply_edit mcp__lsp__format_document mcp__lsp__get_diagnostics mcp__lsp__open_document mcp__lsp__get_server_capabilities mcp__lsp__go_to_symbol
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  required-capabilities: codeActionProvider
+  optional-capabilities: workspaceSymbolProvider documentFormattingProvider
 ---
 
 > Requires the agent-lsp MCP server.

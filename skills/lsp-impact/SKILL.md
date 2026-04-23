@@ -5,6 +5,9 @@ argument-hint: "[symbol-name | file-path]"
 allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__call_hierarchy mcp__lsp__type_hierarchy mcp__lsp__get_references mcp__lsp__get_server_capabilities mcp__lsp__get_change_impact
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  required-capabilities: referencesProvider
+  optional-capabilities: callHierarchyProvider typeHierarchyProvider workspaceSymbolProvider
 ---
 
 > Requires the agent-lsp MCP server.

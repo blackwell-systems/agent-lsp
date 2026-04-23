@@ -5,6 +5,9 @@ argument-hint: "[symbol-name]"
 allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__open_document mcp__lsp__get_references mcp__lsp__get_diagnostics mcp__lsp__run_build Edit Write
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  required-capabilities: referencesProvider
+  optional-capabilities: workspaceSymbolProvider
 ---
 
 > Requires the agent-lsp MCP server.

@@ -5,6 +5,8 @@ argument-hint: "[old-name] [new-name]"
 allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__prepare_rename mcp__lsp__get_references mcp__lsp__rename_symbol mcp__lsp__apply_edit mcp__lsp__get_diagnostics
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  required-capabilities: referencesProvider renameProvider workspaceSymbolProvider
 ---
 
 > Requires the agent-lsp MCP server.

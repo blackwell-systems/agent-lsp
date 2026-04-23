@@ -4,6 +4,8 @@ description: Wrap any code edit with before/after diagnostic comparison. Specula
 allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_diagnostics mcp__lsp__simulate_edit_atomic mcp__lsp__simulate_chain mcp__lsp__get_code_actions mcp__lsp__format_document mcp__lsp__apply_edit Edit Write Bash
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  optional-capabilities: codeActionProvider documentFormattingProvider
 ---
 
 > Requires the agent-lsp MCP server.

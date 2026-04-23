@@ -4,6 +4,7 @@ description: Speculative code editing session — simulate changes in memory bef
 allowed-tools: mcp__lsp__start_lsp mcp__lsp__create_simulation_session mcp__lsp__simulate_edit mcp__lsp__simulate_chain mcp__lsp__evaluate_session mcp__lsp__commit_session mcp__lsp__discard_session mcp__lsp__destroy_session mcp__lsp__simulate_edit_atomic
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata: {}
 ---
 
 > Requires the agent-lsp MCP server.

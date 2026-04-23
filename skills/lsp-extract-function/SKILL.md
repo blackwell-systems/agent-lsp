@@ -5,6 +5,9 @@ argument-hint: "[file-path] [start-line] [end-line] [new-function-name]"
 allowed-tools: mcp__lsp__get_document_symbols mcp__lsp__get_code_actions mcp__lsp__execute_command mcp__lsp__apply_edit mcp__lsp__get_diagnostics mcp__lsp__open_document mcp__lsp__format_document mcp__lsp__get_server_capabilities
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  required-capabilities: codeActionProvider
+  optional-capabilities: documentFormattingProvider documentSymbolProvider
 ---
 
 > Requires the agent-lsp MCP server.

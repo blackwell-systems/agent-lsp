@@ -5,6 +5,8 @@ argument-hint: "[file-path] [optional: run=true]"
 allowed-tools: mcp__lsp__get_tests_for_file mcp__lsp__get_workspace_symbols mcp__lsp__open_document mcp__lsp__run_tests
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  optional-capabilities: workspaceSymbolProvider
 ---
 
 > Requires the agent-lsp MCP server.

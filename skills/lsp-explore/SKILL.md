@@ -5,6 +5,9 @@ argument-hint: "[symbol-name]"
 allowed-tools: mcp__lsp__start_lsp mcp__lsp__go_to_symbol mcp__lsp__get_info_on_location mcp__lsp__go_to_implementation mcp__lsp__call_hierarchy mcp__lsp__get_references mcp__lsp__open_document mcp__lsp__get_server_capabilities
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  required-capabilities: hoverProvider
+  optional-capabilities: implementationProvider callHierarchyProvider referencesProvider
 ---
 
 > Requires the agent-lsp MCP server.

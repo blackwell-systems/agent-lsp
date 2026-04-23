@@ -5,6 +5,9 @@ argument-hint: "[symbol-or-file] [intent]"
 allowed-tools: mcp__lsp__get_change_impact mcp__lsp__simulate_edit_atomic mcp__lsp__simulate_chain mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__apply_edit mcp__lsp__open_document mcp__lsp__format_document Edit Write
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
+metadata:
+  required-capabilities: referencesProvider
+  optional-capabilities: documentFormattingProvider
 ---
 
 > Requires the agent-lsp MCP server.
