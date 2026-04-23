@@ -1,0 +1,14 @@
+name: list_workspace_folders returns active roots
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+assert:
+  tool: list_workspace_folders
+  expect:
+    not_error: true
+    contains: ["go"]
+timeout: 30s

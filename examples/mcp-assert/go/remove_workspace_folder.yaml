@@ -1,0 +1,18 @@
+name: remove_workspace_folder removes previously added folder
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: add_workspace_folder
+    args:
+      path: "{{fixture}}/hello"
+assert:
+  tool: remove_workspace_folder
+  args:
+    path: "{{fixture}}/hello"
+  expect:
+    not_error: true
+timeout: 30s

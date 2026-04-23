@@ -1,0 +1,20 @@
+name: go_to_symbol navigates to Person by name
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+assert:
+  tool: go_to_symbol
+  args:
+    symbol_path: Person
+  expect:
+    not_error: true
+    contains: ["main.go"]
+timeout: 30s

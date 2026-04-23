@@ -1,0 +1,26 @@
+name: get_symbol_source retrieves source for Person
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+  - tool: get_diagnostics
+    args:
+      file_path: "{{fixture}}/main.go"
+assert:
+  tool: get_symbol_source
+  args:
+    file_path: "{{fixture}}/main.go"
+    line: 6
+    character: 6
+  expect:
+    not_error: true
+    not_empty: true
+    contains: ["Person"]
+timeout: 30s

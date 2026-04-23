@@ -1,0 +1,15 @@
+name: add_workspace_folder adds hello subfolder
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+assert:
+  tool: add_workspace_folder
+  args:
+    path: "{{fixture}}/hello"
+  expect:
+    not_error: true
+timeout: 30s

@@ -1,0 +1,12 @@
+name: detect_lsp_servers finds Go in fixture workspace
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+assert:
+  tool: detect_lsp_servers
+  args:
+    workspace_dir: "{{fixture}}"
+  expect:
+    not_error: true
+    contains: ["go"]
+timeout: 30s

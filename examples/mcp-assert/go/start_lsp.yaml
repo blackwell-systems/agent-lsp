@@ -1,0 +1,12 @@
+name: start_lsp initializes server for Go workspace
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+assert:
+  tool: start_lsp
+  args:
+    root_dir: "{{fixture}}"
+  expect:
+    not_error: true
+    not_empty: true
+timeout: 30s

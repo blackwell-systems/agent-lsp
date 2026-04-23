@@ -1,0 +1,15 @@
+name: set_log_level changes verbosity to debug
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+assert:
+  tool: set_log_level
+  args:
+    level: debug
+  expect:
+    not_error: true
+timeout: 30s

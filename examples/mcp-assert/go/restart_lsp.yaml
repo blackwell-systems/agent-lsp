@@ -1,0 +1,17 @@
+name: restart_lsp_server restarts without error
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: open_document
+    args:
+      file_path: "{{fixture}}/main.go"
+      language_id: go
+assert:
+  tool: restart_lsp_server
+  expect:
+    not_error: true
+timeout: 30s

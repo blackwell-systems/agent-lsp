@@ -1,0 +1,17 @@
+name: did_change_watched_files notifies server of file change
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+assert:
+  tool: did_change_watched_files
+  args:
+    changes:
+      - uri: "file://{{fixture}}/main.go"
+        type: 2
+  expect:
+    not_error: true
+timeout: 30s
