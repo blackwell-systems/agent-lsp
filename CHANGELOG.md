@@ -5,6 +5,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-04-24
+
 ### Added
 
 - **Elixir: 16 verified capabilities** (up from 13). Fixed definition, call_hierarchy, and apply_edit. Symbols (get_document_symbols) now correctly marked as failing due to ElixirLS needing more compile time than the 20s init wait provides.
