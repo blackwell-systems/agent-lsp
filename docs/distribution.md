@@ -108,7 +108,7 @@ Submitted. Cursor detects 20 skill components from SKILL.md files. Listed under 
 Manually submitted. Free listing.
 
 ### Awesome MCP Servers
-PR submitted ([punkpeye/awesome-mcp-servers#5145](https://github.com/punkpeye/awesome-mcp-servers/pull/5145)). Pending maintainer review.
+Listed. [PR #5145](https://github.com/punkpeye/awesome-mcp-servers/pull/5145) merged 2026-04-23. Badge added to README.
 
 ## Documentation site
 
