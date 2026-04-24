@@ -6,6 +6,7 @@
 [![CI Coverage](https://img.shields.io/badge/CI--verified_tools-50%2F50-brightgreen.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Agent Skills](assets/badge-agentskills.svg)](https://agentskills.io)
+[![Awesome MCP Servers](https://img.shields.io/badge/Awesome-MCP%20Servers-fc60a8)](https://github.com/punkpeye/awesome-mcp-servers)
 
 **The most complete MCP server for language intelligence.** 50 tools, 30 CI-verified languages, 20 agent workflows. Single Go binary.
 
