@@ -58,6 +58,7 @@ nav:
   - Skills: skills.md
   - Architecture: architecture.md
   - Speculative Execution: speculative-execution.md
+  - Phase Enforcement: phase-enforcement.md
   - Language Support: language-support.md
   - LSP Conformance: lsp-conformance.md
   - Distribution: distribution.md

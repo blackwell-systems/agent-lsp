@@ -710,3 +710,10 @@ These are intentional deferrals with designed seams for future upgrade, not miss
 - Addition of a final validation pass (fresh session post-merge)
 
 </details>
+
+---
+
+## See also
+
+- [Phase Enforcement](phase-enforcement.md): when speculative execution tools are used within `/lsp-safe-edit` or `/lsp-refactor`, phase enforcement prevents agents from calling `apply_edit` before completing the simulation phase.
+- [Skills Reference](skills.md): skill workflows that compose speculative execution tools into safe multi-step operations.

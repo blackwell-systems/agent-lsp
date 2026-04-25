@@ -5,6 +5,23 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **Skill phase enforcement**: runtime state machine that enforces tool call ordering during skill workflows. Three new tools: `activate_skill`, `deactivate_skill`, `get_skill_phase`. Four skills have phase configs: `lsp-rename` (3 phases), `lsp-refactor` (5 phases), `lsp-safe-edit` (4 phases), `lsp-verify` (5 phases). Two enforcement modes: `warn` (log and allow) and `block` (return error with structured recovery guidance). Phases advance automatically based on tool call patterns. Global forbidden lists prevent tools that don't belong in a skill's workflow. All agent-lsp tool handlers wrapped via generic `addToolWithPhaseCheck` function. Phase events logged to JSONL audit trail. 17 unit tests covering matching, phase advancement, warn/block modes, and full workflow integration for lsp-rename and lsp-refactor. New `internal/phase/` package. See [docs/phase-enforcement.md](docs/phase-enforcement.md).
+- **Phase enforcement documentation**: standalone deep-dive doc (`docs/phase-enforcement.md`), tool reference entries in `docs/tools.md`, architecture and features docs updated, mcp-assert assertions for all 3 new tools.
+- **Prerequisites section** in installation guide: states what you need (a language server, an MCP client) before installing.
+- **"What to try first" guidance** in quickstart: concrete examples of what to ask your AI agent after setup.
+
+### Changed
+
+- Tool count updated from 50 to 53 across all documentation (README, index, architecture, tools, features, quickstart).
+- `ROADMAP.md` and `docs/changelog.md` replaced with symlinks to their `docs/` and root counterparts respectively, eliminating duplicate files that had drifted out of sync.
+- `required-capabilities` and `optional-capabilities` metadata marked as shipped in roadmap (were listed as planned but shipped in v0.4.0).
+- Awesome MCP Servers marked as shipped in FEATURES.md distribution table.
+- `ready_timeout_seconds` parameter added to `start_lsp` documentation in tools.md (was documented in FEATURES.md but missing from the primary tool reference).
+- Architecture doc updated: nine `doc.go` packages (adds `phase`), five tool registration files (adds `tools_phase.go`), `addToolWithPhaseCheck` wrapper documented.
+- Cross-reference to phase enforcement added to speculative-execution.md "See also" section.
+
 ## [0.4.0] - 2026-04-24
 
 ### Added

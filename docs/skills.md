@@ -384,7 +384,39 @@ to gate the edit on diagnostic impact.
 
 ---
 
+## Phase enforcement
+
+Four skills have runtime phase enforcement via `tool_permissions` metadata: ordering
+constraints that prevent agents from calling tools out of sequence. For example,
+`/lsp-refactor` blocks `apply_edit` until blast-radius analysis and speculative preview
+are complete.
+
+| Skill | Phases | Key safety gate |
+|-------|--------|-----------------|
+| `/lsp-rename` | 3: prerequisites, preview, execute | `apply_edit` blocked until preview complete |
+| `/lsp-refactor` | 5: blast_radius, speculative_preview, apply, build_verification, test_execution | Edits blocked until impact analyzed and simulated |
+| `/lsp-safe-edit` | 4: setup, speculative_preview, apply, verify_and_fix | Disk writes blocked until simulation complete |
+| `/lsp-verify` | 5: test_correlation, diagnostics, build, tests, fix_and_format | Speculative tools globally forbidden (verify is post-edit) |
+
+To activate enforcement, call `activate_skill` at the start of a skill workflow:
+
+```
+activate_skill(skill_name="lsp-refactor", mode="block")
+```
+
+Phases advance automatically as the agent calls tools from later phases. When the
+workflow is complete, call `deactivate_skill`.
+
+Two enforcement modes: `warn` (log violation, allow the call) and `block` (return
+error with recovery guidance). Default is `warn`.
+
+See [docs/phase-enforcement.md](./phase-enforcement.md) for the full design, all
+phase tables, and architecture details.
+
+---
+
 ## See also
 
 - [docs/tools.md](./tools.md): full tool reference with parameters and examples
+- [docs/phase-enforcement.md](./phase-enforcement.md): phase enforcement design, all phase configs, architecture
 - [docs/language-support.md](./language-support.md): language coverage matrix and per-language tool support

@@ -1,6 +1,6 @@
 # agent-lsp Tool Reference
 
-All 50 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
+All 53 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
 both `line` and `column` in every tool call; the server converts internally to
 the 0-based values the LSP spec requires.
 
@@ -19,6 +19,7 @@ the 0-based values the LSP spec requires.
 - [Simulation tools](#simulation-tools): `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`
 - [Startup and warm-up notes](#startup-and-warm-up-notes)
 - [Symbol lookup tools](#symbol-lookup-tools): `go_to_symbol`, `get_symbol_source`, `get_symbol_documentation`
+- [Phase enforcement tools](#phase-enforcement-tools): `activate_skill`, `deactivate_skill`, `get_skill_phase`
 - [Skills](#skills)
 
 ---
@@ -39,6 +40,7 @@ workspace root at runtime.
 |------|------|----------|-------------|
 | `root_dir` | string | yes | Absolute path to the workspace root (directory containing `package.json`, `go.mod`, `go.work`, etc.) |
 | `language_id` | string | no | In multi-server mode, selects a specific configured server (e.g. `"go"` targets gopls, `"typescript"` targets typescript-language-server). Without this, all configured servers are started. Use `get_server_capabilities` to diagnose which server is active. |
+| `ready_timeout_seconds` | number | no | If > 0, blocks until all `$/progress` workspace-indexing tokens complete or this many seconds elapse. Useful for servers like jdtls that index asynchronously after initialize. Fires as soon as indexing completes (does not always wait the full timeout). |
 
 **Example call**
 
@@ -2734,6 +2736,101 @@ still executes on all other files.
 
 **Normal mode** (`dry_run` omitted or false): behavior unchanged, returns the
 `WorkspaceEdit` directly, ready for `apply_edit`.
+
+---
+
+## Phase enforcement tools
+
+Runtime enforcement of skill phase ordering. When an agent activates a skill,
+tool calls are checked against the skill's declared phase permissions. Phases
+advance automatically as the agent calls tools from later phases. See
+[docs/phase-enforcement.md](./phase-enforcement.md) for the full design.
+
+### `activate_skill`
+
+Start phase enforcement for a skill workflow. Once active, every tool call is
+checked against the current phase's allowed/forbidden lists before executing.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `skill_name` | string | yes | Skill to activate (`lsp-rename`, `lsp-refactor`, `lsp-safe-edit`, `lsp-verify`) |
+| `mode` | string | no | `warn` (log violation, allow call) or `block` (return error with recovery guidance). Default: `warn` |
+
+**Example call**
+
+```json
+{ "skill_name": "lsp-refactor", "mode": "block" }
+```
+
+**Example output**
+
+```json
+{
+  "status": "activated",
+  "skill": "lsp-refactor",
+  "mode": "block",
+  "current_phase": "blast_radius",
+  "total_phases": 5,
+  "allowed_tools": ["get_change_impact", "go_to_symbol", "get_references"],
+  "forbidden_tools": ["apply_edit", "simulate_*", "Edit", "Write", "rename_symbol"]
+}
+```
+
+**Notes**
+
+- Only one skill can be active at a time. Call `deactivate_skill` before activating a different skill.
+- Phase enforcement applies to all agent-lsp tools. External tools (Edit, Write, Bash) appear in forbidden lists for informational purposes but cannot be enforced at runtime.
+
+---
+
+### `deactivate_skill`
+
+Stop phase enforcement for the currently active skill. Idempotent: safe to call
+when no skill is active.
+
+**Parameters:** none
+
+**Example output**
+
+```json
+{ "status": "deactivated" }
+```
+
+---
+
+### `get_skill_phase`
+
+Query the current state of phase enforcement: active skill, current phase,
+allowed and forbidden tools, and the full tool call history since activation.
+
+**Parameters:** none
+
+**Example output (skill active)**
+
+```json
+{
+  "active": true,
+  "skill_name": "lsp-rename",
+  "current_phase": "preview",
+  "phase_index": 1,
+  "total_phases": 3,
+  "mode": "warn",
+  "allowed_tools": ["go_to_symbol", "prepare_rename", "get_references", "rename_symbol"],
+  "forbidden_tools": ["apply_edit", "Edit", "Write", "format_document", "run_tests"],
+  "tool_history": ["start_lsp", "go_to_symbol", "prepare_rename"]
+}
+```
+
+**Example output (no skill active)**
+
+```json
+{
+  "active": false,
+  "available_skills": ["lsp-rename", "lsp-refactor", "lsp-safe-edit", "lsp-verify"]
+}
+```
 
 ---
 

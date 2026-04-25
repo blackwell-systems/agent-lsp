@@ -3,13 +3,13 @@
 [![Blackwell Systems](https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg)](https://github.com/blackwell-systems)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 [![Languages](https://img.shields.io/badge/languages-30_CI--verified-brightgreen.svg)](#multi-language-support)
-[![CI Coverage](https://img.shields.io/badge/CI--verified_tools-50%2F50-brightgreen.svg)](#tools)
+[![CI Coverage](https://img.shields.io/badge/CI--verified_tools-53%2F53-brightgreen.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Agent Skills](assets/badge-agentskills.svg)](https://agentskills.io)
 [![Awesome MCP Servers](https://img.shields.io/badge/Awesome-MCP%20Servers-fc60a8)](https://github.com/punkpeye/awesome-mcp-servers)
 <a href="https://github.com/blackwell-systems/mcp-assert"><img src="https://raw.githubusercontent.com/blackwell-systems/mcp-assert/main/assets/badge-passing.svg?v=3" alt="mcp-assert: passing" height="20"></a>
 
-**The most complete MCP server for language intelligence.** 50 tools, 30 CI-verified languages, 20 agent workflows. Single Go binary.
+**The most complete MCP server for language intelligence.** 53 tools, 30 CI-verified languages, 20 agent workflows. Single Go binary.
 
 AI agents make incorrect code changes because they can't see the full picture: who calls this function, what breaks if I rename it, does the build still pass. Language servers have the answers, but existing MCP bridges either cold-start on every request or expose raw tools that agents use incorrectly.
 
@@ -102,6 +102,20 @@ See [docs/skills.md](./docs/skills.md) for full descriptions and usage guidance.
 | Skill | Purpose |
 |-------|---------|
 | `/lsp-refactor` | End-to-end refactor: blast-radius → preview → apply → verify → test |
+
+### Phase enforcement
+
+Skills encode correct ordering. Phase enforcement *enforces* it at runtime. When an agent activates a skill, the phase tracker blocks out-of-order tool calls: `apply_edit` during blast-radius analysis returns an error with recovery guidance instead of silently skipping the safety gate.
+
+```
+activate_skill("lsp-refactor", "block")   # Start enforcement
+get_change_impact(...)                     # Phase 1: blast radius
+apply_edit(...)                            # BLOCKED: "forbidden in blast_radius phase"
+simulate_edit_atomic(...)                  # Phase 2: auto-advance to speculative_preview
+apply_edit(...)                            # Phase 3: auto-advance to apply, now allowed
+```
+
+Four skills have phase configs: `/lsp-rename`, `/lsp-refactor`, `/lsp-safe-edit`, `/lsp-verify`. See [docs/phase-enforcement.md](docs/phase-enforcement.md).
 
 ## Docker
 
@@ -244,13 +258,13 @@ Your AI agent calls tools automatically. The first call initializes the workspac
 start_lsp(root_dir="/your/project")
 ```
 
-This is what the agent does, not something you type. Then use any of the 50 tools. The session stays warm; no restart needed when switching files.
+This is what the agent does, not something you type. Then use any of the 53 tools. The session stays warm; no restart needed when switching files.
 
 ## What's unique about agent-lsp
 
 | Capability | Details |
 |------------|---------|
-| Tools | **50** |
+| Tools | **53** |
 | Languages (CI-verified) | **30** — end-to-end integration tests on every push |
 | Agent workflows (skills) | **20** — named multi-step procedures |
 | Speculative execution | **8 tools** — simulate changes before writing to disk |
@@ -281,7 +295,7 @@ See [docs/language-support.md](./docs/language-support.md) for the full coverage
 
 ## Tools
 
-50 tools covering navigation, analysis, refactoring, speculative execution, and session lifecycle. All CI-verified.
+53 tools covering navigation, analysis, refactoring, speculative execution, and session lifecycle. All CI-verified.
 
 See [docs/tools.md](./docs/tools.md) for the full reference with parameters and examples.
 

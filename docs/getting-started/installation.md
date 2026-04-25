@@ -4,6 +4,15 @@ title: Installation
 
 # Installation
 
+## Prerequisites
+
+agent-lsp is a single binary with no runtime dependencies. You need:
+
+- **A language server** for your language (e.g., `gopls` for Go, `typescript-language-server` for TypeScript, `pyright` for Python). Run `agent-lsp doctor` after installing to check which servers are available on your PATH.
+- **An MCP client** to connect to agent-lsp: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Cursor](https://cursor.com), [Continue](https://continue.dev), or any tool that supports the [Model Context Protocol](https://modelcontextprotocol.io/).
+
+For specific install methods below, you also need the corresponding package manager: Homebrew, npm (Node.js 18+), Go 1.21+, or Docker.
+
 ## Recommended: install script
 
 ```bash

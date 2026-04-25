@@ -1,0 +1,13 @@
+name: activate_skill starts phase enforcement for lsp-rename
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+assert:
+  tool: activate_skill
+  args:
+    skill_name: lsp-rename
+    mode: warn
+  expect:
+    not_error: true
+    contains: ["activated", "lsp-rename", "prerequisites"]
+timeout: 30s

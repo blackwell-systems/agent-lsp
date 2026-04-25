@@ -1,0 +1,10 @@
+name: get_skill_phase returns available skills when none active
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+assert:
+  tool: get_skill_phase
+  expect:
+    not_error: true
+    contains: ["lsp-rename", "lsp-refactor", "lsp-safe-edit", "lsp-verify"]
+timeout: 30s

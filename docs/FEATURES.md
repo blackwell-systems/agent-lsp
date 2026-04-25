@@ -1,10 +1,10 @@
 # agent-lsp Features Dump
 
-Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. The 49→50 CI count reflects `set_log_level` verified in a separate test path. All 50 tools have `ToolAnnotations` (Title, ReadOnlyHint, DestructiveHint, IdempotentHint, OpenWorldHint) and 171 `jsonschema` struct tags providing parameter semantics in the schema itself.
+Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. All 53 tools have `ToolAnnotations` (Title, ReadOnlyHint, DestructiveHint, IdempotentHint, OpenWorldHint) and 171+ `jsonschema` struct tags providing parameter semantics in the schema itself.
 
 ---
 
-## Tools (50 total, 50 CI-verified)
+## Tools (53 total, 53 CI-verified)
 
 ### Session & Lifecycle (8 tools)
 
@@ -210,10 +210,10 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Internally: create → apply → evaluate → discard → destroy
 - Returns `EvaluationResult` directly
 
-**Total: 50 tools**
-- **CI-verified: 50** (including `set_log_level`, which is verified separately across all 30 languages)
-- **ToolAnnotations:** All 50 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
-- **jsonschema struct tags:** 171 tags across all Args structs; 100% parameter description coverage
+**Total: 53 tools** (50 core + 3 phase enforcement)
+- **CI-verified: 53** (including `set_log_level` verified separately across all 30 languages, and 3 phase enforcement tools verified via mcp-assert)
+- **ToolAnnotations:** All 53 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
+- **jsonschema struct tags:** 171+ tags across all Args structs; 100% parameter description coverage
 - **1-indexed coordinates:** All line/column parameters are 1-based (editor convention)
 - **0-based conversion:** `extractRange` helper converts to 0-based for LSP protocol internally
 
@@ -633,6 +633,58 @@ Events flow through `logging` package at `LevelDebug` (lifecycle) and `LevelErro
 
 ---
 
+## Phase Enforcement (3 tools)
+
+Runtime enforcement of skill phase ordering. Prevents agents from calling tools out of order during multi-step workflows (e.g., `apply_edit` before blast-radius analysis in `/lsp-refactor`).
+
+### Phase Enforcement Tools
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `activate_skill` | Start phase enforcement for a skill workflow | `skill_name` (string, req), `mode` (string, opt: "warn", "block") |
+| `deactivate_skill` | Stop phase enforcement | none |
+| `get_skill_phase` | Query current phase, allowed/forbidden tools, tool history | none |
+
+### Enforcement Modes
+
+| Mode | Behavior |
+|------|----------|
+| `warn` | Log violation, allow call to proceed (default) |
+| `block` | Return isError with structured recovery guidance |
+
+### Skills with Phase Configs
+
+| Skill | Phases | Key Safety Property |
+|-------|--------|---------------------|
+| `lsp-rename` | 3: prerequisites, preview, execute | `apply_edit` blocked until preview complete |
+| `lsp-refactor` | 5: blast_radius, speculative_preview, apply, build_verification, test_execution | `apply_edit` and `simulate_*` blocked until blast-radius complete |
+| `lsp-safe-edit` | 4: setup, speculative_preview, apply, verify_and_fix | `apply_edit` blocked until simulation complete |
+| `lsp-verify` | 5: test_correlation, diagnostics, build, tests, fix_and_format | `simulate_*` globally forbidden (verify is post-edit) |
+
+### Phase Advancement
+
+- Automatic: calling a tool from a later phase's allowed list advances to that phase
+- Pass-through: tools not in any phase config (e.g., `get_info_on_location`) are always allowed
+- Global forbidden: some tools are blocked regardless of phase (skill-specific)
+- External tools (Edit, Write, Bash) appear in forbidden lists for agent guidance but cannot be enforced at runtime
+
+### Architecture
+
+- `internal/phase/types.go` — `EnforcementMode`, `PhaseDefinition`, `SkillPhaseConfig`, `PhaseViolation`, `PhaseStatus`
+- `internal/phase/matcher.go` — glob matching for tool name patterns (trailing `*` wildcard)
+- `internal/phase/tracker.go` — thread-safe `Tracker` state machine (activate, deactivate, check+record, status)
+- `internal/phase/skills.go` — built-in phase configs for 4 skills
+- `cmd/agent-lsp/tools_phase.go` — MCP tool registration for 3 phase enforcement tools
+- `cmd/agent-lsp/server.go` — `addToolWithPhaseCheck[T]` generic wrapper; all tool handlers wrapped automatically
+
+### Audit Trail Integration
+
+Phase events logged to JSONL audit trail: `activate_skill`, `deactivate_skill`, `phase_advance`, `phase_violation`.
+
+See [docs/phase-enforcement.md](./phase-enforcement.md) for the full design document.
+
+---
+
 ## Distribution Channels
 
 | Channel | Status | Command/URL |
@@ -651,7 +703,7 @@ Events flow through `logging` package at `LevelDebug` (lifecycle) and `LevelErro
 | Scoop | done (v0.2.0) | `scoop bucket add blackwell-systems https://github.com/blackwell-systems/agent-lsp && scoop install agent-lsp` — manifest at `bucket/agent-lsp.json` |
 | Winget | done (v0.2.0) | `winget install BlackwellSystems.agent-lsp` — manifests at `winget/manifests/` |
 | Nix flake | planned | `nix run github:blackwell-systems/agent-lsp` |
-| Awesome MCP Servers | planned | PR to curated GitHub list |
+| Awesome MCP Servers | done (v0.4.0) | Listed in [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers) |
 | VS Code extension | planned | zero-CLI-setup for Copilot/Continue/Cline |
 
 ### Licensing
@@ -862,6 +914,13 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 - `tools_analysis.go` — 13 analysis tools
 - `tools_workspace.go` — 19 workspace/lifecycle tools (includes `set_log_level`)
 - `tools_session.go` — 8 simulation/session tools
+- `tools_phase.go` — 3 phase enforcement tools; `checkPhasePermission` helper
+
+**internal/phase:**
+- `types.go` — `EnforcementMode`, `PhaseDefinition`, `SkillPhaseConfig`, `PhaseViolation`, `PhaseStatus`
+- `matcher.go` — `MatchToolPattern`, `MatchesAny` (glob matching for tool name patterns)
+- `tracker.go` — `Tracker` state machine: `ActivateSkill`, `DeactivateSkill`, `CheckAndRecord`, `Status`
+- `skills.go` — built-in phase configs for lsp-rename, lsp-refactor, lsp-safe-edit, lsp-verify
 
 **internal/config:**
 - `config.go` — `ServerEntry`, `Config` types for multi-server JSON config

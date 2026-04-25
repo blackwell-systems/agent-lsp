@@ -38,11 +38,12 @@ gopls subprocess                                         typescript-language-ser
 
 **What agent-lsp does:**
 
-1. Speaks MCP to the AI agent, exposing 50 tools the agent can call.
+1. Speaks MCP to the AI agent, exposing 53 tools the agent can call.
 2. Translates each tool call into one or more LSP JSON-RPC requests, sent over stdin/stdout pipes to the appropriate language server subprocess.
 3. Maintains a persistent session: the language server index stays warm across all tool calls, all files, all packages. There is no cold-start on each request.
 4. Adds a speculative execution layer on top: edits can be applied in-memory to the live LSP state, evaluated for diagnostic impact, then committed to disk or discarded, without ever touching the file system until explicitly requested.
 5. Ships a skills layer: prompt documents that tell Claude how to orchestrate multi-step workflows using the tools correctly.
+6. Enforces skill phase ordering at runtime: when an agent activates a skill, the phase tracker monitors tool calls and blocks out-of-order operations (e.g., writing to disk before simulating).
 
 The binary is a single statically-linked Go executable. No Node.js runtime. No per-request process spawn.
 
@@ -64,8 +65,10 @@ cmd/agent-lsp/
   doctor_test.go        ← tests for doctor subcommand
   server.go             ← MCP server construction; tool/resource registration; mcpSessionSender;
                            HTTP transport via --http flag (Streamable HTTP + optional Bearer token auth);
+                           addToolWithPhaseCheck[T] generic wrapper for phase enforcement;
+                           PhaseTracker initialization with BuiltinSkills();
                            (tool registration was extracted from server.go in a decomposition wave;
-                           server.go now delegates to the four tool files below)
+                           server.go now delegates to the five tool files below)
   http_test.go          ← tests for HTTP transport and --http/--port/--token flag parsing
   tools_navigation.go   ← 10 navigation tools: go_to_definition, go_to_type_definition,
                            go_to_implementation, go_to_declaration, go_to_symbol,
@@ -85,6 +88,17 @@ cmd/agent-lsp/
   tools_session.go      ← 8 simulation/session tools: create_simulation_session, simulate_edit,
                            evaluate_session, simulate_chain, commit_session, discard_session,
                            destroy_session, simulate_edit_atomic
+  tools_phase.go        ← 3 phase enforcement tools: activate_skill, deactivate_skill,
+                           get_skill_phase; checkPhasePermission helper
+  audit_helpers.go      ← Diagnostic snapshot helpers for audit trail (pre/post edit)
+
+internal/phase/
+  types.go         ← EnforcementMode, PhaseDefinition, SkillPhaseConfig, PhaseViolation, PhaseStatus
+  matcher.go       ← MatchToolPattern, MatchesAny: glob matching (trailing * wildcard)
+  tracker.go       ← Tracker: thread-safe state machine (activate, deactivate, check+record, status);
+                     auto-advances phases based on tool call patterns
+  skills.go        ← Built-in phase configs for lsp-rename (3 phases), lsp-refactor (5 phases),
+                     lsp-safe-edit (4 phases), lsp-verify (5 phases)
 
 internal/config/
   config.go        ← ServerEntry + Config types for multi-server JSON config
@@ -184,9 +198,9 @@ pkg/
     doc.go         ← package-level doc comment + all 32 type aliases, 5 constants, 2 constructor vars
     types_test.go  ← smoke tests verifying alias targets are non-nil
 
-Eight internal packages (`lsp`, `session`, `tools`, `resources`, `types`, `uri`,
-`logging`, `extensions`) have a `doc.go` with a package-level doc comment. `internal/config`,
-`internal/audit`, and `internal/httpauth` use inline file-level comments instead.
+Nine internal packages (`lsp`, `session`, `tools`, `resources`, `types`, `uri`,
+`logging`, `extensions`, `phase`) have a `doc.go` with a package-level doc comment.
+`internal/config`, `internal/audit`, and `internal/httpauth` use inline file-level comments instead.
 
 skills/            ← Agent Skills (SKILL.md directories)
   install.sh       ← Installer: symlinks or copies skill dirs to ~/.claude/skills/
@@ -326,7 +340,7 @@ When the context is cancelled (signal received), the HTTP server calls `Shutdown
 
 ## Tool Registration Model
 
-50 MCP tools are exposed to the AI agent. In MCP, a "tool" is a named function with a JSON Schema for its arguments that the AI can invoke via a JSON-RPC `tools/call` request. Tools are defined in four files under `cmd/agent-lsp/` and dispatched through a shared pattern.
+53 MCP tools are exposed to the AI agent. In MCP, a "tool" is a named function with a JSON Schema for its arguments that the AI can invoke via a JSON-RPC `tools/call` request. Tools are defined in five files under `cmd/agent-lsp/` and dispatched through a shared pattern.
 
 ### How a tool is defined
 
@@ -351,7 +365,7 @@ mcp.AddTool(d.server, &mcp.Tool{
 })
 ```
 
-### The four registration files
+### The five registration files
 
 | File | Tools registered | Count |
 |------|-----------------|-------|
@@ -359,8 +373,9 @@ mcp.AddTool(d.server, &mcp.Tool{
 | `tools_navigation.go` | go_to_definition, references, call hierarchy, rename | 10 |
 | `tools_analysis.go` | hover, diagnostics, completions, symbols, change impact | 13 |
 | `tools_session.go` | Speculative execution (simulate, evaluate, commit) | 8 |
+| `tools_phase.go` | Phase enforcement (activate_skill, deactivate_skill, get_skill_phase) | 3 |
 
-All four registration functions are called from `Run()` in `server.go` via the `toolDeps` bundle, which carries shared dependencies: the MCP server, the client resolver, the session manager, and the `clientForFileWithAutoInit` closure.
+All five registration functions are called from `Run()` in `server.go` via the `toolDeps` bundle, which carries shared dependencies: the MCP server, the client resolver, the session manager, the phase tracker, and the `clientForFileWithAutoInit` closure. The 50 core tools are wrapped via `addToolWithPhaseCheck` (generic wrapper that checks phase permissions before each handler). The 3 phase tools use raw `mcp.AddTool` to avoid circular enforcement.
 
 ### Handler separation
 
@@ -997,7 +1012,7 @@ The boundary is clear:
 ```
 Go binary (agent-lsp)         skills/ directory
 ─────────────────────         ──────────────────
-Exposes 50 MCP tools          Encodes correct tool sequences
+Exposes 53 MCP tools          Encodes correct tool sequences
 Handles one tool call         Handles multi-step workflows
 Knows nothing about skills    Knows exactly which tools to call
 ```

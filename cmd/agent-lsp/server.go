@@ -17,6 +17,7 @@ import (
 	"github.com/blackwell-systems/agent-lsp/internal/httpauth"
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
+	"github.com/blackwell-systems/agent-lsp/internal/phase"
 	"github.com/blackwell-systems/agent-lsp/internal/resources"
 	"github.com/blackwell-systems/agent-lsp/internal/session"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
@@ -100,6 +101,19 @@ func toolArgsToMap(v interface{}) map[string]interface{} {
 		return map[string]interface{}{}
 	}
 	return m
+}
+
+// addToolWithPhaseCheck wraps mcp.AddTool to insert a phase enforcement check
+// before every tool handler. If a skill is active and the tool call violates the
+// current phase's permissions, the check returns an error result without invoking
+// the handler. When no skill is active, the check is a no-op.
+func addToolWithPhaseCheck[T any](d toolDeps, tool *mcp.Tool, handler func(ctx context.Context, req *mcp.CallToolRequest, args T) (*mcp.CallToolResult, any, error)) {
+	mcp.AddTool(d.server, tool, func(ctx context.Context, req *mcp.CallToolRequest, args T) (*mcp.CallToolResult, any, error) {
+		if result := checkPhasePermission(d.phaseTracker, tool.Name); result != nil {
+			return result, nil, nil
+		}
+		return handler(ctx, req, args)
+	})
 }
 
 // makeCallToolResult converts a types.ToolResult to *mcp.CallToolResult.
@@ -229,6 +243,7 @@ type toolDeps struct {
 	serverPath               string
 	serverArgs               []string
 	auditLogger              *audit.Logger
+	phaseTracker             *phase.Tracker
 }
 
 // Run creates and starts the MCP server.
@@ -262,6 +277,8 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		},
 	})
 
+	phaseTracker := phase.NewTracker(phase.BuiltinSkills(), auditLogger)
+
 	deps := toolDeps{
 		server:                   server,
 		cs:                       cs,
@@ -271,12 +288,14 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		serverPath:               serverPath,
 		serverArgs:               serverArgs,
 		auditLogger:              auditLogger,
+		phaseTracker:             phaseTracker,
 	}
 
 	registerWorkspaceTools(deps)
 	registerNavigationTools(deps)
 	registerAnalysisTools(deps)
 	registerSessionTools(deps)
+	registerPhaseTools(deps)
 
 	// ------- Register resources -------
 

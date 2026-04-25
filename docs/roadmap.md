@@ -12,7 +12,7 @@ title: Roadmap
 
 ## Extensions
 
-Extensions add language-specific tools beyond what LSP exposes. The core 50 tools cover 26 of the most agent-relevant LSP 3.17 methods (navigation, analysis, refactoring, diagnostics, formatting) plus 24 tools that go beyond the LSP spec (speculative execution, build/test, change impact analysis, cross-repo references, audit). Three low-value LSP methods are intentionally omitted: `selectionRange`, `foldingRange`, and `codeLens`. Extensions run arbitrary toolchain logic for a specific language.
+Extensions add language-specific tools beyond what LSP exposes. The core 53 tools cover 26 of the most agent-relevant LSP 3.17 methods (navigation, analysis, refactoring, diagnostics, formatting) plus 24 tools that go beyond the LSP spec (speculative execution, build/test, change impact analysis, cross-repo references, audit). Three low-value LSP methods are intentionally omitted: `selectionRange`, `foldingRange`, and `codeLens`. Extensions run arbitrary toolchain logic for a specific language.
 
 ### Go extension (Wave 1: test + module intelligence)
 
@@ -192,8 +192,8 @@ Skills that target the "Strong" tier should avoid hard dependencies on `callHier
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **`required-capabilities` metadata** | Planned | Space-separated list of LSP server capability keys in SKILL.md frontmatter `metadata` field. Checked against `get_server_capabilities` before skill activation. |
-| **`optional-capabilities` metadata** | Planned | Same format. Steps using these capabilities skip cleanly when unavailable. No warning on activation. |
+| **`required-capabilities` metadata** | **Shipped** | Space-separated list of LSP server capability keys in SKILL.md frontmatter `metadata` field. All 20 skills declare required and optional capabilities. |
+| **`optional-capabilities` metadata** | **Shipped** | Same format. Steps using these capabilities skip cleanly when unavailable. No warning on activation. |
 | **Capability check tool** | Planned | A new tool or skill (`/lsp-check-capabilities`) that reports which of the 20 skills are fully viable, partially viable, or unavailable for the current language server. One call shows the agent what it can and cannot do. |
 | **Degraded-mode skill variants** | Planned | For high-value skills like `/lsp-impact`, define a degraded path in the skill body that uses only `get_references` when call/type hierarchy are unavailable. Explicit in the prose, not a separate skill file. |
 
@@ -641,15 +641,18 @@ Agent calls rename_symbol  -> phase = "execute", apply_edit now allowed
 | Session state | In-memory only, lost on restart | Could persist via existing audit trail |
 | Scope | Any MCP server (proxy is server-agnostic) | agent-lsp tools only (the runtime owns the state) |
 
-### Implementation plan
+### Implementation status
 
-| Item | Priority | Description |
-|------|----------|-------------|
-| **Phase state machine** | High | Per-skill state tracker that advances phases based on tool calls. Uses `tool_permissions` YAML to define transitions. |
-| **Enforcement mode** | High | Two modes: `warn` (log violation, allow call) and `block` (return isError with recovery guidance). Default to `warn` initially. |
-| **Phase inference rules** | Medium | Define how tool calls map to phase transitions. A call to `prepare_rename` moves from "prerequisites" to "preview". A call to `rename_symbol` (dry_run=false) moves from "preview" to "execute". |
-| **Structured recovery actions** | Medium | When a call is blocked, return machine-readable guidance: which tool to call next, which phase will unlock. Agents can self-correct without parsing error strings. |
-| **Audit trail integration** | Low | Log phase transitions and violations to the JSONL audit trail. Post-session graders can verify phase compliance without runtime enforcement. |
+| Item | Status | Description |
+|------|--------|-------------|
+| **Phase state machine** | **Shipped** | `internal/phase/tracker.go`: thread-safe `Tracker` with `ActivateSkill`, `DeactivateSkill`, `CheckAndRecord`, `Status`. Auto-advances phases based on tool call patterns. |
+| **Enforcement modes** | **Shipped** | `warn` (log violation, allow call) and `block` (return isError with recovery guidance). Default: `warn`. |
+| **Phase inference rules** | **Shipped** | Tools matching a later phase's allowed list auto-advance. Tools not in any config pass through. Global forbidden checked first. |
+| **Structured recovery actions** | **Shipped** | Blocked calls return JSON with `reason`, `recovery` (which tools to call), `current_phase`, `skill`. |
+| **Audit trail integration** | **Shipped** | `activate_skill`, `deactivate_skill`, `phase_advance`, `phase_violation` events logged to JSONL audit trail. |
+| **MCP tools** | **Shipped** | 3 tools: `activate_skill(skill_name, mode)`, `deactivate_skill()`, `get_skill_phase()`. |
+| **Generic wrapper** | **Shipped** | `addToolWithPhaseCheck[T]` wraps all tool handlers; single-line replacement across 4 tool files. |
+| **Arg-level enforcement** | Planned | Enforce `dry_run=true` vs `dry_run=false` for `rename_symbol` in preview vs execute phases. |
 
 ### Skills with tool_permissions (shipped)
 
@@ -657,6 +660,8 @@ Agent calls rename_symbol  -> phase = "execute", apply_edit now allowed
 - `/lsp-refactor` (5 phases: blast_radius, speculative_preview, apply, build_verification, test_execution)
 - `/lsp-safe-edit` (4 phases: setup, speculative_preview, apply, verify_and_fix)
 - `/lsp-verify` (5 phases: test_correlation, diagnostics, build, tests, fix_and_format)
+
+See [docs/phase-enforcement.md](phase-enforcement.md) for the full design document.
 
 ## Bigger Bets
 

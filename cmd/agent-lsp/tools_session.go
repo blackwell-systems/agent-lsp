@@ -67,7 +67,7 @@ type SimulateEditAtomicArgs struct {
 }
 
 func registerSessionTools(d toolDeps) {
-	mcp.AddTool(d.server, &mcp.Tool{
+	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "create_simulation_session",
 		Description: "Create a new speculative code session for simulating edits without committing to disk. Returns a session ID. Baseline diagnostics are captured lazily on first edit per file. Use this to explore what-if scenarios before applying changes.",
 		Annotations: &mcp.ToolAnnotations{
@@ -81,7 +81,7 @@ func registerSessionTools(d toolDeps) {
 		return makeCallToolResult(r), nil, err
 	})
 
-	mcp.AddTool(d.server, &mcp.Tool{
+	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "simulate_edit",
 		Description: "Apply a range edit to a file within a simulation session. Changes are held in-memory only. The session captures baseline diagnostics on first edit to each file, then tracks versions for subsequent edits. Returns the new version number after the edit. All line/column positions are 1-indexed (matching editor line numbers).",
 		Annotations: &mcp.ToolAnnotations{
@@ -95,7 +95,7 @@ func registerSessionTools(d toolDeps) {
 		return makeCallToolResult(r), nil, err
 	})
 
-	mcp.AddTool(d.server, &mcp.Tool{
+	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "evaluate_session",
 		Description: "Evaluate a simulation session by comparing current diagnostics against baselines. Returns errors introduced, errors resolved, net delta, and confidence (high for file scope, eventual for workspace). Use after simulate_edit to assess impact before committing.",
 		Annotations: &mcp.ToolAnnotations{
@@ -109,7 +109,7 @@ func registerSessionTools(d toolDeps) {
 		return makeCallToolResult(r), nil, err
 	})
 
-	mcp.AddTool(d.server, &mcp.Tool{
+	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "simulate_chain",
 		Description: "Apply a sequence of edits and evaluate after each step. Returns per-step diagnostics and identifies the safe-to-apply-through step (last step with net delta == 0). Use this to find the safest partial application of a multi-step change. All line/column positions in each edit are 1-indexed.",
 		Annotations: &mcp.ToolAnnotations{
@@ -123,7 +123,7 @@ func registerSessionTools(d toolDeps) {
 		return makeCallToolResult(r), nil, err
 	})
 
-	mcp.AddTool(d.server, &mcp.Tool{
+	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "commit_session",
 		Description: "Commit a simulation session. With apply=true, writes changes to disk and notifies LSP servers. With apply=false, returns a unified diff patch. Use after evaluate_session confirms the changes are safe.",
 		Annotations: &mcp.ToolAnnotations{
@@ -172,7 +172,7 @@ func registerSessionTools(d toolDeps) {
 		return makeCallToolResult(r), nil, err
 	})
 
-	mcp.AddTool(d.server, &mcp.Tool{
+	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "discard_session",
 		Description: "Discard a simulation session and revert all in-memory changes by restoring baseline content. Use when simulation results show the changes would introduce errors.",
 		Annotations: &mcp.ToolAnnotations{
@@ -186,7 +186,7 @@ func registerSessionTools(d toolDeps) {
 		return makeCallToolResult(r), nil, err
 	})
 
-	mcp.AddTool(d.server, &mcp.Tool{
+	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "destroy_session",
 		Description: "Destroy a simulation session and release all resources. Call this after commit or discard to clean up. Sessions in terminal states (committed, discarded, destroyed) cannot be reused.",
 		Annotations: &mcp.ToolAnnotations{
@@ -200,7 +200,7 @@ func registerSessionTools(d toolDeps) {
 		return makeCallToolResult(r), nil, err
 	})
 
-	mcp.AddTool(d.server, &mcp.Tool{
+	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "simulate_edit_atomic",
 		Description: "One-shot atomic operation: create session, apply edit, evaluate, and destroy. Returns evaluation result. Use for quick what-if checks without managing session lifecycle manually. Requires start_lsp to be called first. All line/column positions are 1-indexed. net_delta: 0 means the edit is safe to apply.",
 		Annotations: &mcp.ToolAnnotations{

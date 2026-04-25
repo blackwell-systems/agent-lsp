@@ -1,0 +1,15 @@
+name: deactivate_skill stops phase enforcement
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: activate_skill
+    args:
+      skill_name: lsp-rename
+      mode: warn
+assert:
+  tool: deactivate_skill
+  expect:
+    not_error: true
+    contains: ["deactivated"]
+timeout: 30s
