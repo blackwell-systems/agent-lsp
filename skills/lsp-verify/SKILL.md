@@ -7,6 +7,56 @@ license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
   optional-capabilities: codeActionProvider documentFormattingProvider
+  tool_permissions:
+    phases:
+      test_correlation:
+        description: "Pre-step: map changed source files to their test files"
+        allowed:
+          - "mcp__lsp__get_tests_for_file"
+        forbidden:
+          - "mcp__lsp__apply_edit"
+          - "Edit"
+          - "Write"
+      diagnostics:
+        description: "Layer 1: collect LSP diagnostics for changed files"
+        allowed:
+          - "mcp__lsp__start_lsp"
+          - "mcp__lsp__get_diagnostics"
+        forbidden:
+          - "mcp__lsp__apply_edit"
+          - "Edit"
+          - "Write"
+      build:
+        description: "Layer 2: run compiler build"
+        allowed:
+          - "mcp__lsp__run_build"
+        forbidden:
+          - "mcp__lsp__apply_edit"
+          - "Edit"
+          - "Write"
+      tests:
+        description: "Layer 3: run test suite"
+        allowed:
+          - "mcp__lsp__run_tests"
+          - "Bash"                         # scoped test commands for large repos
+        forbidden:
+          - "mcp__lsp__apply_edit"
+          - "Edit"
+          - "Write"
+      fix_and_format:
+        description: "Post-verification: apply code action fixes and format"
+        allowed:
+          - "mcp__lsp__get_code_actions"
+          - "mcp__lsp__apply_edit"
+          - "mcp__lsp__format_document"
+          - "mcp__lsp__get_diagnostics"    # re-check after fixes
+        forbidden:
+          - "mcp__lsp__simulate_*"
+          - "mcp__lsp__run_build"          # re-run full verify instead
+          - "mcp__lsp__run_tests"          # re-run full verify instead
+    global_forbidden:
+      - "mcp__lsp__simulate_*"             # verify is post-edit, not speculative
+      - "mcp__lsp__rename_symbol"          # verify does not make semantic changes
 ---
 
 > Requires the agent-lsp MCP server.

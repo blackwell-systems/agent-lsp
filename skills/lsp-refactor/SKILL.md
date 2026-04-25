@@ -9,6 +9,60 @@ compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/a
 metadata:
   required-capabilities: referencesProvider
   optional-capabilities: documentFormattingProvider
+  tool_permissions:
+    phases:
+      blast_radius:
+        description: "Phase 1: analyze impact before any edits"
+        allowed:
+          - "mcp__lsp__get_change_impact"
+          - "mcp__lsp__go_to_symbol"
+          - "mcp__lsp__get_references"
+        forbidden:
+          - "mcp__lsp__apply_edit"
+          - "mcp__lsp__simulate_*"
+          - "Edit"
+          - "Write"
+      speculative_preview:
+        description: "Phase 2: simulate edits in memory, compare diagnostics"
+        allowed:
+          - "mcp__lsp__open_document"
+          - "mcp__lsp__get_diagnostics"
+          - "mcp__lsp__simulate_edit_atomic"
+          - "mcp__lsp__simulate_chain"
+        forbidden:
+          - "mcp__lsp__apply_edit"
+          - "Edit"
+          - "Write"
+      apply:
+        description: "Phase 3: write changes to disk and format"
+        allowed:
+          - "mcp__lsp__apply_edit"
+          - "mcp__lsp__format_document"
+          - "Edit"
+          - "Write"
+        forbidden:
+          - "mcp__lsp__simulate_*"
+          - "mcp__lsp__rename_symbol"
+      build_verification:
+        description: "Phase 4: check diagnostics and run the build"
+        allowed:
+          - "mcp__lsp__get_diagnostics"
+          - "mcp__lsp__run_build"
+        forbidden:
+          - "mcp__lsp__apply_edit"
+          - "Edit"
+          - "Write"
+      test_execution:
+        description: "Phase 5: find and run affected tests"
+        allowed:
+          - "mcp__lsp__get_tests_for_file"
+          - "mcp__lsp__run_tests"
+        forbidden:
+          - "mcp__lsp__apply_edit"
+          - "Edit"
+          - "Write"
+    global_forbidden:
+      - "mcp__lsp__rename_symbol"        # refactor uses edit, not rename
 ---
 
 > Requires the agent-lsp MCP server.

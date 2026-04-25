@@ -8,6 +8,35 @@ license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
   required-capabilities: referencesProvider renameProvider workspaceSymbolProvider
+  tool_permissions:
+    phases:
+      prerequisites:
+        description: Initialize LSP if needed
+        allowed: ["mcp__lsp__start_lsp"]
+        forbidden: []
+      preview:
+        description: "Locate symbol, validate rename, enumerate references, dry-run"
+        allowed:
+          - "mcp__lsp__go_to_symbol"
+          - "mcp__lsp__prepare_rename"
+          - "mcp__lsp__get_references"
+          - "mcp__lsp__rename_symbol"    # dry_run=true only
+        forbidden:
+          - "mcp__lsp__apply_edit"
+          - "Edit"
+          - "Write"
+      execute:
+        description: "Capture pre-rename diagnostics, execute rename, apply, verify"
+        allowed:
+          - "mcp__lsp__get_diagnostics"
+          - "mcp__lsp__rename_symbol"    # dry_run=false
+          - "mcp__lsp__apply_edit"
+        forbidden:
+          - "mcp__lsp__simulate_*"
+          - "mcp__lsp__run_build"
+    global_forbidden:
+      - "mcp__lsp__format_document"      # rename does not format
+      - "mcp__lsp__run_tests"            # rename does not run tests
 ---
 
 > Requires the agent-lsp MCP server.

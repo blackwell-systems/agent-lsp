@@ -7,6 +7,49 @@ license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
   optional-capabilities: codeActionProvider documentFormattingProvider
+  tool_permissions:
+    phases:
+      setup:
+        description: "Open files and capture baseline diagnostics"
+        allowed:
+          - "mcp__lsp__start_lsp"
+          - "mcp__lsp__open_document"
+          - "mcp__lsp__get_diagnostics"
+        forbidden:
+          - "mcp__lsp__apply_edit"
+          - "Edit"
+          - "Write"
+      speculative_preview:
+        description: "Simulate the edit in memory before touching disk"
+        allowed:
+          - "mcp__lsp__simulate_edit_atomic"
+          - "mcp__lsp__simulate_chain"
+        forbidden:
+          - "mcp__lsp__apply_edit"
+          - "Edit"
+          - "Write"
+      apply:
+        description: "Write the change to disk"
+        allowed:
+          - "Edit"
+          - "Write"
+          - "mcp__lsp__apply_edit"
+        forbidden:
+          - "mcp__lsp__simulate_*"
+      verify_and_fix:
+        description: "Collect post-edit diagnostics, surface code actions, format"
+        allowed:
+          - "mcp__lsp__get_diagnostics"
+          - "mcp__lsp__get_code_actions"
+          - "mcp__lsp__apply_edit"        # for applying code action fixes
+          - "mcp__lsp__format_document"
+        forbidden:
+          - "mcp__lsp__simulate_*"
+          - "mcp__lsp__run_build"
+          - "mcp__lsp__run_tests"
+    global_forbidden:
+      - "mcp__lsp__rename_symbol"          # safe-edit uses direct edits
+      - "mcp__lsp__get_change_impact"      # blast radius is lsp-impact's job
 ---
 
 > Requires the agent-lsp MCP server.
