@@ -33,9 +33,15 @@ Simulate changes in memory before writing to disk. No other MCP-LSP implementati
 
 `simulate_edit_atomic` previews the diagnostic impact of any edit. You see exactly what breaks before the file is touched. `simulate_chain` evaluates a sequence of dependent edits (rename a function, update all callers, change the return type) and reports which step first introduces an error.
 
-8 speculative execution tools: `create_simulation_session`, `simulate_edit`, `simulate_chain`, `evaluate_session`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`.
+8 speculative execution tools. See [docs/speculative-execution.md](./docs/speculative-execution.md) for the full workflow.
 
-See [docs/speculative-execution.md](./docs/speculative-execution.md) for the full workflow.
+### Phase enforcement
+
+Skills tell agents the correct order of operations. Phase enforcement makes the runtime *block* violations instead of trusting the agent to follow instructions.
+
+When an agent activates a skill, every tool call is checked against the current phase's permissions. Calling `apply_edit` during blast-radius analysis doesn't silently proceed; it returns an error with specific recovery guidance ("complete the blast_radius phase first, allowed tools: [get_change_impact, get_references]"). Phases advance automatically as the agent calls tools from later phases.
+
+No other MCP tool provider enforces workflow ordering at runtime. See [docs/phase-enforcement.md](./docs/phase-enforcement.md).
 
 ### Works with
 
@@ -102,20 +108,6 @@ See [docs/skills.md](./docs/skills.md) for full descriptions and usage guidance.
 | Skill | Purpose |
 |-------|---------|
 | `/lsp-refactor` | End-to-end refactor: blast-radius → preview → apply → verify → test |
-
-### Phase enforcement
-
-Skills encode correct ordering. Phase enforcement *enforces* it at runtime. When an agent activates a skill, the phase tracker blocks out-of-order tool calls: `apply_edit` during blast-radius analysis returns an error with recovery guidance instead of silently skipping the safety gate.
-
-```
-activate_skill("lsp-refactor", "block")   # Start enforcement
-get_change_impact(...)                     # Phase 1: blast radius
-apply_edit(...)                            # BLOCKED: "forbidden in blast_radius phase"
-simulate_edit_atomic(...)                  # Phase 2: auto-advance to speculative_preview
-apply_edit(...)                            # Phase 3: auto-advance to apply, now allowed
-```
-
-Four skills have phase configs: `/lsp-rename`, `/lsp-refactor`, `/lsp-safe-edit`, `/lsp-verify`. See [docs/phase-enforcement.md](docs/phase-enforcement.md).
 
 ## Docker
 
@@ -268,6 +260,7 @@ This is what the agent does, not something you type. Then use any of the 53 tool
 | Languages (CI-verified) | **30** — end-to-end integration tests on every push |
 | Agent workflows (skills) | **20** — named multi-step procedures |
 | Speculative execution | **8 tools** — simulate changes before writing to disk |
+| Phase enforcement | **4 skills** — runtime blocks out-of-order tool calls with recovery guidance |
 | Connection model | **persistent** — warm index across files and projects |
 | Call hierarchy | **✓** — single tool, direction param |
 | Type hierarchy | **✓** — CI-verified |

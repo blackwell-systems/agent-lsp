@@ -38,6 +38,14 @@ Simulate changes in memory before writing to disk. No other MCP-LSP implementati
 
 Read more in the [speculative execution docs](speculative-execution.md).
 
+## Phase enforcement
+
+Skills tell agents the correct order of operations. Phase enforcement makes the runtime *block* violations instead of trusting the agent to follow instructions.
+
+When an agent activates a skill, every tool call is checked against the current phase's permissions. Calling `apply_edit` during blast-radius analysis returns an error with specific recovery guidance, not silence. Phases advance automatically as the agent progresses through the workflow.
+
+No other MCP tool provider enforces workflow ordering at runtime. Read more in the [phase enforcement docs](phase-enforcement.md).
+
 ## Works with
 
 | AI Tool | Transport | Config |
@@ -56,6 +64,7 @@ Read more in the [speculative execution docs](speculative-execution.md).
 | Languages (CI-verified) | **30**, end-to-end integration tests on every push |
 | Agent workflows (skills) | **20**, named multi-step procedures |
 | Speculative execution | **8 tools**, simulate changes before writing to disk |
+| Phase enforcement | **4 skills**, runtime blocks out-of-order tool calls with recovery guidance |
 | Connection model | **persistent**, warm index across files and projects |
 | Call hierarchy | single tool, direction param |
 | Type hierarchy | CI-verified |
