@@ -7,6 +7,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Agent Skills](assets/badge-agentskills.svg)](https://agentskills.io)
 [![Awesome MCP Servers](https://img.shields.io/badge/Awesome-MCP%20Servers-fc60a8)](https://github.com/punkpeye/awesome-mcp-servers)
+<a href="https://github.com/blackwell-systems/mcp-assert"><img src="https://raw.githubusercontent.com/blackwell-systems/mcp-assert/main/assets/badge-passing.svg?v=3" alt="mcp-assert: passing" height="20"></a>
 
 **The most complete MCP server for language intelligence.** 50 tools, 30 CI-verified languages, 20 agent workflows. Single Go binary.
 
