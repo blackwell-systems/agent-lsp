@@ -1,0 +1,19 @@
+# Error path: activating a skill when one is already active returns an error.
+name: activate_skill rejects double activation
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: activate_skill
+    args:
+      skill_name: lsp-rename
+      mode: warn
+assert:
+  tool: activate_skill
+  args:
+    skill_name: lsp-refactor
+    mode: warn
+  expect:
+    error: true
+    contains: ["already active"]
+timeout: 30s

@@ -304,6 +304,68 @@ func TestErrorPaths(t *testing.T) {
 			t.Logf("rename_symbol/builtin_keyword: %s", detail)
 		}
 	})
+
+	// -------------------------------------------------------------------------
+	// Phase enforcement error paths
+	// -------------------------------------------------------------------------
+
+	t.Run("activate_skill/unknown_skill", func(t *testing.T) {
+		res, err := callTool(ctx, session, "activate_skill", map[string]any{
+			"skill_name": "nonexistent-skill",
+			"mode":       "warn",
+		})
+		ok, detail := isWellFormedResponse(res, err)
+		if !ok {
+			t.Errorf("expected well-formed error for unknown skill, got: %s", detail)
+		} else {
+			t.Logf("activate_skill/unknown_skill: %s", detail)
+		}
+	})
+
+	t.Run("activate_skill/double_activate", func(t *testing.T) {
+		// Activate a valid skill first.
+		res, err := callTool(ctx, session, "activate_skill", map[string]any{
+			"skill_name": "lsp-rename",
+			"mode":       "warn",
+		})
+		if err != nil || res.IsError {
+			t.Skipf("first activate_skill failed: err=%v", err)
+			return
+		}
+		// Try to activate another skill while one is already active.
+		res, err = callTool(ctx, session, "activate_skill", map[string]any{
+			"skill_name": "lsp-refactor",
+			"mode":       "warn",
+		})
+		ok, detail := isWellFormedResponse(res, err)
+		if !ok {
+			t.Errorf("expected well-formed error for double activate, got: %s", detail)
+		} else {
+			t.Logf("activate_skill/double_activate: %s", detail)
+		}
+		// Cleanup: deactivate so subsequent tests start clean.
+		_, _ = callTool(ctx, session, "deactivate_skill", map[string]any{})
+	})
+
+	t.Run("get_skill_phase/no_active_skill", func(t *testing.T) {
+		res, err := callTool(ctx, session, "get_skill_phase", map[string]any{})
+		ok, detail := isWellFormedResponse(res, err)
+		if !ok {
+			t.Errorf("expected well-formed response for inactive phase query, got: %s", detail)
+		} else {
+			t.Logf("get_skill_phase/no_active_skill: %s", detail)
+		}
+	})
+
+	t.Run("deactivate_skill/idempotent_when_inactive", func(t *testing.T) {
+		res, err := callTool(ctx, session, "deactivate_skill", map[string]any{})
+		ok, detail := isWellFormedResponse(res, err)
+		if !ok {
+			t.Errorf("expected well-formed response for idempotent deactivate, got: %s", detail)
+		} else {
+			t.Logf("deactivate_skill/idempotent_when_inactive: %s", detail)
+		}
+	})
 }
 
 // createErrorPathSession creates a simulation session for error-path subtests.

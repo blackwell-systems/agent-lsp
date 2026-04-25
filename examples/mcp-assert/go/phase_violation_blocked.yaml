@@ -1,0 +1,23 @@
+# Integration test: phase enforcement blocks forbidden tool calls.
+# Activates lsp-refactor in block mode, then calls apply_edit which is
+# forbidden in the blast_radius phase. Expects an isError response with
+# recovery guidance.
+name: phase enforcement blocks apply_edit during blast_radius
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: activate_skill
+    args:
+      skill_name: lsp-refactor
+      mode: block
+assert:
+  tool: apply_edit
+  args:
+    file_path: "/tmp/nonexistent.go"
+    old_text: "old"
+    new_text: "new"
+  expect:
+    error: true
+    contains: ["phase_violation", "blast_radius", "forbidden"]
+timeout: 30s

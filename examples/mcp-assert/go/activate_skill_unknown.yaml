@@ -1,0 +1,14 @@
+# Error path: activating a nonexistent skill returns an error.
+name: activate_skill rejects unknown skill name
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+assert:
+  tool: activate_skill
+  args:
+    skill_name: nonexistent-skill
+    mode: warn
+  expect:
+    error: true
+    contains: ["unknown skill"]
+timeout: 30s

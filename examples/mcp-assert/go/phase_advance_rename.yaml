@@ -1,0 +1,25 @@
+# Integration test: phase auto-advancement in lsp-rename.
+# Activates lsp-rename, calls go_to_symbol (advances to preview phase),
+# then checks get_skill_phase to verify the advance happened.
+name: phase auto-advances from prerequisites to preview
+server:
+  command: agent-lsp
+  args: ["go:gopls"]
+setup:
+  - tool: start_lsp
+    args:
+      root_dir: "{{fixture}}"
+  - tool: activate_skill
+    args:
+      skill_name: lsp-rename
+      mode: block
+  - tool: go_to_symbol
+    args:
+      symbol_path: "Person"
+      workspace_root: "{{fixture}}"
+assert:
+  tool: get_skill_phase
+  expect:
+    not_error: true
+    contains: ["preview", "lsp-rename"]
+timeout: 30s

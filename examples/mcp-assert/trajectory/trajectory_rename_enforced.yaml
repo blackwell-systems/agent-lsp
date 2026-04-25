@@ -1,0 +1,54 @@
+# Trajectory assertion: validates the /lsp-rename skill protocol with phase enforcement.
+# activate_skill must come first, deactivate_skill must come last.
+# The core protocol (prepare_rename before rename_symbol) is still required.
+name: lsp-rename with phase enforcement follows enforced protocol
+trace:
+  - tool: activate_skill
+    args:
+      skill_name: lsp-rename
+      mode: block
+  - tool: start_lsp
+    args:
+      root_dir: "fixtures/go"
+  - tool: go_to_symbol
+    args:
+      symbol_path: "Person"
+      workspace_root: "fixtures/go"
+  - tool: prepare_rename
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+  - tool: get_references
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+  - tool: rename_symbol
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+      new_name: "Entity"
+      dry_run: true
+  - tool: get_diagnostics
+    args:
+      file_path: "fixtures/go/main.go"
+  - tool: rename_symbol
+    args:
+      file_path: "fixtures/go/main.go"
+      line: 6
+      column: 6
+      new_name: "Entity"
+      dry_run: false
+  - tool: deactivate_skill
+trajectory:
+  - type: order
+    tools: ["activate_skill", "prepare_rename", "rename_symbol", "deactivate_skill"]
+  - type: presence
+    tools: ["activate_skill", "deactivate_skill", "prepare_rename", "rename_symbol"]
+  - type: args_contain
+    tool: activate_skill
+    args:
+      skill_name: lsp-rename
+      mode: block
