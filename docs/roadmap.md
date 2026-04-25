@@ -614,6 +614,50 @@ This produces a table showing pass rates per language per skill, directly answer
 | **Phase 3** | Docker-isolated eval harness using existing images. `agent-lsp eval run` and `agent-lsp eval matrix` CLI subcommands. Multi-trial execution with pass@k/pass^k metrics. | 1 week | Reproducible, containerized evaluation. Cross-language skill reliability data. |
 | **Phase 4** | Audit trail aggregation and production graders. Track `net_delta` first-attempt success rates by model/language/skill. `agent-lsp eval --audit-log` for post-session analysis. | 2-3 days | Production monitoring. Data-driven skill improvement. Marketing ammunition. |
 
+## Skill Phase Enforcement
+
+agent-lsp is a persistent runtime with stateful sessions (simulation sessions, workspace state, diagnostics cache). It already enforces ordering within sessions (e.g., you can't `evaluate_session` before `create_simulation_session`). Extending this to skill-level phases is a natural evolution.
+
+### How it works
+
+When an agent activates a skill, agent-lsp tracks which phase the skill is in based on tool call history. The `tool_permissions` metadata (already added to 4 skills) declares which tools are allowed per phase. The runtime infers the current phase from the tools called so far and blocks calls that violate the current phase's permissions.
+
+```
+Agent calls prepare_rename -> phase = "preview"
+Agent calls get_references -> still "preview"
+Agent tries apply_edit     -> BLOCKED: "apply_edit is not allowed in the preview phase. 
+                               Complete the preview by calling rename_symbol first."
+Agent calls rename_symbol  -> phase = "execute", apply_edit now allowed
+```
+
+### Differences from Centian's approach
+
+| Dimension | Centian | agent-lsp |
+|-----------|---------|-----------|
+| Architecture | Separate proxy process, routes all traffic | Built into the tool provider that already has state |
+| Setup | Reroute MCP traffic, register tasks, write templates | Zero setup; permissions are in the skill YAML |
+| Phase inference | Explicit registration (`task_start_step`) | Automatic from tool call history |
+| Recovery | Generic "call centian.task_resume" | Skill-specific ("call rename_symbol to complete preview") |
+| Session state | In-memory only, lost on restart | Could persist via existing audit trail |
+| Scope | Any MCP server (proxy is server-agnostic) | agent-lsp tools only (the runtime owns the state) |
+
+### Implementation plan
+
+| Item | Priority | Description |
+|------|----------|-------------|
+| **Phase state machine** | High | Per-skill state tracker that advances phases based on tool calls. Uses `tool_permissions` YAML to define transitions. |
+| **Enforcement mode** | High | Two modes: `warn` (log violation, allow call) and `block` (return isError with recovery guidance). Default to `warn` initially. |
+| **Phase inference rules** | Medium | Define how tool calls map to phase transitions. A call to `prepare_rename` moves from "prerequisites" to "preview". A call to `rename_symbol` (dry_run=false) moves from "preview" to "execute". |
+| **Structured recovery actions** | Medium | When a call is blocked, return machine-readable guidance: which tool to call next, which phase will unlock. Agents can self-correct without parsing error strings. |
+| **Audit trail integration** | Low | Log phase transitions and violations to the JSONL audit trail. Post-session graders can verify phase compliance without runtime enforcement. |
+
+### Skills with tool_permissions (shipped)
+
+- `/lsp-rename` (3 phases: prerequisites, preview, execute)
+- `/lsp-refactor` (5 phases: blast_radius, speculative_preview, apply, build_verification, test_execution)
+- `/lsp-safe-edit` (4 phases: setup, speculative_preview, apply, verify_and_fix)
+- `/lsp-verify` (5 phases: test_correlation, diagnostics, build, tests, fix_and_format)
+
 ## Bigger Bets
 
 | Feature | Status | Description |
