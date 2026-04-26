@@ -188,6 +188,7 @@ jobs:
       - uses: vedantmgoyal9/winget-releaser@v2
         with:
           identifier: BlackwellSystems.agent-lsp
+          installers-regex: 'windows.*\.zip$'
           max-versions-to-keep: 5
           fork-user: blackwell-systems
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
