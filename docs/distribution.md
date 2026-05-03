@@ -129,6 +129,21 @@ mcp-registry-publish → publishes metadata to official MCP Registry (GitHub OID
 
 Docker images are built inside the `release` job by GoReleaser (`dockers:` section). 22 images (11 tags × 2 architectures) are built and combined into 11 multi-arch manifest lists via `docker_manifests`. Base images build first so downstream images can pull them as their `FROM` layer.
 
+## Marketing and Discovery
+
+| Channel | Status | Notes |
+|---------|--------|-------|
+| **LinkedIn** | Ready | Token savings post drafted. Post after experiment is final. |
+| **Hacker News** | Not submitted | The token savings blog post (data, methodology, reproducible) is HN-ready. |
+| **Reddit** | Not submitted | r/LocalLLaMA, r/golang, r/programming. Different angle per sub. |
+| **Go Weekly** | Not submitted | Submit blog post link. Targeted Go devs. |
+| **Twitter/X** | Not active | Thread format works for the data. |
+| **Dev.to / Hashnode** | Not active | Cross-post blog for SEO. |
+| **glama.ai** | Not listed | MCP server discovery platform. |
+| **Product Hunt** | Not launched | High one-day spike, dies after. Save for a bigger release. |
+| **Claude Code community** | Not posted | Direct users of the tool. |
+| **YouTube** | Not started | "Watch LSP vs grep side by side" demo. High effort, high impact. |
+
 ## Planned
 
 | Channel | Notes |
