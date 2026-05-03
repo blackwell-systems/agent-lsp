@@ -43,7 +43,7 @@ mkdir -p "$DIST_DIR"
 for GOKEY in "${!PLATFORMS[@]}"; do
   IFS=: read -r PLAT_TAG BINARY_NAME ARCHIVE_EXT <<< "${PLATFORMS[$GOKEY]}"
 
-  ARCHIVE="agent-lsp_${VERSION}_${GOKEY}.${ARCHIVE_EXT}"
+  ARCHIVE="agent-lsp_${GOKEY}.${ARCHIVE_EXT}"
   URL="https://github.com/${REPO}/releases/download/${TAG}/${ARCHIVE}"
   BIN_DIR="${PYPI_DIR}/agent_lsp/bin"
 
