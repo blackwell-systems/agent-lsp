@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-lsp"
+version = "0.5.0"
+description = "MCP server for language intelligence. 53 tools, 30 languages, speculative execution."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.8"
+keywords = ["mcp", "lsp", "language-server", "ai-agents", "code-intelligence", "model-context-protocol"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development",
+    "Topic :: Text Editors :: Integrated Development Environments (IDE)",
+]
+
+[project.urls]
+Homepage = "https://github.com/blackwell-systems/agent-lsp"
+Documentation = "https://agent-lsp.com"
+Repository = "https://github.com/blackwell-systems/agent-lsp"
+
+[project.scripts]
+agent-lsp = "agent_lsp.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["agent_lsp*"]
+
+[tool.setuptools.package-data]
+agent_lsp = ["bin/*"]

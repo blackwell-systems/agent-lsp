@@ -162,8 +162,12 @@ func main() {
 	}
 	defer client.Shutdown(ctx)
 
-	fmt.Fprintf(os.Stderr, "Waiting for gopls to index...\n")
-	client.WaitForWorkspaceReadyTimeout(ctx, 180*time.Second)
+	fmt.Fprintf(os.Stderr, "Waiting for LSP to index...\n")
+	if *lang != "rust" {
+		// rust-analyzer doesn't emit $/progress tokens reliably; skip this
+		// and rely on the polling loop below instead.
+		client.WaitForWorkspaceReadyTimeout(ctx, 180*time.Second)
+	}
 
 	// Open target files and files that reference the target symbol. Pyright
 	// (and some other LSP servers) only deeply analyze open files, so opening
@@ -194,7 +198,14 @@ func main() {
 	// WaitForFileIndexed timeout that makes GetReferences block on clean files).
 	warmupURI := fileURI(tgt.refSymbolFile)
 	warmupPos := types.Position{Line: tgt.refSymbolLine, Character: tgt.refSymbolCol}
-	for i := 0; i < 30; i++ {
+	// Rust needs longer because rust-analyzer runs cargo check before answering.
+	pollInterval := 2 * time.Second
+	pollAttempts := 30
+	if *lang == "rust" {
+		pollInterval = 5 * time.Second
+		pollAttempts = 60
+	}
+	for i := 0; i < pollAttempts; i++ {
 		raw := lspReferences(ctx, client, warmupURI, warmupPos)
 		var refs []json.RawMessage
 		json.Unmarshal(raw, &refs)
@@ -202,10 +213,10 @@ func main() {
 			fmt.Fprintf(os.Stderr, "  index ready (%d refs for %s)\n", len(refs), tgt.refSymbol)
 			break
 		}
-		if i == 29 {
+		if i == pollAttempts-1 {
 			fmt.Fprintf(os.Stderr, "  warning: index may be incomplete (%d refs)\n", len(refs))
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(pollInterval)
 	}
 	fmt.Fprintf(os.Stderr, "Ready.\n\n")
 
@@ -1460,13 +1471,27 @@ func findExportedSymbols(content, lang string) []string {
 		var name string
 		switch lang {
 		case "rust":
-			// Rust: pub fn name(, pub struct Name, pub enum Name, pub trait Name
+			// Rust: pub fn, pub async fn, pub(crate) fn, pub struct, pub enum, pub trait
+			var rest string
 			if strings.HasPrefix(trimmed, "pub fn ") {
-				rest := trimmed[len("pub fn "):]
+				rest = trimmed[len("pub fn "):]
+			} else if strings.HasPrefix(trimmed, "pub async fn ") {
+				rest = trimmed[len("pub async fn "):]
+			} else if strings.HasPrefix(trimmed, "pub(crate) fn ") {
+				rest = trimmed[len("pub(crate) fn "):]
+			} else if strings.HasPrefix(trimmed, "pub(super) fn ") {
+				rest = trimmed[len("pub(super) fn "):]
+			} else if strings.HasPrefix(trimmed, "pub(crate) async fn ") {
+				rest = trimmed[len("pub(crate) async fn "):]
+			}
+			if rest != "" {
 				if parenIdx := strings.Index(rest, "("); parenIdx > 0 {
 					name = rest[:parenIdx]
+				} else if parenIdx := strings.Index(rest, "<"); parenIdx > 0 {
+					name = rest[:parenIdx]
 				}
-			} else if strings.HasPrefix(trimmed, "pub struct ") {
+			}
+			if name == "" && strings.HasPrefix(trimmed, "pub struct ") {
 				rest := trimmed[len("pub struct "):]
 				for i, c := range rest {
 					if c == ' ' || c == '{' || c == '(' || c == '<' {

@@ -98,6 +98,12 @@ curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.bla
 ### Glama
 Listed at [glama.ai/mcp/servers/blackwell-systems/agent-lsp](https://glama.ai/mcp/servers/blackwell-systems/agent-lsp). Profile managed via `glama.json` in repo root. Score badge: A grade. Build verified; server passes Glama's automated inspection checks.
 
+### PyPI
+```bash
+pip install agent-lsp
+```
+Platform-specific wheels containing the Go binary. Each wheel is tagged with the correct platform (e.g. `macosx_11_0_arm64`, `manylinux2014_x86_64`), so pip resolves the right one automatically. No Go toolchain required. Built via `scripts/pypi-build-wheels.sh` and published with twine on each release tag.
+
 ### Smithery
 `smithery.yaml` in the repo root enables auto-indexing on Smithery. Auto-discovered from GitHub.
 
