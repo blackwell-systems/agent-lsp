@@ -340,42 +340,51 @@ Two categories of eval frameworks exist, and neither addresses what agent-lsp ne
 
 When `get_references` is called on line 42 of a Go file, the correct answer is a deterministic set of locations. No LLM-as-judge is needed. The tool either returns the right locations or it does not. Paying for GPT-4 API calls to grade a response that can be verified with `assert.Equal` is wasteful and introduces false variance.
 
-**The gap:** No framework combines deterministic tool correctness testing with MCP server evaluation. No framework tests across multiple languages or programming environments. No framework measures tool reliability (`pass^k`) or skill protocol compliance (trajectory matching).
+**The gap:** At the time of writing, no framework combined deterministic tool correctness testing with MCP server evaluation. No framework tested across multiple languages or programming environments. No framework measured tool reliability or skill protocol compliance. **mcp-assert now fills this gap** (see below).
 
 The only framework with native MCP integration is [Inspect AI](https://github.com/UKGovernmentBEIS/inspect_ai) (1,900+ stars, UK AI Safety Institute). It can serve MCP tools to an evaluated model and score the results. This is useful for Layer 2 (skill workflow testing) but unnecessary for Layer 1 (tool correctness), which is 80% of the work.
 
-### mcp-eval: potential sister project
+### mcp-assert: shipped sister project
 
-The gap identified above is not specific to agent-lsp. Every MCP server author needs to prove their tools work. A standalone `mcp-eval` framework would serve the entire MCP ecosystem:
+The gap identified above is what [mcp-assert](https://github.com/blackwell-systems/mcp-assert) fills. It shipped as a separate repo (`blackwell-systems/mcp-assert`) and is now at **v0.8.0**.
 
-**What it would be:** A Go-based, deterministic-first eval framework for MCP servers. Given an MCP server binary, run its tools against fixture inputs and grade the outputs. No LLM required for correctness testing. Fast, CI-native, zero API costs.
+**What it is:** A Go-based, deterministic-first testing framework for MCP servers. Given an MCP server binary or URL, run its tools against fixture inputs and grade the outputs. No LLM required for correctness testing. Single binary, CI-native, zero API costs.
+
+**Shipped commands:**
+
+| Command | Description |
+|---------|-------------|
+| `run` | Execute YAML assertion suites against a live MCP server |
+| `audit` | Connect to a server, discover all tools, call each with schema-generated inputs, report health vs. crashes |
+| `fuzz` | Category-based adversarial input generation (empty/null args, wrong types, boundary values, injection payloads) |
+| `generate` | Auto-generate stub YAML assertions from a server's tool schema |
+| `snapshot` | Capture and compare tool output snapshots for regression detection |
+| `inspect` | Static analysis of the MCP server codebase (race conditions, error handling, protocol compliance) |
+| `watch` | File-watching mode for local development |
 
 **How it differs from existing MCP eval tools:**
 
-| Dimension | Existing MCP evals | mcp-eval |
+| Dimension | Existing MCP evals | mcp-assert |
 |---|---|---|
 | Grading | LLM-as-judge (subjective, costly) | Deterministic assertions (exact, free) |
 | Language | Node.js / Python | Go (single binary, fast CI) |
-| Multi-language | Not supported | Test same tool across multiple language server backends |
-| Reliability metrics | Not measured | `pass@k` and `pass^k` per tool per language |
-| Skill/workflow testing | Not supported | Trajectory matchers for tool call ordering |
-| Docker isolation | Not supported | Per-trial container execution via existing Docker images |
+| Fuzz testing | Not supported | Category-based adversarial inputs from JSON Schema |
+| Docker isolation | Not supported | `--docker` flag for destructive tool isolation |
+| Output formats | Varies | JSON, JUnit XML, Markdown |
+| Transport | Usually stdio only | stdio, HTTP, SSE |
 
-**Relationship to agent-lsp:** agent-lsp is the reference implementation that scores highest on mcp-eval. The eval framework validates the tool server. The tool server demonstrates the eval framework. Sister projects that feed each other.
+**Relationship to agent-lsp:** agent-lsp's skill trajectory assertions use mcp-assert in CI. mcp-assert's fuzz and audit commands have found bugs in 5 official MCP SDKs (TypeScript, Python, PHP, Go, mcp-go). The projects feed each other: agent-lsp is the reference MCP server that exercises mcp-assert's testing capabilities.
 
 ```bash
-# Evaluate any MCP server
-mcp-eval run --server "agent-lsp go:gopls" --suite evals/go/
-mcp-eval run --server "other-mcp-server" --suite evals/basic/
+# Audit any MCP server
+mcp-assert audit --server "npx -y @modelcontextprotocol/server-everything" --output ./assertions
 
-# Cross-language matrix
-mcp-eval matrix --server "agent-lsp" --languages go,typescript,python,gleam
+# Fuzz test for crashes
+mcp-assert fuzz --server "npx -y @modelcontextprotocol/server-everything" --json
 
-# CI integration
-mcp-eval ci --server "agent-lsp" --threshold 95 --fail-on-regression
+# Run assertion suite in CI
+mcp-assert run --suite ./assertions --server "npx -y @modelcontextprotocol/server-everything" --junit results.xml
 ```
-
-This is a separate repo (`blackwell-systems/mcp-eval`), not embedded in agent-lsp. It evaluates any MCP server, not just agent-lsp. The open-source framing positions it as infrastructure for the MCP ecosystem.
 
 ### Two-layer architecture
 
