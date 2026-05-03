@@ -538,6 +538,15 @@ func (c *LSPClient) writeRaw(body []byte) error {
 	return nil
 }
 
+// SendRequest sends a JSON-RPC request and waits for the response.
+// This is the low-level method that skips capability checks and indexing waits.
+// Use the typed methods (GetReferences, GetInfoOnLocation, etc.) for normal
+// usage. SendRequest is useful for batch/measurement scenarios where the
+// workspace is already indexed.
+func (c *LSPClient) SendRequest(ctx context.Context, method string, params interface{}) (json.RawMessage, error) {
+	return c.sendRequest(ctx, method, params)
+}
+
 // sendRequest sends a JSON-RPC request and waits for the response.
 func (c *LSPClient) sendRequest(ctx context.Context, method string, params interface{}) (json.RawMessage, error) {
 	id := int(c.nextID.Add(1))

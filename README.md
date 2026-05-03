@@ -35,6 +35,10 @@ Simulate changes in memory before writing to disk. No other MCP-LSP implementati
 
 8 speculative execution tools. See [docs/speculative-execution.md](./docs/speculative-execution.md) for the full workflow.
 
+### Token savings
+
+Structured LSP responses use **5-21x fewer tokens** than grep/read on the same tasks. On HashiCorp Consul (319K lines), a blast-radius analysis uses 17.7MB via grep vs 841KB via LSP, reducing 5,534 tool calls to 119. Savings scale with codebase size. See [docs/token-savings.md](./docs/token-savings.md) for the full experiment across three codebases.
+
 ### Phase enforcement
 
 Skills tell agents the correct order of operations. Phase enforcement makes the runtime *block* violations instead of trusting the agent to follow instructions.

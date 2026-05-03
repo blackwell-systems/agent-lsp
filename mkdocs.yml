@@ -61,6 +61,7 @@ nav:
   - Phase Enforcement: phase-enforcement.md
   - Language Support: language-support.md
   - LSP Conformance: lsp-conformance.md
+  - Token Savings: token-savings.md
   - Distribution: distribution.md
   - CI Notes: ci-notes.md
   - Changelog: changelog.md
