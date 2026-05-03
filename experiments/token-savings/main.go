@@ -34,6 +34,7 @@ import (
 type result struct {
 	bytes      int
 	roundTrips int
+	durationMs int64
 }
 
 type taskResult struct {
@@ -73,6 +74,18 @@ func configForLang(lang string) langConfig {
 			buildCmd: []string{"mypy", "."}, testCmd: []string{"pytest", "-x", "-q", "--tb=no"},
 			grepIncl: "*.py", lspLangID: "python",
 		}
+	case "typescript":
+		return langConfig{
+			ext: ".ts", testGlob: "*.test.ts", skipExt: ".d.ts",
+			buildCmd: []string{"tsc", "--noEmit"}, testCmd: []string{"npx", "vitest", "run", "--reporter=json"},
+			grepIncl: "*.ts", lspLangID: "typescript",
+		}
+	case "rust":
+		return langConfig{
+			ext: ".rs", testGlob: "", skipExt: "",
+			buildCmd: []string{"cargo", "check"}, testCmd: []string{"cargo", "test", "--message-format=json"},
+			grepIncl: "*.rs", lspLangID: "rust",
+		}
 	default: // go
 		return langConfig{
 			ext: ".go", testGlob: "*_test.go", skipExt: ".pb.go",
@@ -100,6 +113,13 @@ func main() {
 			if *serverArgs == "" {
 				*serverArgs = "--stdio"
 			}
+		case "typescript":
+			*server = "typescript-language-server"
+			if *serverArgs == "" {
+				*serverArgs = "--stdio"
+			}
+		case "rust":
+			*server = "rust-analyzer"
 		default:
 			fmt.Fprintf(os.Stderr, "unsupported language: %s\n", *lang)
 			os.Exit(1)
@@ -145,13 +165,30 @@ func main() {
 	fmt.Fprintf(os.Stderr, "Waiting for gopls to index...\n")
 	client.WaitForWorkspaceReadyTimeout(ctx, 180*time.Second)
 
-	// Open target files and wait for cross-package index.
+	// Open target files and files that reference the target symbol. Pyright
+	// (and some other LSP servers) only deeply analyze open files, so opening
+	// importers is necessary for cross-file references to resolve.
 	fmt.Fprintf(os.Stderr, "Indexing target files...\n")
 	openFileInLSP(ctx, client, tgt.largestFile, fileURI(tgt.largestFile), tgt.cfg.lspLangID)
 	openFileInLSP(ctx, client, tgt.refSymbolFile, fileURI(tgt.refSymbolFile), tgt.cfg.lspLangID)
 	if tgt.testableFile != "" {
 		openFileInLSP(ctx, client, tgt.testableFile, fileURI(tgt.testableFile), tgt.cfg.lspLangID)
 	}
+	// Open files that reference the target symbol (importers).
+	grepForImporters := runGrep(absRoot, tgt.refSymbol, tgt.cfg.grepIncl)
+	importerFiles := uniqueFiles(grepForImporters)
+	opened := 0
+	for _, f := range importerFiles {
+		if opened >= 10 {
+			break
+		}
+		path := filepath.Join(absRoot, f)
+		openFileInLSP(ctx, client, path, fileURI(path), tgt.cfg.lspLangID)
+		opened++
+	}
+	fmt.Fprintf(os.Stderr, "  opened %d importer files\n", opened)
+	// Brief pause for the LSP server to process all didOpen notifications.
+	time.Sleep(3 * time.Second)
 
 	// Poll until references resolve using SendRequest (skips the 15s
 	// WaitForFileIndexed timeout that makes GetReferences block on clean files).
@@ -174,28 +211,44 @@ func main() {
 
 	var results []taskResult
 
+	n := 10 // total tasks
+	i := 0
+	task := func(name string, fn func() taskResult) {
+		i++
+		fmt.Fprintf(os.Stderr, "[%d/%d] %s\n", i, n, name)
+		results = append(results, fn())
+	}
+
 	// --- Simple tasks ---
-	fmt.Fprintf(os.Stderr, "[1/7] Find all callers of %s\n", tgt.refSymbol)
-	results = append(results, taskFindCallers(ctx, absRoot, client, tgt))
-
-	fmt.Fprintf(os.Stderr, "[2/7] Type signature lookup\n")
-	results = append(results, taskTypeSignature(ctx, absRoot, client, tgt))
-
-	fmt.Fprintf(os.Stderr, "[3/7] Edit safety check\n")
-	results = append(results, taskEditSafety(ctx, absRoot, client, tgt))
+	task(fmt.Sprintf("Find all callers of %s", tgt.refSymbol),
+		func() taskResult { return taskFindCallers(ctx, absRoot, client, tgt) })
+	task("Type signature lookup",
+		func() taskResult { return taskTypeSignature(ctx, absRoot, client, tgt) })
+	task("Edit safety check",
+		func() taskResult { return taskEditSafety(ctx, absRoot, client, tgt) })
+	simpleCount := len(results) // remember where simple tasks end
 
 	// --- Skill workflows ---
-	fmt.Fprintf(os.Stderr, "[4/7] Skill: /lsp-refactor (rename %s)\n", tgt.refSymbol)
-	results = append(results, taskSkillRefactor(ctx, absRoot, client, tgt))
-
-	fmt.Fprintf(os.Stderr, "[5/7] Skill: /lsp-impact on %s\n", rel(absRoot, tgt.largestFile))
-	results = append(results, taskSkillImpact(ctx, absRoot, client, tgt))
-
-	fmt.Fprintf(os.Stderr, "[6/7] Skill: /lsp-rename (atomic rename %s)\n", tgt.refSymbol)
-	results = append(results, taskSkillRename(ctx, absRoot, client, tgt))
-
-	fmt.Fprintf(os.Stderr, "[7/7] Skill: /lsp-dead-code on %s\n", rel(absRoot, tgt.largestFile))
-	results = append(results, taskSkillDeadCode(ctx, absRoot, client, tgt))
+	task(fmt.Sprintf("Skill: /lsp-refactor (rename %s)", tgt.refSymbol),
+		func() taskResult { return taskSkillRefactor(ctx, absRoot, client, tgt) })
+	task(fmt.Sprintf("Skill: /lsp-impact on %s", rel(absRoot, tgt.largestFile)),
+		func() taskResult { return taskSkillImpact(ctx, absRoot, client, tgt) })
+	task(fmt.Sprintf("Skill: /lsp-rename (%s)", tgt.refSymbol),
+		func() taskResult { return taskSkillRename(ctx, absRoot, client, tgt) })
+	task(fmt.Sprintf("Skill: /lsp-dead-code on %s", rel(absRoot, tgt.largestFile)),
+		func() taskResult { return taskSkillDeadCode(ctx, absRoot, client, tgt) })
+	task("Precision (false positives for ambiguous symbol)",
+		func() taskResult { return taskPrecision(ctx, absRoot, client, tgt) })
+	if *lang == "go" || *lang == "rust" {
+		// Multi-hop and interface tasks require call hierarchy and implementation
+		// providers, which are fully supported by gopls and rust-analyzer.
+		task(fmt.Sprintf("Multi-hop call chain (%s)", tgt.refSymbol),
+			func() taskResult { return taskMultiHopCallChain(ctx, absRoot, client, tgt) })
+		task("Interface implementations",
+			func() taskResult { return taskInterfaceImpls(ctx, absRoot, client, tgt) })
+	} else {
+		n -= 2 // skip tasks requiring call hierarchy / implementation providers
+	}
 
 	// --- Output ---
 	repoName := filepath.Base(absRoot)
@@ -204,16 +257,16 @@ func main() {
 	fmt.Fprintf(&buf, "### %s (%s lines, %d files)\n\n", repoName, formatNum(lineCount), fileCount)
 
 	fmt.Fprintf(&buf, "**Simple tasks**\n\n")
-	fmt.Fprintf(&buf, "| Task | Grep/Read | LSP | Ratio | Round trips |\n")
-	fmt.Fprintf(&buf, "|------|----------:|----:|------:|------------:|\n")
-	for _, r := range results[:3] {
+	fmt.Fprintf(&buf, "| Task | Grep/Read | LSP | Ratio | Round trips | Time |\n")
+	fmt.Fprintf(&buf, "|------|----------:|----:|------:|------------:|-----:|\n")
+	for _, r := range results[:simpleCount] {
 		writeRow(&buf, r)
 	}
 
-	fmt.Fprintf(&buf, "\n**Skill workflows (%d skills)**\n\n", len(results)-3)
-	fmt.Fprintf(&buf, "| Task | Grep/Read | LSP | Ratio | Round trips |\n")
-	fmt.Fprintf(&buf, "|------|----------:|----:|------:|------------:|\n")
-	for _, r := range results[3:] {
+	fmt.Fprintf(&buf, "\n**Skill workflows and advanced tasks (%d tasks)**\n\n", len(results)-simpleCount)
+	fmt.Fprintf(&buf, "| Task | Grep/Read | LSP | Ratio | Round trips | Time |\n")
+	fmt.Fprintf(&buf, "|------|----------:|----:|------:|------------:|-----:|\n")
+	for _, r := range results[simpleCount:] {
 		writeRow(&buf, r)
 	}
 
@@ -244,9 +297,10 @@ func main() {
 
 func writeRow(buf *bytes.Buffer, r taskResult) {
 	ratio := float64(r.grepRead.bytes) / float64(max(r.lspResult.bytes, 1))
-	fmt.Fprintf(buf, "| %s | %s | %s | **%.0fx** | %d vs %d |\n",
+	fmt.Fprintf(buf, "| %s | %s | %s | **%.0fx** | %d vs %d | %dms vs %dms |\n",
 		r.name, formatNum(r.grepRead.bytes), formatNum(r.lspResult.bytes),
-		ratio, r.grepRead.roundTrips, r.lspResult.roundTrips)
+		ratio, r.grepRead.roundTrips, r.lspResult.roundTrips,
+		r.grepRead.durationMs, r.lspResult.durationMs)
 }
 
 // --- Target discovery ---
@@ -266,7 +320,7 @@ func discoverTargets(root, lang string) targets {
 		}
 		name := d.Name()
 		if d.IsDir() {
-			if name == "vendor" || name == ".git" || name == "node_modules" || name == "testdata" || name == "__pycache__" || name == ".venv" || name == "venv" {
+			if name == "vendor" || name == ".git" || name == "node_modules" || name == "testdata" || name == "__pycache__" || name == ".venv" || name == "venv" || name == "dist" || name == "build" {
 				return filepath.SkipDir
 			}
 			return nil
@@ -360,12 +414,14 @@ func discoverTargets(root, lang string) targets {
 // --- Task implementations ---
 
 func taskFindCallers(ctx context.Context, root string, client *lsp.LSPClient, tgt targets) taskResult {
+	grepStart := time.Now()
 	grepOut := runGrep(root, tgt.refSymbol, tgt.cfg.grepIncl)
-	gr := result{bytes: len(grepOut), roundTrips: 1}
+	gr := result{bytes: len(grepOut), roundTrips: 1, durationMs: time.Since(grepStart).Milliseconds()}
 
+	lspStart := time.Now()
 	refsJSON := lspReferences(ctx, client, fileURI(tgt.refSymbolFile),
 		types.Position{Line: tgt.refSymbolLine, Character: tgt.refSymbolCol})
-	lr := result{bytes: len(refsJSON), roundTrips: 1}
+	lr := result{bytes: len(refsJSON), roundTrips: 1, durationMs: time.Since(lspStart).Milliseconds()}
 
 	logTask(gr, lr)
 	return taskResult{name: fmt.Sprintf("Find callers of `%s`", tgt.refSymbol), grepRead: gr, lspResult: lr}
@@ -373,15 +429,17 @@ func taskFindCallers(ctx context.Context, root string, client *lsp.LSPClient, tg
 
 func taskTypeSignature(ctx context.Context, root string, client *lsp.LSPClient, tgt targets) taskResult {
 	// Grep: find function definition + read context.
-	grepOut := runCmd(root, "grep", "-rn", "-A", "15", "func.*"+tgt.refSymbol, "--include=*.go", ".")
-	gr := result{bytes: len(grepOut), roundTrips: 1}
+	grepStart := time.Now()
+	grepOut := runCmd(root, "grep", "-rn", "-A", "15", "func.*"+tgt.refSymbol, "--include="+tgt.cfg.grepIncl, ".")
+	gr := result{bytes: len(grepOut), roundTrips: 1, durationMs: time.Since(grepStart).Milliseconds()}
 
 	// LSP: hover.
+	lspStart := time.Now()
 	hoverRaw, _ := client.SendRequest(ctx, "textDocument/hover", map[string]any{
 		"textDocument": map[string]any{"uri": fileURI(tgt.refSymbolFile)},
 		"position":     types.Position{Line: tgt.refSymbolLine, Character: tgt.refSymbolCol},
 	})
-	lr := result{bytes: len(hoverRaw), roundTrips: 1}
+	lr := result{bytes: len(hoverRaw), roundTrips: 1, durationMs: time.Since(lspStart).Milliseconds()}
 
 	logTask(gr, lr)
 	return taskResult{name: fmt.Sprintf("Type signature of `%s`", tgt.refSymbol), grepRead: gr, lspResult: lr}
@@ -686,6 +744,339 @@ func taskSkillDeadCode(ctx context.Context, root string, client *lsp.LSPClient, 
 	}
 }
 
+// --- Task 8: Multi-hop call chain ---
+// "Who calls the functions that call X?" Two levels of incoming call hierarchy.
+// Grep: grep for X, parse enclosing function from each match, grep for each of those.
+// LSP: call_hierarchy incoming, 2 levels deep.
+func taskMultiHopCallChain(ctx context.Context, root string, client *lsp.LSPClient, tgt targets) taskResult {
+	pos := types.Position{Line: tgt.refSymbolLine, Character: tgt.refSymbolCol}
+	uri := fileURI(tgt.refSymbolFile)
+
+	// --- Grep workflow ---
+	grepStart := time.Now()
+
+	// Level 1: find direct callers.
+	grepOut := runGrep(root, tgt.refSymbol, tgt.cfg.grepIncl)
+	totalGrepBytes := len(grepOut)
+	grepRoundTrips := 1
+
+	// For each match, read the file to find the enclosing function name.
+	matchFiles := uniqueFiles(grepOut)
+	enclosingFuncs := map[string]bool{}
+	for _, f := range matchFiles {
+		content, _ := os.ReadFile(filepath.Join(root, f))
+		totalGrepBytes += min(len(content), 3000) // read context
+		grepRoundTrips++
+		// Crude: find function names in the file that contain the match.
+		for _, line := range strings.Split(string(content), "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "func ") {
+				if fn := extractFuncName(trimmed); fn != "" {
+					enclosingFuncs[fn] = true
+				}
+			}
+		}
+	}
+
+	// Level 2: grep for each enclosing function.
+	level2Funcs := 0
+	for fn := range enclosingFuncs {
+		if len(fn) < 3 {
+			continue
+		}
+		out := runGrep(root, fn, tgt.cfg.grepIncl)
+		totalGrepBytes += len(out)
+		grepRoundTrips++
+		level2Funcs++
+		if level2Funcs >= 10 {
+			break // cap to keep runtime reasonable
+		}
+	}
+	grepDuration := time.Since(grepStart)
+	gr := result{bytes: totalGrepBytes, roundTrips: grepRoundTrips, durationMs: grepDuration.Milliseconds()}
+
+	// --- LSP workflow ---
+	lspStart := time.Now()
+	totalLSPBytes := 0
+	lspRoundTrips := 0
+
+	// Level 1: prepare + incoming calls.
+	callBytes := lspCallHierarchy(ctx, client, uri, pos)
+	totalLSPBytes += len(callBytes)
+	lspRoundTrips += 2 // prepare + incoming
+
+	// Level 2: for each level-1 caller, get their incoming calls.
+	// Parse the incoming calls response to get caller positions.
+	// The callBytes contains prepRaw + incomingRaw concatenated.
+	// We need to parse just the incoming part. For simplicity, try parsing
+	// the whole thing as an array of incoming call items.
+	var incomingCalls []struct {
+		From struct {
+			URI   string `json:"uri"`
+			Range struct {
+				Start struct {
+					Line int `json:"line"`
+					Char int `json:"character"`
+				} `json:"start"`
+			} `json:"range"`
+		} `json:"from"`
+	}
+	json.Unmarshal(callBytes, &incomingCalls)
+
+	level2Count := 0
+	for _, call := range incomingCalls {
+		if level2Count >= 5 {
+			break
+		}
+		callerURI := call.From.URI
+		callerPos := types.Position{Line: call.From.Range.Start.Line, Character: call.From.Range.Start.Char}
+		l2Bytes := lspCallHierarchy(ctx, client, callerURI, callerPos)
+		totalLSPBytes += len(l2Bytes)
+		lspRoundTrips += 2
+		level2Count++
+	}
+	lspDuration := time.Since(lspStart)
+	lr := result{bytes: totalLSPBytes, roundTrips: lspRoundTrips, durationMs: lspDuration.Milliseconds()}
+
+	logTask(gr, lr)
+	return taskResult{
+		name:      fmt.Sprintf("Multi-hop: callers of callers of `%s`", tgt.refSymbol),
+		grepRead:  gr,
+		lspResult: lr,
+	}
+}
+
+// extractFuncName pulls the function name from a "func ..." line.
+func extractFuncName(line string) string {
+	rest := line[5:] // skip "func "
+	if strings.HasPrefix(rest, "(") {
+		if cp := strings.Index(rest, ")"); cp >= 0 {
+			rest = strings.TrimSpace(rest[cp+1:])
+		}
+	}
+	if pp := strings.Index(rest, "("); pp > 0 {
+		return rest[:pp]
+	}
+	return ""
+}
+
+// --- Task 9: Precision measurement ---
+// Grep for an ambiguous symbol name and count false positives.
+// LSP returns only true references; grep matches any string occurrence.
+func taskPrecision(ctx context.Context, root string, client *lsp.LSPClient, tgt targets) taskResult {
+	// Pick an ambiguous name: short, common words that appear as both symbol
+	// names and in comments/strings. For Python, use slightly longer names
+	// that are more likely to be actual defined functions, not just built-ins.
+	ambiguous := []string{"Close", "Error", "String", "Read", "Write", "Name", "Type"}
+	if tgt.cfg.lspLangID == "python" {
+		ambiguous = []string{"validate", "response", "request", "handle", "parse", "encode", "decode"}
+	}
+
+	// Find one that exists in the codebase and has a definition we can query.
+	var symbol string
+	var symFile string
+	var symLine, symCol int
+	for _, name := range ambiguous {
+		grepOut := runGrep(root, name, tgt.cfg.grepIncl)
+		grepLines := strings.Count(string(grepOut), "\n")
+		if grepLines < 5 {
+			continue
+		}
+		// Find the definition.
+		for _, f := range uniqueFiles(grepOut) {
+			path := filepath.Join(root, f)
+			l, c := findSymbolPosition(path, name)
+			if l > 0 {
+				symbol = name
+				symFile = path
+				symLine = l
+				symCol = c
+				break
+			}
+		}
+		if symbol != "" {
+			break
+		}
+	}
+	if symbol == "" {
+		// Fallback to the ref symbol.
+		symbol = tgt.refSymbol
+		symFile = tgt.refSymbolFile
+		symLine = tgt.refSymbolLine
+		symCol = tgt.refSymbolCol
+	}
+
+	// --- Grep side ---
+	grepStart := time.Now()
+	grepOut := runGrep(root, symbol, tgt.cfg.grepIncl)
+	grepMatches := strings.Count(string(grepOut), "\n")
+	grepDuration := time.Since(grepStart)
+	gr := result{bytes: len(grepOut), roundTrips: 1, durationMs: grepDuration.Milliseconds()}
+
+	// --- LSP side ---
+	// Open the file containing the symbol definition so the LSP server indexes it.
+	uri := fileURI(symFile)
+	openFileInLSP(ctx, client, symFile, uri, tgt.cfg.lspLangID)
+	time.Sleep(1 * time.Second) // let LSP process the file
+
+	lspStart := time.Now()
+	refsJSON := lspReferences(ctx, client, uri, types.Position{Line: symLine, Character: symCol})
+	var refs []json.RawMessage
+	json.Unmarshal(refsJSON, &refs)
+	lspDuration := time.Since(lspStart)
+	lr := result{bytes: len(refsJSON), roundTrips: 1, durationMs: lspDuration.Milliseconds()}
+
+	falsePositives := grepMatches - len(refs)
+	if falsePositives < 0 {
+		falsePositives = 0
+	}
+
+	logTask(gr, lr)
+	fmt.Fprintf(os.Stderr, "  precision: grep found %d matches, LSP found %d refs (%d likely false positives)\n",
+		grepMatches, len(refs), falsePositives)
+	return taskResult{
+		name:      fmt.Sprintf("Precision: `%s` (%d grep vs %d LSP refs, %d false+)", symbol, grepMatches, len(refs), falsePositives),
+		grepRead:  gr,
+		lspResult: lr,
+	}
+}
+
+// --- Task 10: Interface implementations (Go only) ---
+// "Find all types that implement this interface."
+// Grep: cannot do this. Would need to read every file and manually check method sets.
+// LSP: go_to_implementation returns concrete types directly.
+func taskInterfaceImpls(ctx context.Context, root string, client *lsp.LSPClient, tgt targets) taskResult {
+	// Find an interface in the largest file or a common one.
+	fileContent, _ := os.ReadFile(tgt.largestFile)
+	uri := fileURI(tgt.largestFile)
+
+	// Look for interfaces/traits: Go "type Xxx interface", Rust "pub trait Xxx".
+	var ifaceName string
+	var ifaceLine, ifaceCol int
+	for i, line := range strings.Split(string(fileContent), "\n") {
+		trimmed := strings.TrimSpace(line)
+		// Go: type Xxx interface
+		if strings.HasPrefix(trimmed, "type ") && strings.Contains(trimmed, " interface") {
+			parts := strings.Fields(trimmed)
+			if len(parts) >= 3 && (parts[2] == "interface" || strings.HasSuffix(parts[2], "interface{")) {
+				ifaceName = parts[1]
+				ifaceLine = i
+				ifaceCol = strings.Index(line, ifaceName)
+				break
+			}
+		}
+		// Rust: pub trait Xxx
+		if strings.HasPrefix(trimmed, "pub trait ") || strings.HasPrefix(trimmed, "trait ") {
+			rest := trimmed
+			if strings.HasPrefix(rest, "pub ") {
+				rest = rest[4:]
+			}
+			rest = rest[6:] // skip "trait "
+			for j, c := range rest {
+				if c == ' ' || c == '{' || c == '<' || c == ':' {
+					ifaceName = rest[:j]
+					break
+				}
+			}
+			if ifaceName != "" {
+				ifaceLine = i
+				ifaceCol = strings.Index(line, ifaceName)
+				break
+			}
+		}
+	}
+
+	// If no interface in largest file, search other files.
+	if ifaceName == "" {
+		var goFiles []string
+		filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			if strings.HasSuffix(d.Name(), ".go") && !strings.HasSuffix(d.Name(), "_test.go") {
+				goFiles = append(goFiles, path)
+			}
+			return nil
+		})
+		for _, f := range goFiles {
+			content, _ := os.ReadFile(f)
+			for i, line := range strings.Split(string(content), "\n") {
+				trimmed := strings.TrimSpace(line)
+				if strings.HasPrefix(trimmed, "type ") && strings.Contains(trimmed, " interface") {
+					parts := strings.Fields(trimmed)
+					if len(parts) >= 3 {
+						ifaceName = parts[1]
+						ifaceLine = i
+						ifaceCol = strings.Index(line, ifaceName)
+						tgt.largestFile = f // update for this task
+						uri = fileURI(f)
+						openFileInLSP(ctx, client, f, uri, tgt.cfg.lspLangID)
+						break
+					}
+				}
+			}
+			if ifaceName != "" {
+				break
+			}
+		}
+	}
+
+	if ifaceName == "" {
+		return taskResult{
+			name:      "Interface implementations (no interface found)",
+			grepRead:  result{bytes: 0, roundTrips: 0},
+			lspResult: result{bytes: 0, roundTrips: 0},
+		}
+	}
+
+	// --- Grep workflow ---
+	// To find implementations of an interface, grep cannot help directly.
+	// The agent would need to: read the interface definition to get method signatures,
+	// then grep for each method name, then read files to check if types have all methods.
+	grepStart := time.Now()
+	totalGrepBytes := 0
+	grepRoundTrips := 0
+
+	// Read the interface definition.
+	totalGrepBytes += len(fileContent)
+	grepRoundTrips++
+
+	// Grep for the interface name (to find types that reference it).
+	grepOut := runGrep(root, ifaceName, tgt.cfg.grepIncl)
+	totalGrepBytes += len(grepOut)
+	grepRoundTrips++
+
+	// For each match, read the file to check method sets.
+	for _, f := range uniqueFiles(grepOut) {
+		content, _ := os.ReadFile(filepath.Join(root, f))
+		totalGrepBytes += len(content) // must read entire file to check method sets
+		grepRoundTrips++
+	}
+	grepDuration := time.Since(grepStart)
+	gr := result{bytes: totalGrepBytes, roundTrips: grepRoundTrips, durationMs: grepDuration.Milliseconds()}
+
+	// --- LSP workflow ---
+	lspStart := time.Now()
+	implRaw, _ := client.SendRequest(ctx, "textDocument/implementation", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
+		"position":     types.Position{Line: ifaceLine, Character: ifaceCol},
+	})
+	implBytes := normalizeLSPLocations(implRaw, root)
+	lspDuration := time.Since(lspStart)
+
+	var impls []json.RawMessage
+	json.Unmarshal(implBytes, &impls)
+	lr := result{bytes: len(implBytes), roundTrips: 1, durationMs: lspDuration.Milliseconds()}
+
+	logTask(gr, lr)
+	fmt.Fprintf(os.Stderr, "  interface: %s has %d implementations\n", ifaceName, len(impls))
+	return taskResult{
+		name:      fmt.Sprintf("Interface: implementations of `%s` (%d found)", ifaceName, len(impls)),
+		grepRead:  gr,
+		lspResult: lr,
+	}
+}
+
 // --- LSP helpers ---
 
 func lspReferences(ctx context.Context, client *lsp.LSPClient, uri string, pos types.Position) []byte {
@@ -823,6 +1214,81 @@ func findExportedSymbols(content, lang string) []string {
 		trimmed := strings.TrimSpace(line)
 		var name string
 		switch lang {
+		case "rust":
+			// Rust: pub fn name(, pub struct Name, pub enum Name, pub trait Name
+			if strings.HasPrefix(trimmed, "pub fn ") {
+				rest := trimmed[len("pub fn "):]
+				if parenIdx := strings.Index(rest, "("); parenIdx > 0 {
+					name = rest[:parenIdx]
+				}
+			} else if strings.HasPrefix(trimmed, "pub struct ") {
+				rest := trimmed[len("pub struct "):]
+				for i, c := range rest {
+					if c == ' ' || c == '{' || c == '(' || c == '<' {
+						name = rest[:i]
+						break
+					}
+				}
+				if name == "" && len(rest) > 0 {
+					name = rest
+				}
+			} else if strings.HasPrefix(trimmed, "pub enum ") {
+				rest := trimmed[len("pub enum "):]
+				for i, c := range rest {
+					if c == ' ' || c == '{' || c == '<' {
+						name = rest[:i]
+						break
+					}
+				}
+			} else if strings.HasPrefix(trimmed, "pub trait ") {
+				rest := trimmed[len("pub trait "):]
+				for i, c := range rest {
+					if c == ' ' || c == '{' || c == '<' || c == ':' {
+						name = rest[:i]
+						break
+					}
+				}
+			}
+		case "typescript":
+			// TypeScript: export function name(, export class Name, export const name
+			if strings.HasPrefix(trimmed, "export function ") {
+				rest := trimmed[len("export function "):]
+				if parenIdx := strings.Index(rest, "("); parenIdx > 0 {
+					name = rest[:parenIdx]
+				}
+			} else if strings.HasPrefix(trimmed, "export class ") {
+				rest := trimmed[len("export class "):]
+				for i, c := range rest {
+					if c == ' ' || c == '{' || c == '<' {
+						name = rest[:i]
+						break
+					}
+				}
+			} else if strings.HasPrefix(trimmed, "export const ") {
+				rest := trimmed[len("export const "):]
+				for i, c := range rest {
+					if c == ' ' || c == '=' || c == ':' {
+						name = rest[:i]
+						break
+					}
+				}
+			} else if strings.HasPrefix(trimmed, "export interface ") {
+				rest := trimmed[len("export interface "):]
+				for i, c := range rest {
+					if c == ' ' || c == '{' || c == '<' {
+						name = rest[:i]
+						break
+					}
+				}
+			} else if strings.HasPrefix(trimmed, "export type ") {
+				rest := trimmed[len("export type "):]
+				for i, c := range rest {
+					if c == ' ' || c == '=' || c == '<' {
+						name = rest[:i]
+						break
+					}
+				}
+			}
 		case "python":
 			// Python: def func_name( or class ClassName
 			if strings.HasPrefix(trimmed, "def ") {
@@ -909,8 +1375,9 @@ func rel(base, path string) string {
 }
 
 func logTask(gr, lr result) {
-	fmt.Fprintf(os.Stderr, "  grep: %s (%d calls), lsp: %s (%d calls)\n",
-		formatNum(gr.bytes), gr.roundTrips, formatNum(lr.bytes), lr.roundTrips)
+	fmt.Fprintf(os.Stderr, "  grep: %s (%d calls, %dms), lsp: %s (%d calls, %dms)\n",
+		formatNum(gr.bytes), gr.roundTrips, gr.durationMs,
+		formatNum(lr.bytes), lr.roundTrips, lr.durationMs)
 }
 
 func formatNum(n int) string {
@@ -933,6 +1400,10 @@ func isTestFile(name, lang string) bool {
 	switch lang {
 	case "python":
 		return strings.HasPrefix(name, "test_") || strings.HasSuffix(name, "_test.py")
+	case "typescript":
+		return strings.HasSuffix(name, ".test.ts") || strings.HasSuffix(name, ".spec.ts")
+	case "rust":
+		return false // Rust tests are inline (#[cfg(test)] modules), not separate files
 	default: // go
 		return strings.HasSuffix(name, "_test.go")
 	}
