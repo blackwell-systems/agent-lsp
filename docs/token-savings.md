@@ -6,19 +6,21 @@ each approach on real codebases of different sizes and languages.
 
 ### Key findings
 
-| Codebase | Language | Lines | Savings | Tokens saved |
-|----------|----------|------:|--------:|-------------:|
-| agent-lsp | Go | 15K | **5x** | ~437K |
-| FastAPI | Python | 33K | **2x** | ~216K |
-| HashiCorp Consul | Go | 319K | **21x** | ~4.3M |
+| Codebase | Language | Lines | Overall | `/lsp-rename` | Tokens saved |
+|----------|----------|------:|--------:|--------------:|-------------:|
+| agent-lsp | Go | 15K | **4x** | **86x** | ~594K |
+| FastAPI | Python | 33K | **2x** | **116x** | ~389K |
+| HashiCorp Consul | Go | 319K | **21x** | **97x** | ~6.2M |
 
-- **Savings scale with codebase size.** Grep output grows linearly with the number
-  of files; LSP responses stay proportional to actual references.
-- **Edit safety is the strongest case.** Checking if an edit breaks the build:
-  23-65x fewer tokens (structured diagnostics vs raw compiler output).
-- **Skill workflows amplify savings.** Multi-step operations like `/lsp-impact` on
-  a large file (57 exports across 319K lines): 21x fewer tokens, 5,534 grep calls
-  reduced to 119 LSP calls.
+- **`/lsp-rename` saves 86-116x consistently** across all three codebases. The grep
+  agent must read every file containing the symbol to safely edit it; LSP does it
+  atomically in 3 calls.
+- **Savings scale with codebase size.** 4x at 15K lines, 21x at 319K lines. Grep
+  output grows linearly with file count; LSP responses stay constant.
+- **Edit safety saves 23-65x.** Structured diagnostics vs raw compiler/mypy output.
+- **Blast-radius analysis on a large file (57 exports, 319K lines):** 21x fewer
+  tokens, 5,534 grep calls reduced to 119 LSP calls.
+- **Dead code detection at scale:** 20x on consul (7.1MB grep vs 348KB LSP).
 
 **Methodology:**
 - **Grep/Read** = total bytes of grep output + file content read + build/test output.
@@ -30,7 +32,7 @@ each approach on real codebases of different sizes and languages.
 
 ---
 
-### agent-lsp (15,000 lines, 82 files)
+### agent-lsp (15,134 lines, 82 files)
 
 **Simple tasks**
 
@@ -40,14 +42,16 @@ each approach on real codebases of different sizes and languages.
 | Type signature of `Shutdown` | 4,872 | 393 | **12x** | 1 vs 1 |
 | Edit safety check (break build, measure output) | 75,740 | 1,171 | **65x** | 3 vs 3 |
 
-**Skill workflows**
+**Skill workflows (4 skills)**
 
 | Task | Grep/Read | LSP | Ratio | Round trips |
 |------|----------:|----:|------:|------------:|
 | Skill: `/lsp-refactor` rename `Shutdown` | 28,304 | 30,733 | **1x** | 17 vs 5 |
-| Skill: `/lsp-impact` on `client.go` (52 exports) | 2,073,853 | 405,163 | **5x** | 795 vs 109 |
+| Skill: `/lsp-impact` on `client.go` (52 exports) | 2,076,635 | 410,228 | **5x** | 795 vs 109 |
+| Skill: `/lsp-rename` `Shutdown` (14 files) | 195,474 | 2,285 | **86x** | 16 vs 3 |
+| Skill: `/lsp-dead-code` on `client.go` (52 exports, 5 dead) | 673,197 | 235,050 | **3x** | 57 vs 57 |
 
-**Total: 2,185,884 grep/read vs 438,593 LSP = 5x savings (~436,822 tokens saved)**
+**Total: 3,057,337 grep/read vs 680,993 LSP = 4x savings (~594,086 tokens saved)**
 
 ### fastapi-bench (32,564 lines, 621 files)
 
@@ -59,14 +63,16 @@ each approach on real codebases of different sizes and languages.
 | Type signature of `middleware` | 0 | 156 | **0x** | 1 vs 1 |
 | Edit safety check (break build, measure output) | 181,470 | 4,200 | **43x** | 3 vs 3 |
 
-**Skill workflows**
+**Skill workflows (4 skills)**
 
 | Task | Grep/Read | LSP | Ratio | Round trips |
 |------|----------:|----:|------:|------------:|
 | Skill: `/lsp-refactor` rename `middleware` | 24,665 | 4,202 | **6x** | 25 vs 5 |
 | Skill: `/lsp-impact` on `routing.py` (38 exports) | 1,460,499 | 802,062 | **2x** | 418 vs 79 |
+| Skill: `/lsp-rename` `middleware` (22 files) | 416,042 | 3,601 | **116x** | 24 vs 3 |
+| Skill: `/lsp-dead-code` on `routing.py` (38 exports, 22 dead) | 904,821 | 626,555 | **1x** | 41 vs 41 |
 
-**Total: 1,674,562 grep/read vs 811,192 LSP = 2x savings (~215,842 tokens saved)**
+**Total: 2,995,425 grep/read vs 1,441,348 LSP = 2x savings (~388,519 tokens saved)**
 
 ### consul-bench (319,072 lines, 1468 files)
 
@@ -78,28 +84,32 @@ each approach on real codebases of different sizes and languages.
 | Type signature of `GetNode` | 20,817 | 464 | **45x** | 1 vs 1 |
 | Edit safety check (break build, measure output) | 173,498 | 7,477 | **23x** | 3 vs 3 |
 
-**Skill workflows**
+**Skill workflows (4 skills)**
 
 | Task | Grep/Read | LSP | Ratio | Round trips |
 |------|----------:|----:|------:|------------:|
 | Skill: `/lsp-refactor` rename `GetNode` | 46,874 | 14,055 | **3x** | 21 vs 5 |
 | Skill: `/lsp-impact` on `catalog.go` (57 exports) | 17,745,627 | 841,371 | **21x** | 5534 vs 119 |
+| Skill: `/lsp-rename` `GetNode` (18 files) | 802,815 | 8,286 | **97x** | 20 vs 3 |
+| Skill: `/lsp-dead-code` on `catalog.go` (57 exports, 22 dead) | 7,133,669 | 348,452 | **20x** | 62 vs 62 |
 
-**Total: 17,997,631 grep/read vs 869,323 LSP = 21x savings (~4,282,077 tokens saved)**
+**Total: 25,934,115 grep/read vs 1,226,061 LSP = 21x savings (~6,177,013 tokens saved)**
 
 ---
 
 ### Reproduce
 
 ```bash
-# On any Go project
+# Run on any Go project
 go run ./experiments/token-savings --root /path/to/go/project
 
-# On any Python project
+# Run on any Python project
 go run ./experiments/token-savings --root /path/to/python/project --language python
 
-# Append to results file
+# Append results to the doc
 go run ./experiments/token-savings --root /path/to/project --output docs/token-savings.md
 ```
 
 Prerequisites: `gopls` (Go) or `pyright-langserver` (Python) on PATH.
+
+Source: [`experiments/token-savings/main.go`](../experiments/token-savings/main.go)

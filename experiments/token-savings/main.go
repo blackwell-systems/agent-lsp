@@ -175,21 +175,27 @@ func main() {
 	var results []taskResult
 
 	// --- Simple tasks ---
-	fmt.Fprintf(os.Stderr, "[1/5] Find all callers of %s\n", tgt.refSymbol)
+	fmt.Fprintf(os.Stderr, "[1/7] Find all callers of %s\n", tgt.refSymbol)
 	results = append(results, taskFindCallers(ctx, absRoot, client, tgt))
 
-	fmt.Fprintf(os.Stderr, "[2/5] Type signature lookup\n")
+	fmt.Fprintf(os.Stderr, "[2/7] Type signature lookup\n")
 	results = append(results, taskTypeSignature(ctx, absRoot, client, tgt))
 
-	fmt.Fprintf(os.Stderr, "[3/5] Edit safety check\n")
+	fmt.Fprintf(os.Stderr, "[3/7] Edit safety check\n")
 	results = append(results, taskEditSafety(ctx, absRoot, client, tgt))
 
 	// --- Skill workflows ---
-	fmt.Fprintf(os.Stderr, "[4/5] Skill: /lsp-refactor (rename %s)\n", tgt.refSymbol)
+	fmt.Fprintf(os.Stderr, "[4/7] Skill: /lsp-refactor (rename %s)\n", tgt.refSymbol)
 	results = append(results, taskSkillRefactor(ctx, absRoot, client, tgt))
 
-	fmt.Fprintf(os.Stderr, "[5/5] Skill: /lsp-impact on %s\n", rel(absRoot, tgt.largestFile))
+	fmt.Fprintf(os.Stderr, "[5/7] Skill: /lsp-impact on %s\n", rel(absRoot, tgt.largestFile))
 	results = append(results, taskSkillImpact(ctx, absRoot, client, tgt))
+
+	fmt.Fprintf(os.Stderr, "[6/7] Skill: /lsp-rename (atomic rename %s)\n", tgt.refSymbol)
+	results = append(results, taskSkillRename(ctx, absRoot, client, tgt))
+
+	fmt.Fprintf(os.Stderr, "[7/7] Skill: /lsp-dead-code on %s\n", rel(absRoot, tgt.largestFile))
+	results = append(results, taskSkillDeadCode(ctx, absRoot, client, tgt))
 
 	// --- Output ---
 	repoName := filepath.Base(absRoot)
@@ -204,7 +210,7 @@ func main() {
 		writeRow(&buf, r)
 	}
 
-	fmt.Fprintf(&buf, "\n**Skill workflows**\n\n")
+	fmt.Fprintf(&buf, "\n**Skill workflows (%d skills)**\n\n", len(results)-3)
 	fmt.Fprintf(&buf, "| Task | Grep/Read | LSP | Ratio | Round trips |\n")
 	fmt.Fprintf(&buf, "|------|----------:|----:|------:|------------:|\n")
 	for _, r := range results[3:] {
@@ -547,6 +553,134 @@ func taskSkillImpact(ctx context.Context, root string, client *lsp.LSPClient, tg
 	logTask(gr, lr)
 	return taskResult{
 		name:      fmt.Sprintf("Skill: `/lsp-impact` on `%s` (%d exports)", filepath.Base(targetFile), len(exports)),
+		grepRead:  gr,
+		lspResult: lr,
+	}
+}
+
+// --- Task 6: Skill /lsp-rename ---
+// The grep approach for a rename: grep to find occurrences, read each file to
+// understand context, sed/replace in each file, build to verify, revert if broken.
+// LSP: prepare_rename + rename_symbol (atomic workspace edit) + diagnostics.
+func taskSkillRename(ctx context.Context, root string, client *lsp.LSPClient, tgt targets) taskResult {
+	uri := fileURI(tgt.refSymbolFile)
+	pos := types.Position{Line: tgt.refSymbolLine, Character: tgt.refSymbolCol}
+
+	// --- Grep workflow ---
+	// Step 1: grep to find all occurrences.
+	grepOut := runGrep(root, tgt.refSymbol, tgt.cfg.grepIncl)
+	totalGrepBytes := len(grepOut)
+	grepRoundTrips := 1
+
+	// Step 2: read each matching file to verify context before replacing.
+	matchFiles := uniqueFiles(grepOut)
+	for _, f := range matchFiles {
+		content, _ := os.ReadFile(filepath.Join(root, f))
+		totalGrepBytes += len(content) // agent reads the full file to safely edit it
+		grepRoundTrips++
+	}
+
+	// Step 3: after replacing, build to verify nothing broke.
+	buildOut := runCmd(root, tgt.cfg.buildCmd[0], tgt.cfg.buildCmd[1:]...)
+	totalGrepBytes += len(buildOut)
+	grepRoundTrips++
+	gr := result{bytes: totalGrepBytes, roundTrips: grepRoundTrips}
+
+	// --- LSP workflow ---
+	totalLSPBytes := 0
+	lspRoundTrips := 0
+
+	// Step 1: prepare_rename (validate the symbol is renameable).
+	prepRaw, _ := client.SendRequest(ctx, "textDocument/prepareRename", map[string]any{
+		"textDocument": map[string]any{"uri": uri}, "position": pos,
+	})
+	totalLSPBytes += len(prepRaw)
+	lspRoundTrips++
+
+	// Step 2: rename_symbol (atomic workspace edit across all files).
+	renameRaw, _ := client.SendRequest(ctx, "textDocument/rename", map[string]any{
+		"textDocument": map[string]any{"uri": uri}, "position": pos,
+		"newName": tgt.refSymbol + "Renamed",
+	})
+	totalLSPBytes += len(renameRaw)
+	lspRoundTrips++
+
+	// Step 3: get_diagnostics (verify no errors after rename).
+	diagsJSON, _ := json.Marshal(client.GetDiagnostics(uri))
+	totalLSPBytes += len(diagsJSON)
+	lspRoundTrips++
+	lr := result{bytes: totalLSPBytes, roundTrips: lspRoundTrips}
+
+	logTask(gr, lr)
+	return taskResult{
+		name:      fmt.Sprintf("Skill: `/lsp-rename` `%s` (%d files)", tgt.refSymbol, len(matchFiles)),
+		grepRead:  gr,
+		lspResult: lr,
+	}
+}
+
+// --- Task 7: Skill /lsp-dead-code ---
+// Find exported symbols with zero references (dead code).
+// Grep: for each export in the file, grep the entire codebase. If only the
+// definition matches, it's dead. Agent must read the file + N grep passes.
+// LSP: get_document_symbols + get_references per symbol. Zero-ref symbols are dead.
+func taskSkillDeadCode(ctx context.Context, root string, client *lsp.LSPClient, tgt targets) taskResult {
+	targetFile := tgt.largestFile
+	uri := fileURI(targetFile)
+
+	fileContent, _ := os.ReadFile(targetFile)
+	exports := findExportedSymbols(string(fileContent), tgt.cfg.lspLangID)
+
+	// Cap at 10, scale.
+	measured := exports
+	if len(measured) > 10 {
+		measured = measured[:10]
+	}
+
+	// --- Grep workflow ---
+	totalGrepBytes := len(fileContent) // must read the file to find exports
+	grepRoundTrips := 1
+	for _, name := range measured {
+		grepOut := runGrep(root, name, tgt.cfg.grepIncl)
+		totalGrepBytes += len(grepOut)
+		grepRoundTrips++
+	}
+
+	// --- LSP workflow ---
+	symbolsRaw := lspDocumentSymbols(ctx, client, uri)
+	totalLSPBytes := len(symbolsRaw)
+	lspRoundTrips := 1
+
+	deadCount := 0
+	for _, name := range measured {
+		line, col := findSymbolPosition(targetFile, name)
+		refsJSON := lspReferences(ctx, client, uri, types.Position{Line: line, Character: col})
+		totalLSPBytes += len(refsJSON)
+		lspRoundTrips++
+
+		// Count dead symbols (empty reference list or only self-reference).
+		var refs []json.RawMessage
+		json.Unmarshal(refsJSON, &refs)
+		if len(refs) <= 1 {
+			deadCount++
+		}
+	}
+
+	// Scale up if capped.
+	if len(exports) > len(measured) {
+		scale := float64(len(exports)) / float64(len(measured))
+		totalGrepBytes = int(float64(totalGrepBytes) * scale)
+		totalLSPBytes = int(float64(totalLSPBytes) * scale)
+		grepRoundTrips = int(float64(grepRoundTrips) * scale)
+		lspRoundTrips = int(float64(lspRoundTrips) * scale)
+		deadCount = int(float64(deadCount) * scale)
+	}
+	gr := result{bytes: totalGrepBytes, roundTrips: grepRoundTrips}
+	lr := result{bytes: totalLSPBytes, roundTrips: lspRoundTrips}
+
+	logTask(gr, lr)
+	return taskResult{
+		name:      fmt.Sprintf("Skill: `/lsp-dead-code` on `%s` (%d exports, %d dead)", filepath.Base(targetFile), len(exports), deadCount),
 		grepRead:  gr,
 		lspResult: lr,
 	}
