@@ -5,16 +5,21 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-05-03
+
 ### Added
 
-- **Token savings experiment** (`experiments/token-savings/`): reproducible Go script that measures input token cost of LSP vs grep/read approaches on any Go or Python codebase. Auto-discovers target symbols, runs 5 tasks (find callers, type signature, edit safety, skill refactor, skill impact), outputs markdown comparison table. Supports `--language go|python` and `--server` flags for multi-language benchmarking.
+- **Token savings experiment** (`experiments/token-savings/`): reproducible Go script that measures input token cost of LSP vs grep/read approaches across Go, Python, and TypeScript codebases. 13 tasks covering 7 agent skills. Auto-discovers target symbols. Results: 5-34x savings across 5 codebases (agent-lsp, Hono, FastAPI, Next.js, HashiCorp Consul).
 - **`SendRequest` public method** on `LSPClient`: exposes the low-level JSON-RPC request path for batch/measurement scenarios where the workspace is already indexed.
+- **PyPI distribution** (`pypi/`): platform-specific wheels containing the Go binary. `pip install agent-lsp` works on macOS, Linux, and Windows without a Go toolchain.
+- **Download stats script** (`scripts/download-stats.sh`): queries npm, PyPI, GitHub Releases, and Docker Hub. Generates SVG badge.
 
 ### Changed
 
 - File-level comments added to 21 core source files across `cmd/agent-lsp/`, `internal/lsp/`, `internal/tools/`, and `internal/session/` explaining architecture, design decisions, and data flow.
 - Roadmap updated: "mcp-eval" section replaced with "mcp-assert: shipped sister project" reflecting v0.8.0 reality.
-- mcp-assert GitHub description updated to emphasize language-agnostic testing.
+- README: added token savings section with headline numbers (5-34x, link to full experiment).
+- Distribution docs: added PyPI channel and marketing/discovery tracking section.
 
 ## [0.5.0] - 2026-04-25
 
