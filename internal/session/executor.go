@@ -1,3 +1,13 @@
+// executor.go provides per-session serialization for speculative execution.
+//
+// The problem: multiple simulate_edit and evaluate calls on the same session
+// must not interleave, because they share a single LSP client and the diagnostic
+// state would become corrupted. But operations on different sessions should
+// proceed concurrently.
+//
+// The solution: a per-session channel semaphore (buffered channel of size 1).
+// Acquire sends into the channel (blocks if occupied); Release receives from it.
+// Independent sessions get independent channels, so no global bottleneck.
 package session
 
 import (

@@ -1,3 +1,14 @@
+// navigation.go implements MCP tool handlers for code navigation:
+// go_to_definition, go_to_type_definition, go_to_implementation,
+// go_to_declaration, and get_references.
+//
+// All navigation handlers follow the same pattern: validate args, open the
+// document via WithDocument, call the corresponding LSP method, and format
+// the resulting locations into 1-indexed file:line:column tuples.
+//
+// LSP returns 0-indexed positions (per the spec); all handlers convert to
+// 1-indexed before returning to the MCP client. This matches editor conventions
+// and is less error-prone for AI agents.
 package tools
 
 import (

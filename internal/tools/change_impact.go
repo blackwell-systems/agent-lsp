@@ -1,3 +1,17 @@
+// change_impact.go implements the get_change_impact MCP tool for blast-radius
+// analysis. Given a list of changed files, it:
+//
+//   1. Opens each file and retrieves its exported symbols (GetDocumentSymbols).
+//   2. Calls GetReferences for each exported symbol to find all callers.
+//   3. Partitions callers into test files vs non-test callers.
+//   4. Extracts enclosing test function names for test references.
+//
+// The result tells the agent which code paths are affected by the change,
+// enabling informed decisions about whether to proceed with an edit or halt
+// due to excessive blast radius.
+//
+// Optionally, include_transitive follows one additional level of indirection:
+// for each non-test caller, find its callers too.
 package tools
 
 import (

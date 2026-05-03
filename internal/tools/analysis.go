@@ -1,3 +1,16 @@
+// analysis.go implements MCP tool handlers for code analysis queries:
+// get_diagnostics, get_info_on_location (hover), get_completions,
+// get_signature_help, get_code_actions, get_document_symbols, and
+// get_workspace_symbols.
+//
+// get_diagnostics has special behavior: it reopens the document from disk
+// before collecting diagnostics, ensuring results reflect the latest saved
+// state rather than stale LSP cache. It waits up to 25 seconds for
+// diagnostics to settle (cross-package analysis in Go can be slow).
+//
+// get_code_actions filters the returned actions to a concise summary:
+// title, kind, and whether a command or workspace edit is attached.
+// Full workspace edits are not inlined to keep responses compact.
 package tools
 
 import (

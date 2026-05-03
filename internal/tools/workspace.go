@@ -1,3 +1,12 @@
+// workspace.go implements MCP tool handlers that modify workspace state:
+// rename_symbol, prepare_rename, open_document, close_document, apply_edit,
+// format_document, and format_range.
+//
+// The rename handler includes a fuzzy fallback for imprecise AI positions:
+// if the exact line:column produces an empty WorkspaceEdit, it hovers to get
+// the symbol name, searches workspace symbols for a match, and retries the
+// rename at the resolved definition location. This compensates for agents
+// that provide approximate rather than exact cursor positions.
 package tools
 
 import (

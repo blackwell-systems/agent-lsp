@@ -1,3 +1,16 @@
+// position_pattern.go resolves @@-marker patterns to line:column positions.
+//
+// AI agents frequently provide imprecise positions. Instead of requiring exact
+// line:column numbers, tools can accept a position_pattern like "func @@MyFunc"
+// where @@ marks the cursor position. This file resolves such patterns to
+// precise 1-indexed line:column coordinates by searching the file content.
+//
+// The @@ marker splits the pattern into prefix ("func ") and suffix ("MyFunc").
+// The full search text is "func MyFunc" (prefix + suffix concatenated). The
+// cursor position is at byte offset prefix_length within the matched text.
+//
+// Line/column coordinates are 1-indexed and column is converted to UTF-16
+// code units per LSP spec section 3.4 (surrogate pairs for codepoints >= U+10000).
 package tools
 
 import (

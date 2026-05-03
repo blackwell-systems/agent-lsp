@@ -1,3 +1,13 @@
+// helpers.go contains shared utilities used across all tool handlers:
+//
+//   - ValidateFilePath: path traversal prevention (resolves symlinks, checks
+//     workspace root boundary). Used by every tool that accepts a file_path arg.
+//   - WithDocument: convenience wrapper that reads a file from disk, opens it
+//     in the LSP server, and calls a callback. Handles the common open-then-query
+//     pattern used by navigation and analysis tools.
+//   - CreateFileURI / URIToFilePath: file path <-> file:// URI conversion.
+//   - CheckInitialized: guard that returns a clear error when the LSP client
+//     hasn't been started yet.
 package tools
 
 import (

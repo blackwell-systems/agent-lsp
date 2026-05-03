@@ -1,3 +1,11 @@
+// differ.go computes the diagnostic delta between a session's baseline
+// and the current LSP state. This is the core of speculative execution:
+// the net_delta (introduced minus resolved) tells the agent whether an
+// edit made things better (negative), worse (positive), or neutral (zero).
+//
+// Comparison uses DiagnosticsEqual which matches on range + message + severity.
+// Source is only compared when both diagnostics have a non-empty Source field,
+// because some language servers omit Source on certain diagnostic kinds.
 package session
 
 import (

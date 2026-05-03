@@ -1,3 +1,14 @@
+// detect.go implements the detect_lsp_servers MCP tool: scan a workspace for
+// source files, identify which programming languages are present, check PATH
+// for the corresponding LSP server binaries, and return a suggested configuration.
+//
+// Detection uses a two-pass scoring system:
+//   - Root markers (go.mod, Cargo.toml, package.json) score +50 per file.
+//   - File extensions (.go, .rs, .ts) score +1 per file.
+// Languages are sorted by score descending so the primary language appears first.
+//
+// The knownServers table maps languages to their LSP server binaries. When
+// multiple servers exist for a language, the first one found wins.
 package tools
 
 import (
