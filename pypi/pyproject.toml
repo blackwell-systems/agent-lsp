@@ -9,7 +9,7 @@ description = "MCP server for language intelligence. 53 tools, 30 languages, spe
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.8"
-keywords = ["mcp", "lsp", "language-server", "ai-agents", "code-intelligence", "model-context-protocol"]
+keywords = ["mcp", "lsp", "language-server", "ai-agents", "code-intelligence", "model-context-protocol", "ai-coding", "code-navigation", "refactoring", "diagnostics", "gopls", "pyright", "typescript-language-server", "speculative-execution", "mcp-server", "claude", "cursor", "copilot"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
