@@ -210,6 +210,28 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  pypi-publish:
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tools
+        run: pip install wheel setuptools twine
+
+      - name: Build and publish wheels
+        run: |
+          bash scripts/pypi-build-wheels.sh "${{ github.ref_name }}"
+          twine upload pypi/dist/*.whl
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+
   mcp-registry-publish:
     needs: npm-publish
     runs-on: ubuntu-latest
