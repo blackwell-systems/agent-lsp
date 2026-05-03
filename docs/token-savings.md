@@ -11,6 +11,7 @@ each approach on real codebases across three languages and four projects.
 | agent-lsp | Go | 15K | **5x** | **96x** | 92% noise | ~1.3M |
 | Hono | TypeScript | 24K | **13x** | **1,441x** | 93% noise | ~1.2M |
 | FastAPI | Python | 33K | **2x** | **116x** | 97% noise | ~693K |
+| Next.js | TypeScript | 196K | **5x** | **52x** | 98% noise | ~1.1M |
 | HashiCorp Consul | Go | 319K | **34x** | **97x** | 99% noise | ~13.1M |
 
 - **`/lsp-rename` saves 92-1,441x consistently.** The grep agent must read every file
@@ -167,3 +168,28 @@ go run ./experiments/token-savings --root /path/to/project --output docs/token-s
 Prerequisites: language server on PATH (`gopls`, `pyright-langserver`, or `typescript-language-server`).
 
 Source: [`experiments/token-savings/main.go`](../experiments/token-savings/main.go)
+### src (196,523 lines, 1201 files)
+
+**Simple tasks**
+
+| Task | Grep/Read | LSP | Ratio | Round trips | Time |
+|------|----------:|----:|------:|------------:|-----:|
+| Find callers of `RouteCacheEntry` | 9,014 | 352 | **26x** | 1 vs 1 | 138ms vs 1ms |
+| Type signature of `RouteCacheEntry` | 7,896 | 310 | **25x** | 1 vs 1 | 114ms vs 1ms |
+| Edit safety check (break build, measure output) | 110,830 | 6,386 | **17x** | 3 vs 3 | 0ms vs 0ms |
+
+**Skill workflows and advanced tasks (8 tasks)**
+
+| Task | Grep/Read | LSP | Ratio | Round trips | Time |
+|------|----------:|----:|------:|------------:|-----:|
+| Skill: `/lsp-refactor` rename `RouteCacheEntry` | 22,660 | 7,000 | **3x** | 9 vs 5 | 0ms vs 0ms |
+| Skill: `/lsp-impact` on `cache.ts` (43 exports) | 1,493,510 | 649,755 | **2x** | 477 vs 90 | 0ms vs 0ms |
+| Skill: `/lsp-rename` `RouteCacheEntry` (6 files) | 345,596 | 6,635 | **52x** | 8 vs 3 | 0ms vs 0ms |
+| Skill: `/lsp-dead-code` on `cache.ts` (43 exports, 0 dead) | 698,926 | 641,104 | **1x** | 47 vs 47 | 0ms vs 0ms |
+| Skill: `/lsp-understand` Code Map of `cache.ts` (43 exports) | 1,958,789 | 803,213 | **2x** | 612 vs 134 | 1871ms vs 55ms |
+| Skill: `/lsp-safe-edit` (speculative edit + verify + revert) | 111,343 | 6,483 | **17x** | 4 vs 3 | 1778ms vs 1ms |
+| Skill: `/lsp-verify` (diagnostics + build + tests) | 111,963 | 6,066 | **18x** | 3 vs 3 | 1847ms vs 0ms |
+| Precision: `Close` (158 grep vs 3 LSP refs, 155 false+) | 13,279 | 357 | **37x** | 1 vs 1 | 103ms vs 93ms |
+
+**Total: 4,883,806 grep/read vs 2,127,661 LSP = 2x savings (~689,036 tokens saved)**
+
