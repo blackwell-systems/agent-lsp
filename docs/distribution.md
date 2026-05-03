@@ -139,16 +139,29 @@ Docker images are built inside the `release` job by GoReleaser (`dockers:` secti
 
 | Channel | Status | Notes |
 |---------|--------|-------|
-| **LinkedIn** | Ready | Token savings post drafted. Post after experiment is final. |
-| **Hacker News** | Not submitted | The token savings blog post (data, methodology, reproducible) is HN-ready. |
-| **Reddit** | Not submitted | r/LocalLLaMA, r/golang, r/programming. Different angle per sub. |
-| **Go Weekly** | Not submitted | Submit blog post link. Targeted Go devs. |
+| **LinkedIn** | Ready | Token savings post drafted. |
+| **Hacker News** | Not submitted | Token savings blog post is HN-ready. |
+| **Reddit** | Not submitted | r/LocalLLaMA, r/golang, r/programming. |
+| **Go Weekly** | Not submitted | Submit blog post link. |
 | **Twitter/X** | Not active | Thread format works for the data. |
-| **Dev.to / Hashnode** | Not active | Cross-post blog for SEO. |
-| **glama.ai** | Not listed | MCP server discovery platform. |
-| **Product Hunt** | Not launched | High one-day spike, dies after. Save for a bigger release. |
-| **Claude Code community** | Not posted | Direct users of the tool. |
-| **YouTube** | Not started | "Watch LSP vs grep side by side" demo. High effort, high impact. |
+| **glama.ai** | Not listed | MCP server discovery. |
+| **Product Hunt** | Not launched | Save for bigger release. |
+| **YouTube** | Not started | "LSP vs grep side by side" demo. |
+
+### Awesome Lists
+
+| List | Stars | Status | Section |
+|------|------:|--------|---------|
+| punkpeye/awesome-mcp-servers | 86K | **Listed** | Already on the list |
+| bradAGI/awesome-cli-coding-agents | 308 | **PR #75 open** | Agent infrastructure |
+| appcypher/awesome-mcp-servers | 5.5K | Branch pushed, needs PR from browser | Development Tools |
+| wong2/awesome-mcp-servers | 4K | Not submitted | Community Servers |
+| TensorBlock/awesome-mcp-servers | 656 | Not submitted | Code Analysis & Quality |
+| ai-boost/awesome-harness-engineering | 705 | Not submitted | Skills & MCP |
+| ai-for-developers/awesome-ai-coding-tools | 1.7K | Not submitted | Code Search and Navigation |
+| rohitg00/awesome-devops-mcp-servers | 979 | Not submitted | Coding Agents |
+| hesreallyhim/awesome-claude-code | 42K | Not submitted | Tooling > Orchestrators |
+| avelino/awesome-go | 172K | **Blocked until Sep 2026** (5-month history req) | Go Tools |
 
 ## Planned
 
