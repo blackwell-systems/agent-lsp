@@ -1,3 +1,16 @@
+// build.go implements the run_build, run_tests, and get_tests_for_file MCP tools.
+// These tools run language-specific toolchain commands (go build, tsc, cargo build,
+// mypy, etc.) and parse their output into structured BuildError/TestFailure types.
+//
+// Key design:
+//   - The runners dispatch table maps language IDs to build/test commands with
+//     template args. "{path}" placeholders are replaced at runtime.
+//   - Build and test output parsers are language-specific regex matchers that
+//     extract file:line:column:message tuples from compiler output.
+//   - These tools do not require an LSP client. They shell out to the
+//     language's native toolchain independently.
+//   - For Go, GOWORK=off is always set to prevent the inherited shell workspace
+//     from affecting builds in the analyzed directory.
 package tools
 
 import (
@@ -369,6 +382,19 @@ func applyPathArg(templateArgs []string, resolvedPath string) []string {
 }
 
 // --- build output parsers ---
+//
+// Each language's build tool emits errors in a different format. These regexes
+// extract structured file:line:column:message tuples from raw compiler output.
+// The patterns match the most common error format for each toolchain:
+//   - Go:         file.go:42:10: message
+//   - TypeScript: file.ts(42,10): error TS2304: message
+//   - Python:     file.py:42: error: message  (mypy format, no column)
+//   - C#:         file.cs(42,10): error CS1234: message
+//   - Swift/Zig:  file.swift:42:10: error: message
+//   - Kotlin:     e: file.kt: (42, 10): error: message (Gradle format)
+//
+// Rust is a special case: errors span multiple lines with "error[E0123]:"
+// on one line and "--> file:line:col" on a subsequent line.
 
 var (
 	reBuildGo         = regexp.MustCompile(`^([^:]+):(\d+):(\d+):\s+(.+)$`)

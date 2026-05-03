@@ -1,3 +1,15 @@
+// main.go is the entry point for the agent-lsp binary. It handles CLI argument
+// parsing, subcommand routing (init, doctor, --version, --help), and server
+// startup in one of three modes:
+//
+//   - Single-server:  agent-lsp go gopls
+//   - Multi-server:   agent-lsp go:gopls typescript:tsserver,--stdio
+//   - Auto-detect:    agent-lsp  (scans PATH for known servers)
+//
+// After parsing, main creates the appropriate ClientResolver (single or multi),
+// activates language extensions, sets up signal handling for graceful shutdown,
+// and delegates to server.Run which registers all MCP tools and starts the
+// transport (stdio or HTTP).
 package main
 
 import (

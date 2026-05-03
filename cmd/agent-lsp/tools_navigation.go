@@ -1,3 +1,11 @@
+// tools_navigation.go defines MCP tool registrations for code navigation:
+// go_to_definition, go_to_type_definition, go_to_implementation,
+// go_to_declaration, get_references, rename_symbol, prepare_rename,
+// go_to_symbol, and get_symbol_source.
+//
+// Navigation tools require an initialized LSP client. They use
+// clientForFileWithAutoInit to resolve the correct language server for the
+// file being navigated (e.g. gopls for .go, tsserver for .ts).
 package main
 
 import (

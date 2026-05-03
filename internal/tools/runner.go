@@ -1,3 +1,12 @@
+// runner.go defines the types and dispatch table for the run_build and run_tests
+// tools. The languageRunner struct maps a language ID to its build and test
+// commands with template arguments. The runners map is the dispatch table
+// consulted by RunBuild and RunTests in build.go.
+//
+// Types defined here (BuildResult, TestResult, TestFileResult) are the
+// structured JSON responses returned to MCP clients. TestFailure.Location
+// uses LSP-normalized locations so failure sites can be navigated with
+// go_to_definition or get_references.
 package tools
 
 import "github.com/blackwell-systems/agent-lsp/internal/types"

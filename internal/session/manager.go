@@ -1,3 +1,20 @@
+// manager.go implements the SessionManager which controls the lifecycle of
+// simulation sessions for speculative execution.
+//
+// A simulation session snapshots the current diagnostic state from the LSP
+// server, then tracks virtual edits applied by the agent. When the agent
+// evaluates the session, the manager:
+//   1. Applies each edit to the real LSP server (via didChange/didOpen).
+//   2. Waits for diagnostics to settle.
+//   3. Computes the diagnostic delta (new errors minus baseline errors).
+//   4. Reverts the LSP server state (via ReopenDocument from disk).
+//
+// If the agent commits, edits are written to disk and the LSP state is left
+// updated. If the agent discards, everything reverts to the baseline.
+//
+// Thread safety: all public methods acquire m.mu, and per-session operations
+// are serialized through the SessionExecutor to prevent interleaved evaluations
+// from corrupting LSP state.
 package session
 
 import (

@@ -1,3 +1,12 @@
+// tools_analysis.go defines MCP tool registrations for code analysis:
+// get_info_on_location (hover), get_completions, get_signature_help,
+// get_code_actions, get_document_symbols, get_workspace_symbols,
+// get_document_highlights, get_inlay_hints, get_semantic_tokens,
+// call_hierarchy, type_hierarchy, get_change_impact, and
+// get_cross_repo_references.
+//
+// Analysis tools are read-only: they query the language server for
+// information but do not modify files or state.
 package main
 
 import (

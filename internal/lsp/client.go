@@ -1,3 +1,25 @@
+// client.go is the core LSP subprocess client. It manages the full lifecycle
+// of a language server process: spawning, JSON-RPC 2.0 framing, request/response
+// correlation via integer IDs, server-initiated request handling, diagnostic
+// caching with subscriber notifications, workspace progress tracking ($/progress),
+// and automatic file watching via fsnotify.
+//
+// The client is thread-safe. All public methods may be called concurrently.
+// Internal state is protected by fine-grained mutexes (mu for process state,
+// pendingMu for in-flight requests, diagMu for diagnostics, etc.).
+//
+// Lifecycle:
+//   1. NewLSPClient creates an unstarted client.
+//   2. Initialize spawns the subprocess, performs the LSP handshake,
+//      stores server capabilities, and starts the auto-watcher.
+//   3. Tool handlers call methods like GetReferences, GetDefinition, etc.
+//   4. Shutdown sends shutdown+exit and stops the watcher.
+//   5. Restart combines Shutdown + Initialize for server recovery.
+//
+// The readLoop goroutine dispatches all incoming messages: responses are
+// matched to pending requests by ID; notifications (diagnostics, progress)
+// are handled inline; server-initiated requests (workspace/configuration,
+// workspace/applyEdit) are responded to immediately.
 package lsp
 
 import (
@@ -1193,6 +1215,15 @@ func (c *LSPClient) WaitForFileIndexed(ctx context.Context, uri string, timeoutM
 }
 
 // ---- LSP Operations ----
+//
+// Each method below wraps a single LSP request. The pattern is consistent:
+//   1. Check hasCapability (skip gracefully if server doesn't support it).
+//   2. Send the JSON-RPC request via sendRequest (which handles timeouts).
+//   3. Parse the response, normalizing across LSP response variants
+//      (e.g. Location vs LocationLink, CompletionList vs CompletionItem[]).
+//
+// Methods that depend on workspace indexing (GetReferences) wait for the
+// server to finish indexing before issuing the request.
 
 // GetInfoOnLocation performs a hover request and returns the hover text.
 func (c *LSPClient) GetInfoOnLocation(ctx context.Context, uri string, pos types.Position) (string, error) {
@@ -2323,6 +2354,11 @@ func decodeSemanticTokens(data []int, tokenTypes []string, tokenModifiers []stri
 }
 
 // ---- Parse Helpers ----
+//
+// LSP location responses come in multiple shapes depending on the server
+// and method: a single Location, a []Location, or a []LocationLink (which
+// has targetUri/targetRange instead of uri/range). The parsers below
+// normalize all variants into []types.Location for a consistent API.
 
 // parseLocations parses an LSP response that can be a Location, []Location, or []LocationLink.
 func parseLocations(raw json.RawMessage) []types.Location {

@@ -1,3 +1,13 @@
+// tools_phase.go defines MCP tool registrations for skill phase enforcement:
+// activate_skill, deactivate_skill, and get_skill_phase.
+//
+// Phase enforcement tracks which phase a skill workflow is in (e.g. "preview"
+// vs "execute" for lsp-rename) and blocks tool calls that violate the current
+// phase's permissions. This prevents agents from applying edits before
+// completing blast-radius analysis, or committing before verifying diagnostics.
+//
+// These tools are registered directly on the MCP server (not via
+// addToolWithPhaseCheck) because they control the phase tracker itself.
 package main
 
 import (

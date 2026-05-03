@@ -1,3 +1,15 @@
+// tools_session.go defines MCP tool registrations for speculative execution:
+// create_simulation_session, simulate_edit, simulate_edit_atomic,
+// simulate_chain, evaluate_session, commit_session, discard_session,
+// and destroy_session.
+//
+// Speculative execution lets agents preview edits in memory before writing
+// to disk. A session snapshots the LSP state, applies edits virtually,
+// collects diagnostics, and reports the net error delta. If net_delta == 0,
+// the edit is safe to commit; otherwise, the agent can discard and retry.
+//
+// Sessions are managed by internal/session.SessionManager and are isolated
+// from each other and from the live workspace state.
 package main
 
 import (

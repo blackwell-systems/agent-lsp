@@ -1,3 +1,20 @@
+// server.go creates and configures the MCP server. It is the bridge between
+// the MCP protocol (tools, resources, transports) and the internal packages
+// that implement language intelligence.
+//
+// The Run function:
+//   1. Wraps the LSP ClientResolver in a clientState for thread-safe access.
+//   2. Creates shared dependencies (session manager, audit logger, phase tracker).
+//   3. Registers all MCP tools via register*Tools functions (tools_*.go files).
+//   4. Registers MCP resources (diagnostics://, hover://, completions://).
+//   5. Starts the transport: stdio (default) or HTTP with bearer-token auth.
+//
+// Key abstractions:
+//   - toolDeps: bundles all dependencies passed to tool registration functions.
+//   - addToolWithPhaseCheck: generic wrapper that enforces skill phase permissions
+//     before every tool handler, without modifying individual handlers.
+//   - clientForFile / autoInitClient: multi-layered client resolution that handles
+//     single-server, multi-server, and auto-initialization from file paths.
 package main
 
 import (

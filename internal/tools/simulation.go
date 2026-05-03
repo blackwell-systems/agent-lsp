@@ -1,3 +1,25 @@
+// simulation.go implements the MCP tool handlers for speculative execution:
+// create_simulation_session, simulate_edit, simulate_edit_atomic,
+// simulate_chain, evaluate_session, commit_session, discard_session,
+// and destroy_session.
+//
+// Speculative execution is agent-lsp's key differentiator: agents can preview
+// edits in memory, measure the diagnostic delta, and decide whether to apply
+// or discard before touching disk. The flow:
+//
+//   1. create_simulation_session: snapshot current LSP state.
+//   2. simulate_edit (one or more): apply edits in memory.
+//   3. evaluate_session: collect diagnostics, compute net_delta.
+//   4. commit_session (if safe) or discard_session (if not).
+//   5. destroy_session: release resources.
+//
+// simulate_edit_atomic combines steps 2-3 into a single call: apply one edit,
+// evaluate immediately, and return the delta. This is the most common path
+// for single-edit safety checks.
+//
+// simulate_chain applies multiple edits in sequence and evaluates after each,
+// reporting a per-step delta and a cumulative safe_to_apply_through_step marker.
+// Used for multi-file refactors where each step must be independently safe.
 package tools
 
 import (

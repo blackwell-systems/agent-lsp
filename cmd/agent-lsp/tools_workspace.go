@@ -1,3 +1,16 @@
+// tools_workspace.go defines the MCP tool registrations for workspace and
+// lifecycle operations: start_lsp, restart_lsp, open/close_document,
+// get_diagnostics, apply_edit, format_document, format_range, execute_command,
+// did_change_watched_files, detect_lsp_servers, and set_log_level.
+//
+// Each tool follows the same pattern:
+//   1. An Args struct with jsonschema tags (drives MCP schema generation).
+//   2. A handler registered via addToolWithPhaseCheck that converts the
+//      typed args to the internal map format and delegates to internal/tools.
+//
+// The args structs use jsonschema tags rather than separate schema definitions.
+// The go-sdk reads these tags at startup to generate the MCP tool schema
+// that clients use for argument validation and documentation.
 package main
 
 import (
