@@ -707,6 +707,12 @@ jobs:
             --junit results.xml \
             --badge badge.json
 
+      - name: Lint MCP tool schemas
+        run: |
+          mcp-assert lint \
+            --server "${{ github.workspace }}/agent-lsp go:gopls" \
+            --threshold 0
+
       - name: Upload JUnit results
         if: always()
         uses: actions/upload-artifact@v4
