@@ -710,7 +710,7 @@ jobs:
       - name: Lint MCP tool schemas
         run: |
           mcp-assert lint \
-            --server "${{ github.workspace }}/agent-lsp go:gopls" \
+            --server "agent-lsp go:gopls" \
             --threshold 0
 
       - name: Upload JUnit results
