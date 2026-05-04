@@ -149,6 +149,12 @@ type LSPClient struct {
 	progressTokens map[interface{}]struct{} // active begin tokens
 	progressCond   *sync.Cond // signalled when progressTokens becomes empty
 
+	// workspaceLoaded is set to true after waitForWorkspaceReady completes
+	// successfully (all $/progress tokens done). Once true, WaitForFileIndexed
+	// becomes a no-op because the language server has already loaded all
+	// packages and can answer any query immediately.
+	workspaceLoaded atomic.Bool
+
 	// server capabilities and identity (from initialize response)
 	capsMu          sync.RWMutex
 	capabilities    map[string]interface{}
@@ -452,6 +458,7 @@ func (c *LSPClient) handleProgress(params json.RawMessage) {
 // a matching "end" progress token (preventing an indefinite block).
 func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
 	c.WaitForWorkspaceReadyTimeout(ctx, 60*time.Second)
+	c.workspaceLoaded.Store(true)
 }
 
 // WaitForWorkspaceReadyTimeout blocks until all active $/progress tokens are
@@ -1167,6 +1174,13 @@ func (c *LSPClient) ReopenAllDocuments(ctx context.Context) error {
 // cross-package background load after the first publishDiagnostics, and the
 // stability window lets that finish so cross-file references are available.
 func (c *LSPClient) WaitForFileIndexed(ctx context.Context, uri string, timeoutMs int) error {
+	// If the workspace has already completed its initial load (all $/progress
+	// tokens done), the language server can answer any query immediately.
+	// Skip the per-file diagnostic wait entirely.
+	if c.workspaceLoaded.Load() {
+		return nil
+	}
+
 	const stabilityMs = 1500
 
 	// stabilize is reset on every matching diagnostic notification.
