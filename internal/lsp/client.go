@@ -1166,23 +1166,8 @@ func (c *LSPClient) ReopenAllDocuments(ctx context.Context) error {
 // window with no further notifications. This matches the TypeScript reference: gopls runs a
 // cross-package background load after the first publishDiagnostics, and the
 // stability window lets that finish so cross-file references are available.
-//
-// If diagnostics are already cached for the URI (meaning gopls has already
-// processed this file at least once), the function returns immediately. This
-// prevents blocking for the full timeout on clean files in already-indexed
-// workspaces, which is the common case for batch reference queries.
 func (c *LSPClient) WaitForFileIndexed(ctx context.Context, uri string, timeoutMs int) error {
 	const stabilityMs = 1500
-
-	// Fast path: if diagnostics are already cached for this URI, gopls has
-	// already processed the file. No need to wait for a notification that
-	// already happened.
-	c.diagMu.RLock()
-	_, alreadyCached := c.diags[uri]
-	c.diagMu.RUnlock()
-	if alreadyCached {
-		return nil
-	}
 
 	// stabilize is reset on every matching diagnostic notification.
 	stabilize := make(chan struct{}, 1)
@@ -1427,7 +1412,7 @@ func (c *LSPClient) GetReferences(ctx context.Context, uri string, pos types.Pos
 		return []types.Location{}, nil
 	}
 	c.waitForWorkspaceReady(ctx)
-	_ = c.WaitForFileIndexed(ctx, uri, 2000)
+	_ = c.WaitForFileIndexed(ctx, uri, 15000)
 	result, err := c.sendRequest(ctx, "textDocument/references", map[string]interface{}{
 		"textDocument": map[string]interface{}{"uri": uri},
 		"position":     pos,
