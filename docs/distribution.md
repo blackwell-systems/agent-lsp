@@ -144,7 +144,7 @@ Docker images are built inside the `release` job by GoReleaser (`dockers:` secti
 | **Reddit** | Not submitted | r/LocalLLaMA, r/golang, r/programming. |
 | **Go Weekly** | Not submitted | Submit blog post link. |
 | **Twitter/X** | Not active | Thread format works for the data. |
-| **glama.ai** | Not listed | MCP server discovery. |
+| **glama.ai** | Listed (A grade) | MCP server discovery. |
 | **Product Hunt** | Not launched | Save for bigger release. |
 | **YouTube** | Not started | "LSP vs grep side by side" demo. |
 

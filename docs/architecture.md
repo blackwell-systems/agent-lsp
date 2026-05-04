@@ -69,7 +69,10 @@ cmd/agent-lsp/
                            PhaseTracker initialization with BuiltinSkills();
                            (tool registration was extracted from server.go in a decomposition wave;
                            server.go now delegates to the five tool files below)
+  helpers.go            ← shared helpers for the cmd layer (toolArgsToMap, clientForFile, autoInitClient)
   http_test.go          ← tests for HTTP transport and --http/--port/--token flag parsing
+  schema_fix.go         ← fixes nullable array types in JSON Schemas for Gemini compatibility;
+                           collapses Types: ["null","array"] to Type: "array"
   tools_navigation.go   ← 10 navigation tools: go_to_definition, go_to_type_definition,
                            go_to_implementation, go_to_declaration, go_to_symbol,
                            rename_symbol, prepare_rename, get_document_highlights,
@@ -224,6 +227,8 @@ skills/            ← Agent Skills (SKILL.md directories)
   lsp-extract-function/ ← Extract code into a new function
   lsp-fix-all/     ← Fix all diagnostics in a file or workspace
   lsp-generate/    ← Generate code with LSP-aware validation
+
+experiments/token-savings/    Reproducible benchmark: LSP vs grep/read token cost
 ```
 
 ---
@@ -255,7 +260,7 @@ implementation evolves.
 
 ### Layer rules
 
-- `cmd/agent-lsp/` owns the MCP server lifecycle and routes requests to handlers via the four tool files
+- `cmd/agent-lsp/` owns the MCP server lifecycle and routes requests to handlers via the five tool files
 - `internal/tools/` and `internal/resources/` import from `internal/lsp/`, `internal/session/`, and `internal/types/`. They do not import from each other
 - `internal/lsp/` imports from `internal/types/`, `internal/logging/`, and `internal/uri/` (no upward dependencies)
 - `internal/session/` imports from `internal/lsp/`, `internal/types/`, `internal/logging/`, and `internal/uri/`
@@ -375,7 +380,7 @@ mcp.AddTool(d.server, &mcp.Tool{
 | `tools_session.go` | Speculative execution (simulate, evaluate, commit) | 8 |
 | `tools_phase.go` | Phase enforcement (activate_skill, deactivate_skill, get_skill_phase) | 3 |
 
-All five registration functions are called from `Run()` in `server.go` via the `toolDeps` bundle, which carries shared dependencies: the MCP server, the client resolver, the session manager, the phase tracker, and the `clientForFileWithAutoInit` closure. The 50 core tools are wrapped via `addToolWithPhaseCheck` (generic wrapper that checks phase permissions before each handler). The 3 phase tools use raw `mcp.AddTool` to avoid circular enforcement.
+All five registration functions are called from `Run()` in `server.go` via the `toolDeps` bundle, which carries shared dependencies: the MCP server, the client resolver, the session manager, the phase tracker, and the `clientForFileWithAutoInit` closure. The 50 non-phase tools are wrapped via `addToolWithPhaseCheck` (generic wrapper that checks phase permissions before each handler). The 3 phase tools use raw `mcp.AddTool` to avoid circular enforcement.
 
 ### Handler separation
 

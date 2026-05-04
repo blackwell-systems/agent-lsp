@@ -37,7 +37,7 @@ Simulate changes in memory before writing to disk. No other MCP-LSP implementati
 
 ### Token savings
 
-Structured LSP responses use **5-21x fewer tokens** than grep/read on the same tasks. On HashiCorp Consul (319K lines), a blast-radius analysis uses 17.7MB via grep vs 841KB via LSP, reducing 5,534 tool calls to 119. Savings scale with codebase size. See [docs/token-savings.md](./docs/token-savings.md) for the full experiment across three codebases.
+Structured LSP responses use **5-34x fewer tokens** than grep/read on the same tasks. On HashiCorp Consul (319K lines), a blast-radius analysis uses 17.7MB via grep vs 841KB via LSP, reducing 5,534 tool calls to 119. Savings scale with codebase size. See [docs/token-savings.md](./docs/token-savings.md) for the full experiment across five codebases.
 
 ### Phase enforcement
 
@@ -175,6 +175,9 @@ winget install BlackwellSystems.agent-lsp
 **All platforms**
 
 ```bash
+# pip
+pip install agent-lsp
+
 # npm
 npm install -g @blackwell-systems/agent-lsp
 
@@ -271,7 +274,7 @@ This is what the agent does, not something you type. Then use any of the 53 tool
 | Cross-repo references | **✓** — multi-root workspace |
 | Auto-watch | **✓** — always-on, debounced file watching |
 | HTTP+SSE transport | **✓** — bearer token auth, non-root Docker |
-| Distribution | **single Go binary** — 8 install channels |
+| Distribution | **single Go binary** — 9 install channels |
 
 ## Use Cases
 

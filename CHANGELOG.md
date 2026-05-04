@@ -5,6 +5,23 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-05-04
+
+### Fixed
+
+- Nullable array schemas (`"type": ["null","array"]`) collapsed to `"type": "array"` for Gemini 2.5 Flash compatibility. Fixes #2.
+
+## [0.5.2] - 2026-05-03
+
+### Added
+
+- PyPI distribution: `pip install agent-lsp`. Platform-specific wheels published automatically on release.
+- Download stats script (`scripts/download-stats.sh`).
+
+### Changed
+
+- PyPI publish job added to release workflow (automated on every tag).
+
 ## [0.5.1] - 2026-05-03
 
 ### Added

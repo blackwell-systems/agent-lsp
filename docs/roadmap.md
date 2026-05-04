@@ -182,7 +182,7 @@ Based on CI testing across 30 languages, the capability landscape clusters into 
 
 | Tier | Capabilities | Languages |
 |------|-------------|-----------|
-| Full | All 50 tools viable | Go (gopls), TypeScript, Rust, C/C++ (clangd), C# |
+| Full | All 53 tools viable | Go (gopls), TypeScript, Rust, C/C++ (clangd), C# |
 | Strong | Most tools; missing call/type hierarchy | Python, Ruby, PHP, Kotlin, Swift, Dart, Gleam, Elixir |
 | Basic | Navigation + diagnostics; limited refactoring | YAML, JSON, Dockerfile, CSS, HTML, Terraform, SQL |
 
@@ -409,7 +409,7 @@ mcp-assert run --suite ./assertions --server "npx -y @modelcontextprotocol/serve
 
 ### Layer 1: Tool Correctness (deterministic, no LLM)
 
-For each of 50 tools across N languages, maintain test fixtures with expected outputs. Call the MCP tool directly, compare output against expected results. Organized as Go table-driven tests with per-language, per-tool coverage tracking.
+For each of 53 tools across N languages, maintain test fixtures with expected outputs. Call the MCP tool directly, compare output against expected results. Organized as Go table-driven tests with per-language, per-tool coverage tracking.
 
 **What this looks like in practice:**
 
@@ -446,7 +446,7 @@ func TestToolCorrectness(t *testing.T) {
                 assert.Contains(t, result, "greeter.gleam")
             },
         },
-        // ... 50 tools x 30 languages
+        // ... 53 tools x 30 languages
     }
 }
 ```
