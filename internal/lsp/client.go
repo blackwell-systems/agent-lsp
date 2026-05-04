@@ -1427,7 +1427,7 @@ func (c *LSPClient) GetReferences(ctx context.Context, uri string, pos types.Pos
 		return []types.Location{}, nil
 	}
 	c.waitForWorkspaceReady(ctx)
-	_ = c.WaitForFileIndexed(ctx, uri, 15000)
+	_ = c.WaitForFileIndexed(ctx, uri, 2000)
 	result, err := c.sendRequest(ctx, "textDocument/references", map[string]interface{}{
 		"textDocument": map[string]interface{}{"uri": uri},
 		"position":     pos,
