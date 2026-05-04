@@ -124,7 +124,16 @@ func toolArgsToMap(v interface{}) map[string]interface{} {
 // before every tool handler. If a skill is active and the tool call violates the
 // current phase's permissions, the check returns an error result without invoking
 // the handler. When no skill is active, the check is a no-op.
+//
+// It also pre-generates a fixed JSON Schema for the tool's input type, collapsing
+// nullable array types ("type": ["null","array"]) into plain arrays ("type": "array").
+// This ensures compatibility with strict OpenAPI 3.0 clients like Gemini.
 func addToolWithPhaseCheck[T any](d toolDeps, tool *mcp.Tool, handler func(ctx context.Context, req *mcp.CallToolRequest, args T) (*mcp.CallToolResult, any, error)) {
+	// Pre-generate and fix the schema so mcp.AddTool uses it directly
+	// (it skips generation when InputSchema is non-nil).
+	if tool.InputSchema == nil {
+		tool.InputSchema = generateFixedSchema[T]()
+	}
 	mcp.AddTool(d.server, tool, func(ctx context.Context, req *mcp.CallToolRequest, args T) (*mcp.CallToolResult, any, error) {
 		if result := checkPhasePermission(d.phaseTracker, tool.Name); result != nil {
 			return result, nil, nil
