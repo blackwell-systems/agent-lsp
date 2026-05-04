@@ -5,6 +5,23 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Performance
+
+- **get_change_impact: 100x faster on large files.** Rewrote the batch reference query system:
+  - Parallel worker pool (8 concurrent goroutines) replaces sequential loop
+  - `GetReferencesRaw` skips per-file `WaitForFileIndexed` for batch callers
+  - Single warmup query absorbs cold-start cost; result reused (not discarded)
+  - `workspaceLoaded` atomic flag: once all `$/progress` tokens complete, `WaitForFileIndexed` becomes a no-op for all subsequent calls
+  - Struct fields excluded from export collection (avoids 50%+ unnecessary queries on Go codebases)
+  - Context cancellation check in workers for early exit
+  - Transitive references parallelized (was sequential)
+  - Test function deduplication in output
+
+  Before: `get_change_impact` on a 2,295-line file (80+ exports) hung for 20+ minutes.
+  After: completes in under 30 seconds on a cold workspace, under 5 seconds on a warm one.
+
+  This unblocked the `/inspect` skill on external repositories.
+
 ## [0.5.3] - 2026-05-04
 
 ### Fixed
