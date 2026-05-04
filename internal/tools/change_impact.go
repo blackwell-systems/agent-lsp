@@ -115,8 +115,9 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 
 	// Phase 1.5: Warmup. The first reference query on a cold workspace forces
 	// the language server to complete its full package/module load. Subsequent
-	// queries are fast. We do one blocking query on the first symbol to absorb
-	// the cold-start cost before fanning out to the parallel worker pool.
+	// queries are fast. We do one blocking query (with full WaitForFileIndexed)
+	// on the first symbol to absorb the cold-start cost. After this completes,
+	// the workspace is warm and GetReferencesRaw (no per-file wait) is safe.
 	// This is language-agnostic: every LSP server (gopls, pyright, tsserver,
 	// rust-analyzer) front-loads its indexing on the first reference request.
 	if len(allExports) > 0 {
@@ -180,7 +181,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 						Character: loc.Range.Start.Character,
 					}
 					transLocs, _ := WithDocument[[]types.Location](ctx, client, refPath, lsp.LanguageIDFromPath(refPath), func(fURI string) ([]types.Location, error) {
-						return client.GetReferences(ctx, fURI, transitivePos, false)
+						return client.GetReferencesRaw(ctx, fURI, transitivePos, false)
 					})
 					for _, tLoc := range transLocs {
 						tPath, tErr := URIToFilePath(tLoc.URI)
@@ -260,7 +261,7 @@ func queryReferencesParallel(ctx context.Context, client *lsp.LSPClient, symbols
 			defer func() { <-sem }() // release
 
 			locs, err := WithDocument[[]types.Location](ctx, client, s.File, s.LangID, func(fURI string) ([]types.Location, error) {
-				return client.GetReferences(ctx, fURI, s.Position, false)
+				return client.GetReferencesRaw(ctx, fURI, s.Position, false)
 			})
 
 			ref := symbolRefs{Symbol: s, Locs: locs}

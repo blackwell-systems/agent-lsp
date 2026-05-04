@@ -1405,7 +1405,9 @@ func (c *LSPClient) GetDeclaration(ctx context.Context, uri string, pos types.Po
 }
 
 // GetReferences returns all references to the symbol at position.
-// Waits for workspace to be ready before issuing the request.
+// Waits for workspace to be ready and for the file to be indexed before
+// issuing the request. For batch operations where the caller has already
+// ensured the workspace is warm, use GetReferencesRaw instead.
 func (c *LSPClient) GetReferences(ctx context.Context, uri string, pos types.Position, includeDecl bool) ([]types.Location, error) {
 	if !c.hasCapability("referencesProvider") {
 		logging.Log(logging.LevelDebug, "server does not support references")
@@ -1413,6 +1415,22 @@ func (c *LSPClient) GetReferences(ctx context.Context, uri string, pos types.Pos
 	}
 	c.waitForWorkspaceReady(ctx)
 	_ = c.WaitForFileIndexed(ctx, uri, 15000)
+	return c.getReferencesInternal(ctx, uri, pos, includeDecl)
+}
+
+// GetReferencesRaw returns all references without waiting for file indexing.
+// The caller is responsible for ensuring the workspace is warm (e.g. by
+// calling GetReferences once first to absorb the cold-start cost). Use this
+// in batch operations like get_change_impact where the warmup is done once
+// and per-file waits would multiply the latency by the number of symbols.
+func (c *LSPClient) GetReferencesRaw(ctx context.Context, uri string, pos types.Position, includeDecl bool) ([]types.Location, error) {
+	if !c.hasCapability("referencesProvider") {
+		return []types.Location{}, nil
+	}
+	return c.getReferencesInternal(ctx, uri, pos, includeDecl)
+}
+
+func (c *LSPClient) getReferencesInternal(ctx context.Context, uri string, pos types.Position, includeDecl bool) ([]types.Location, error) {
 	result, err := c.sendRequest(ctx, "textDocument/references", map[string]interface{}{
 		"textDocument": map[string]interface{}{"uri": uri},
 		"position":     pos,
