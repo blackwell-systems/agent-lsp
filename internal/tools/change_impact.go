@@ -2,9 +2,10 @@
 // analysis. Given a list of changed files, it:
 //
 //  1. Opens each file and retrieves its exported symbols (GetDocumentSymbols).
-//  2. Calls GetReferences for each exported symbol IN PARALLEL to find all callers.
-//  3. Partitions callers into test files vs non-test callers.
-//  4. Extracts enclosing test function names for test references.
+//  2. Warms the workspace with one blocking reference query.
+//  3. Calls GetReferencesRaw for each exported symbol IN PARALLEL.
+//  4. Partitions callers into test files vs non-test callers.
+//  5. Extracts enclosing test function names for test references.
 //
 // The result tells the agent which code paths are affected by the change,
 // enabling informed decisions about whether to proceed with an edit or halt
@@ -58,25 +59,25 @@ type exportedSymbol struct {
 
 // symbolRefs holds the references found for a single symbol.
 type symbolRefs struct {
-	Symbol   exportedSymbol
-	Locs     []types.Location
-	Warning  string
+	Symbol  exportedSymbol
+	Locs    []types.Location
+	Warning string
 }
 
 // maxConcurrentRefs is the worker pool size for parallel reference queries.
 const maxConcurrentRefs = 8
 
 // HandleGetChangeImpact enumerates exported symbols in each changed file via
-// GetDocumentSymbols, calls GetReferences in parallel for each symbol, partitions
-// results into test files vs non-test callers, and extracts enclosing test function
-// names for test references.
-func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+// GetDocumentSymbols, calls GetReferencesRaw in parallel for each symbol,
+// partitions results into test files vs non-test callers, and extracts
+// enclosing test function names for test references.
+func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
 
-	// Decode changed_files (arrives as []interface{} from JSON).
-	rawFiles, ok := args["changed_files"].([]interface{})
+	// Decode changed_files (arrives as []any from JSON).
+	rawFiles, ok := args["changed_files"].([]any)
 	if !ok || len(rawFiles) == 0 {
 		return types.ErrorResult("changed_files is required"), nil
 	}
@@ -98,6 +99,9 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 	}
 
 	// Phase 1: Collect all exported symbols from all changed files.
+	// Only collects top-level exports (functions, types, variables, constants).
+	// Struct fields are excluded: they aren't independently callable and their
+	// references are noise that inflates the symbol count.
 	var allExports []exportedSymbol
 	var warnings []string
 
@@ -110,29 +114,44 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 			warnings = append(warnings, fmt.Sprintf("warning: could not get symbols for %s: %s", file, err))
 			continue
 		}
-		collectExportedSymbols(symbols, file, langID, &allExports)
+		collectExportedSymbols(symbols, file, langID, &allExports, false)
 	}
 
 	// Phase 1.5: Warmup. The first reference query on a cold workspace forces
 	// the language server to complete its full package/module load. Subsequent
 	// queries are fast. We do one blocking query (with full WaitForFileIndexed)
-	// on the first symbol to absorb the cold-start cost. After this completes,
-	// the workspace is warm and GetReferencesRaw (no per-file wait) is safe.
-	// This is language-agnostic: every LSP server (gopls, pyright, tsserver,
-	// rust-analyzer) front-loads its indexing on the first reference request.
+	// on the first symbol to absorb the cold-start cost. The result is kept
+	// and used in Phase 2 so we don't re-query the same symbol.
+	var warmupResult *symbolRefs
 	if len(allExports) > 0 {
 		first := allExports[0]
-		_, _ = WithDocument[[]types.Location](ctx, client, first.File, first.LangID, func(fURI string) ([]types.Location, error) {
+		locs, err := WithDocument[[]types.Location](ctx, client, first.File, first.LangID, func(fURI string) ([]types.Location, error) {
 			return client.GetReferences(ctx, fURI, first.Position, false)
 		})
+		ref := symbolRefs{Symbol: first, Locs: locs}
+		if err != nil {
+			ref.Warning = fmt.Sprintf("warning: GetReferences failed for %s in %s: %s", first.Name, first.File, err)
+		}
+		warmupResult = &ref
 	}
 
-	// Phase 2: Query references for all symbols in parallel.
-	refResults := queryReferencesParallel(ctx, client, allExports)
+	// Phase 2: Query references for remaining symbols in parallel.
+	// Skip the first symbol (already queried in warmup).
+	remaining := allExports
+	if len(remaining) > 0 {
+		remaining = remaining[1:]
+	}
+	refResults := queryReferencesParallel(ctx, client, remaining)
+
+	// Prepend the warmup result so all symbols are in order.
+	if warmupResult != nil {
+		refResults = append([]symbolRefs{*warmupResult}, refResults...)
+	}
 
 	// Phase 3: Partition results into test vs non-test callers.
 	var changedSymbols []symbolRef
 	testFilesSet := map[string]bool{}
+	testFuncSet := map[string]bool{} // dedup key: "file:name"
 	var testFunctions []symbolRef
 	var nonTestCallers []symbolRef
 	var refWarnings []string
@@ -158,14 +177,17 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 			}
 			if isTestFile(refPath) {
 				testFilesSet[refPath] = true
-				// Find enclosing function in the test file (with caching).
 				enclosing := findEnclosingTestFunction(ctx, client, testSymbolCache, refPath, loc.Range.Start.Line)
 				if enclosing != nil {
-					testFunctions = append(testFunctions, symbolRef{
-						Name: enclosing.Name,
-						File: refPath,
-						Line: enclosing.SelectionRange.Start.Line + 1,
-					})
+					key := fmt.Sprintf("%s:%s", refPath, enclosing.Name)
+					if !testFuncSet[key] {
+						testFuncSet[key] = true
+						testFunctions = append(testFunctions, symbolRef{
+							Name: enclosing.Name,
+							File: refPath,
+							Line: enclosing.SelectionRange.Start.Line + 1,
+						})
+					}
 				}
 			} else {
 				nonTestCallers = append(nonTestCallers, symbolRef{
@@ -173,25 +195,35 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 					File: refPath,
 					Line: loc.Range.Start.Line + 1,
 				})
+			}
+		}
+	}
 
-				// Transitive: find test files that reference this non-test caller.
-				if includeTransitive {
-					transitivePos := types.Position{
-						Line:      loc.Range.Start.Line,
-						Character: loc.Range.Start.Character,
-					}
-					transLocs, _ := WithDocument[[]types.Location](ctx, client, refPath, lsp.LanguageIDFromPath(refPath), func(fURI string) ([]types.Location, error) {
-						return client.GetReferencesRaw(ctx, fURI, transitivePos, false)
-					})
-					for _, tLoc := range transLocs {
-						tPath, tErr := URIToFilePath(tLoc.URI)
-						if tErr != nil {
-							continue
-						}
-						if isTestFile(tPath) {
-							testFilesSet[tPath] = true
-						}
-					}
+	// Phase 3.5: Transitive references (if requested).
+	// Batched and parallelized like Phase 2.
+	if includeTransitive && len(nonTestCallers) > 0 {
+		var transitiveSymbols []exportedSymbol
+		for _, caller := range nonTestCallers {
+			transitiveSymbols = append(transitiveSymbols, exportedSymbol{
+				Name:   caller.Name,
+				File:   caller.File,
+				LangID: lsp.LanguageIDFromPath(caller.File),
+				Position: types.Position{
+					Line:      caller.Line - 1, // convert back to 0-indexed
+					Character: 0,
+				},
+				Line: caller.Line,
+			})
+		}
+		transitiveResults := queryReferencesParallel(ctx, client, transitiveSymbols)
+		for _, ref := range transitiveResults {
+			for _, loc := range ref.Locs {
+				tPath, tErr := URIToFilePath(loc.URI)
+				if tErr != nil {
+					continue
+				}
+				if isTestFile(tPath) {
+					testFilesSet[tPath] = true
 				}
 			}
 		}
@@ -210,7 +242,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 		summary += " Warnings: " + strings.Join(warnings, "; ")
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"changed_symbols":  changedSymbols,
 		"test_files":       testFiles,
 		"test_functions":   testFunctions,
@@ -228,7 +260,9 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 
 // collectExportedSymbols walks a DocumentSymbol tree and appends exported symbols
 // to the provided slice. For Go, only uppercase symbols are exported.
-func collectExportedSymbols(syms []types.DocumentSymbol, filePath, langID string, out *[]exportedSymbol) {
+// If recurseIntoChildren is false, struct fields and method children are skipped
+// to avoid inflating the symbol count with non-independently-callable members.
+func collectExportedSymbols(syms []types.DocumentSymbol, filePath, langID string, out *[]exportedSymbol, recurseIntoChildren bool) {
 	for _, sym := range syms {
 		exported := langID != "go" || (len(sym.Name) > 0 && sym.Name[0] >= 'A' && sym.Name[0] <= 'Z')
 		if exported {
@@ -243,11 +277,15 @@ func collectExportedSymbols(syms []types.DocumentSymbol, filePath, langID string
 				Line: sym.SelectionRange.Start.Line + 1,
 			})
 		}
-		collectExportedSymbols(sym.Children, filePath, langID, out)
+		if recurseIntoChildren {
+			collectExportedSymbols(sym.Children, filePath, langID, out, true)
+		}
 	}
 }
 
-// queryReferencesParallel queries GetReferences for all symbols using a worker pool.
+// queryReferencesParallel queries GetReferencesRaw for all symbols using a
+// worker pool. The caller must ensure the workspace is warm before calling
+// (e.g. by doing one blocking GetReferences call first).
 func queryReferencesParallel(ctx context.Context, client *lsp.LSPClient, symbols []exportedSymbol) []symbolRefs {
 	results := make([]symbolRefs, len(symbols))
 	var wg sync.WaitGroup
@@ -257,6 +295,13 @@ func queryReferencesParallel(ctx context.Context, client *lsp.LSPClient, symbols
 		wg.Add(1)
 		go func(idx int, s exportedSymbol) {
 			defer wg.Done()
+
+			// Respect context cancellation.
+			if ctx.Err() != nil {
+				results[idx] = symbolRefs{Symbol: s, Warning: "context cancelled"}
+				return
+			}
+
 			sem <- struct{}{}        // acquire
 			defer func() { <-sem }() // release
 
@@ -310,7 +355,6 @@ func findEnclosingSymbol(syms []types.DocumentSymbol, lineNum int) *types.Docume
 			if best == nil || size < (best.Range.End.Line-best.Range.Start.Line) {
 				best = sym
 			}
-			// Check children for a tighter fit.
 			if child := findEnclosingSymbol(sym.Children, lineNum); child != nil {
 				childSize := child.Range.End.Line - child.Range.Start.Line
 				if best == nil || childSize < (best.Range.End.Line-best.Range.Start.Line) {
