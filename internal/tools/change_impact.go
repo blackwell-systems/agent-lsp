@@ -113,6 +113,19 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 		collectExportedSymbols(symbols, file, langID, &allExports)
 	}
 
+	// Phase 1.5: Warmup. The first reference query on a cold workspace forces
+	// the language server to complete its full package/module load. Subsequent
+	// queries are fast. We do one blocking query on the first symbol to absorb
+	// the cold-start cost before fanning out to the parallel worker pool.
+	// This is language-agnostic: every LSP server (gopls, pyright, tsserver,
+	// rust-analyzer) front-loads its indexing on the first reference request.
+	if len(allExports) > 0 {
+		first := allExports[0]
+		_, _ = WithDocument[[]types.Location](ctx, client, first.File, first.LangID, func(fURI string) ([]types.Location, error) {
+			return client.GetReferences(ctx, fURI, first.Position, false)
+		})
+	}
+
 	// Phase 2: Query references for all symbols in parallel.
 	refResults := queryReferencesParallel(ctx, client, allExports)
 
