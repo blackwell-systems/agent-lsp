@@ -321,14 +321,22 @@ Understanding the process model is the most important prerequisite for reading t
 
 **Daemon broker process (Python/TypeScript only):**
 
-Language servers like pyright and tsserver need minutes of background indexing before `textDocument/references` works. In direct mode, agent-lsp spawns a fresh server per session, so the workspace is never indexed when the first reference query arrives. The daemon broker solves this by keeping the language server alive between sessions: the first session pays the indexing cost, and all subsequent sessions connect to a warm server instantly.
+Language servers like pyright and tsserver need minutes of background indexing before `textDocument/references` works. In direct mode, agent-lsp spawns a fresh language server subprocess per MCP session. When the session ends, the subprocess dies, and its entire workspace index is lost. The next session spawns a fresh subprocess that starts indexing from scratch. For gopls this is fine (Go modules index in seconds), but for pyright on a 1,000-file Python repo, indexing takes minutes. Every session pays the full cost, and reference queries time out because the server is never ready in time.
 
-- One process per (rootDir, languageID) pair, spawned on first `start_lsp` for languages that need sustained indexing.
-- Persists between agent sessions. Auto-exits after 30 minutes of inactivity.
-- Owns the language server subprocess (pyright, tsserver). Listens on a Unix domain socket.
-- Proxies JSON-RPC between connected agent-lsp clients and the single language server.
-- Tracks workspace readiness and writes state to `~/.cache/agent-lsp/daemons/<hash>/daemon.json`.
-- Go, Rust, C, and other fast-indexing servers bypass daemon mode entirely (zero overhead).
+The daemon broker solves this by decoupling the language server's lifetime from the MCP session's lifetime. The broker is a separate process (`agent-lsp daemon-broker`) that:
+
+1. **Spawns the language server once** as its own child process (e.g. `pyright-langserver --stdio`), communicating via stdin/stdout pipes.
+2. **Performs LSP `initialize`** with the workspace root, then waits for the server to finish indexing.
+3. **Listens on a Unix domain socket** at `~/.cache/agent-lsp/daemons/<hash>/daemon.sock`.
+4. **Accepts connections from agent-lsp sessions.** Each connection is a JSON-RPC channel using Content-Length framing (same wire format as LSP stdio). The broker reads requests from the socket, forwards them to the language server's stdin, reads responses from the language server's stdout, and writes them back to the socket.
+5. **Tracks readiness.** Once the language server finishes indexing, the broker writes `"ready": true` to `daemon.json`. Agent-lsp clients check this flag before issuing reference queries.
+6. **Manages its own lifetime.** When the last socket client disconnects, the broker starts a 30-minute inactivity timer. If no new client connects, the broker sends `shutdown` + `exit` to the language server, removes its socket and state files, and exits. If a new client connects, the timer resets.
+
+The key insight: the broker process is detached from the agent-lsp process (`Setsid: true` on the subprocess). When the MCP session ends and agent-lsp exits, the broker and its language server keep running. The next `start_lsp` call finds the existing broker via `FindRunningDaemon` (checks PID liveness + socket reachability), connects to the socket, and gets an already-indexed language server instantly.
+
+- One broker per (rootDir, languageID) pair. The directory hash ensures different workspaces get different daemons.
+- State files live at `~/.cache/agent-lsp/daemons/<hash>/`: `daemon.json` (metadata), `daemon.sock` (Unix socket), `daemon.pid` (process ID).
+- Go, Rust, C, and other fast-indexing servers bypass daemon mode entirely. `NeedsDaemon()` returns false for these languages, so the direct subprocess model is used with zero overhead.
 
 **Communication direction (direct mode, e.g. Go/Rust):**
 
