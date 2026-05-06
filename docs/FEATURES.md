@@ -348,7 +348,7 @@ warnings: [roots that failed indexing]
 | Language | Server Binary | CI Status | Notes |
 |----------|---------------|-----------|-------|
 | TypeScript | `typescript-language-server` | passing | `npm i -g typescript-language-server typescript` |
-| Python | `pyright-langserver` | passing | `npm i -g pyright` |
+| Python | `pyright-langserver` | passing | `npm i -g pyright`; **daemon mode**: persistent broker for large repos (validated on FastAPI, 1,119 files) |
 | Go | `gopls` | passing | `go install golang.org/x/tools/gopls@latest` |
 | Rust | `rust-analyzer` | passing | `rustup component add rust-analyzer` |
 | Java | `jdtls` | flaky | cold-start indexing; Tier 2 skipped on timeout; eclipse.jdt.ls snapshots |
@@ -504,6 +504,33 @@ warnings: [roots that failed indexing]
 | `textDocument/completion` | `CompletionItem[]`, `CompletionList ({isIncomplete, items})` |
 | `textDocument/codeAction` | `(Command | CodeAction)[]`; discriminated by checking if `command` field is a bare string |
 | `textDocument/documentSymbol` | `DocumentSymbol[]`, `SymbolInformation[]`; three-pass tree reconstruction for SymbolInformation |
+
+---
+
+## Persistent Daemon Mode
+
+Language servers like pyright (Python) and tsserver (TypeScript) need sustained background indexing before `textDocument/references` works on large codebases. agent-lsp solves this with a persistent daemon broker that survives between agent sessions.
+
+**How it works:**
+
+1. `start_lsp` with `language_id="python"` or `"typescript"` auto-detects that a daemon is needed
+2. A broker subprocess (`agent-lsp daemon-broker`) spawns, starts pyright, indexes the workspace
+3. Agent-lsp connects via Unix socket, queries are proxied to pyright through the broker
+4. Subsequent sessions connect to the same warm daemon instantly (no re-indexing)
+5. Daemon exits after 30 minutes of inactivity; state lives in `~/.cache/agent-lsp/daemons/`
+
+**Languages that use daemon mode:** Python, TypeScript, JavaScript
+**Languages that bypass daemon mode:** Go, Rust, C, C++, Java, Ruby, PHP, and all others (zero overhead; these servers index fast enough to serve references within seconds)
+
+**CLI management:**
+
+```bash
+agent-lsp daemon-status                    # List all active daemons
+agent-lsp daemon-stop --all                # Stop all daemons
+agent-lsp daemon-stop --root-dir=X --language=python  # Stop specific daemon
+```
+
+**Validated on:** FastAPI (1,119 Python files, 80K stars): daemon indexes in ~10 seconds, `get_references` returns 1,214 results across 556 files instantly. Without daemon mode, pyright timed out at 5 minutes on every attempt.
 
 ---
 
@@ -974,7 +1001,7 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 - Each package has smoke tests verifying alias targets are non-nil at compile time
 
 **skills/:**
-- 20 skill directories; each contains `SKILL.md` with frontmatter + prompt body
+- 21 skill directories; each contains `SKILL.md` with frontmatter + prompt body
 - `install.sh` — symlinks/copies skill dirs to `~/.claude/skills/`; maintains CLAUDE.md managed block
 
 ### Key Architectural Facts

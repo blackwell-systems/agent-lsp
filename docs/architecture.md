@@ -36,6 +36,25 @@ gopls subprocess                                         typescript-language-ser
 (indexes .go files)                                      (indexes .ts/.tsx files)
 ```
 
+**For languages that need sustained indexing (Python, TypeScript on large repos),** a daemon broker process persists between sessions:
+
+```
+AI agent (session 1)              AI agent (session 2, minutes later)
+    │                                 │
+    ▼                                 ▼
+agent-lsp (ephemeral)             agent-lsp (ephemeral)
+    │                                 │
+    │  Unix socket                    │  Unix socket (same daemon, already warm)
+    ▼                                 ▼
+daemon-broker (persistent, one per root+language)
+    │
+    │  stdin/stdout pipes
+    ▼
+pyright-langserver (persistent, fully indexed)
+```
+
+The daemon auto-spawns on first `start_lsp` for Python/TypeScript, indexes the workspace in the background, and serves queries to all subsequent sessions instantly. Auto-exits after 30 minutes of inactivity.
+
 **What agent-lsp does:**
 
 1. Speaks MCP to the AI agent, exposing 53 tools the agent can call.
@@ -55,7 +74,7 @@ The binary is a single statically-linked Go executable. No Node.js runtime. No p
 cmd/agent-lsp/
   main.go               ← CLI entrypoint; argument parsing, signal handling, panic recovery;
                            --version flag prints Version (injected by GoReleaser, falls back to "dev");
-                           dispatches to runInit (init subcommand) and runDoctor (doctor subcommand)
+                           dispatches to runInit, runDoctor, daemon-broker, daemon-status, daemon-stop
   version.go            ← var Version = "dev"; set at build time via -ldflags="-X main.Version=x.y.z"
   doc.go                ← package-level doc comment
   init.go               ← runInit: interactive `agent-lsp init` subcommand; generates mcp.json config
@@ -63,6 +82,8 @@ cmd/agent-lsp/
   doctor.go             ← runDoctor: `agent-lsp doctor` subcommand; starts each configured LSP server,
                            checks capabilities, and reports which tools are supported/unsupported
   doctor_test.go        ← tests for doctor subcommand
+  daemon.go             ← Daemon CLI subcommands: daemon-broker (persistent broker process),
+                           daemon-status (list active daemons), daemon-stop (terminate daemons)
   server.go             ← MCP server construction; tool/resource registration; mcpSessionSender;
                            HTTP transport via --http flag (Streamable HTTP + optional Bearer token auth);
                            addToolWithPhaseCheck[T] generic wrapper for phase enforcement;
@@ -121,12 +142,23 @@ internal/httpauth/
 
 internal/lsp/
   client.go        ← LSPClient: subprocess lifecycle, JSON-RPC framing, request/response
-                     correlation, server-initiated requests, file watcher
-  manager.go       ← ServerManager: multi-server registry, ClientForFile routing by extension
+                     correlation, server-initiated requests, file watcher;
+                     NewDaemonClient: socket-connected client for daemon mode
+  manager.go       ← ServerManager: multi-server registry, ClientForFile routing by extension;
+                     startOrConnectDaemon: transparent daemon lifecycle for Python/TypeScript
   resolver.go      ← ClientResolver interface
   framing.go       ← Content-Length framing (FrameReader / FrameWriter)
   diagnostics.go   ← WaitForDiagnostics: stabilization wait with timeout
   normalize.go     ← NormalizeDocumentSymbols, NormalizeCompletion, NormalizeCodeActions
+  daemon.go        ← DaemonInfo, NeedsDaemon, FindRunningDaemon, WriteDaemonInfo,
+                     ListDaemons, StopDaemon, CleanupStaleDaemons
+  daemon_broker.go ← RunBroker: persistent subprocess that owns the language server,
+                     listens on a Unix socket, proxies JSON-RPC, tracks readiness,
+                     auto-exits after 30 min inactivity
+  scope.go         ← GenerateScopeConfig: generates pyrightconfig.json / tsconfig.json
+                     to limit workspace indexing scope for large repos
+  warmup.go        ← Multi-signal readiness gate for daemon clients: diagnostics,
+                     hover canary, adaptive first-query timeout
 
 internal/session/
   manager.go       ← SessionManager: create/apply/evaluate/commit/discard/destroy sessions

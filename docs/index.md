@@ -62,7 +62,7 @@ No other MCP tool provider enforces workflow ordering at runtime. Read more in t
 |------------|---------|
 | Tools | **53** |
 | Languages (CI-verified) | **30**, end-to-end integration tests on every push |
-| Agent workflows (skills) | **20**, named multi-step procedures |
+| Agent workflows (skills) | **21**, named multi-step procedures |
 | Speculative execution | **8 tools**, simulate changes before writing to disk |
 | Phase enforcement | **4 skills**, runtime blocks out-of-order tool calls with recovery guidance |
 | Connection model | **persistent**, warm index across files and projects |

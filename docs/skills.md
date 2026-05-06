@@ -1,10 +1,10 @@
 # Skills Reference
 
-agent-lsp ships 20 skills, named workflows that encode correct tool sequences so
+agent-lsp ships 21 skills, named workflows that encode correct tool sequences so
 multi-step operations happen reliably. This doc is a developer reference: what each
 skill does, when to reach for it, and what it does that raw tool calls miss.
 
-All 20 skills conform to the [Agent Skills](https://agentskills.io/) open standard, the cross-agent skill format adopted by Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and [30+ other tools](https://agentskills.io/clients). Each `SKILL.md` includes the required `name` and `description` frontmatter fields, plus `license`, `compatibility`, and `allowed-tools`.
+All 21 skills conform to the [Agent Skills](https://agentskills.io/) open standard, the cross-agent skill format adopted by Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and [30+ other tools](https://agentskills.io/clients). Each `SKILL.md` includes the required `name` and `description` frontmatter fields, plus `license`, `compatibility`, and `allowed-tools`.
 
 **agent-lsp skills are not locked to any single AI provider.** Because they follow the AgentSkills open standard, they work with any conforming agent: Claude, Copilot, Cursor, Gemini, Codex, Roo Code, OpenHands, and the rest. The MCP server handles the LSP runtime; the skills are portable workflow definitions that any agent can load and execute.
 
@@ -381,6 +381,33 @@ fast feedback without running the full suite.
 Start with lsp-explore for a single symbol triage. Escalate to lsp-understand
 when you need the full module picture before making changes. Then use lsp-safe-edit
 to gate the edit on diagnostic impact.
+
+---
+
+### `/lsp-inspect`
+
+Full code quality audit for a file, package, or directory. Combines LSP batch
+analysis with LLM-driven heuristic checks. The broadest composition skill:
+uses `get_change_impact` for mechanical checks (dead symbols, test coverage),
+then reads source code for reasoning checks (silent failures, error wrapping,
+doc drift, coverage gaps, panics, context propagation).
+
+```
+/lsp-inspect internal/handlers/     # Audit an entire package
+/lsp-inspect pkg/auth.go --checks dead_symbol,error_wrapping
+/lsp-inspect src/ --json            # Structured output
+```
+
+Composes: `get_change_impact` (batch), `get_references` (fallback),
+`get_document_symbols`, `get_info_on_location`, `get_diagnostics`,
+`call_hierarchy`, source reading with heuristic pattern matching.
+
+Output: severity-tiered findings report (errors, warnings, info) with
+per-finding confidence levels (high/medium/low) and LSP tier annotation.
+
+Unlike the external inspector agent, this skill runs inline (no background
+agent, no permission gates, no warmup flag files). It uses the already-warm
+LSP session directly.
 
 ---
 

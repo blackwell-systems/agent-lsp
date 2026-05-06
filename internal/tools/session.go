@@ -24,14 +24,38 @@ func HandleStartLsp(
 		return types.ErrorResult("root_dir is required"), nil
 	}
 
+	languageID, _ := args["language_id"].(string)
+
 	// Shutdown any existing client.
 	if existing := getClient(); existing != nil {
 		_ = existing.Shutdown(ctx) // best-effort
 	}
 
+	// Optional workspace scoping: generate a language-server config file that
+	// limits indexing to specific subdirectories. This enables agent-lsp to work
+	// on large monorepos (e.g., 12M-line Python repos) without reference query
+	// timeouts from full-workspace indexing.
+	var scopeConfig *lsp.ScopeConfig
+	if rawScope, ok := args["scope"]; ok {
+		scopePaths := ParseScopePaths(rawScope)
+		if len(scopePaths) > 0 {
+			sc, err := lsp.GenerateScopeConfig(rootDir, languageID, scopePaths)
+			if err != nil {
+				return types.ErrorResult(fmt.Sprintf("failed to generate scope config: %s", err)), nil
+			}
+			scopeConfig = sc
+		}
+	}
+
 	client := lsp.NewLSPClient(serverPath, serverArgs)
 	if err := client.Initialize(ctx, rootDir); err != nil {
+		// Clean up scope config on init failure.
+		lsp.RemoveScopeConfig(scopeConfig)
 		return types.ErrorResult(fmt.Sprintf("failed to initialize LSP server: %s", err)), nil
+	}
+
+	if scopeConfig != nil {
+		client.SetScopeConfig(scopeConfig)
 	}
 
 	setClient(client)
@@ -45,6 +69,28 @@ func HandleStartLsp(
 	}
 
 	return types.TextResult("LSP server started successfully"), nil
+}
+
+// ParseScopePaths extracts scope paths from the args value.
+// Accepts a single string or []interface{} (JSON array).
+func ParseScopePaths(raw interface{}) []string {
+	switch v := raw.(type) {
+	case string:
+		if v == "" {
+			return nil
+		}
+		return []string{v}
+	case []interface{}:
+		paths := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok && s != "" {
+				paths = append(paths, s)
+			}
+		}
+		return paths
+	default:
+		return nil
+	}
 }
 
 // HandleRestartLspServer restarts the LSP server with the given root dir.

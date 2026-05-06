@@ -5,6 +5,30 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **`/lsp-inspect` skill (21st skill).** Full code quality audit for a file or package. Combines LSP batch analysis (`get_change_impact`) with LLM-driven heuristic checks. Check taxonomy: `dead_symbol`, `test_coverage`, `silent_failure`, `error_wrapping`, `coverage_gap`, `doc_drift`, `panic_not_recovered`, `context_propagation`. Runs inline (no background agent, no permission gates). Language-agnostic: works with any configured language server. Replaces the external `agentskills-code-inspector` with a first-party skill that uses the already-warm LSP session directly.
+
+- **Workspace scoping via `scope` parameter on `start_lsp`.** Generates a temporary language-server config (`pyrightconfig.json` for Python, `tsconfig.json` for TypeScript) that restricts analysis to specified subdirectories. Enables agent-lsp to work on large monorepos without full-workspace indexing. Accepts a string or array of paths relative to `root_dir`. Config is automatically removed on server shutdown, with backup/restore of any pre-existing config file. No-op for languages with native module boundaries (Go, Rust).
+
+- **Multi-signal warmup gate for `get_references`.** Servers that don't emit `$/progress` tokens (pyright, jedi-language-server) previously caused reference queries to time out because the workspace wasn't confirmed ready. New three-signal readiness detection:
+  1. `$/progress` tokens (existing path, gopls/rust-analyzer/jdtls)
+  2. Diagnostic arrival: waits up to 30s for first `publishDiagnostics` notification
+  3. Hover canary: issues a hover request to confirm file analysis is complete
+
+  First reference query on a cold workspace gets a 5-minute timeout (vs 2 minutes for subsequent queries). On success, workspace is marked warm and future queries use normal timeouts. On timeout, returns a guidance message recommending the `scope` parameter or longer warmup. The warmup gate is only active for daemon-connected clients; direct-mode clients (gopls, rust-analyzer) use the existing fast path with zero overhead.
+
+- **Persistent LSP daemon mode for Python and TypeScript.** Language servers that need sustained background indexing (pyright, tsserver) now run as persistent daemon brokers that survive between agent sessions. Architecture:
+  - `start_lsp` with `language_id="python"` or `"typescript"` automatically spawns a daemon broker subprocess
+  - The broker owns the language server, listens on a Unix socket, and proxies JSON-RPC
+  - Agent-lsp connects to the daemon via socket (no subprocess spawn on subsequent sessions)
+  - Daemon auto-exits after 30 minutes of inactivity
+  - `get_references` on daemon clients returns clear "indexing in progress" status if workspace isn't ready
+  - New CLI commands: `agent-lsp daemon-status`, `agent-lsp daemon-stop [--all]`
+  - Go, Rust, C, and other languages with fast-indexing servers bypass daemon mode entirely (zero overhead)
+
+  Validated on FastAPI (1,119 Python files, 80K stars): daemon indexes in ~10 seconds, `get_references` on the `FastAPI` class returns 1,214 references across 556 files instantly. Previously timed out at 5 minutes on every attempt.
+
 ### Performance
 
 - **get_change_impact: 100x faster on large files.** Rewrote the batch reference query system:

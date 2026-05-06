@@ -4,9 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/blackwell-systems/agent-lsp/internal/config"
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
@@ -185,7 +189,17 @@ func (m *ServerManager) StartForLanguage(ctx context.Context, rootDir, languageI
 		}
 		// Match by languageID field or by any extension in the set.
 		if strings.ToLower(e.languageID) == langLower || e.extensions[langLower] {
-			// Restart if already running.
+			// Daemon mode: for languages that need sustained indexing.
+			if NeedsDaemon(langLower) {
+				client, err := m.startOrConnectDaemon(ctx, rootDir, langLower, e.command)
+				if err != nil {
+					return nil, err
+				}
+				e.client = client
+				return client, nil
+			}
+
+			// Direct mode: restart if already running.
 			if e.client != nil {
 				_ = e.client.Shutdown(ctx)
 			}
@@ -198,6 +212,71 @@ func (m *ServerManager) StartForLanguage(ctx context.Context, rootDir, languageI
 		}
 	}
 	return nil, fmt.Errorf("no server configured for language %q; check get_server_capabilities or reconfigure with the correct server binary", languageID)
+}
+
+// startOrConnectDaemon checks for an existing daemon and connects, or spawns a new one.
+func (m *ServerManager) startOrConnectDaemon(ctx context.Context, rootDir, languageID string, command []string) (*LSPClient, error) {
+	// Check for existing running daemon.
+	info, err := FindRunningDaemon(rootDir, languageID)
+	if err == nil && info != nil {
+		logging.Log(logging.LevelDebug, fmt.Sprintf("daemon: connecting to existing %s daemon (PID %d, ready=%v)", languageID, info.PID, info.Ready))
+		client, err := NewDaemonClient(info)
+		if err == nil {
+			return client, nil
+		}
+		// Connection failed; daemon may be dead. Clean up and respawn.
+		logging.Log(logging.LevelDebug, fmt.Sprintf("daemon: connection failed, respawning: %v", err))
+	}
+
+	// Spawn a new daemon broker.
+	logging.Log(logging.LevelDebug, fmt.Sprintf("daemon: spawning new %s daemon for %s", languageID, rootDir))
+	if err := spawnDaemonProcess(rootDir, languageID, command); err != nil {
+		return nil, fmt.Errorf("daemon: failed to spawn broker: %w", err)
+	}
+
+	// Wait briefly for the daemon to start and create its socket.
+	var daemonInfo *DaemonInfo
+	for i := 0; i < 20; i++ { // up to 10 seconds
+		time.Sleep(500 * time.Millisecond)
+		daemonInfo, _ = FindRunningDaemon(rootDir, languageID)
+		if daemonInfo != nil {
+			break
+		}
+	}
+	if daemonInfo == nil {
+		return nil, fmt.Errorf("daemon: broker did not start within 10 seconds")
+	}
+
+	client, err := NewDaemonClient(daemonInfo)
+	if err != nil {
+		return nil, fmt.Errorf("daemon: failed to connect to new broker: %w", err)
+	}
+	return client, nil
+}
+
+// spawnDaemonProcess launches the daemon-broker as a detached subprocess.
+func spawnDaemonProcess(rootDir, languageID string, command []string) error {
+	// Find our own binary path.
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+
+	cmdStr := strings.Join(command, ",")
+	args := []string{
+		"daemon-broker",
+		"--root-dir=" + rootDir,
+		"--language=" + languageID,
+		"--command=" + cmdStr,
+	}
+
+	cmd := exec.Command(self, args...)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	// Detach: don't let the subprocess die with us.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+
+	return cmd.Start()
 }
 
 // Shutdown gracefully shuts down all managed LSP clients.

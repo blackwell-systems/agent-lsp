@@ -108,7 +108,7 @@ Platform-specific wheels containing the Go binary. Each wheel is tagged with the
 `smithery.yaml` in the repo root enables auto-indexing on Smithery. Auto-discovered from GitHub.
 
 ### cursor.directory
-Submitted. Cursor detects 20 skill components from SKILL.md files. Listed under Developer Tools.
+Submitted. Cursor detects 21 skill components from SKILL.md files. Listed under Developer Tools.
 
 ### mcpservers.org
 Manually submitted. Free listing.

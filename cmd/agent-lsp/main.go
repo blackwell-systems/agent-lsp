@@ -63,6 +63,20 @@ func main() {
 		return
 	}
 
+	// Subcommand routing: agent-lsp daemon-broker / daemon-status / daemon-stop
+	if len(os.Args) >= 2 && os.Args[1] == "daemon-broker" {
+		runDaemonBroker(os.Args[2:])
+		return
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "daemon-status" {
+		runDaemonStatus(os.Args[2:])
+		return
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "daemon-stop" {
+		runDaemonStop(os.Args[2:])
+		return
+	}
+
 	logging.SetLevelFromEnv()
 	parsed, err := config.ParseArgs(os.Args[1:])
 	if err != nil {

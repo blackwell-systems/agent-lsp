@@ -39,6 +39,10 @@ Simulate changes in memory before writing to disk. No other MCP-LSP implementati
 
 Structured LSP responses use **5-34x fewer tokens** than grep/read on the same tasks. On HashiCorp Consul (319K lines), a blast-radius analysis uses 17.7MB via grep vs 841KB via LSP, reducing 5,534 tool calls to 119. Savings scale with codebase size. See [docs/token-savings.md](./docs/token-savings.md) for the full experiment across five codebases.
 
+### Persistent daemon mode
+
+Python and TypeScript projects need minutes of background indexing before `get_references` works. agent-lsp automatically spawns a persistent daemon broker that survives between sessions, so the workspace stays indexed. First session: daemon starts and indexes (~10s for FastAPI). Subsequent sessions: instant connection to the warm daemon. Auto-exits after 30 minutes of inactivity. Go, Rust, and other fast-indexing languages bypass this entirely (zero overhead).
+
 ### Phase enforcement
 
 Skills tell agents the correct order of operations. Phase enforcement makes the runtime *block* violations instead of trusting the agent to follow instructions.
@@ -112,6 +116,7 @@ See [docs/skills.md](./docs/skills.md) for full descriptions and usage guidance.
 | Skill | Purpose |
 |-------|---------|
 | `/lsp-refactor` | End-to-end refactor: blast-radius → preview → apply → verify → test |
+| `/lsp-inspect` | Full code quality audit: dead symbols, test coverage, error handling, doc drift |
 
 ## Docker
 
@@ -265,7 +270,7 @@ This is what the agent does, not something you type. Then use any of the 53 tool
 |------------|---------|
 | Tools | **53** |
 | Languages (CI-verified) | **30** — end-to-end integration tests on every push |
-| Agent workflows (skills) | **20** — named multi-step procedures |
+| Agent workflows (skills) | **21** — named multi-step procedures |
 | Speculative execution | **8 tools** — simulate changes before writing to disk |
 | Phase enforcement | **4 skills** — runtime blocks out-of-order tool calls with recovery guidance |
 | Connection model | **persistent** — warm index across files and projects |

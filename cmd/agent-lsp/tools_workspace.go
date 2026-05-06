@@ -15,6 +15,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/blackwell-systems/agent-lsp/internal/audit"
@@ -30,6 +31,7 @@ type StartLspArgs struct {
 	RootDir              string  `json:"root_dir" jsonschema:"Workspace root directory containing the project (e.g. directory with go.mod, package.json)"`
 	LanguageID           string  `json:"language_id,omitempty" jsonschema:"Language server to start (e.g. go, typescript, rust). Optional; auto-detected"`
 	ReadyTimeoutSeconds  float64 `json:"ready_timeout_seconds,omitempty" jsonschema:"If > 0, block until all $/progress workspace-indexing tokens complete or this many seconds elapse. Useful for servers like jdtls that index asynchronously after initialize."`
+	Scope                any     `json:"scope,omitempty" jsonschema:"Limit indexing to specific subdirectories. Accepts a path string or array of paths relative to root_dir. Generates a temporary language-server config (pyrightconfig.json, tsconfig.json) that restricts analysis scope. Use on large monorepos to prevent reference query timeouts."`
 }
 
 type RestartLspArgs struct {
@@ -126,6 +128,22 @@ func registerWorkspaceTools(d toolDeps) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args StartLspArgs) (*mcp.CallToolResult, any, error) {
 		if sm, ok := d.resolver.(*lsp.ServerManager); ok {
 			if args.LanguageID != "" {
+				// Apply workspace scoping before starting the language server.
+				if args.Scope != nil {
+					scopePaths := tools.ParseScopePaths(args.Scope)
+					if len(scopePaths) > 0 {
+						sc, err := lsp.GenerateScopeConfig(args.RootDir, args.LanguageID, scopePaths)
+						if err != nil {
+							return makeCallToolResult(types.ErrorResult(fmt.Sprintf("failed to generate scope config: %s", err))), nil, nil
+						}
+						// Cleanup deferred to client.Shutdown via SetScopeConfig below.
+						defer func() {
+							if c := d.cs.get(); c != nil && sc != nil {
+								c.SetScopeConfig(sc)
+							}
+						}()
+					}
+				}
 				client, err := sm.StartForLanguage(ctx, args.RootDir, args.LanguageID)
 				if err != nil {
 					return makeCallToolResult(types.ErrorResult(err.Error())), nil, nil

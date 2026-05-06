@@ -119,57 +119,6 @@ The gap between what clangd provides and what the broader toolchain offers is la
 | `ruby.security` | Brakeman security scan (Rails) |
 | `ruby.audit` | `bundle-audit` CVE scan on `Gemfile.lock` |
 
-## Performance: get_change_impact on large files
-
-**Priority:** High
-**Status:** Open
-
-### The problem
-
-`get_change_impact` is unusable on files with many exported symbols. On `server.go` in mark3labs/mcp-go (2,651 lines, 100+ exports), the tool hangs for 10+ minutes because it calls `GetReferences` sequentially for every exported symbol. Each `GetReferences` call internally runs `WaitForFileIndexed` (up to 15 seconds on cold files) and then the LSP `textDocument/references` request.
-
-The call chain:
-```
-get_change_impact(changed_files=["server.go"])
-  → GetDocumentSymbols → 100+ exported symbols
-  → for each symbol:
-      → GetReferences(file, line, col)
-        → waitForWorkspaceReady (fast, already done)
-        → WaitForFileIndexed(uri, 15s timeout)
-        → sendRequest("textDocument/references")
-      → for each reference in test files:
-          → GetDocumentSymbols (to find enclosing test function)
-```
-
-On a file with 100 exports, the worst case is 100 x (15s wait + LSP query + test file lookups) = minutes of wall clock time. Even with warm caches (0s wait), the sequential LSP queries take 30-60 seconds for 100 symbols.
-
-### Why it matters
-
-`get_change_impact` is the primary tool for:
-- The `/inspect` skill's dead symbol and test coverage checks (Tier 1A)
-- The `/lsp-impact` skill's blast-radius analysis
-- Pre-edit safety checks on files with many exports
-
-When it hangs, the entire inspector agent stalls. Background agents have no way to time out gracefully: they just appear stuck.
-
-### Root causes
-
-1. **Sequential reference queries.** Each symbol is queried one at a time. No parallelism.
-2. **Per-symbol WaitForFileIndexed.** Each `GetReferences` call waits up to 15 seconds for the file to be indexed, even though the workspace is already ready. For 100 symbols in the same file, this is 100 redundant waits.
-3. **No cap on export count.** A 2,651-line file with 100+ exports is treated the same as a 50-line file with 3 exports.
-4. **Test file fan-out.** For each reference in a test file, `GetDocumentSymbols` is called to find the enclosing test function. This adds more LSP round-trips.
-
-### Proposed fixes (in priority order)
-
-1. **Parallelize reference queries.** Use a worker pool (e.g. 8 concurrent goroutines) with `errgroup` to query references for multiple symbols simultaneously. Most LSP servers handle concurrent requests fine. This alone would reduce a 100-symbol file from 60s to ~8s.
-
-2. **Single WaitForFileIndexed per batch.** Call `WaitForFileIndexed` once for the target file before the loop, not per-symbol inside `GetReferences`. The file doesn't change between queries.
-
-3. **Cap export count with early bail.** If a file has more than 50 exports, return the symbol list with a `"truncated": true` flag and let the caller decide. Or accept a `max_symbols` parameter.
-
-4. **Cache test file symbols.** When processing references, cache `GetDocumentSymbols` results per file so the same test file isn't queried repeatedly for different symbols.
-
-5. **Add a timeout parameter.** `get_change_impact` should accept a `timeout_seconds` parameter. If the operation exceeds it, return partial results with a warning instead of hanging indefinitely.
 
 ## Product
 
@@ -181,7 +130,7 @@ When it hangs, the entire inspector agent stalls. Background agents have no way 
 
 ## Skills
 
-20 skills shipped. See [skills.md](skills.md) for the full catalog.
+21 skills shipped. See [skills.md](skills.md) for the full catalog.
 
 ### Creation skills
 
@@ -194,6 +143,14 @@ Current skills are oriented around modifying existing code. These skills target 
 | `/lsp-discover-api` | Completion-driven API exploration. Open a file, place the cursor after a package qualifier, call `get_completions` to show available methods/fields. Use LSP knowledge instead of training data (which may be outdated). |
 | `/lsp-bootstrap` | Project scaffolding with LSP verification. Create build files (go.mod, package.json, Cargo.toml), start LSP, confirm indexing works, verify initial diagnostics are clean before writing application code. |
 | `/lsp-wire` | After creating a new package/module, verify it's importable from the intended consumer, check the public API surface via `get_document_symbols`, confirm no dangling imports or missing exports. |
+
+### Inspection skill
+
+| Skill | Description |
+|-------|-------------|
+| `/lsp-inspect` | Full code quality audit for a file or package. Composes `get_change_impact` (batch dead symbol + test coverage), `get_references` (per-symbol verification), `get_diagnostics` (error detection), and LLM reasoning checks (silent failures, error wrapping, doc drift, coverage gaps). Produces a severity-tiered findings report. Replaces the external `agentskills-code-inspector` with a first-party skill that has direct access to the warm LSP session. Language-agnostic: works with any configured language server. |
+
+Rationale: The inspector workflow is currently a separate repo that orchestrates agent-lsp's tools via MCP round-trips. Shipping it as a bundled skill eliminates: (1) separate installation, (2) MCP permission setup for background agents, (3) warmup gate complexity, (4) redundant `start_lsp` calls. The mechanical checks (`dead_symbol`, `test_coverage`) use `get_change_impact` directly. The reasoning checks (`silent_failure`, `error_wrapping`, `doc_drift`) are LLM-driven heuristics defined in the skill markdown. All 20 existing skills remain unchanged; `/lsp-inspect` is additive.
 
 ### Skill composition
 

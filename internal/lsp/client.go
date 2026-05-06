@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -132,6 +133,11 @@ type LSPClient struct {
 
 	initialized bool
 
+	// daemon mode fields
+	isDaemon   bool        // true if connected to a daemon broker (not a direct subprocess)
+	daemonInfo *DaemonInfo // metadata about the connected daemon
+	socketConn net.Conn    // Unix socket connection (nil for direct subprocess mode)
+
 	// pending RPC requests
 	pendingMu sync.Mutex
 	pending   map[int]*pendingRequest
@@ -148,6 +154,12 @@ type LSPClient struct {
 	progressMu     sync.Mutex
 	progressTokens map[interface{}]struct{} // active begin tokens
 	progressCond   *sync.Cond // signalled when progressTokens becomes empty
+
+	// workspace scoping (generated config for large repos)
+	scopeConfig *ScopeConfig
+
+	// multi-signal warmup gate for servers that don't emit $/progress
+	warmup *warmupState
 
 	// workspaceLoaded is set to true after waitForWorkspaceReady completes
 	// successfully (all $/progress tokens done). Once true, WaitForFileIndexed
@@ -188,10 +200,84 @@ func NewLSPClient(serverPath string, serverArgs []string) *LSPClient {
 		diags:          make(map[string][]types.LSPDiagnostic),
 		progressTokens: make(map[interface{}]struct{}),
 		capabilities:   make(map[string]interface{}),
+		warmup:         newWarmupState(),
 	}
 	c.nextID.Store(0)
 	c.progressCond = sync.NewCond(&c.progressMu)
 	return c
+}
+
+// NewDaemonClient creates an LSPClient connected to an existing daemon broker
+// via Unix socket. Unlike NewLSPClient, it does NOT spawn a subprocess or call
+// Initialize; the daemon already did that.
+func NewDaemonClient(info *DaemonInfo) (*LSPClient, error) {
+	conn, err := net.DialTimeout("unix", info.SocketPath, 5*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon socket: %w", err)
+	}
+
+	// Daemon clients assume all capabilities are available. The daemon's language
+	// server already advertised its capabilities during initialize; we trust that
+	// any tool call routed to a daemon client is valid. This avoids needing a
+	// capability exchange protocol over the socket.
+	allCaps := map[string]interface{}{
+		"referencesProvider":       true,
+		"hoverProvider":            true,
+		"definitionProvider":       true,
+		"typeDefinitionProvider":   true,
+		"declarationProvider":      true,
+		"implementationProvider":   true,
+		"documentSymbolProvider":   true,
+		"workspaceSymbolProvider":  true,
+		"completionProvider":       true,
+		"signatureHelpProvider":    true,
+		"codeActionProvider":       true,
+		"renameProvider":           true,
+		"documentFormattingProvider": true,
+		"documentHighlightProvider": true,
+		"callHierarchyProvider":    true,
+		"semanticTokensProvider":   true,
+		"inlayHintProvider":        true,
+	}
+
+	c := &LSPClient{
+		rootDir:        info.RootDir,
+		pending:        make(map[int]*pendingRequest),
+		openDocs:       make(map[string]docMeta),
+		diags:          make(map[string][]types.LSPDiagnostic),
+		progressTokens: make(map[interface{}]struct{}),
+		capabilities:   allCaps,
+		warmup:         newWarmupState(),
+		isDaemon:       true,
+		daemonInfo:     info,
+		socketConn:     conn,
+		initialized:    true, // daemon already initialized the LSP server
+		stdin:          conn, // write to the socket
+		frameReader:    NewFrameReader(conn),
+	}
+	c.nextID.Store(0)
+	c.progressCond = sync.NewCond(&c.progressMu)
+
+	// If daemon reports ready, mark warmup as complete.
+	if info.Ready {
+		c.workspaceLoaded.Store(true)
+		c.warmup.MarkReady()
+	}
+
+	// Start reading responses from the socket.
+	go c.readLoop()
+
+	return c, nil
+}
+
+// IsDaemon returns true if this client is connected to a daemon broker.
+func (c *LSPClient) IsDaemon() bool {
+	return c.isDaemon
+}
+
+// DaemonInfo returns the daemon metadata, or nil if not in daemon mode.
+func (c *LSPClient) GetDaemonInfo() *DaemonInfo {
+	return c.daemonInfo
 }
 
 // start spawns the subprocess and begins reading responses.
@@ -414,6 +500,9 @@ func (c *LSPClient) handlePublishDiagnostics(params json.RawMessage) {
 	if err := json.Unmarshal(params, &p); err != nil {
 		return
 	}
+
+	// Notify warmup gate that diagnostics have arrived.
+	c.warmup.NotifyDiagnostic()
 
 	c.diagMu.Lock()
 	c.diags[p.URI] = p.Diagnostics
@@ -879,7 +968,23 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 }
 
 // Shutdown gracefully shuts down the LSP server.
+// In daemon mode, this only closes the socket connection; the daemon stays alive.
 func (c *LSPClient) Shutdown(ctx context.Context) error {
+	// Daemon mode: just close the socket, don't kill the server.
+	if c.isDaemon {
+		if c.socketConn != nil {
+			c.socketConn.Close()
+			c.socketConn = nil
+		}
+		return nil
+	}
+
+	// Clean up any generated scope config files.
+	if c.scopeConfig != nil {
+		RemoveScopeConfig(c.scopeConfig)
+		c.scopeConfig = nil
+	}
+
 	c.stopWatcher()
 	_, err := c.sendRequest(ctx, "shutdown", nil)
 	if err != nil {
@@ -893,6 +998,11 @@ func (c *LSPClient) Shutdown(ctx context.Context) error {
 	}
 	c.mu.Unlock()
 	return nil
+}
+
+// SetScopeConfig stores a scope configuration for cleanup on shutdown.
+func (c *LSPClient) SetScopeConfig(sc *ScopeConfig) {
+	c.scopeConfig = sc
 }
 
 // Restart shuts down the current server and reinitializes it.
@@ -1427,6 +1537,13 @@ func (c *LSPClient) GetReferences(ctx context.Context, uri string, pos types.Pos
 		logging.Log(logging.LevelDebug, "server does not support references")
 		return []types.Location{}, nil
 	}
+
+	// Daemon mode: use the warmup gate with extended timeout and readiness checking.
+	if c.isDaemon {
+		return GetReferencesWithWarmup(ctx, c, uri, pos, includeDecl)
+	}
+
+	// Direct mode: original behavior ($/progress + WaitForFileIndexed).
 	c.waitForWorkspaceReady(ctx)
 	_ = c.WaitForFileIndexed(ctx, uri, 15000)
 	return c.getReferencesInternal(ctx, uri, pos, includeDecl)
