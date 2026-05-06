@@ -31,7 +31,7 @@ type StartLspArgs struct {
 	RootDir              string  `json:"root_dir" jsonschema:"Workspace root directory containing the project (e.g. directory with go.mod, package.json)"`
 	LanguageID           string  `json:"language_id,omitempty" jsonschema:"Language server to start (e.g. go, typescript, rust). Optional; auto-detected"`
 	ReadyTimeoutSeconds  float64 `json:"ready_timeout_seconds,omitempty" jsonschema:"If > 0, block until all $/progress workspace-indexing tokens complete or this many seconds elapse. Useful for servers like jdtls that index asynchronously after initialize."`
-	Scope                any     `json:"scope,omitempty" jsonschema:"Limit indexing to specific subdirectories. Accepts a path string or array of paths relative to root_dir. Generates a temporary language-server config (pyrightconfig.json, tsconfig.json) that restricts analysis scope. Use on large monorepos to prevent reference query timeouts."`
+	Scope                string  `json:"scope,omitempty" jsonschema:"Limit indexing to specific subdirectories. Accepts a path string or array of paths relative to root_dir. Generates a temporary language-server config (pyrightconfig.json, tsconfig.json) that restricts analysis scope. Use on large monorepos to prevent reference query timeouts."`
 }
 
 type RestartLspArgs struct {
@@ -129,7 +129,7 @@ func registerWorkspaceTools(d toolDeps) {
 		if sm, ok := d.resolver.(*lsp.ServerManager); ok {
 			if args.LanguageID != "" {
 				// Apply workspace scoping before starting the language server.
-				if args.Scope != nil {
+				if args.Scope != "" {
 					scopePaths := tools.ParseScopePaths(args.Scope)
 					if len(scopePaths) > 0 {
 						sc, err := lsp.GenerateScopeConfig(args.RootDir, args.LanguageID, scopePaths)
