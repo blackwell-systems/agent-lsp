@@ -332,7 +332,7 @@ The daemon broker solves this by decoupling the language server's lifetime from 
 5. **Tracks readiness.** Once the language server finishes indexing, the broker writes `"ready": true` to `daemon.json`. Agent-lsp clients check this flag before issuing reference queries.
 6. **Manages its own lifetime.** When the last socket client disconnects, the broker starts a 30-minute inactivity timer. If no new client connects, the broker sends `shutdown` + `exit` to the language server, removes its socket and state files, and exits. If a new client connects, the timer resets.
 
-The key insight: the broker process is detached from the agent-lsp process (`Setsid: true` on the subprocess). When the MCP session ends and agent-lsp exits, the broker and its language server keep running. The next `start_lsp` call finds the existing broker via `FindRunningDaemon` (checks PID liveness + socket reachability), connects to the socket, and gets an already-indexed language server instantly.
+The broker process is detached from the agent-lsp process (`Setsid: true` on the subprocess). When the MCP session ends and agent-lsp exits, the broker and its language server keep running. The next `start_lsp` call finds the existing broker via `FindRunningDaemon` (checks PID liveness + socket reachability), connects to the socket, and gets an already-indexed language server instantly.
 
 - One broker per (rootDir, languageID) pair. The directory hash ensures different workspaces get different daemons.
 - State files live at `~/.cache/agent-lsp/daemons/<hash>/`: `daemon.json` (metadata), `daemon.sock` (Unix socket), `daemon.pid` (process ID).
