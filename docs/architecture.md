@@ -319,14 +319,32 @@ Understanding the process model is the most important prerequisite for reading t
 - Communicate with the Go process using LSP JSON-RPC with **Content-Length framing** (each message is preceded by a `Content-Length: N\r\n\r\n` header giving the byte length of the JSON body; this is the standard LSP wire format, not HTTP).
 - Remain running for the lifetime of the MCP session. The index stays warm; no subprocess is spawned per tool call.
 
-**Communication direction:**
+**Daemon broker process (Python/TypeScript only):**
+
+Language servers like pyright and tsserver need minutes of background indexing before `textDocument/references` works. In direct mode, agent-lsp spawns a fresh server per session, so the workspace is never indexed when the first reference query arrives. The daemon broker solves this by keeping the language server alive between sessions: the first session pays the indexing cost, and all subsequent sessions connect to a warm server instantly.
+
+- One process per (rootDir, languageID) pair, spawned on first `start_lsp` for languages that need sustained indexing.
+- Persists between agent sessions. Auto-exits after 30 minutes of inactivity.
+- Owns the language server subprocess (pyright, tsserver). Listens on a Unix domain socket.
+- Proxies JSON-RPC between connected agent-lsp clients and the single language server.
+- Tracks workspace readiness and writes state to `~/.cache/agent-lsp/daemons/<hash>/daemon.json`.
+- Go, Rust, C, and other fast-indexing servers bypass daemon mode entirely (zero overhead).
+
+**Communication direction (direct mode, e.g. Go/Rust):**
 
 ```
 AI agent ──MCP JSON-RPC──► agent-lsp ──LSP JSON-RPC──► gopls subprocess
 AI agent ◄──MCP JSON-RPC── agent-lsp ◄──LSP JSON-RPC── gopls subprocess
 ```
 
-The Go process never opens sockets to the language servers. All LSP traffic goes through `os/exec` pipe pairs, which is what language servers expect.
+**Communication direction (daemon mode, e.g. Python/TypeScript):**
+
+```
+AI agent ──MCP JSON-RPC──► agent-lsp ──JSON-RPC──► daemon-broker ──LSP JSON-RPC──► pyright
+                            (Unix socket)              (stdin/stdout pipes)
+```
+
+In direct mode, the Go process communicates with language servers through `os/exec` pipe pairs. In daemon mode, agent-lsp connects to the broker via a Unix domain socket; the broker owns the pipe pair to the language server.
 
 ---
 
