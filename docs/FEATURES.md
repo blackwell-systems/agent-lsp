@@ -271,7 +271,9 @@ metadata:
 # skill body (prompt for agent)
 ```
 
-**Capability metadata:** All 20 skills declare `required-capabilities` and `optional-capabilities` in frontmatter. Maps directly to LSP server capability keys from `get_server_capabilities`. Agents can check before activation whether the current language server supports the skill's requirements. Skills with zero required capabilities (lsp-safe-edit, lsp-simulate, lsp-verify, lsp-test-correlation) work with any language server.
+**Capability metadata:** All 21 skills declare `required-capabilities` and `optional-capabilities` in frontmatter. Maps directly to LSP server capability keys from `get_server_capabilities`. Agents can check before activation whether the current language server supports the skill's requirements. Skills with zero required capabilities (lsp-safe-edit, lsp-simulate, lsp-verify, lsp-test-correlation) work with any language server.
+
+**Runtime skill classification:** `get_server_capabilities` now includes a `skills` array in its response, classifying every skill as `supported` (all required capabilities present), `partial` (required present, some optional missing), or `unsupported` (missing required capabilities). One call at session start tells the agent exactly which skills to use and which to skip.
 
 | Capability | Skills that require it | Skills that optionally use it |
 |---|---|---|

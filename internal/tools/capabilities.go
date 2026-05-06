@@ -54,13 +54,86 @@ var alwaysAvailableTools = []string{
 	"detect_lsp_servers",
 }
 
+// SkillStatus describes whether a skill is viable with the current language server.
+type SkillStatus struct {
+	Name               string   `json:"name"`
+	Status             string   `json:"status"` // "supported", "partial", "unsupported"
+	MissingRequired    []string `json:"missing_required,omitempty"`
+	MissingOptional    []string `json:"missing_optional,omitempty"`
+}
+
 // ServerCapabilitiesResult is the response shape for get_server_capabilities.
 type ServerCapabilitiesResult struct {
 	ServerName      string                 `json:"server_name,omitempty"`
 	ServerVersion   string                 `json:"server_version,omitempty"`
 	SupportedTools  []string               `json:"supported_tools"`
 	UnsupportedTools []string              `json:"unsupported_tools"`
+	Skills          []SkillStatus          `json:"skills,omitempty"`
 	Capabilities    map[string]interface{} `json:"capabilities"`
+}
+
+// skillCapabilities defines required and optional capabilities for each skill.
+// Sourced from SKILL.md frontmatter metadata fields.
+var skillCapabilities = []struct {
+	name     string
+	required []string
+	optional []string
+}{
+	{"lsp-cross-repo", []string{"referencesProvider"}, []string{"implementationProvider", "callHierarchyProvider", "workspaceSymbolProvider"}},
+	{"lsp-dead-code", []string{"documentSymbolProvider", "referencesProvider"}, nil},
+	{"lsp-docs", []string{"hoverProvider"}, []string{"definitionProvider"}},
+	{"lsp-edit-export", []string{"referencesProvider"}, []string{"workspaceSymbolProvider"}},
+	{"lsp-edit-symbol", []string{"workspaceSymbolProvider"}, nil},
+	{"lsp-explore", []string{"hoverProvider"}, []string{"implementationProvider", "callHierarchyProvider", "referencesProvider"}},
+	{"lsp-extract-function", []string{"codeActionProvider"}, []string{"documentFormattingProvider", "documentSymbolProvider"}},
+	{"lsp-fix-all", []string{"codeActionProvider"}, []string{"documentFormattingProvider"}},
+	{"lsp-format-code", []string{"documentFormattingProvider"}, []string{"documentRangeFormattingProvider"}},
+	{"lsp-generate", []string{"codeActionProvider"}, []string{"workspaceSymbolProvider", "documentFormattingProvider"}},
+	{"lsp-impact", []string{"referencesProvider"}, []string{"callHierarchyProvider", "typeHierarchyProvider", "workspaceSymbolProvider"}},
+	{"lsp-implement", []string{"implementationProvider"}, []string{"typeHierarchyProvider", "workspaceSymbolProvider"}},
+	{"lsp-inspect", []string{"documentSymbolProvider", "referencesProvider"}, []string{"callHierarchyProvider"}},
+	{"lsp-local-symbols", []string{"documentSymbolProvider"}, []string{"documentHighlightProvider", "hoverProvider"}},
+	{"lsp-refactor", []string{"referencesProvider"}, []string{"documentFormattingProvider"}},
+	{"lsp-rename", []string{"referencesProvider", "renameProvider", "workspaceSymbolProvider"}, nil},
+	{"lsp-safe-edit", nil, []string{"codeActionProvider", "documentFormattingProvider"}},
+	{"lsp-simulate", nil, nil},
+	{"lsp-test-correlation", nil, []string{"workspaceSymbolProvider"}},
+	{"lsp-understand", []string{"hoverProvider"}, []string{"implementationProvider", "callHierarchyProvider", "referencesProvider", "documentSymbolProvider", "workspaceSymbolProvider"}},
+	{"lsp-verify", nil, []string{"codeActionProvider", "documentFormattingProvider"}},
+}
+
+// classifySkills checks each skill's required and optional capabilities against
+// the server's advertised capabilities and returns a status for each.
+func classifySkills(caps map[string]interface{}) []SkillStatus {
+	var result []SkillStatus
+	for _, skill := range skillCapabilities {
+		var missingReq, missingOpt []string
+		for _, cap := range skill.required {
+			if !hasCapabilityInMap(caps, cap) {
+				missingReq = append(missingReq, cap)
+			}
+		}
+		for _, cap := range skill.optional {
+			if !hasCapabilityInMap(caps, cap) {
+				missingOpt = append(missingOpt, cap)
+			}
+		}
+
+		status := "supported"
+		if len(missingReq) > 0 {
+			status = "unsupported"
+		} else if len(missingOpt) > 0 {
+			status = "partial"
+		}
+
+		result = append(result, SkillStatus{
+			Name:            skill.name,
+			Status:          status,
+			MissingRequired: missingReq,
+			MissingOptional: missingOpt,
+		})
+	}
+	return result
 }
 
 // HandleGetServerCapabilities returns the language server's capability map
@@ -100,6 +173,7 @@ func HandleGetServerCapabilities(_ context.Context, client *lsp.LSPClient, _ map
 		ServerVersion:    version,
 		SupportedTools:   supported,
 		UnsupportedTools: unsupported,
+		Skills:           classifySkills(caps),
 		Capabilities:     caps,
 	}
 

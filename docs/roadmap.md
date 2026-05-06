@@ -203,7 +203,7 @@ Skills that target the "Strong" tier should avoid hard dependencies on `callHier
 |---------|--------|-------------|
 | **`required-capabilities` metadata** | **Shipped** | Space-separated list of LSP server capability keys in SKILL.md frontmatter `metadata` field. All 20 skills declare required and optional capabilities. |
 | **`optional-capabilities` metadata** | **Shipped** | Same format. Steps using these capabilities skip cleanly when unavailable. No warning on activation. |
-| **Capability check tool** | Planned | A new tool or skill (`/lsp-check-capabilities`) that reports which of the 20 skills are fully viable, partially viable, or unavailable for the current language server. One call shows the agent what it can and cannot do. |
+| **Capability check tool** | **Shipped** | Integrated into `get_server_capabilities`: `skills` array classifies all 21 skills as supported/partial/unsupported based on the current server's capabilities. |
 | **Degraded-mode skill variants** | Planned | For high-value skills like `/lsp-impact`, define a degraded path in the skill body that uses only `get_references` when call/type hierarchy are unavailable. Explicit in the prose, not a separate skill file. |
 
 ### Fits the AgentSkills spec
