@@ -38,6 +38,16 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - **Content-Length parse error handling in broker.** Malformed `Content-Length` headers from socket clients now return an error instead of silently producing `contentLength=0`.
 - **Error wrapping in `StopDaemon`.** `os.FindProcess` errors now include the PID and operation context.
 
+- **Concurrency fixes in daemon broker and warmup state.** Fixed 4 data races found by internal concurrency audit:
+  - DaemonInfo struct writes synchronized with mutex between warmup goroutine and main event loop
+  - `lastDisconn` read protected by `connMu` lock (was racing with write path)
+  - `firstRefDone` moved from package-level to per-warmupState field (prevents cross-client state leakage in multi-server mode)
+  - `socketConn` nil-write in daemon Shutdown protected by `c.mu`
+
+### Testing
+
+- **17 new unit tests for daemon, warmup, and scope packages.** Covers `NeedsDaemon`, `DaemonDir`, `WriteDaemonInfo`/`RefreshDaemonInfo` round-trip, `CleanupStaleDaemons`, `GenerateScopeConfig` (Python, TypeScript, Go no-op), backup/restore of existing configs, `warmupState` lifecycle (`FirstRefTimeout`, `MarkReady`, `NotifyDiagnostic`).
+
 ### Performance
 
 - **get_change_impact: 100x faster on large files.** Rewrote the batch reference query system:
