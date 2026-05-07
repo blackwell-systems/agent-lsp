@@ -75,6 +75,7 @@ func RunBroker(cfg BrokerConfig) error {
 		StartTime:    time.Now(),
 		LastActivity: time.Now(),
 	}
+	var infoMu sync.Mutex // protects writes to info fields
 	if err := WriteDaemonInfo(info); err != nil {
 		return fmt.Errorf("daemon: failed to write info: %w", err)
 	}
@@ -99,11 +100,13 @@ func RunBroker(cfg BrokerConfig) error {
 		client.WaitForWorkspaceReadyTimeout(ctx, 10*time.Minute)
 
 		// Mark ready.
+		infoMu.Lock()
 		info.Ready = true
 		info.LastActivity = time.Now()
 		if err := WriteDaemonInfo(info); err != nil {
 			logging.Log(logging.LevelWarning, fmt.Sprintf("daemon: failed to write ready flag: %v", err))
 		}
+		infoMu.Unlock()
 		logging.Log(logging.LevelDebug, "daemon: workspace indexed, marked ready")
 	}()
 
@@ -159,8 +162,10 @@ func RunBroker(cfg BrokerConfig) error {
 			connCount.Add(1)
 			connMu.Unlock()
 
+			infoMu.Lock()
 			info.LastActivity = time.Now()
 			_ = WriteDaemonInfo(info)
+			infoMu.Unlock()
 
 			go func(c net.Conn) {
 				handleBrokerConnection(c, client)
@@ -172,7 +177,10 @@ func RunBroker(cfg BrokerConfig) error {
 			}(conn)
 
 		case <-inactivityTicker.C:
-			if connCount.Load() == 0 && time.Since(lastDisconn) >= daemonInactivityTimeout {
+			connMu.Lock()
+			idle := connCount.Load() == 0 && time.Since(lastDisconn) >= daemonInactivityTimeout
+			connMu.Unlock()
+			if idle {
 				logging.Log(logging.LevelDebug, "daemon: inactivity timeout, shutting down")
 				_ = client.Shutdown(ctx)
 				cleanup(dir)

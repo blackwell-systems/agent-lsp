@@ -972,9 +972,12 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 func (c *LSPClient) Shutdown(ctx context.Context) error {
 	// Daemon mode: just close the socket, don't kill the server.
 	if c.isDaemon {
-		if c.socketConn != nil {
-			c.socketConn.Close()
-			c.socketConn = nil
+		c.mu.Lock()
+		conn := c.socketConn
+		c.socketConn = nil
+		c.mu.Unlock()
+		if conn != nil {
+			conn.Close()
 		}
 		return nil
 	}

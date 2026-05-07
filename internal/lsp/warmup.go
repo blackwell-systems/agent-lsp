@@ -42,6 +42,13 @@ type warmupState struct {
 	// firstRefTimeout is the extended timeout for the first reference query
 	// on a cold workspace. Subsequent queries use the normal 120s timeout.
 	firstRefTimeout time.Duration
+
+	// firstRefDone tracks whether the first successful reference query has completed.
+	// Unlike completed (which tracks readiness signals), this only becomes true after
+	// an actual reference query returns results. Diagnostics and hover confirm the
+	// server is alive, but only a successful reference query confirms the workspace
+	// is fully indexed for cross-file resolution.
+	firstRefDone atomic.Bool
 }
 
 func newWarmupState() *warmupState {
@@ -148,13 +155,6 @@ func (w *warmupState) hoverCanary(ctx context.Context, client *LSPClient, fileUR
 	return result != nil && string(result) != "null"
 }
 
-// firstRefDone tracks whether the first successful reference query has completed.
-// Unlike completed (which tracks readiness signals), this only becomes true after
-// an actual reference query returns results. Diagnostics and hover confirm the
-// server is alive, but only a successful reference query confirms the workspace
-// is fully indexed for cross-file resolution.
-var firstRefDone atomic.Bool
-
 // FirstRefTimeout returns the extended timeout for the first reference query.
 // Returns 0 (use normal timeout) when:
 //   - A reference query has already succeeded (workspace confirmed warm)
@@ -163,7 +163,7 @@ var firstRefDone atomic.Bool
 // Only returns the extended timeout when neither signal has confirmed readiness,
 // which happens with servers like pyright that don't emit $/progress tokens.
 func (w *warmupState) FirstRefTimeout() time.Duration {
-	if firstRefDone.Load() {
+	if w.firstRefDone.Load() {
 		return 0
 	}
 	if w.completed.Load() {
@@ -175,7 +175,7 @@ func (w *warmupState) FirstRefTimeout() time.Duration {
 // MarkReady marks the workspace as fully ready (after a successful reference query).
 func (w *warmupState) MarkReady() {
 	w.completed.Store(true)
-	firstRefDone.Store(true)
+	w.firstRefDone.Store(true)
 }
 
 // NotifyDiagnostic is called when any publishDiagnostics notification arrives.
