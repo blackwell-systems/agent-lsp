@@ -31,6 +31,13 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
   Validated on FastAPI (1,119 Python files, 80K stars): daemon indexes in ~10 seconds, `get_references` on the `FastAPI` class returns 1,214 references across 556 files instantly. Previously timed out at 5 minutes on every attempt.
 
+### Fixed
+
+- **Daemon broker panic recovery.** Added `defer recover()` to warmup and socket accept goroutines in the daemon broker. Previously, a panic in either goroutine would crash the broker silently with no error reporting.
+- **Daemon ready flag write failure now logged.** `WriteDaemonInfo` in the warmup goroutine previously discarded errors with `_ =`. If writing the ready flag fails, the daemon would appear permanently stuck in "indexing" state. Now logs a warning.
+- **Content-Length parse error handling in broker.** Malformed `Content-Length` headers from socket clients now return an error instead of silently producing `contentLength=0`.
+- **Error wrapping in `StopDaemon`.** `os.FindProcess` errors now include the PID and operation context.
+
 ### Performance
 
 - **get_change_impact: 100x faster on large files.** Rewrote the batch reference query system:

@@ -89,13 +89,21 @@ func RunBroker(cfg BrokerConfig) error {
 
 	// Start warmup in background.
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logging.Log(logging.LevelWarning, fmt.Sprintf("daemon: panic in warmup goroutine: %v", r))
+			}
+		}()
+
 		// Wait for workspace readiness using $/progress tokens first.
 		client.WaitForWorkspaceReadyTimeout(ctx, 10*time.Minute)
 
 		// Mark ready.
 		info.Ready = true
 		info.LastActivity = time.Now()
-		_ = WriteDaemonInfo(info)
+		if err := WriteDaemonInfo(info); err != nil {
+			logging.Log(logging.LevelWarning, fmt.Sprintf("daemon: failed to write ready flag: %v", err))
+		}
 		logging.Log(logging.LevelDebug, "daemon: workspace indexed, marked ready")
 	}()
 
@@ -119,6 +127,12 @@ func RunBroker(cfg BrokerConfig) error {
 	// Accept connections in a goroutine.
 	newConns := make(chan net.Conn, 8)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logging.Log(logging.LevelWarning, fmt.Sprintf("daemon: panic in socket accept goroutine: %v", r))
+			}
+		}()
+
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
@@ -259,7 +273,11 @@ func readFramedMessage(reader *bufio.Reader) ([]byte, error) {
 			break // empty line separates headers from body
 		}
 		if len(line) > 16 && line[:16] == "Content-Length: " {
-			contentLength, _ = strconv.Atoi(line[16:])
+			var parseErr error
+			contentLength, parseErr = strconv.Atoi(line[16:])
+			if parseErr != nil {
+				return nil, fmt.Errorf("invalid Content-Length: %s", line)
+			}
 		}
 	}
 	if contentLength == 0 {

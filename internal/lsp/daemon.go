@@ -159,7 +159,7 @@ func StopDaemon(rootDir, languageID string) error {
 	}
 	proc, err := os.FindProcess(info.PID)
 	if err != nil {
-		return err
+		return fmt.Errorf("sending SIGTERM to daemon PID %d: %w", info.PID, err)
 	}
 	return proc.Signal(syscall.SIGTERM)
 }
