@@ -698,6 +698,110 @@ See [docs/phase-enforcement.md](phase-enforcement.md) for the full design docume
 | **Runtime trace correlation** | Planned | Ingest test execution traces and correlate with static call hierarchy from LSP. Identify "called at runtime but zero test coverage" and "test covers code paths that static analysis says are dead." Bridges the gap between static reference analysis and actual execution paths. |
 | **Louvain community detection** | Planned | Cluster symbols by call-edge density to discover functional modules. Enhances `/lsp-architecture` with automatically detected boundaries and module groupings, without requiring explicit package structure. |
 | **Cross-service HTTP route linking** | Planned | Match `fetch("/api/users")` call sites to `@app.route("/api/users")` handler definitions across files and repos. Extends `get_cross_repo_references` beyond symbol-level to HTTP route-level cross-service analysis. |
-| **Tree-sitter fallback for massive codebases** | Planned | For codebases where full LSP indexing is too expensive (langchain 136K stars, openclaw, Linux kernel), provide a degraded-but-fast structural query layer via tree-sitter. Tree-sitter parses each file independently without resolving dependencies, making it viable at any scale. Covers: symbol extraction, call site detection, function boundaries, import graphs. Does not cover: type resolution, cross-package references, diagnostics. Used as the default for languages without a good LSP server (Bash, YAML, Terraform, Dockerfile) and as a fallback when LSP servers can't handle the workspace size. Implementation via CGo bindings to the C tree-sitter library with vendored grammars for all 30 CI-verified languages. |
-| **Selective indexing** | Planned | For massive monorepos, index only the packages the agent is actively working in rather than the full transitive dependency closure. Extends the existing `scope` parameter on `start_lsp` with automatic scope detection: identify the package containing the agent's current file, index it and its direct dependencies, defer the rest. LSP servers like pyright resolve the full import graph regardless of scope; selective indexing would intercept and limit which files are opened, reducing memory and indexing time. Combined with the persistent knowledge graph, previously-indexed packages serve cached results while new packages index on demand. |
-| **Massive codebase strategy** | Planned | Three-layer approach for codebases too large for full LSP (100K+ lines, deep dependency graphs): (1) Tree-sitter for fast structural discovery (symbol lists, call sites, file outlines) with no memory or indexing cost. (2) Selective LSP indexing for precision work on the active package (types, references, diagnostics). (3) Persistent knowledge graph to cache results across sessions so the first session pays the cost and subsequent sessions are instant. Each layer fills a different need: tree-sitter is fast and broad, LSP is accurate and narrow, the cache makes everything fast on repeat. The agent and skills layer chooses which layer to query based on the operation: `/lsp-architecture` uses tree-sitter (needs breadth), `/lsp-rename` uses LSP (needs precision), `/lsp-inspect` uses both (structural scan + reference verification). |
+| **Tree-sitter fallback** | Planned | See Massive Codebase Strategy section below. |
+| **Selective indexing** | Planned | See Massive Codebase Strategy section below. |
+
+---
+
+## Massive Codebase Strategy
+
+**Status:** Planned
+
+**Problem:** LSP servers resolve the full type/dependency graph of a workspace. On small-to-medium codebases (up to ~50K lines), this works well: gopls indexes in seconds, pyright in tens of seconds, and all tools return accurate results. On massive codebases (langchain at 136K stars, openclaw, Linux kernel at 28M LOC), full LSP indexing is either too slow (minutes), too memory-intensive (gigabytes), or both. Pyright resolves the full import graph regardless of workspace scoping. gopls loads all packages transitively referenced by the workspace root.
+
+**Current state:** agent-lsp works well up to ~50K lines. The `scope` parameter on `start_lsp` helps with monorepos but doesn't solve the fundamental problem: the language server wants to load everything.
+
+### Three-layer architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Skills layer                             │
+│  Chooses which query layer to use based on the operation     │
+├──────────┬──────────────────┬────────────────────────────────┤
+│ Layer 1  │    Layer 2       │         Layer 3                │
+│ Tree-    │    Selective     │         Persistent             │
+│ sitter   │    LSP           │         Knowledge Graph        │
+├──────────┼──────────────────┼────────────────────────────────┤
+│ Fast     │ Accurate         │ Instant (cached)               │
+│ Broad    │ Narrow           │ Grows over time                │
+│ No deps  │ Active pkg only  │ All previously-queried symbols │
+│ Any size │ Bounded memory   │ SQLite on disk                 │
+└──────────┴──────────────────┴────────────────────────────────┘
+```
+
+### Layer 1: Tree-sitter (structural discovery)
+
+Parses each file independently using tree-sitter AST analysis. No dependency resolution, no type inference, no memory accumulation. Viable at any scale because each file is processed in isolation.
+
+**What it provides:**
+- Symbol extraction (functions, types, classes, methods, constants)
+- Call site detection (which functions appear to call which other functions, by name)
+- Function boundaries (start line, end line, parameter count)
+- Import/require graph (which files import which modules)
+- File outlines (structural summary without reading the full file)
+
+**What it cannot provide:**
+- Type resolution (what type does this variable have?)
+- Cross-package references (is this the `Close` from package A or package B?)
+- Diagnostics (does this code compile?)
+- Rename safety (will renaming this break callers?)
+
+**When skills use it:**
+- `/lsp-architecture`: needs to scan every file for structure. Tree-sitter does this in seconds on any codebase. Full LSP would take minutes.
+- `/lsp-inspect` (structural scan phase): find `go func()` blocks, identify error handling patterns, locate channel operations. Pattern-based, not type-based.
+- `/lsp-dead-code` (candidate identification): tree-sitter finds all exported symbols. LSP then verifies the candidates that look dead.
+
+**Implementation:** CGo bindings to the C tree-sitter library with vendored grammars for all 30 CI-verified languages. Falls back to tree-sitter automatically for languages without a configured LSP server (Bash, YAML, Terraform, Dockerfile, Makefile).
+
+### Layer 2: Selective LSP (precision work)
+
+Full LSP, but scoped to the active package and its direct dependencies instead of the full transitive closure.
+
+**How it works:**
+1. Agent opens a file. agent-lsp identifies the containing package.
+2. Instead of indexing the entire workspace, agent-lsp generates a scoped config that limits the language server to that package and its direct imports.
+3. The language server loads quickly (seconds, not minutes) because it only resolves one level of dependencies.
+4. When the agent moves to a different package, the scope shifts. The old package's results are cached in Layer 3.
+
+**What it provides:** Full LSP accuracy (types, references, diagnostics, rename, code actions) within the scoped region.
+
+**Limitation:** Cross-package references outside the scope return incomplete results. The knowledge graph (Layer 3) fills this gap with cached data from previous scopes.
+
+**Extends:** The existing `scope` parameter on `start_lsp`. Currently requires the user to specify paths. Selective indexing would auto-detect the scope from the agent's current file.
+
+### Layer 3: Persistent knowledge graph (cumulative cache)
+
+SQLite-backed cache of all LSP results across sessions. Every reference lookup, every symbol list, every call hierarchy result is stored keyed by file content hash. Invalidated by file watcher when source changes.
+
+**What it provides:** Instant results for any symbol the agent (or a previous session) already queried. Grows over time as the agent works across the codebase. After a few sessions, most of the codebase is cached.
+
+**How it interacts with the other layers:**
+- Tree-sitter identifies candidates (e.g., "these 50 functions might be dead code").
+- The knowledge graph answers immediately for the 30 that were queried before ("these 20 have callers, these 10 don't").
+- Selective LSP verifies the remaining 20 that aren't cached yet.
+
+See the Persistent Knowledge Graph entry in Bigger Bets for lifecycle details (creation, invalidation, corruption handling, size management).
+
+### How skills choose layers
+
+| Skill | Layer 1 (tree-sitter) | Layer 2 (LSP) | Layer 3 (cache) |
+|-------|----------------------|---------------|-----------------|
+| `/lsp-architecture` | Primary (structural scan) | Not used | Supplements with cached type info |
+| `/lsp-rename` | Not used | Primary (must be accurate) | Pre-checks blast radius from cache |
+| `/lsp-inspect` | Structural patterns | Reference verification | Cached dead-symbol results |
+| `/lsp-dead-code` | Candidate identification | Verification of candidates | Cached reference counts |
+| `/lsp-impact` | Not used | Primary | Cached caller lists |
+| `/lsp-understand` | File outline | Call hierarchy, references | Cached results for known symbols |
+| `/lsp-refactor` | Not used | Primary (full workflow) | Pre-populates blast radius |
+
+### What this means for users
+
+- **Small codebases (under 50K lines):** No change. Full LSP works perfectly. Layer 3 (cache) makes repeat operations instant.
+- **Medium codebases (50K-200K lines):** Layer 3 eliminates cold-start pain. First session is the same as today. Second session is fast for previously-queried areas.
+- **Massive codebases (200K+ lines):** All three layers working together. Tree-sitter for discovery, selective LSP for the active area, cache for everything else. The agent can navigate langchain or the Linux kernel without waiting for a full index.
+
+### Implementation order
+
+1. **Knowledge graph (Layer 3)** first. Pure Go SQLite cache. Accelerates existing tools without changing any architecture. Immediate value for all users.
+2. **Tree-sitter fallback (Layer 1)** second. Adds structural queries for languages without LSP and for broad-scan operations. CGo dependency.
+3. **Selective indexing (Layer 2)** third. Requires the most integration work (auto-scope detection, dynamic scope shifting, partial result merging with cache).
