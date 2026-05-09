@@ -300,10 +300,12 @@ func collectExportedSymbols(syms []types.DocumentSymbol, filePath, langID string
 const perSymbolTimeout = 15 * time.Second
 
 // queryReferencesParallel queries GetReferencesRaw for all symbols using a
-// worker pool. The caller must ensure the workspace is warm before calling
-// (e.g. by doing one blocking GetReferences call first).
+// worker pool. Checks the persistent reference cache first; only queries the
+// language server for cache misses. The caller must ensure the workspace is
+// warm before calling (e.g. by doing one blocking GetReferences call first).
 func queryReferencesParallel(ctx context.Context, client *lsp.LSPClient, symbols []exportedSymbol) []symbolRefs {
 	results := make([]symbolRefs, len(symbols))
+	cache := client.RefCache()
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, maxConcurrentRefs)
 
@@ -315,6 +317,12 @@ func queryReferencesParallel(ctx context.Context, client *lsp.LSPClient, symbols
 			// Respect context cancellation.
 			if ctx.Err() != nil {
 				results[idx] = symbolRefs{Symbol: s, Warning: "context cancelled"}
+				return
+			}
+
+			// Check cache first.
+			if cached := cache.Get(s.File, s.Name, s.Line); cached != nil {
+				results[idx] = symbolRefs{Symbol: s, Locs: cached.Locations}
 				return
 			}
 
@@ -336,6 +344,9 @@ func queryReferencesParallel(ctx context.Context, client *lsp.LSPClient, symbols
 				} else {
 					ref.Warning = fmt.Sprintf("warning: GetReferences failed for %s in %s: %s", s.Name, s.File, err)
 				}
+			} else {
+				// Cache successful results.
+				cache.Put(s.File, s.Name, s.Line, locs)
 			}
 			results[idx] = ref
 		}(i, sym)

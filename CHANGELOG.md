@@ -7,6 +7,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **Persistent reference cache (knowledge graph Layer 3).** `get_change_impact` results are now cached in a per-workspace SQLite database (`~/.agent-lsp/cache/<hash>/refs.db`). First call queries the language server and stores results keyed by file content hash. Subsequent calls for the same symbols return instantly from cache. File watcher automatically invalidates entries when source files change on disk. Cache is opportunistic: agent-lsp works without it, and missing or corrupted databases fall back to direct LSP queries transparently. Pure Go SQLite via `modernc.org/sqlite`, no CGo.
+
 - **Fix: progressMu deadlock in WaitForWorkspaceReadyTimeout.** The function locked `progressMu` at entry but did not unlock on the timeout or normal exit paths. When `get_change_impact` opened multiple files, gopls emitted `$/progress` notifications that required `progressMu` in `readLoop`. The held lock deadlocked the entire read pipeline: no LSP responses could be dispatched, blocking all pending requests indefinitely. Root cause of every multi-file `get_change_impact` hang. Fixed with `defer progressMu.Unlock()`.
 
 - **Panic recovery in daemon broker connection handler.** `handleBrokerConnection` goroutines now have `defer recover()`, matching the other two goroutines in `RunBroker`. Previously a panic from a malformed message would kill the entire daemon broker process.

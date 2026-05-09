@@ -159,6 +159,9 @@ type LSPClient struct {
 	// workspace scoping (generated config for large repos)
 	scopeConfig *ScopeConfig
 
+	// persistent reference cache (SQLite, survives across sessions)
+	refCache *SymbolRefCache
+
 	// multi-signal warmup gate for servers that don't emit $/progress
 	warmup *warmupState
 
@@ -757,6 +760,7 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	}
 
 	c.rootDir = rootDir
+	c.refCache = NewSymbolRefCache(rootDir)
 	rootURI := (&url.URL{Scheme: "file", Path: rootDir}).String()
 	c.capsMu.Lock()
 	c.workspaceFolders = []workspaceFolder{{URI: rootURI, Name: rootDir}}
@@ -994,6 +998,12 @@ func (c *LSPClient) Shutdown(ctx context.Context) error {
 		return nil
 	}
 
+	// Close the reference cache.
+	if c.refCache != nil {
+		c.refCache.Close()
+		c.refCache = nil
+	}
+
 	// Clean up any generated scope config files.
 	if c.scopeConfig != nil {
 		RemoveScopeConfig(c.scopeConfig)
@@ -1053,6 +1063,11 @@ func (c *LSPClient) killProcess() {
 // SetScopeConfig stores a scope configuration for cleanup on shutdown.
 func (c *LSPClient) SetScopeConfig(sc *ScopeConfig) {
 	c.scopeConfig = sc
+}
+
+// RefCache returns the persistent reference cache, or nil if not available.
+func (c *LSPClient) RefCache() *SymbolRefCache {
+	return c.refCache
 }
 
 // Restart shuts down the current server and reinitializes it.
@@ -2359,6 +2374,15 @@ func (c *LSPClient) startWatcher(rootDir string) {
 			pending = make(map[string]fsnotify.Op)
 			if err := c.DidChangeWatchedFiles(changes); err != nil {
 				logging.Log(logging.LevelDebug, "auto-watcher: didChangeWatchedFiles error: "+err.Error())
+			}
+			// Invalidate cached references for changed files.
+			if c.refCache != nil {
+				for _, ch := range changes {
+					path := uripkg.URIToPath(ch.URI)
+					if path != "" {
+						c.refCache.InvalidateFile(path)
+					}
+				}
 			}
 		}
 
