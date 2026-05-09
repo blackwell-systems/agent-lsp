@@ -7,6 +7,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **Fix: progressMu deadlock in WaitForWorkspaceReadyTimeout.** The function locked `progressMu` at entry but did not unlock on the timeout or normal exit paths. When `get_change_impact` opened multiple files, gopls emitted `$/progress` notifications that required `progressMu` in `readLoop`. The held lock deadlocked the entire read pipeline: no LSP responses could be dispatched, blocking all pending requests indefinitely. Root cause of every multi-file `get_change_impact` hang. Fixed with `defer progressMu.Unlock()`.
+
 - **Panic recovery in daemon broker connection handler.** `handleBrokerConnection` goroutines now have `defer recover()`, matching the other two goroutines in `RunBroker`. Previously a panic from a malformed message would kill the entire daemon broker process.
 
 - **Context propagation in daemon broker.** Forwarded requests now use the broker's lifecycle context instead of `context.Background()`. Requests are cancelled when the daemon shuts down instead of running indefinitely.

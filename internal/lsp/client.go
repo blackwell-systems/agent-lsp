@@ -567,6 +567,7 @@ func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
 // returns immediately before indexing has even started.
 func (c *LSPClient) WaitForWorkspaceReadyTimeout(ctx context.Context, timeout time.Duration) {
 	c.progressMu.Lock()
+	defer c.progressMu.Unlock()
 
 	// Grace period: if no progress tokens yet and caller requested an extended
 	// wait (>60s), wait briefly for the first token. Avoids 10s delay for
@@ -586,7 +587,6 @@ func (c *LSPClient) WaitForWorkspaceReadyTimeout(ctx context.Context, timeout ti
 		for len(c.progressTokens) == 0 {
 			if time.Now().After(graceDeadline) || ctx.Err() != nil {
 				close(grace)
-				c.progressMu.Unlock()
 				return
 			}
 			c.progressCond.Wait()

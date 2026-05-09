@@ -74,10 +74,18 @@ const maxConcurrentRefs = 16
 // GetDocumentSymbols, calls GetReferencesRaw in parallel for each symbol,
 // partitions results into test files vs non-test callers, and extracts
 // enclosing test function names for test references.
+// changeImpactTimeout caps the entire get_change_impact operation. Prevents
+// indefinite blocking when gopls is slow to index a new workspace.
+const changeImpactTimeout = 90 * time.Second
+
 func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
+
+	// Apply overall timeout so the tool never blocks indefinitely.
+	ctx, cancel := context.WithTimeout(ctx, changeImpactTimeout)
+	defer cancel()
 
 	// Decode changed_files (arrives as []any from JSON).
 	rawFiles, ok := args["changed_files"].([]any)
