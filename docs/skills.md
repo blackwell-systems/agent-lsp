@@ -8,6 +8,10 @@ All 21 skills conform to the [Agent Skills](https://agentskills.io/) open standa
 
 **agent-lsp skills are not locked to any single AI provider.** Because they follow the AgentSkills open standard, they work with any conforming agent: Claude, Copilot, Cursor, Gemini, Codex, Roo Code, OpenHands, and the rest. The MCP server handles the LSP runtime; the skills are portable workflow definitions that any agent can load and execute.
 
+**Two discovery paths:**
+- **MCP prompts:** Any MCP client discovers all 21 skills via `prompts/list` and retrieves full workflow instructions via `prompts/get`. No installation step required; skill definitions are embedded in the binary.
+- **AgentSkills install:** `./skills/install.sh` copies SKILL.md files to your AI tool's skill directory for slash command access.
+
 See the [Setup guide](getting-started/quickstart.md) for installation instructions. For the individual tools that skills compose, see [docs/tools.md](./tools.md). For the full AgentSkills specification, see [agentskills.io/specification](https://agentskills.io/specification).
 
 ## Quick example

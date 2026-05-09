@@ -1,8 +1,11 @@
 package lsp
 
 import (
+	"context"
 	"testing"
 	"time"
+
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 func TestNewWarmupState(t *testing.T) {
@@ -66,5 +69,19 @@ func TestMarkReady_SetsFlags(t *testing.T) {
 	}
 	if !ws.firstRefDone.Load() {
 		t.Error("firstRefDone should be true after MarkReady")
+	}
+}
+
+// TestGetReferencesWithWarmup_NoCapability verifies the fast path when
+// the server doesn't support references.
+func TestGetReferencesWithWarmup_NoCapability(t *testing.T) {
+	c := NewLSPClient("fake", nil)
+	// capabilities map is empty, so referencesProvider is not set.
+	locs, err := GetReferencesWithWarmup(context.Background(), c, "file:///test.go", types.Position{Line: 1, Character: 0}, false)
+	if err != nil {
+		t.Errorf("expected nil error, got: %v", err)
+	}
+	if len(locs) != 0 {
+		t.Errorf("expected empty locations, got %d", len(locs))
 	}
 }

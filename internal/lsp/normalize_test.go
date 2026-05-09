@@ -221,5 +221,124 @@ func TestNormalizeCodeActions_Mixed(t *testing.T) {
 	}
 }
 
+// ---- NormalizeCompletion edge cases ----
+
+func TestNormalizeCompletion_NullString(t *testing.T) {
+	result, err := lsp.NormalizeCompletion(json.RawMessage(`null`))
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if len(result.Items) != 0 {
+		t.Errorf("expected empty Items, got %d", len(result.Items))
+	}
+}
+
+func TestNormalizeCompletion_EmptyList(t *testing.T) {
+	raw := json.RawMessage(`{"isIncomplete":false,"items":[]}`)
+	result, err := lsp.NormalizeCompletion(raw)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.IsIncomplete {
+		t.Error("expected IsIncomplete == false")
+	}
+	if result.Items == nil {
+		t.Error("expected non-nil Items (empty, not nil)")
+	}
+	if len(result.Items) != 0 {
+		t.Errorf("expected 0 items, got %d", len(result.Items))
+	}
+}
+
+func TestNormalizeCompletion_EmptyArray(t *testing.T) {
+	raw := json.RawMessage(`[]`)
+	result, err := lsp.NormalizeCompletion(raw)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.Items == nil {
+		t.Error("expected non-nil Items for empty array")
+	}
+	if len(result.Items) != 0 {
+		t.Errorf("expected 0 items, got %d", len(result.Items))
+	}
+}
+
+// ---- NormalizeCodeActions edge cases ----
+
+func TestNormalizeCodeActions_EmptyArray(t *testing.T) {
+	result, err := lsp.NormalizeCodeActions(json.RawMessage(`[]`))
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("expected 0 actions, got %d", len(result))
+	}
+}
+
+func TestNormalizeCodeActions_NullString(t *testing.T) {
+	result, err := lsp.NormalizeCodeActions(json.RawMessage(`null`))
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("expected 0 actions, got %d", len(result))
+	}
+}
+
+func TestNormalizeCodeActions_CodeActionWithEdit(t *testing.T) {
+	raw := json.RawMessage(`[{"title":"Organize imports","kind":"source.organizeImports","edit":{"changes":{}}}]`)
+	result, err := lsp.NormalizeCodeActions(raw)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if len(result) != 1 {
+		t.Fatalf("expected 1 action, got %d", len(result))
+	}
+	if result[0].Title != "Organize imports" {
+		t.Errorf("Title = %q, want %q", result[0].Title, "Organize imports")
+	}
+	if result[0].Kind == nil || *result[0].Kind != "source.organizeImports" {
+		t.Errorf("Kind = %v, want source.organizeImports", result[0].Kind)
+	}
+}
+
+// ---- NormalizeDocumentSymbols edge cases ----
+
+func TestNormalizeDocumentSymbols_InvalidJSON(t *testing.T) {
+	_, err := lsp.NormalizeDocumentSymbols(json.RawMessage(`not json`))
+	if err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+}
+
+func TestNormalizeDocumentSymbols_NullString(t *testing.T) {
+	result, err := lsp.NormalizeDocumentSymbols(json.RawMessage(`null`))
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("expected empty slice, got %d", len(result))
+	}
+}
+
+func TestNormalizeDocumentSymbols_SymbolInformationOrphans(t *testing.T) {
+	// SymbolInformation with a containerName that doesn't match any other symbol.
+	raw := json.RawMessage(`[
+  {"name":"Method","kind":6,"location":{"uri":"file:///foo.go","range":{"start":{"line":0,"character":0},"end":{"line":1,"character":0}}},"containerName":"NonExistent"}
+]`)
+	result, err := lsp.NormalizeDocumentSymbols(raw)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	// Method's container doesn't exist, so Method is a root.
+	if len(result) != 1 {
+		t.Fatalf("expected 1 root symbol, got %d", len(result))
+	}
+	if result[0].Name != "Method" {
+		t.Errorf("Name = %q, want %q", result[0].Name, "Method")
+	}
+}
+
 // Ensure the types package is used directly (suppress unused import warning).
 var _ types.DocumentSymbol

@@ -61,7 +61,7 @@ The daemon auto-spawns on first `start_lsp` for Python/TypeScript, indexes the w
 2. Translates each tool call into one or more LSP JSON-RPC requests, sent over stdin/stdout pipes to the appropriate language server subprocess.
 3. Maintains a persistent session: the language server index stays warm across all tool calls, all files, all packages. There is no cold-start on each request.
 4. Adds a speculative execution layer on top: edits can be applied in-memory to the live LSP state, evaluated for diagnostic impact, then committed to disk or discarded, without ever touching the file system until explicitly requested.
-5. Ships a skills layer: prompt documents that tell Claude how to orchestrate multi-step workflows using the tools correctly.
+5. Ships a skills layer: structured workflow definitions available as AgentSkills slash commands and as MCP prompts (`prompts/list` / `prompts/get`) for any MCP client.
 6. Enforces skill phase ordering at runtime: when an agent activates a skill, the phase tracker monitors tool calls and blocks out-of-order operations (e.g., writing to disk before simulating).
 
 The binary is a single statically-linked Go executable. No Node.js runtime. No per-request process spawn.
@@ -1068,16 +1068,18 @@ InitializedHandler: func(_ context.Context, req *mcp.InitializedRequest) {
 
 ## Skills Layer
 
-**Key distinction:** Skills are not Go code and are not part of the compiled binary. They are prompt documents, Markdown files that tell Claude how to orchestrate the MCP tools in the correct multi-step sequence. They live in the `skills/` directory of this repo and are installed separately into the AI client's skill directory (`~/.claude/skills/`).
+Skills are structured workflow definitions that tell agents how to orchestrate MCP tools in the correct multi-step sequence. They are defined as SKILL.md Markdown files in the `skills/` directory and are delivered through two channels:
 
-The boundary is clear:
+1. **MCP prompts (embedded):** All 21 skills are compiled into the binary via `//go:embed` and served through the MCP protocol's `prompts/list` and `prompts/get` methods. Any MCP client discovers them automatically. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`.
+
+2. **AgentSkills (file-based):** The same SKILL.md files can be installed into the AI client's skill directory (`~/.claude/skills/`) via `install.sh` for slash command access in Claude Code and other AgentSkills-compatible clients.
 
 ```
-Go binary (agent-lsp)         skills/ directory
-─────────────────────         ──────────────────
-Exposes 53 MCP tools          Encodes correct tool sequences
-Handles one tool call         Handles multi-step workflows
-Knows nothing about skills    Knows exactly which tools to call
+Go binary (agent-lsp)                     skills/ directory
+─────────────────────                     ──────────────────
+Exposes 53 MCP tools                      Source SKILL.md definitions
+Serves skills via prompts/list + get      Installed to ~/.claude/skills/ for slash commands
+Embeds skill definitions at build time    Used by AgentSkills clients directly
 ```
 
 The `skills/` directory contains Agent Skills, structured directories that Claude Code loads as slash commands. Each skill is a directory containing a `SKILL.md` file in the [AgentSkills](https://github.com/anthropics/agent-skills) format:
@@ -1105,9 +1107,13 @@ allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build ...
 ...prompt body with instructions for the agent...
 ```
 
-Skills are not Go code. They are prompt documents that tell Claude how to orchestrate the MCP tools exposed by this server. They exist in this repo so they ship alongside the server binary and stay in sync with the tool API.
+Skills are prompt documents that tell agents how to orchestrate the MCP tools exposed by this server. They exist in this repo so they ship alongside the server binary and stay in sync with the tool API.
 
-**Installing skills:**
+**Accessing skills:**
+
+**MCP prompts (automatic):** Skills are embedded in the binary and served via `prompts/list` / `prompts/get`. Any MCP client discovers them on connection. No installation step required.
+
+**AgentSkills install (manual):**
 
 ```bash
 ./skills/install.sh          # symlink all skills to ~/.claude/skills/

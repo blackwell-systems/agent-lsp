@@ -134,11 +134,23 @@ func addToolWithPhaseCheck[T any](d toolDeps, tool *mcp.Tool, handler func(ctx c
 	if tool.InputSchema == nil {
 		tool.InputSchema = generateFixedSchema[T]()
 	}
+	toolName := tool.Name
 	mcp.AddTool(d.server, tool, func(ctx context.Context, req *mcp.CallToolRequest, args T) (*mcp.CallToolResult, any, error) {
-		if result := checkPhasePermission(d.phaseTracker, tool.Name); result != nil {
+		if result := checkPhasePermission(d.phaseTracker, toolName); result != nil {
 			return result, nil, nil
 		}
-		return handler(ctx, req, args)
+		start := time.Now()
+		result, structured, err := handler(ctx, req, args)
+		elapsed := time.Since(start)
+
+		// Log latency for every tool call. Slow calls (>5s) get a warning.
+		if elapsed > 5*time.Second {
+			logging.Log(logging.LevelWarning, fmt.Sprintf("tool %s: %s (slow)", toolName, elapsed.Round(time.Millisecond)))
+		} else {
+			logging.Log(logging.LevelDebug, fmt.Sprintf("tool %s: %s", toolName, elapsed.Round(time.Millisecond)))
+		}
+
+		return result, structured, err
 	})
 }
 
@@ -322,6 +334,9 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	registerAnalysisTools(deps)
 	registerSessionTools(deps)
 	registerPhaseTools(deps)
+
+	// ------- Register prompts (skills as MCP prompts) -------
+	registerPrompts(server)
 
 	// ------- Register resources -------
 

@@ -148,7 +148,18 @@ func main() {
 	}()
 
 	// Run the MCP server with panic recovery.
-	if err := runWithRecovery(ctx, resolver, registry, serverPath, serverArgs, parsed.HTTPMode, parsed.HTTPPort, parsed.HTTPToken, parsed.HTTPListenAddr, parsed.HTTPNoAuth, parsed.AuditLogPath); err != nil {
+	err = runWithRecovery(ctx, resolver, registry, serverPath, serverArgs, parsed.HTTPMode, parsed.HTTPPort, parsed.HTTPToken, parsed.HTTPListenAddr, parsed.HTTPNoAuth, parsed.AuditLogPath)
+
+	// Always shut down LSP clients on exit, regardless of how we got here.
+	// This prevents orphaned gopls/pyright processes when the MCP transport
+	// closes (stdin EOF) without triggering a signal.
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), gracefulShutdownTimeout)
+	defer shutdownCancel()
+	if shutdownErr := resolver.Shutdown(shutdownCtx); shutdownErr != nil {
+		logging.Log(logging.LevelWarning, fmt.Sprintf("LSP shutdown on exit: %v", shutdownErr))
+	}
+
+	if err != nil {
 		logging.Log(logging.LevelError, fmt.Sprintf("server error: %v", err))
 		os.Exit(1)
 	}

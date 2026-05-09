@@ -219,7 +219,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 
 ---
 
-## Skills (20 total)
+## Skills (21 total)
 
 | Skill | Invocation | Allowed Tools | Description |
 |-------|-----------|---------------|-------------|
@@ -246,12 +246,9 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 
 **User-facing reference:** `docs/skills.md` — one-page skill catalog with usage examples and trigger conditions
 
-**Installation:** `cd skills && ./install.sh`
-- `--copy` flag: copies instead of symlinks
-- `--force` flag: overwrites existing
-- `--dry-run` flag: previews what would happen without making changes
-- Scans for `SKILL.md` files up to two levels deep
-- Creates `~/.claude/skills/` if needed
+**Discovery:** Skills are available through two channels:
+- **MCP prompts:** Any MCP client discovers skills via `prompts/list` (short descriptions) and retrieves full instructions via `prompts/get`. No manual installation required. Skill definitions are embedded in the binary.
+- **AgentSkills install:** `cd skills && ./install.sh` copies SKILL.md files to `~/.claude/skills/` for Claude Code slash command access. Flags: `--copy`, `--force`, `--dry-run`. Scans for `SKILL.md` files up to two levels deep.
 
 **CLAUDE.md sync:** `install.sh` maintains managed skills table in `~/.claude/CLAUDE.md` between sentinel comments (`<!-- agent-lsp:skills:start/end -->`). Auto-discovers skills from SKILL.md frontmatter — re-running keeps CLAUDE.md in sync without touching surrounding content.
 

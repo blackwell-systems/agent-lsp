@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
@@ -65,7 +66,9 @@ type symbolRefs struct {
 }
 
 // maxConcurrentRefs is the worker pool size for parallel reference queries.
-const maxConcurrentRefs = 8
+// 16 keeps the gopls request queue saturated without flooding it. gopls has
+// limited internal concurrency, so values above ~24 show diminishing returns.
+const maxConcurrentRefs = 16
 
 // HandleGetChangeImpact enumerates exported symbols in each changed file via
 // GetDocumentSymbols, calls GetReferencesRaw in parallel for each symbol,
@@ -283,6 +286,11 @@ func collectExportedSymbols(syms []types.DocumentSymbol, filePath, langID string
 	}
 }
 
+// perSymbolTimeout caps how long a single reference query can take.
+// Prevents one slow symbol from blocking the entire batch. Symbols that
+// exceed this are skipped with a warning.
+const perSymbolTimeout = 15 * time.Second
+
 // queryReferencesParallel queries GetReferencesRaw for all symbols using a
 // worker pool. The caller must ensure the workspace is warm before calling
 // (e.g. by doing one blocking GetReferences call first).
@@ -305,13 +313,21 @@ func queryReferencesParallel(ctx context.Context, client *lsp.LSPClient, symbols
 			sem <- struct{}{}        // acquire
 			defer func() { <-sem }() // release
 
-			locs, err := WithDocument[[]types.Location](ctx, client, s.File, s.LangID, func(fURI string) ([]types.Location, error) {
-				return client.GetReferencesRaw(ctx, fURI, s.Position, false)
+			// Per-symbol timeout prevents one slow query from blocking the batch.
+			symCtx, cancel := context.WithTimeout(ctx, perSymbolTimeout)
+			defer cancel()
+
+			locs, err := WithDocument[[]types.Location](symCtx, client, s.File, s.LangID, func(fURI string) ([]types.Location, error) {
+				return client.GetReferencesRaw(symCtx, fURI, s.Position, false)
 			})
 
 			ref := symbolRefs{Symbol: s, Locs: locs}
 			if err != nil {
-				ref.Warning = fmt.Sprintf("warning: GetReferences failed for %s in %s: %s", s.Name, s.File, err)
+				if symCtx.Err() == context.DeadlineExceeded {
+					ref.Warning = fmt.Sprintf("warning: GetReferences timed out for %s in %s after %s", s.Name, s.File, perSymbolTimeout)
+				} else {
+					ref.Warning = fmt.Sprintf("warning: GetReferences failed for %s in %s: %s", s.Name, s.File, err)
+				}
 			}
 			results[idx] = ref
 		}(i, sym)

@@ -125,7 +125,8 @@ type LSPClient struct {
 	// workspace root (set during Initialize)
 	rootDir string
 
-	mu          sync.Mutex
+	mu          sync.Mutex // guards cmd, initialized, socketConn, and other state
+	writeMu     sync.Mutex // guards stdin writes only; separate from mu to prevent deadlock on pipe backpressure
 	cmd         *exec.Cmd
 	stdin       io.WriteCloser
 	frameReader *FrameReader
@@ -305,6 +306,8 @@ func (c *LSPClient) start() error {
 		return fmt.Errorf("start process: %w", err)
 	}
 
+	logging.Log(logging.LevelInfo, fmt.Sprintf("LSP server started: %s (PID %d)", c.serverPath, cmd.Process.Pid))
+
 	c.cmd = cmd
 	c.stdin = stdin
 	c.frameReader = NewFrameReader(stdout)
@@ -313,8 +316,10 @@ func (c *LSPClient) start() error {
 	go c.readLoop()
 
 	// Monitor process exit.
+	startTime := time.Now()
 	go func() {
 		err := cmd.Wait()
+		uptime := time.Since(startTime).Round(time.Second)
 		exitErr := fmt.Errorf("lsp process exited: %w", err)
 		c.rejectPending(exitErr)
 		c.mu.Lock()
@@ -324,7 +329,9 @@ func (c *LSPClient) start() error {
 			c.stderrMu.Lock()
 			buf := string(c.stderrBuf)
 			c.stderrMu.Unlock()
-			logging.Log(logging.LevelError, fmt.Sprintf("LSP server exited with error. Last stderr:\n%s", buf))
+			logging.Log(logging.LevelError, fmt.Sprintf("LSP server %s (PID %d) exited with error after %s. Last stderr:\n%s", c.serverPath, cmd.Process.Pid, uptime, buf))
+		} else {
+			logging.Log(logging.LevelInfo, fmt.Sprintf("LSP server %s (PID %d) exited cleanly after %s", c.serverPath, cmd.Process.Pid, uptime))
 		}
 	}()
 
@@ -622,12 +629,15 @@ func (c *LSPClient) rejectPending(err error) {
 
 // writeRaw writes a framed message to stdin.
 func (c *LSPClient) writeRaw(body []byte) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.stdin == nil {
+	w := c.stdin
+	c.mu.Unlock()
+	if w == nil {
 		return fmt.Errorf("LSP client not started")
 	}
-	_, err := c.stdin.Write(EncodeMessage(body))
+	_, err := w.Write(EncodeMessage(body))
 	if err != nil {
 		return fmt.Errorf("writeRaw: %w", err)
 	}
@@ -969,6 +979,8 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 
 // Shutdown gracefully shuts down the LSP server.
 // In daemon mode, this only closes the socket connection; the daemon stays alive.
+// For direct-mode clients, it sends shutdown/exit, waits up to 3 seconds for
+// the process to exit, then force-kills it to prevent orphaned processes.
 func (c *LSPClient) Shutdown(ctx context.Context) error {
 	// Daemon mode: just close the socket, don't kill the server.
 	if c.isDaemon {
@@ -991,6 +1003,9 @@ func (c *LSPClient) Shutdown(ctx context.Context) error {
 	c.stopWatcher()
 	_, err := c.sendRequest(ctx, "shutdown", nil)
 	if err != nil {
+		// If the shutdown request fails (server already dead, pipe broken),
+		// skip exit and go straight to process cleanup.
+		c.killProcess()
 		return fmt.Errorf("shutdown request: %w", err)
 	}
 	_ = c.sendNotification("exit", nil)
@@ -999,8 +1014,40 @@ func (c *LSPClient) Shutdown(ctx context.Context) error {
 		c.stdin.Close()
 		c.stdin = nil
 	}
+	cmd := c.cmd
 	c.mu.Unlock()
+
+	// Wait for the process to exit, force-kill if it takes too long.
+	if cmd != nil && cmd.Process != nil {
+		done := make(chan struct{})
+		go func() {
+			cmd.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+			// Process exited cleanly.
+		case <-time.After(3 * time.Second):
+			logging.Log(logging.LevelWarning, fmt.Sprintf("LSP server %s (PID %d) did not exit after 3s, killing", c.serverPath, cmd.Process.Pid))
+			cmd.Process.Kill()
+		}
+	}
 	return nil
+}
+
+// killProcess force-kills the subprocess if it's still running.
+// Used when graceful shutdown fails.
+func (c *LSPClient) killProcess() {
+	c.mu.Lock()
+	if c.stdin != nil {
+		c.stdin.Close()
+		c.stdin = nil
+	}
+	cmd := c.cmd
+	c.mu.Unlock()
+	if cmd != nil && cmd.Process != nil {
+		cmd.Process.Kill()
+	}
 }
 
 // SetScopeConfig stores a scope configuration for cleanup on shutdown.

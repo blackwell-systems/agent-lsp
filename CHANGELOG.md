@@ -7,6 +7,27 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **Panic recovery in daemon broker connection handler.** `handleBrokerConnection` goroutines now have `defer recover()`, matching the other two goroutines in `RunBroker`. Previously a panic from a malformed message would kill the entire daemon broker process.
+
+- **Context propagation in daemon broker.** Forwarded requests now use the broker's lifecycle context instead of `context.Background()`. Requests are cancelled when the daemon shuts down instead of running indefinitely.
+
+- **Per-symbol timeout in `get_change_impact`.** Each reference query in the parallel batch is capped at 15 seconds. Previously, a single slow symbol (e.g., a widely-referenced type in a large file) could block the entire operation for minutes. Timed-out symbols are skipped with a warning instead of stalling the batch.
+
+- **Write mutex separation fixes stdin pipe deadlock.** `writeRaw` now uses a dedicated `writeMu` instead of the shared `c.mu`. When gopls's stdin pipe buffer fills under heavy concurrent writes (e.g., 100+ parallel reference queries), the `Write()` call blocks. Previously this held `c.mu`, deadlocking all subsequent operations including reads and state checks. The separated mutex allows reads and state transitions to proceed while a write is blocked on pipe backpressure.
+
+- **Diagnostic logging for all tool calls and process lifecycle.** Every tool call now logs its latency via the central `addToolWithPhaseCheck` wrapper. Calls exceeding 5 seconds are logged at WARNING level (e.g., "tool get_change_impact: 8.2s (slow)"); all others log at DEBUG. Process lifecycle events are also logged: "LSP server started: gopls (PID 12345)" on spawn, "LSP server gopls (PID 12345) exited cleanly after 45s" on exit, with uptime tracking. These diagnostics make performance bottlenecks and process leaks visible in the audit trail without requiring manual investigation.
+
+- **Test coverage expansion.** 174+ new tests across 9 packages covering process lifecycle, broker framing, scope config, warmup state, prompt parsing, normalization edge cases, session types, config inference, resource parsing, skill classification, symbol extraction, and more. Coverage improved: internal/tools 31% to 39.6%, internal/lsp 29.8% to 35.7%, cmd/agent-lsp 17.3% to 22.2%, internal/resources 17.5% to 35%, internal/session to 63.6%, internal/config to 69.2%.
+
+- **`get_change_impact` concurrency bump.** Worker pool increased from 8 to 16 parallel reference queries. Reduces wall time on large files (100+ exports) by keeping the gopls request queue saturated.
+
+- **Process lifecycle cleanup.** Fixed orphaned language server processes accumulating across sessions. Three changes:
+  1. `Shutdown()` now waits up to 3 seconds for the language server to exit, then force-kills it. Previously it sent `shutdown`/`exit` via stdin and hoped the process would die.
+  2. `StartForLanguage` shuts down the previous client before starting a new one, preventing leaks when switching workspaces.
+  3. `resolver.Shutdown()` is now called on every exit path (stdin EOF, context cancelled), not just on signals and panics. This was the primary cause of process accumulation: normal session ends never cleaned up child processes.
+
+- **Skills as MCP prompts.** All 21 skills are now discoverable via `prompts/list` and retrievable via `prompts/get`, making them available to any MCP client (Cursor, Windsurf, etc.), not just Claude Code. The listing returns only short descriptions to minimize context cost; full workflow instructions load on demand when a specific prompt is requested. Skill SKILL.md files are embedded into the binary at build time for portable, self-contained distribution. Skills continue to work as AgentSkills slash commands in parallel.
+
 - **`/lsp-inspect` skill (21st skill).** Full code quality audit for a file or package. Combines LSP batch analysis (`get_change_impact`) with LLM-driven heuristic checks. Check taxonomy: `dead_symbol`, `test_coverage`, `silent_failure`, `error_wrapping`, `coverage_gap`, `doc_drift`, `panic_not_recovered`, `context_propagation`. Runs inline (no background agent, no permission gates). Language-agnostic: works with any configured language server. Replaces the external `agentskills-code-inspector` with a first-party skill that uses the already-warm LSP session directly.
 
 - **Skill capability check in `get_server_capabilities`.** The response now includes a `skills` array classifying all 21 skills as `supported`, `partial`, or `unsupported` based on the current language server's capabilities. Each entry lists missing required and optional capabilities. Agents can check once at startup which skills will work instead of attempting skills that fail.

@@ -2,7 +2,7 @@
 
 **MCP server for language intelligence.** Give AI agents structured access to language servers: go-to-definition, find-all-references, rename, diagnostics, completions, call hierarchy, and speculative execution.
 
-53 tools. 20 agent workflows. 30 CI-verified languages. Single Go binary.
+53 tools. 21 agent workflows. 30 CI-verified languages. Single Go binary.
 
 ## Why
 

@@ -168,7 +168,12 @@ func RunBroker(cfg BrokerConfig) error {
 			infoMu.Unlock()
 
 			go func(c net.Conn) {
-				handleBrokerConnection(c, client)
+				defer func() {
+					if r := recover(); r != nil {
+						logging.Log(logging.LevelWarning, fmt.Sprintf("daemon: panic in broker connection handler: %v", r))
+					}
+				}()
+				handleBrokerConnection(ctx, c, client)
 				connMu.Lock()
 				delete(connections, c)
 				connCount.Add(-1)
@@ -203,7 +208,9 @@ func RunBroker(cfg BrokerConfig) error {
 
 // handleBrokerConnection proxies JSON-RPC between a connected client and the
 // language server. The connection uses Content-Length framing (same as LSP stdio).
-func handleBrokerConnection(conn net.Conn, client *LSPClient) {
+// ctx is the broker's lifecycle context; forwarded requests are cancelled when
+// the broker shuts down.
+func handleBrokerConnection(ctx context.Context, conn net.Conn, client *LSPClient) {
 	defer conn.Close()
 
 	reader := bufio.NewReader(conn)
@@ -232,7 +239,7 @@ func handleBrokerConnection(conn net.Conn, client *LSPClient) {
 				_ = json.Unmarshal(envelope.Params, &params)
 			}
 			logging.Log(logging.LevelDebug, fmt.Sprintf("broker: forwarding request %s (id=%s)", envelope.Method, string(envelope.ID)))
-			result, err := client.sendRequest(context.Background(), envelope.Method, params)
+			result, err := client.sendRequest(ctx, envelope.Method, params)
 			var response []byte
 			if err != nil {
 				logging.Log(logging.LevelDebug, fmt.Sprintf("broker: request %s error: %v", envelope.Method, err))

@@ -191,6 +191,10 @@ func (m *ServerManager) StartForLanguage(ctx context.Context, rootDir, languageI
 		if strings.ToLower(e.languageID) == langLower || e.extensions[langLower] {
 			// Daemon mode: for languages that need sustained indexing.
 			if NeedsDaemon(langLower) {
+				// Close previous daemon connection (socket only; daemon stays alive).
+				if e.client != nil {
+					_ = e.client.Shutdown(ctx)
+				}
 				client, err := m.startOrConnectDaemon(ctx, rootDir, langLower, e.command)
 				if err != nil {
 					return nil, err
