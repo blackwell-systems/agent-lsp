@@ -704,6 +704,7 @@ jobs:
             --fixture ${{ github.workspace }}/test/fixtures/go \
             --timeout 120s \
             --threshold 100 \
+            --reuse-server \
             --junit results.xml \
             --badge badge.json
 
