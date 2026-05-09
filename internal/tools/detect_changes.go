@@ -146,7 +146,7 @@ func HandleDetectChanges(ctx context.Context, client *lsp.LSPClient, args map[st
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling response: %s", err)), nil
 	}
-	return types.TextResult(string(data)), nil
+	return appendHint(types.TextResult(string(data)), "Review high-risk symbols before committing. Use get_change_impact on specific files for detailed analysis."), nil
 }
 
 // enrichSymbols adds a "risk" field to each entry in changed_symbols based on

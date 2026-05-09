@@ -95,7 +95,14 @@ func HandleGetReferences(ctx context.Context, client *lsp.LSPClient, args map[st
 			return types.ErrorResult(fmt.Sprintf("get_references (fuzzy): %s", wErr)), nil
 		}
 	}
-	return locationsResult(locs)
+	res, err := locationsResult(locs)
+	if err != nil {
+		return res, err
+	}
+	if len(locs) == 0 {
+		return appendHint(res, "This symbol may be dead code. Use /lsp-dead-code to verify."), nil
+	}
+	return appendHint(res, "Use get_change_impact for blast radius with test/non-test partitioning."), nil
 }
 
 // HandleGoToDefinition finds the definition of the symbol at the given location.
@@ -135,7 +142,11 @@ func HandleGoToDefinition(ctx context.Context, client *lsp.LSPClient, args map[s
 			return types.ErrorResult(fmt.Sprintf("go_to_definition (fuzzy): %s", wErr)), nil
 		}
 	}
-	return locationsResult(locs)
+	res, err := locationsResult(locs)
+	if err != nil {
+		return res, err
+	}
+	return appendHint(res, "Use get_info_on_location at the definition for type details and documentation."), nil
 }
 
 // HandleGoToTypeDefinition finds the type definition of the symbol at the given location.
@@ -197,7 +208,11 @@ func HandleGoToImplementation(ctx context.Context, client *lsp.LSPClient, args m
 	if wErr != nil {
 		return types.ErrorResult(fmt.Sprintf("go_to_implementation: %s", wErr)), nil
 	}
-	return locationsResult(locs)
+	res, err := locationsResult(locs)
+	if err != nil {
+		return res, err
+	}
+	return appendHint(res, "Use get_references on an implementation to see its callers."), nil
 }
 
 // HandleGoToDeclaration finds the declaration of the symbol at the given location.

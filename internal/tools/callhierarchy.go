@@ -88,5 +88,5 @@ func HandleCallHierarchy(ctx context.Context, client *lsp.LSPClient, args map[st
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling call hierarchy result: %s", mErr)), nil
 	}
-	return types.TextResult(string(data)), nil
+	return appendHint(types.TextResult(string(data)), "Use get_change_impact for a full blast-radius analysis."), nil
 }

@@ -66,7 +66,11 @@ func HandleRunBuild(ctx context.Context, args map[string]interface{}) (types.Too
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling build result: %s", mErr)), nil
 	}
-	return types.TextResult(string(data)), nil
+	buildHint := "Build clean. Use run_tests to verify test suite."
+	if !result.Success {
+		buildHint = "Fix build errors before proceeding."
+	}
+	return appendHint(types.TextResult(string(data)), buildHint), nil
 }
 
 // HandleRunTests is an MCP tool handler for run_tests. It runs the language's
@@ -105,7 +109,11 @@ func HandleRunTests(ctx context.Context, args map[string]interface{}) (types.Too
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling test result: %s", mErr)), nil
 	}
-	return types.TextResult(string(data)), nil
+	testHint := "All tests pass. Safe to commit."
+	if !result.Passed {
+		testHint = "Fix failing tests before committing."
+	}
+	return appendHint(types.TextResult(string(data)), testHint), nil
 }
 
 // HandleGetTestsForFile is an MCP tool handler for get_tests_for_file.

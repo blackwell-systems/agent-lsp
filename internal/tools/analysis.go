@@ -73,7 +73,20 @@ func HandleGetDiagnostics(ctx context.Context, client *lsp.LSPClient, args map[s
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling diagnostics: %s", err)), nil
 	}
-	return types.TextResult(string(data)), nil
+
+	// Contextual hint: suggest code actions if errors found, otherwise confirm clean.
+	hasErrors := false
+	for _, diags := range diagMap {
+		if len(diags) > 0 {
+			hasErrors = true
+			break
+		}
+	}
+	hint := "No errors. Safe to proceed."
+	if hasErrors {
+		hint = "Use get_code_actions at each error location for quick fixes."
+	}
+	return appendHint(types.TextResult(string(data)), hint), nil
 }
 
 // HandleGetInfoOnLocation retrieves hover information at a source location.
@@ -104,7 +117,7 @@ func HandleGetInfoOnLocation(ctx context.Context, client *lsp.LSPClient, args ma
 	if wErr != nil {
 		return types.ErrorResult(fmt.Sprintf("get_info_on_location: %s", wErr)), nil
 	}
-	return types.TextResult(result), nil
+	return appendHint(types.TextResult(result), "Use get_references to find all usages of this symbol."), nil
 }
 
 // HandleGetCompletions retrieves completion suggestions at a source location.
@@ -211,7 +224,7 @@ func HandleGetCodeActions(ctx context.Context, client *lsp.LSPClient, args map[s
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling code actions: %s", mErr)), nil
 	}
-	return types.TextResult(string(data)), nil
+	return appendHint(types.TextResult(string(data)), "Use execute_command to apply a code action."), nil
 }
 
 // HandleGetDocumentSymbols retrieves the symbols defined in a document.
@@ -244,15 +257,16 @@ func HandleGetDocumentSymbols(ctx context.Context, client *lsp.LSPClient, args m
 		shifted[i] = shiftDocumentSymbol(s)
 	}
 
+	docSymbolHint := "Use get_change_impact with this file to analyze blast radius."
 	if format == "outline" {
-		return types.TextResult(renderOutline(shifted, 0)), nil
+		return appendHint(types.TextResult(renderOutline(shifted, 0)), docSymbolHint), nil
 	}
 
 	data, mErr := json.Marshal(shifted)
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling document symbols: %s", mErr)), nil
 	}
-	return types.TextResult(string(data)), nil
+	return appendHint(types.TextResult(string(data)), docSymbolHint), nil
 }
 
 // workspaceSymbolEnriched is a SymbolInformation with an optional hover field.
@@ -309,12 +323,13 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 		return types.ErrorResult(fmt.Sprintf("get_workspace_symbols: %s", err)), nil
 	}
 
+	wsSymHint := "Use get_info_on_location on a symbol for type details."
 	if detailLevel == "basic" || detailLevel == "" {
 		data, mErr := json.Marshal(symbols)
 		if mErr != nil {
 			return types.ErrorResult(fmt.Sprintf("marshaling workspace symbols: %s", mErr)), nil
 		}
-		return types.TextResult(string(data)), nil
+		return appendHint(types.TextResult(string(data)), wsSymHint), nil
 	}
 
 	// Enrich the offset..offset+limit window with hover info.
@@ -350,7 +365,7 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling workspace symbols: %s", mErr)), nil
 	}
-	return types.TextResult(string(data)), nil
+	return appendHint(types.TextResult(string(data)), wsSymHint), nil
 }
 
 // toIntOpt reads an integer argument without error — returns (value, true) if present and valid.

@@ -64,8 +64,13 @@ func HandleGoToSymbol(ctx context.Context, client *lsp.LSPClient, args map[strin
 		return types.ErrorResult(fmt.Sprintf("get_definition: %s", wErr)), nil
 	}
 
+	goToSymHint := "Use get_info_on_location for type info, or get_references for all usages."
 	if len(locs) > 0 {
-		return locationsResult(locs)
+		res, err := locationsResult(locs)
+		if err != nil {
+			return res, err
+		}
+		return appendHint(res, goToSymHint), nil
 	}
 
 	// Fall back: format the candidate Location directly as a FormattedLocation (1-indexed)
@@ -86,7 +91,7 @@ func HandleGoToSymbol(ctx context.Context, client *lsp.LSPClient, args map[strin
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling location: %s", mErr)), nil
 	}
-	return types.TextResult(string(data)), nil
+	return appendHint(types.TextResult(string(data)), goToSymHint), nil
 }
 
 // bestSymbolMatch picks the best candidate from a list of workspace symbols

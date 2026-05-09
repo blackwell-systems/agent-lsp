@@ -76,7 +76,7 @@ func HandleStartLsp(
 		client.WaitForWorkspaceReadyTimeout(ctx, timeout)
 	}
 
-	return types.TextResult("LSP server started successfully"), nil
+	return appendHint(types.TextResult("LSP server started successfully"), "Workspace initialized. Use get_document_symbols or get_diagnostics to begin analysis."), nil
 }
 
 // ParseScopePaths extracts scope paths from the args value.

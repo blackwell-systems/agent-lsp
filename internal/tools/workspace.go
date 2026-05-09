@@ -85,13 +85,13 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 		if mErr != nil {
 			return types.ErrorResult(fmt.Sprintf("marshaling dry_run result: %s", mErr)), nil
 		}
-		return types.TextResult(string(data)), nil
+		return appendHint(types.TextResult(string(data)), "Review the workspace edit, then call rename_symbol without dry_run to apply."), nil
 	}
 	data, mErr := json.Marshal(result)
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling rename result: %s", mErr)), nil
 	}
-	return types.TextResult(string(data)), nil
+	return appendHint(types.TextResult(string(data)), "Use get_diagnostics to verify the rename didn't introduce errors."), nil
 }
 
 // renameWithFuzzyFallback retries rename using workspace symbol candidates when the

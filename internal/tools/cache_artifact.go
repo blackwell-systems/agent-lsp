@@ -32,7 +32,7 @@ func HandleExportCache(ctx context.Context, client *lsp.LSPClient, args map[stri
 	}
 
 	entries, _ := cache.Stats()
-	return types.TextResult(fmt.Sprintf("Cache exported to %s (%d entries)", destPath, entries)), nil
+	return appendHint(types.TextResult(fmt.Sprintf("Cache exported to %s (%d entries)", destPath, entries)), "Commit .agent-lsp/cache.db.gz to share with teammates."), nil
 }
 
 // HandleImportCache imports a gzip-compressed cache artifact from the
@@ -57,5 +57,5 @@ func HandleImportCache(ctx context.Context, client *lsp.LSPClient, args map[stri
 	}
 
 	entries, _ := cache.Stats()
-	return types.TextResult(fmt.Sprintf("Cache imported from %s (%d entries)", srcPath, entries)), nil
+	return appendHint(types.TextResult(fmt.Sprintf("Cache imported from %s (%d entries)", srcPath, entries)), "Cache imported. Reference queries will use cached results."), nil
 }

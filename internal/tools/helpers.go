@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 	uriPkg "github.com/blackwell-systems/agent-lsp/internal/uri"
 )
 
@@ -107,4 +108,15 @@ func CheckInitialized(client *lsp.LSPClient) error {
 		return errors.New("LSP client not initialized; call start_lsp first")
 	}
 	return nil
+}
+
+// appendHint adds a next-step hint to a tool result's text content.
+// The hint is appended as a separate line after the main content.
+// Error results and empty hints/content are returned unchanged.
+func appendHint(result types.ToolResult, hint string) types.ToolResult {
+	if hint == "" || result.IsError || len(result.Content) == 0 || result.Content[0].Text == "" {
+		return result
+	}
+	result.Content[0].Text = result.Content[0].Text + "\n\n---\nNext step: " + hint
+	return result
 }

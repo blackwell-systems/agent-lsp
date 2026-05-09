@@ -267,7 +267,11 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling response: %s", err)), nil
 	}
-	return types.TextResult(string(data)), nil
+	impactHint := "Review high-callers symbols before making changes."
+	if len(refWarnings) > 0 {
+		impactHint = fmt.Sprintf("%d warnings encountered during analysis. %s", len(refWarnings), impactHint)
+	}
+	return appendHint(types.TextResult(string(data)), impactHint), nil
 }
 
 // collectExportedSymbols walks a DocumentSymbol tree and appends exported symbols

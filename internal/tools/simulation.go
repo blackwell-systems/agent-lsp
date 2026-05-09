@@ -364,5 +364,9 @@ func HandleSimulateEditAtomic(ctx context.Context, mgr *session.SessionManager, 
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling result: %s", mErr)), nil
 	}
-	return types.TextResult(string(data)), nil
+	simHint := "Safe to apply. Use apply_edit to write to disk."
+	if evalResult.NetDelta > 0 {
+		simHint = "Edit introduces errors. Review and fix before applying."
+	}
+	return appendHint(types.TextResult(string(data)), simHint), nil
 }
