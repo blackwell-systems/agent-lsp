@@ -111,7 +111,8 @@ type GetChangeImpactArgs struct {
 
 type DetectChangesArgs struct {
 	WorkspaceRoot string `json:"workspace_root,omitempty" jsonschema:"Absolute path to the git repository root. Defaults to the LSP workspace root if omitted"`
-	Scope         string `json:"scope,omitempty" jsonschema:"Which changes to analyze: 'unstaged' (default), 'staged', or 'committed' (HEAD~1..HEAD)"`
+	Scope         string `json:"scope,omitempty" jsonschema:"Which changes to analyze: 'unstaged' (default), 'staged', or 'committed'"`
+	Range         string `json:"range,omitempty" jsonschema:"Git range for 'committed' scope. Examples: 'v0.7.0..HEAD', 'abc123..def456', 'main'. If a single ref is given, compares ref~1..ref. Ignored for unstaged/staged scopes."`
 }
 
 type GetCrossRepoReferencesArgs struct {

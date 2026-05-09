@@ -18,11 +18,19 @@ import (
 )
 
 // gitDiffArgs returns the git diff arguments for the given scope.
-func gitDiffArgs(scope string) []string {
+// If diffRange is non-empty and scope is "committed", it overrides the default HEAD~1..HEAD.
+func gitDiffArgs(scope, diffRange string) []string {
 	switch scope {
 	case "staged":
 		return []string{"diff", "--name-only", "--cached"}
 	case "committed":
+		if diffRange != "" {
+			parts := strings.SplitN(diffRange, "..", 2)
+			if len(parts) == 2 {
+				return []string{"diff", "--name-only", parts[0], parts[1]}
+			}
+			return []string{"diff", "--name-only", diffRange + "~1", diffRange}
+		}
 		return []string{"diff", "--name-only", "HEAD~1", "HEAD"}
 	default: // "unstaged" or empty
 		return []string{"diff", "--name-only"}
@@ -83,7 +91,7 @@ func HandleDetectChanges(ctx context.Context, client *lsp.LSPClient, args map[st
 		return types.ErrorResult("workspace_root is required when no LSP root is set"), nil
 	}
 
-	// Parse scope (default "unstaged").
+	// Parse scope (default "unstaged") and optional range for "committed" scope.
 	scope, _ := args["scope"].(string)
 	if scope == "" {
 		scope = "unstaged"
@@ -92,8 +100,11 @@ func HandleDetectChanges(ctx context.Context, client *lsp.LSPClient, args map[st
 		return types.ErrorResult(fmt.Sprintf("invalid scope %q: must be unstaged, staged, or committed", scope)), nil
 	}
 
+	// Parse optional range for "committed" scope (e.g., "v0.7.0..HEAD", "abc123").
+	diffRange, _ := args["range"].(string)
+
 	// Run git diff.
-	gitArgs := gitDiffArgs(scope)
+	gitArgs := gitDiffArgs(scope, diffRange)
 	cmd := exec.CommandContext(ctx, "git", gitArgs...)
 	cmd.Dir = workspaceRoot
 	var stdout, stderr bytes.Buffer

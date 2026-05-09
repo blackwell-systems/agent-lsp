@@ -8,24 +8,30 @@ import (
 
 func TestGitDiffArgs(t *testing.T) {
 	tests := []struct {
-		scope string
-		want  []string
+		scope     string
+		diffRange string
+		want      []string
 	}{
-		{"unstaged", []string{"diff", "--name-only"}},
-		{"staged", []string{"diff", "--name-only", "--cached"}},
-		{"committed", []string{"diff", "--name-only", "HEAD~1", "HEAD"}},
-		{"", []string{"diff", "--name-only"}}, // default
+		{"unstaged", "", []string{"diff", "--name-only"}},
+		{"staged", "", []string{"diff", "--name-only", "--cached"}},
+		{"committed", "", []string{"diff", "--name-only", "HEAD~1", "HEAD"}},
+		{"", "", []string{"diff", "--name-only"}}, // default
+		{"committed", "v0.7.0..HEAD", []string{"diff", "--name-only", "v0.7.0", "HEAD"}},
+		{"committed", "abc123..def456", []string{"diff", "--name-only", "abc123", "def456"}},
+		{"committed", "main", []string{"diff", "--name-only", "main~1", "main"}},
+		{"staged", "v0.7.0..HEAD", []string{"diff", "--name-only", "--cached"}}, // range ignored for staged
+		{"unstaged", "v0.7.0..HEAD", []string{"diff", "--name-only"}},           // range ignored for unstaged
 	}
 
 	for _, tc := range tests {
-		got := gitDiffArgs(tc.scope)
+		got := gitDiffArgs(tc.scope, tc.diffRange)
 		if len(got) != len(tc.want) {
-			t.Errorf("gitDiffArgs(%q): got %v, want %v", tc.scope, got, tc.want)
+			t.Errorf("gitDiffArgs(%q, %q): got %v, want %v", tc.scope, tc.diffRange, got, tc.want)
 			continue
 		}
 		for i := range got {
 			if got[i] != tc.want[i] {
-				t.Errorf("gitDiffArgs(%q)[%d]: got %q, want %q", tc.scope, i, got[i], tc.want[i])
+				t.Errorf("gitDiffArgs(%q, %q)[%d]: got %q, want %q", tc.scope, tc.diffRange, i, got[i], tc.want[i])
 			}
 		}
 	}
