@@ -1,4 +1,6 @@
-# agent-lsp
+<p align="center">
+  <img src="assets/social-preview.png" alt="agent-lsp" width="600">
+</p>
 
 [![Blackwell Systems](https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg)](https://github.com/blackwell-systems)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
@@ -9,7 +11,7 @@
 [![Awesome MCP Servers](https://img.shields.io/badge/Awesome-MCP%20Servers-fc60a8)](https://github.com/punkpeye/awesome-mcp-servers)
 <a href="https://github.com/blackwell-systems/mcp-assert"><img src="https://raw.githubusercontent.com/blackwell-systems/mcp-assert/main/assets/badge-passing.svg?v=3" alt="mcp-assert: passing" height="20"></a>
 
-**The most complete MCP server for language intelligence.** 53 tools, 30 CI-verified languages, 20 agent workflows. Single Go binary.
+**The most complete MCP server for language intelligence.** 53 tools, 30 CI-verified languages, 21 agent workflows. Single Go binary.
 
 AI agents make incorrect code changes because they can't see the full picture: who calls this function, what breaks if I rename it, does the build still pass. Language servers have the answers, but existing MCP bridges either cold-start on every request or expose raw tools that agents use incorrectly.
 
@@ -63,7 +65,7 @@ No other MCP tool provider enforces workflow ordering at runtime. See [docs/phas
 
 ## Skills
 
-Raw tools get ignored. Skills get used. Each skill encodes the correct tool sequence so workflows actually happen without per-prompt orchestration instructions.
+Raw tools get ignored. Skills get used. Each skill encodes the correct tool sequence so workflows actually happen without per-prompt orchestration instructions. Skills are available as [AgentSkills](https://github.com/anthropics/agent-skills) slash commands and as MCP prompts via `prompts/list` / `prompts/get` for any MCP client.
 
 See [docs/skills.md](./docs/skills.md) for full descriptions and usage guidance.
 
@@ -250,9 +252,11 @@ git clone https://github.com/blackwell-systems/agent-lsp.git /tmp/agent-lsp-skil
 cd /tmp/agent-lsp-skills/skills && ./install.sh --copy
 ```
 
-Skills are prompt files copied into your AI tool's configuration — `--copy` means the clone can be safely deleted afterward.
+Skills are prompt files copied into your AI tool's configuration. `--copy` means the clone can be safely deleted afterward.
 
-Skills are multi-tool workflows that encode reliable procedures — blast-radius check before edit, speculative preview before write, test run after change. See [docs/skills.md](./docs/skills.md) for the full list.
+Skills are also available as **MCP prompts**: any MCP client can discover them via `prompts/list` and retrieve full workflow instructions via `prompts/get`, with no manual installation required. The `install.sh` path is for AgentSkills-compatible clients (Claude Code slash commands).
+
+Skills are multi-tool workflows that encode reliable procedures: blast-radius check before edit, speculative preview before write, test run after change. See [docs/skills.md](./docs/skills.md) for the full list.
 
 ### Step 6: Start working
 
@@ -270,7 +274,7 @@ This is what the agent does, not something you type. Then use any of the 53 tool
 |------------|---------|
 | Tools | **53** |
 | Languages (CI-verified) | **30** — end-to-end integration tests on every push |
-| Agent workflows (skills) | **21** — named multi-step procedures |
+| Agent workflows (skills) | **21** — named multi-step procedures, discoverable via MCP `prompts/list` |
 | Speculative execution | **8 tools** — simulate changes before writing to disk |
 | Phase enforcement | **4 skills** — runtime blocks out-of-order tool calls with recovery guidance |
 | Connection model | **persistent** — warm index across files and projects |
