@@ -57,7 +57,7 @@ The daemon auto-spawns on first `start_lsp` for Python/TypeScript, indexes the w
 
 **What agent-lsp does:**
 
-1. Speaks MCP to the AI agent, exposing 53 tools the agent can call.
+1. Speaks MCP to the AI agent, exposing 56 tools the agent can call.
 2. Translates each tool call into one or more LSP JSON-RPC requests, sent over stdin/stdout pipes to the appropriate language server subprocess.
 3. Maintains a persistent session: the language server index stays warm across all tool calls, all files, all packages. There is no cold-start on each request.
 4. Adds a speculative execution layer on top: edits can be applied in-memory to the live LSP state, evaluated for diagnostic impact, then committed to disk or discarded, without ever touching the file system until explicitly requested.
@@ -84,6 +84,12 @@ cmd/agent-lsp/
   doctor_test.go        ← tests for doctor subcommand
   daemon.go             ← Daemon CLI subcommands: daemon-broker (persistent broker process),
                            daemon-status (list active daemons), daemon-stop (terminate daemons)
+  update.go             ← runUpdate: `agent-lsp update` subcommand; fetches latest GitHub Release,
+                           compares versions, downloads platform binary, atomically replaces
+                           running binary; flags: --check (compare only), --force (update even if current)
+  uninstall.go          ← runUninstall: `agent-lsp uninstall` subcommand; removes MCP config entries,
+                           skill installations, CLAUDE.md managed sections, cache directories;
+                           supports --dry-run
   server.go             ← MCP server construction; tool/resource registration; mcpSessionSender;
                            HTTP transport via --http flag (Streamable HTTP + optional Bearer token auth);
                            addToolWithPhaseCheck[T] generic wrapper for phase enforcement;
@@ -98,17 +104,17 @@ cmd/agent-lsp/
                            go_to_implementation, go_to_declaration, go_to_symbol,
                            rename_symbol, prepare_rename, get_document_highlights,
                            call_hierarchy, type_hierarchy
-  tools_analysis.go     ← 13 analysis tools: get_info_on_location, get_completions,
+  tools_analysis.go     ← 14 analysis tools: get_info_on_location, get_completions,
                            get_signature_help, get_code_actions, get_document_symbols,
                            get_workspace_symbols, get_references, get_inlay_hints,
                            get_semantic_tokens, get_symbol_source, get_symbol_documentation,
-                           get_change_impact, get_cross_repo_references
-  tools_workspace.go    ← 19 workspace/lifecycle tools: start_lsp, restart_lsp_server,
+                           get_change_impact, get_cross_repo_references, detect_changes
+  tools_workspace.go    ← 21 workspace/lifecycle tools: start_lsp, restart_lsp_server,
                            add_workspace_folder, remove_workspace_folder, list_workspace_folders,
                            open_document, close_document, get_diagnostics, get_server_capabilities,
                            detect_lsp_servers, run_build, run_tests, get_tests_for_file,
                            set_log_level, apply_edit, execute_command, did_change_watched_files,
-                           format_document, format_range
+                           format_document, format_range, export_cache, import_cache
   tools_session.go      ← 8 simulation/session tools: create_simulation_session, simulate_edit,
                            evaluate_session, simulate_chain, commit_session, discard_session,
                            destroy_session, simulate_edit_atomic
@@ -159,6 +165,20 @@ internal/lsp/
                      to limit workspace indexing scope for large repos
   warmup.go        ← Multi-signal readiness gate for daemon clients: diagnostics,
                      hover canary, adaptive first-query timeout
+  cache.go         ← SymbolRefCache: persistent SQLite cache for symbol reference results;
+                     keyed by file content hash (SHA-256) and symbol identity; stored at
+                     ~/.agent-lsp/cache/<workspace-hash>/refs.db; WAL mode with 5s busy timeout;
+                     invalidated per-file by the file watcher; nil-safe (all methods are no-ops
+                     when cache is nil, so agent-lsp works without it)
+  cache_artifact.go ← ExportArtifact: VACUUM INTO + gzip compression to dest path;
+                      ImportArtifact: gzip decompress + PRAGMA integrity_check + atomic replace;
+                      enables team-shared cache artifacts (commit .gz, teammates import)
+  scope_detect.go  ← DetectPackageScope: automatic package boundary detection for selective
+                     indexing (Layer 2); parses Python imports (__init__.py walk-up) and
+                     TypeScript/JavaScript imports (package.json walk-up); returns scope paths
+                     for GenerateScopeConfig; ShouldAutoScope activates when workspace has
+                     500+ source files; UpdateAutoScope shifts scope on open_document;
+                     Go and Rust return nil (native module boundaries)
 
 internal/session/
   manager.go       ← SessionManager: create/apply/evaluate/commit/discard/destroy sessions
@@ -185,6 +205,8 @@ internal/tools/
   build.go         ← run_build, run_tests, get_tests_for_file
   change_impact.go ← get_change_impact (enumerate exported symbols, resolve references, partition test/non-test callers)
   cross_repo.go    ← get_cross_repo_references (add consumer repos as workspace folders, partition references by repo)
+  detect_changes.go ← detect_changes (git diff + filter to recognized languages + get_change_impact + per-symbol risk classification)
+  cache_artifact.go ← export_cache and import_cache tool handlers (delegate to SymbolRefCache.ExportArtifact/ImportArtifact)
   workspace.go     ← workspace folder management (add/remove/list)
   workspace_folders.go ← add_workspace_folder, remove_workspace_folder, list_workspace_folders
   session.go       ← start_lsp, open_document, close_document, restart_lsp_server
@@ -260,6 +282,8 @@ skills/            ← Agent Skills (SKILL.md directories)
   lsp-fix-all/     ← Fix all diagnostics in a file or workspace
   lsp-generate/    ← Generate code with LSP-aware validation
   lsp-inspect/     ← Full code quality audit for a file or package
+  lsp-architecture/ ← Project-level architecture overview: language distribution, package map,
+                      entry points, hotspots, dependency flow
 
 experiments/token-savings/    Reproducible benchmark: LSP vs grep/read token cost
 ```
@@ -408,7 +432,7 @@ For HTTP mode, the HTTP server calls `Shutdown` with a 5-second deadline, draini
 
 ## Tool Registration Model
 
-53 MCP tools are exposed to the AI agent. In MCP, a "tool" is a named function with a JSON Schema for its arguments that the AI can invoke via a JSON-RPC `tools/call` request. Tools are defined in five files under `cmd/agent-lsp/` and dispatched through a shared pattern.
+56 MCP tools are exposed to the AI agent. In MCP, a "tool" is a named function with a JSON Schema for its arguments that the AI can invoke via a JSON-RPC `tools/call` request. Tools are defined in five files under `cmd/agent-lsp/` and dispatched through a shared pattern.
 
 ### How a tool is defined
 
@@ -437,13 +461,13 @@ mcp.AddTool(d.server, &mcp.Tool{
 
 | File | Tools registered | Count |
 |------|-----------------|-------|
-| `tools_workspace.go` | Session lifecycle, build/test, workspace management | 19 |
+| `tools_workspace.go` | Session lifecycle, build/test, workspace management, cache export/import | 21 |
 | `tools_navigation.go` | go_to_definition, references, call hierarchy, rename | 10 |
-| `tools_analysis.go` | hover, diagnostics, completions, symbols, change impact | 13 |
+| `tools_analysis.go` | hover, diagnostics, completions, symbols, change impact, detect_changes | 14 |
 | `tools_session.go` | Speculative execution (simulate, evaluate, commit) | 8 |
 | `tools_phase.go` | Phase enforcement (activate_skill, deactivate_skill, get_skill_phase) | 3 |
 
-All five registration functions are called from `Run()` in `server.go` via the `toolDeps` bundle, which carries shared dependencies: the MCP server, the client resolver, the session manager, the phase tracker, and the `clientForFileWithAutoInit` closure. The 50 non-phase tools are wrapped via `addToolWithPhaseCheck` (generic wrapper that checks phase permissions before each handler). The 3 phase tools use raw `mcp.AddTool` to avoid circular enforcement.
+All five registration functions are called from `Run()` in `server.go` via the `toolDeps` bundle, which carries shared dependencies: the MCP server, the client resolver, the session manager, the phase tracker, and the `clientForFileWithAutoInit` closure. The 53 non-phase tools are wrapped via `addToolWithPhaseCheck` (generic wrapper that checks phase permissions before each handler). The 3 phase tools use raw `mcp.AddTool` to avoid circular enforcement.
 
 ### Handler separation
 
@@ -1076,14 +1100,14 @@ InitializedHandler: func(_ context.Context, req *mcp.InitializedRequest) {
 
 Skills are structured workflow definitions that tell agents how to orchestrate MCP tools in the correct multi-step sequence. They are defined as SKILL.md Markdown files in the `skills/` directory and are delivered through two channels:
 
-1. **MCP prompts (embedded):** All 22 skills are compiled into the binary via `//go:embed` and served through the MCP protocol's `prompts/list` and `prompts/get` methods. Any MCP client discovers them automatically. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`.
+1. **MCP prompts (embedded):** All 22 skills are embedded in the binary via `//go:embed` and served through the MCP protocol's `prompts/list` and `prompts/get` methods. Any MCP client discovers them automatically. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`.
 
 2. **AgentSkills (file-based):** The same SKILL.md files can be installed into the AI client's skill directory (`~/.claude/skills/`) via `install.sh` for slash command access in Claude Code and other AgentSkills-compatible clients.
 
 ```
 Go binary (agent-lsp)                     skills/ directory
 ─────────────────────                     ──────────────────
-Exposes 53 MCP tools                      Source SKILL.md definitions
+Exposes 56 MCP tools                      Source SKILL.md definitions
 Serves skills via prompts/list + get      Installed to ~/.claude/skills/ for slash commands
 Embeds skill definitions at build time    Used by AgentSkills clients directly
 ```
@@ -1154,6 +1178,77 @@ The installer scans for `SKILL.md` files up to two levels deep, creates `~/.clau
 | `lsp-fix-all` | Fix all diagnostics in a file or workspace |
 | `lsp-generate` | Generate code with LSP-aware validation |
 | `lsp-inspect` | Full code quality audit: dead symbols, test coverage, error handling, doc drift |
+| `lsp-architecture` | Project-level architecture overview: language distribution, package map, entry points, hotspots, dependency flow |
+
+---
+
+## Persistent Reference Cache
+
+The persistent reference cache (`internal/lsp/cache.go`) stores symbol reference results in a per-workspace SQLite database so that subsequent sessions serve cached results instantly. The language server is only re-queried for files that changed since the last index.
+
+### Storage
+
+The database lives at `~/.agent-lsp/cache/<workspace-hash>/refs.db`, where `<workspace-hash>` is the first 8 bytes of the SHA-256 of the workspace root path, hex-encoded. SQLite is configured with WAL journal mode and a 5-second busy timeout for concurrent access safety.
+
+### Schema
+
+A single table stores cached reference locations:
+
+```sql
+CREATE TABLE symbol_refs (
+    file_path   TEXT NOT NULL,
+    file_hash   TEXT NOT NULL,   -- SHA-256 of file contents at cache time
+    symbol_name TEXT NOT NULL,
+    symbol_line INTEGER NOT NULL,
+    locations   TEXT NOT NULL,   -- JSON array of Location objects
+    cached_at   INTEGER NOT NULL,
+    PRIMARY KEY (file_path, symbol_name, symbol_line)
+);
+```
+
+### Lifecycle
+
+1. **Creation:** `NewSymbolRefCache(workspaceRoot)` is called during `start_lsp`. Returns nil if the database cannot be opened (no-op fallback).
+2. **Population:** `Put(filePath, symbolName, symbolLine, locations)` stores results after each `get_references` query via `get_change_impact`.
+3. **Lookup:** `Get(filePath, symbolName, symbolLine)` returns cached locations if the file content hash matches. Returns nil on miss or stale entry.
+4. **Invalidation:** `InvalidateFile(filePath)` evicts all entries for a file. Called by the file watcher when a source file changes on disk.
+5. **Staleness detection:** On `Get`, the stored file hash is compared against the current file hash. If they differ, the entry is evicted and nil is returned.
+
+### Nil safety
+
+All methods on `SymbolRefCache` are nil-receiver safe. When the cache is nil (database failed to open, or caching is disabled), all operations are silent no-ops. This means agent-lsp works identically with or without a cache; the cache is purely an optimization layer.
+
+### Cache artifacts (team sharing)
+
+`ExportArtifact(destPath)` compacts the database with `VACUUM INTO`, then gzip-compresses the result to the destination path. `ImportArtifact(srcPath)` decompresses a gzip artifact, validates it with `PRAGMA integrity_check`, and atomically replaces the current database. This enables teams to commit a `.gz` cache file to their repo so teammates skip cold-start indexing.
+
+The `export_cache` and `import_cache` MCP tools expose these operations to agents.
+
+---
+
+## Selective Indexing
+
+Selective indexing (`internal/lsp/scope_detect.go`) automatically limits language server analysis to the active package and its direct dependencies on large workspaces. This is Layer 2 of the three-layer architecture for massive codebases.
+
+### When it activates
+
+`ShouldAutoScope(rootDir, languageID)` returns true when:
+1. The language benefits from scoping (Python, TypeScript, JavaScript).
+2. The workspace has 500 or more source files (the `autoScopeThreshold`).
+
+Languages with native module boundaries (Go via `go.mod`, Rust via `Cargo.toml`) return nil since their language servers already scope naturally.
+
+### How it works
+
+1. When `open_document` is called, `UpdateAutoScope` detects the package boundary for the current file.
+2. For **Python**, it walks up from the file's directory looking for `__init__.py` to find the package root, then parses imports from `.py` files in that package to identify direct local dependencies.
+3. For **TypeScript/JavaScript**, it walks up looking for `package.json`, then parses relative `import`/`require` statements to identify direct local dependencies.
+4. If the detected scope differs from the current scope, `GenerateScopeConfig` writes a new config file (`pyrightconfig.json` or `tsconfig.json`) that limits analysis to those directories.
+5. The language server watches its config file and reloads automatically, without a server restart.
+
+### Scope shifting
+
+As the agent navigates between packages, the scope shifts automatically. The old package's results remain in the persistent cache (Layer 3) while the current package gets full LSP precision. This combination of selective indexing and persistent caching provides both accuracy and speed on large codebases.
 
 ---
 

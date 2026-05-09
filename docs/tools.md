@@ -1,6 +1,6 @@
 # agent-lsp Tool Reference
 
-All 53 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
+All 56 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
 both `line` and `column` in every tool call; the server converts internally to
 the 0-based values the LSP spec requires.
 
@@ -9,13 +9,14 @@ the 0-based values the LSP spec requires.
 ## Table of Contents
 
 - [Session tools](#session-tools): `start_lsp`, `restart_lsp_server`, `open_document`, `close_document`, `add_workspace_folder`, `remove_workspace_folder`, `list_workspace_folders`
-- [Analysis tools](#analysis-tools): `get_diagnostics`, `get_info_on_location`, `get_completions`, `get_signature_help`, `get_code_actions`, `get_document_symbols`, `get_workspace_symbols`, `get_change_impact`, `get_cross_repo_references`
+- [Analysis tools](#analysis-tools): `get_diagnostics`, `get_info_on_location`, `get_completions`, `get_signature_help`, `get_code_actions`, `get_document_symbols`, `get_workspace_symbols`, `get_change_impact`, `get_cross_repo_references`, `detect_changes`
 - [Navigation tools](#navigation-tools): `get_references`, `go_to_definition`, `go_to_type_definition`, `go_to_implementation`, `go_to_declaration`
 - [Refactoring tools](#refactoring-tools): `rename_symbol`, `prepare_rename`, `format_document`, `format_range`, `apply_edit`, `execute_command`
 - [Utilities](#utilities): `did_change_watched_files`, `set_log_level`
 - [Code Intelligence tools](#code-intelligence-tools): `call_hierarchy`, `type_hierarchy`, `get_inlay_hints`, `get_semantic_tokens`, `get_document_highlights`
 - [Build & Test tools](#build--test-tools): `run_build`, `run_tests`, `get_tests_for_file`
 - [Server Introspection tools](#server-introspection-tools): `get_server_capabilities`, `detect_lsp_servers`
+- [Cache tools](#cache-tools): `export_cache`, `import_cache`
 - [Simulation tools](#simulation-tools): `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`
 - [Startup and warm-up notes](#startup-and-warm-up-notes)
 - [Symbol lookup tools](#symbol-lookup-tools): `go_to_symbol`, `get_symbol_source`, `get_symbol_documentation`
@@ -824,6 +825,116 @@ Use before changing a shared library API to find all downstream callers.
 - `consumer_references` maps each consumer root to its reference list.
 - `warnings` lists roots that could not be indexed; re-add manually if non-empty.
 - Requires `start_lsp` on the library root first.
+
+---
+
+### `detect_changes`
+
+Run `git diff` to identify changed files, analyze their impact via
+`get_change_impact`, and classify each affected symbol by risk level. A single
+call that answers "what did I break?" without manually listing changed files.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `workspace_root` | string | no | Workspace root directory; defaults to the LSP root if omitted |
+| `scope` | string | no | Git diff scope: `"unstaged"` (default), `"staged"`, or `"committed"` |
+
+**Example call**
+
+```json
+{
+  "workspace_root": "/home/user/myproject",
+  "scope": "staged"
+}
+```
+
+**Returns**
+
+```json
+{
+  "changed_files": ["/home/user/myproject/pkg/handler.go"],
+  "changed_symbols": [
+    { "name": "ServeHTTP", "file": "pkg/handler.go", "line": 42, "risk": "high" }
+  ],
+  "non_test_callers": [
+    { "name": "ServeHTTP", "file": "cmd/server/main.go", "line": 15 }
+  ],
+  "scope": "staged"
+}
+```
+
+**Notes**
+
+- Risk classification: `"high"` (callers from multiple packages), `"medium"` (callers from the same package only), `"low"` (zero non-test callers).
+- Filters out non-source files (plaintext, deleted) before analysis.
+- Delegates to `get_change_impact` internally, so results benefit from the persistent reference cache.
+
+---
+
+## Cache tools
+
+### `export_cache`
+
+Export the persistent reference cache as a gzip-compressed artifact. The
+cache is compacted with `VACUUM INTO` before compression. Use this to share
+a warm cache with teammates: export, commit the `.gz` file, and teammates
+import it to skip cold-start indexing.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `dest_path` | string | yes | Absolute path for the output `.gz` file |
+
+**Example call**
+
+```json
+{
+  "dest_path": "/home/user/myproject/.agent-lsp/cache.db.gz"
+}
+```
+
+**Returns**
+
+```
+Cache exported to /home/user/myproject/.agent-lsp/cache.db.gz (1,247 entries)
+```
+
+---
+
+### `import_cache`
+
+Import a gzip-compressed cache artifact, replacing the current cache contents.
+The artifact is decompressed, validated with `PRAGMA integrity_check`, and
+atomically swapped into the active database.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `src_path` | string | yes | Absolute path to the `.gz` cache artifact |
+
+**Example call**
+
+```json
+{
+  "src_path": "/home/user/myproject/.agent-lsp/cache.db.gz"
+}
+```
+
+**Returns**
+
+```
+Cache imported from /home/user/myproject/.agent-lsp/cache.db.gz (1,247 entries)
+```
+
+**Notes**
+
+- The existing cache is closed and replaced atomically.
+- If the artifact fails integrity check, the import is rejected and the existing cache remains unchanged.
+- Both `export_cache` and `import_cache` require an active LSP session.
 
 ---
 
@@ -2836,7 +2947,7 @@ allowed and forbidden tools, and the full tool call history since activation.
 
 ## Skills
 
-Twenty agent-native skills compose agent-lsp tools into single-command
+Twenty-two agent-native skills compose agent-lsp tools into single-command
 workflows. Install with `cd skills && ./install.sh`.
 
 | Skill | Tools used | Purpose |

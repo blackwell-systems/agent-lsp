@@ -5,13 +5,13 @@
 [![Blackwell Systems](https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg)](https://github.com/blackwell-systems)
 [![LSP 3.17](https://img.shields.io/badge/LSP-3.17-blue.svg)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 [![Languages](https://img.shields.io/badge/languages-30_CI--verified-brightgreen.svg)](#multi-language-support)
-[![CI Coverage](https://img.shields.io/badge/CI--verified_tools-53%2F53-brightgreen.svg)](#tools)
+[![CI Coverage](https://img.shields.io/badge/CI--verified_tools-56%2F56-brightgreen.svg)](#tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Agent Skills](assets/badge-agentskills.svg)](https://agentskills.io)
 [![Awesome MCP Servers](https://img.shields.io/badge/Awesome-MCP%20Servers-fc60a8)](https://github.com/punkpeye/awesome-mcp-servers)
 <a href="https://github.com/blackwell-systems/mcp-assert"><img src="https://raw.githubusercontent.com/blackwell-systems/mcp-assert/main/assets/badge-passing.svg?v=3" alt="mcp-assert: passing" height="20"></a>
 
-**The most complete MCP server for language intelligence.** 53 tools, 30 CI-verified languages, 22 agent workflows. Single Go binary.
+**The most complete MCP server for language intelligence.** 56 tools, 30 CI-verified languages, 22 agent workflows. Single Go binary.
 
 AI agents make incorrect code changes because they can't see the full picture: who calls this function, what breaks if I rename it, does the build still pass. Language servers have the answers, but existing MCP bridges either cold-start on every request or expose raw tools that agents use incorrectly.
 
@@ -266,15 +266,15 @@ Your AI agent calls tools automatically. The first call initializes the workspac
 start_lsp(root_dir="/your/project")
 ```
 
-This is what the agent does, not something you type. Then use any of the 53 tools. The session stays warm; no restart needed when switching files.
+This is what the agent does, not something you type. Then use any of the 56 tools. The session stays warm; no restart needed when switching files.
 
 ## What's unique about agent-lsp
 
 | Capability | Details |
 |------------|---------|
-| Tools | **53** |
+| Tools | **56** |
 | Languages (CI-verified) | **30** — end-to-end integration tests on every push |
-| Agent workflows (skills) | **21** — named multi-step procedures, discoverable via MCP `prompts/list` |
+| Agent workflows (skills) | **22** — named multi-step procedures, discoverable via MCP `prompts/list` |
 | Speculative execution | **8 tools** — simulate changes before writing to disk |
 | Phase enforcement | **4 skills** — runtime blocks out-of-order tool calls with recovery guidance |
 | Connection model | **persistent** — warm index across files and projects |
@@ -304,7 +304,7 @@ See [docs/language-support.md](./docs/language-support.md) for the full coverage
 
 ## Tools
 
-53 tools covering navigation, analysis, refactoring, speculative execution, and session lifecycle. All CI-verified.
+56 tools covering navigation, analysis, refactoring, speculative execution, and session lifecycle. All CI-verified.
 
 See [docs/tools.md](./docs/tools.md) for the full reference with parameters and examples.
 

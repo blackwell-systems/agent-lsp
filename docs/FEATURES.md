@@ -1,10 +1,10 @@
 # agent-lsp Features Dump
 
-Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. All 53 tools have `ToolAnnotations` (Title, ReadOnlyHint, DestructiveHint, IdempotentHint, OpenWorldHint) and 171+ `jsonschema` struct tags providing parameter semantics in the schema itself.
+Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. All 56 tools have `ToolAnnotations` (Title, ReadOnlyHint, DestructiveHint, IdempotentHint, OpenWorldHint) and 171+ `jsonschema` struct tags providing parameter semantics in the schema itself.
 
 ---
 
-## Tools (53 total, 53 CI-verified)
+## Tools (56 total, 56 CI-verified)
 
 ### Session & Lifecycle (8 tools)
 
@@ -67,7 +67,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Single tool handles `textDocument/prepareTypeHierarchy` + `typeHierarchy/supertypes` + `typeHierarchy/subtypes`
 - Tested on Java (jdtls) and TypeScript; TypeScript skips when server does not return hierarchy item
 
-### Analysis (13 tools)
+### Analysis (14 tools)
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
@@ -84,6 +84,14 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `get_symbol_documentation` | Toolchain docs (go doc, pydoc, cargo doc) | `symbol` (string, req), `language_id` (string, req), `format` (string, opt) |
 | `get_change_impact` | Blast-radius analysis | `changed_files` (array, req), `include_transitive` (bool, opt) |
 | `get_cross_repo_references` | Find usages across consumer repos | `symbol_file` (string, req), `line` (int, req), `column` (int, req), `consumer_roots` (array, req), `language_id` (string, opt) |
+| `detect_changes` | Git diff + impact analysis + risk classification | `workspace_root` (string, opt), `scope` (string, opt: "unstaged", "staged", "committed") |
+
+**`detect_changes` notes:**
+- Runs `git diff --name-only` for the specified scope (default: unstaged)
+- Filters to recognized source files (skips plaintext, deleted files)
+- Feeds filtered files to `get_change_impact` for symbol-level analysis
+- Enriches each symbol with risk classification: "high" (callers across multiple packages), "medium" (same-package callers only), "low" (zero non-test callers)
+- Returns `changed_files`, `affected_symbols` (with risk), and `scope`
 
 **`get_code_actions` notes:**
 - `CodeActionContext.diagnostics` auto-populated with overlapping diagnostics from current diagnostic state — enables diagnostic-specific quick fixes; empty array would suppress fixes tied to visible errors
@@ -124,7 +132,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Waits for `$/progress end` before sending on gopls (via `waitForWorkspaceReady`)
 - `include_declaration: false` excludes definition site from count
 
-### Workspace & Diagnostics (6 tools)
+### Workspace & Diagnostics (8 tools)
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
@@ -134,6 +142,18 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `apply_edit` | Apply workspace edit | `file_path` (string, req), `old_text` (string, req), `new_text` (string, req) OR `workspace_edit` (object, req) |
 | `execute_command` | Run LSP workspace command | `command` (string, req), `arguments` (array, opt) |
 | `did_change_watched_files` | Notify of file changes | `changes` (array, req) |
+| `export_cache` | Export reference cache as gzip artifact | `dest_path` (string, req) |
+| `import_cache` | Import reference cache from gzip artifact | `src_path` (string, req) |
+
+**`export_cache` notes:**
+- Compacts the SQLite reference cache with `VACUUM INTO`, then gzip-compresses to dest_path
+- Returns entry count on success
+- Requires an active LSP session with reference cache enabled
+
+**`import_cache` notes:**
+- Decompresses gzip artifact, validates with `PRAGMA integrity_check`, atomically replaces current cache
+- Returns entry count on success
+- Enables team-shared cache: commit the artifact, teammates import to skip cold-start indexing
 
 **`get_diagnostics` notes:**
 - `file_path` validates via `ValidateFilePath` before `CreateFileURI` (path traversal prevented)
@@ -210,16 +230,16 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Internally: create → apply → evaluate → discard → destroy
 - Returns `EvaluationResult` directly
 
-**Total: 53 tools** (50 core + 3 phase enforcement)
-- **CI-verified: 53** (including `set_log_level` verified separately across all 30 languages, and 3 phase enforcement tools verified via mcp-assert)
-- **ToolAnnotations:** All 53 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
+**Total: 56 tools** (53 core + 3 phase enforcement)
+- **CI-verified: 56** (including `set_log_level` verified separately across all 30 languages, and 3 phase enforcement tools verified via mcp-assert)
+- **ToolAnnotations:** All 56 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
 - **jsonschema struct tags:** 171+ tags across all Args structs; 100% parameter description coverage
 - **1-indexed coordinates:** All line/column parameters are 1-based (editor convention)
 - **0-based conversion:** `extractRange` helper converts to 0-based for LSP protocol internally
 
 ---
 
-## Skills (21 total)
+## Skills (22 total)
 
 | Skill | Invocation | Allowed Tools | Description |
 |-------|-----------|---------------|-------------|
@@ -244,6 +264,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `/lsp-generate` | `[file-path:line:col] [intent]` | get_code_actions, execute_command, apply_edit, format_document, get_diagnostics, go_to_symbol | Language server code generation: interface stubs, test skeletons, missing methods, mocks |
 | `/lsp-understand` | `[symbol-name \| file-path]` | get_info_on_location, go_to_implementation, call_hierarchy, get_references, get_symbol_source, get_document_symbols, go_to_symbol | Deep Code Map: type info + implementations + call hierarchy (2-level) + references + source; synthesizes cross-symbol relationships |
 | `/lsp-inspect` | `<file-or-directory> [--checks <types>] [--json]` | get_change_impact, get_references, get_document_symbols, get_info_on_location, get_diagnostics, call_hierarchy, go_to_definition, get_server_capabilities | Full code quality audit: dead symbols, test coverage, silent failures, error wrapping, doc drift, panics, context propagation; severity-tiered findings report |
+| `/lsp-architecture` | `[workspace-root-path]` | start_lsp, get_document_symbols, get_change_impact, detect_lsp_servers, get_workspace_symbols | Project-level architecture overview: language distribution, package map (capped at 30), entry points, hotspots (top 10 by reference count), dependency flow. Read-only. |
 
 **User-facing reference:** `docs/skills.md` — one-page skill catalog with usage examples and trigger conditions
 
@@ -303,6 +324,10 @@ metadata:
 **Diagnostic logging:** Every tool call logs latency via the central `addToolWithPhaseCheck` wrapper. Calls exceeding 5 seconds log at WARNING level. Process start/exit events log PID and uptime.
 
 **Daemon broker panic recovery:** All goroutines in `RunBroker` have `defer recover()`. Forwarded requests use the broker's lifecycle context (cancellable on shutdown).
+
+**Persistent reference cache:** Symbol reference results are cached in a per-workspace SQLite database (`~/.agent-lsp/cache/<hash>/refs.db`), keyed by file content hash. Subsequent sessions serve cached results instantly; the language server is only re-queried for files that changed. File watcher invalidates entries on source changes. Cache is opportunistic: missing or corrupted databases fall back to direct LSP queries transparently. Pure Go SQLite (`modernc.org/sqlite`), no CGo.
+
+**Selective indexing:** On workspaces with 500+ source files (Python, TypeScript), auto-detects the active package boundary and generates scoped language server config. The scope shifts automatically as the agent navigates between packages. Combined with the persistent cache, previously-visited packages serve cached results while the current package gets full LSP precision. Go and Rust bypass this entirely (native module boundaries).
 
 ### Skill Workflow Details
 
@@ -935,7 +960,6 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 
 ### Product (planned)
 
-- **`agent-lsp update`** — self-update to latest release; fetches from GitHub Releases, replaces binary in-place
 - **Config file format** — `~/.agent-lsp.json` or `agent-lsp.json` project file for complex setups with per-server options
 - **Continue.dev config support** — `agent-lsp init` currently skips Continue.dev (different config format than `mcpServers`)
 
@@ -956,8 +980,8 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 - `server.go` — MCP server construction; `toolDeps` struct; `mcpSessionSender`; `InitializedHandler` wires logging bridge; `csResolver` wrapper; HTTP server setup with `/health` endpoint
 - `doctor.go` — `agent-lsp doctor` subcommand; probes each configured language server, reports version + supported capabilities, exits 1 on failure
 - `tools_navigation.go` — 10 navigation tools
-- `tools_analysis.go` — 13 analysis tools
-- `tools_workspace.go` — 19 workspace/lifecycle tools (includes `set_log_level`)
+- `tools_analysis.go` — 14 analysis tools (includes `detect_changes`)
+- `tools_workspace.go` — 21 workspace/lifecycle tools (includes `set_log_level`, `export_cache`, `import_cache`)
 - `tools_session.go` — 8 simulation/session tools
 - `tools_phase.go` — 3 phase enforcement tools; `checkPhasePermission` helper
 
@@ -987,8 +1011,8 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 - `executor.go` — `SerializedExecutor`: per-session `chan struct{}` in `map[string]chan struct{}`; `SessionExecutor` interface
 - `differ.go` — `DiffDiagnostics`: O(n+m) fingerprint-keyed counter map
 
-**internal/tools (25 files):**
-`helpers.go`, `analysis.go`, `navigation.go`, `callhierarchy.go`, `typehierarchy.go`, `inlayhints.go`, `highlights.go`, `semantic_tokens.go`, `capabilities.go`, `detect.go`, `documentation.go`, `symbol_source.go`, `symbol_path.go`, `simulation.go`, `build.go`, `change_impact.go`, `cross_repo.go`, `workspace_folders.go`, `utilities.go`, `fuzzy.go`, `position_pattern.go`, `runner.go`, `workspace.go` (rename_symbol, prepare_rename, format_document, format_range, apply_edit, execute_command), `session.go`, `doc.go`
+**internal/tools (27 files):**
+`helpers.go`, `analysis.go`, `navigation.go`, `callhierarchy.go`, `typehierarchy.go`, `inlayhints.go`, `highlights.go`, `semantic_tokens.go`, `capabilities.go`, `detect.go`, `documentation.go`, `symbol_source.go`, `symbol_path.go`, `simulation.go`, `build.go`, `change_impact.go`, `cross_repo.go`, `detect_changes.go`, `cache_artifact.go`, `workspace_folders.go`, `utilities.go`, `fuzzy.go`, `position_pattern.go`, `runner.go`, `workspace.go` (rename_symbol, prepare_rename, format_document, format_range, apply_edit, execute_command), `session.go`, `doc.go`
 
 **internal/resources:**
 - `resources.go` — `HandleDiagnosticsResource`, `HandleHoverResource`, `HandleCompletionsResource`; three resource templates
@@ -1019,7 +1043,7 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 - Each package has smoke tests verifying alias targets are non-nil at compile time
 
 **skills/:**
-- 21 skill directories; each contains `SKILL.md` with frontmatter + prompt body
+- 22 skill directories; each contains `SKILL.md` with frontmatter + prompt body
 - `install.sh` — symlinks/copies skill dirs to `~/.claude/skills/`; maintains CLAUDE.md managed block
 
 ### Key Architectural Facts
@@ -1118,7 +1142,7 @@ type Extension interface {
 
 ### Layer Rules
 
-- `cmd/agent-lsp/` owns MCP server lifecycle; routes via four tool registration files
+- `cmd/agent-lsp/` owns MCP server lifecycle; routes via five tool registration files
 - `internal/tools/` + `internal/resources/` import from `internal/lsp/`, `internal/session/`, `internal/types/` — not from each other
 - `internal/lsp/` imports: `internal/types/`, `internal/logging/`, `internal/uri/` — no upward deps
 - `internal/session/` imports: `internal/lsp/`, `internal/types/`, `internal/logging/`, `internal/uri/`
@@ -1140,6 +1164,8 @@ type Extension interface {
 | `agent-lsp doctor` | Probe each configured language server; report version + capabilities; exit 1 on failure |
 | `agent-lsp init` | Interactive setup wizard |
 | `agent-lsp init --non-interactive` | CI/scripted setup |
+| `agent-lsp update` | Self-update to latest GitHub Release; `--check` to compare only, `--force` to update even if current |
+| `agent-lsp uninstall` | Clean removal of MCP configs, skill installations, CLAUDE.md sections, caches; `--dry-run` supported |
 | `agent-lsp --help` / `-h` / `help` | Print usage summary with all modes and subcommands |
 | `agent-lsp --version` | Print version and exit |
 
@@ -1246,7 +1272,7 @@ agent-lsp is tested through the MCP protocol layer using [mcp-assert](https://gi
 
 **Two CI jobs run mcp-assert on every push and PR:**
 
-**`mcp-assert-trajectory`** — validates that all 22 skills follow correct tool call sequences. Uses inline traces embedded in YAML files; no live language server needed. Each assertion completes in 0ms. Total job runtime under 60 seconds. Assertion files: `examples/mcp-assert/trajectory/` (21 files, one per skill). Trajectory assertions check `presence` (required tools appear), `absence` (forbidden tools do not appear), `order` (correct sequence), and `args_contain` (specific argument values).
+**`mcp-assert-trajectory`** — validates that all 22 skills follow correct tool call sequences. Uses inline traces embedded in YAML files; no live language server needed. Each assertion completes in 0ms. Total job runtime under 60 seconds. Assertion files: `examples/mcp-assert/trajectory/` (22 files, one per skill). Trajectory assertions check `presence` (required tools appear), `absence` (forbidden tools do not appear), `order` (correct sequence), and `args_contain` (specific argument values).
 
 **`mcp-assert`** — tests tool correctness through the full MCP stdio transport against real gopls. Assertion files: `examples/mcp-assert/go/*.yaml`. 120s per-assertion timeout; total runtime ~2 minutes.
 

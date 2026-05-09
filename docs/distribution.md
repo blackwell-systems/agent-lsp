@@ -104,6 +104,21 @@ pip install agent-lsp
 ```
 Platform-specific wheels containing the Go binary. Each wheel is tagged with the correct platform (e.g. `macosx_11_0_arm64`, `manylinux2014_x86_64`), so pip resolves the right one automatically. No Go toolchain required. Built and published automatically by the `pypi-publish` CI job on every release tag. View at [pypi.org/project/agent-lsp](https://pypi.org/project/agent-lsp/).
 
+### Self-update
+```bash
+agent-lsp update           # Download and replace binary with latest release
+agent-lsp update --check   # Compare current vs latest version without downloading
+agent-lsp update --force   # Update even if already on the latest version
+```
+Fetches the latest release from the GitHub Releases API, downloads the correct binary for the current OS and architecture, and atomically replaces the running binary. Works regardless of the original install method (curl, Homebrew, npm, pip, etc.).
+
+### Clean uninstall
+```bash
+agent-lsp uninstall           # Remove all configs, skills, caches
+agent-lsp uninstall --dry-run # Preview what would be removed
+```
+Removes MCP server entries from `.mcp.json`, `.cursor/mcp.json`, and other config files. Removes skill installations from `~/.claude/skills/lsp-*`. Removes managed sections from CLAUDE.md. Removes cache directories. Does not remove the binary itself (prints the `rm $(which agent-lsp)` command for manual removal).
+
 ### Go install
 ```bash
 go install github.com/blackwell-systems/agent-lsp/cmd/agent-lsp@latest
@@ -114,7 +129,7 @@ Requires a Go toolchain. Builds from source and installs to `$GOPATH/bin`.
 `smithery.yaml` in the repo root enables auto-indexing on Smithery. Auto-discovered from GitHub.
 
 ### cursor.directory
-Submitted. Cursor detects 21 skill components from SKILL.md files. Listed under Developer Tools.
+Submitted. Cursor detects 22 skill components from SKILL.md files. Listed under Developer Tools.
 
 ### mcpservers.org
 Manually submitted. Free listing.

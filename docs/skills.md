@@ -446,6 +446,22 @@ phase tables, and architecture details.
 
 ---
 
+### `/lsp-architecture`
+
+Project-level architecture overview of any codebase in one call: language
+distribution, package hierarchy, entry points, dependency flow, and hotspot
+files ranked by blast radius.
+
+**When to reach for it:**
+- Onboarding to a new codebase: get the big picture before diving into individual files.
+- Before a large refactor: understand which packages exist, how they depend on each other, and which files are the most heavily referenced.
+- Documenting a project's structure for a design review or handoff.
+
+**What it does that raw tools miss:**
+Composes `detect_lsp_servers`, `get_workspace_symbols`, `get_document_symbols`, and `get_change_impact` into a single structured overview. Discovers languages automatically, builds a package map (capped at 30 packages), identifies entry points by convention (`main`, `Run`, `Handler`), and ranks hotspot files by non-test caller count. The persistent reference cache makes repeated hotspot queries instant. Enforces depth limits to prevent runaway analysis on massive codebases.
+
+---
+
 ## See also
 
 - [docs/tools.md](./tools.md): full tool reference with parameters and examples
