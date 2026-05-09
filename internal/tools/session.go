@@ -58,6 +58,14 @@ func HandleStartLsp(
 		client.SetScopeConfig(scopeConfig)
 	}
 
+	// Auto-scope activation: when no manual scope was specified and the
+	// workspace is large enough to benefit, enable automatic scope shifting.
+	if scopeConfig == nil && languageID != "" {
+		if lsp.ShouldAutoScope(rootDir, languageID) {
+			client.SetAutoScope(true, nil)
+		}
+	}
+
 	setClient(client)
 
 	// Optional: block until $/progress indexing completes before returning.
@@ -142,6 +150,12 @@ func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[str
 	if err := client.OpenDocument(ctx, fileURI, text, languageID); err != nil {
 		return types.ErrorResult(fmt.Sprintf("failed to open document: %s", err)), nil
 	}
+
+	// Auto-scope: shift the scope to the package containing this file.
+	if client.AutoScope() {
+		lsp.UpdateAutoScope(client, filePath, languageID)
+	}
+
 	return types.TextResult(fmt.Sprintf("Document opened: %s", filePath)), nil
 }
 

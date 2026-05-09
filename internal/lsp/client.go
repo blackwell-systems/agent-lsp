@@ -157,7 +157,9 @@ type LSPClient struct {
 	progressCond   *sync.Cond // signalled when progressTokens becomes empty
 
 	// workspace scoping (generated config for large repos)
-	scopeConfig *ScopeConfig
+	scopeConfig  *ScopeConfig
+	autoScope    bool     // whether auto-scoping is enabled
+	currentScope []string // currently active scope paths (relative to rootDir)
 
 	// persistent reference cache (SQLite, survives across sessions)
 	refCache *SymbolRefCache
@@ -1081,6 +1083,21 @@ func (c *LSPClient) killProcess() {
 // SetScopeConfig stores a scope configuration for cleanup on shutdown.
 func (c *LSPClient) SetScopeConfig(sc *ScopeConfig) {
 	c.scopeConfig = sc
+}
+
+// AutoScope reports whether auto-scoping is enabled for this client.
+func (c *LSPClient) AutoScope() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.autoScope
+}
+
+// SetAutoScope enables or disables auto-scoping and sets the initial scope paths.
+func (c *LSPClient) SetAutoScope(enabled bool, scope []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.autoScope = enabled
+	c.currentScope = scope
 }
 
 // RefCache returns the persistent reference cache, or nil if not available.
