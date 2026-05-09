@@ -236,6 +236,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - **jsonschema struct tags:** 171+ tags across all Args structs; 100% parameter description coverage
 - **1-indexed coordinates:** All line/column parameters are 1-based (editor convention)
 - **0-based conversion:** `extractRange` helper converts to 0-based for LSP protocol internally
+- **Next-step hints:** Every tool response includes a contextual `hint` field suggesting the logical next tool call. For example, `get_references` hints "use get_change_impact to see the full blast radius"; `detect_changes` hints "use get_change_impact on specific files for detailed analysis." Helps agents chain tools correctly without skills, and helps less capable models navigate the 56-tool surface. Zero-cost addition: one extra field in the JSON response.
 
 ---
 

@@ -7,6 +7,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **Next-step hints in tool responses.** Every tool response now includes a contextual `hint` field suggesting the logical next tool call. For example, `get_references` returns "use get_change_impact to see the full blast radius"; `simulate_edit_atomic` returns "call get_diagnostics to check for remaining issues." Helps agents chain tools correctly without skills and helps less capable models navigate the 56-tool surface.
+
 - **Fix: symbol position resolution in `get_change_impact`.** `collectExportedSymbols` used `DocumentSymbol.SelectionRange.Start` directly for reference lookups, but gopls returns positions pointing to the `func` keyword for functions and methods, not the identifier name. This caused `GetReferencesRaw` to produce "no identifier found" for every function and method. Fixed by searching the source line for the actual symbol name and using that column. Before: 130 warnings per scan. After: zero warnings, full reference data for all symbols.
 
 - **Selective indexing (Layer 2).** Auto-detects the package boundary for the agent's current file and generates scoped language server config (pyrightconfig.json, tsconfig.json) limited to that package and its direct local dependencies. Activates automatically when the workspace has 500+ source files for Python or TypeScript and no manual scope was specified. On `open_document`, if the file is in a different package, the config is regenerated automatically. Pyright and tsserver watch their config files and reload without a server restart. Combined with the persistent cache (Layer 3), previously-visited packages serve cached results while the current package gets full LSP precision.

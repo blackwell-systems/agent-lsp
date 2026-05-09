@@ -473,6 +473,10 @@ All five registration functions are called from `Run()` in `server.go` via the `
 
 Tool registration (`cmd/agent-lsp/tools_*.go`) is separate from tool implementation (`internal/tools/*.go`). The `cmd/` layer owns schema definitions, MCP plumbing, and args-to-map conversion. The `internal/tools/` layer owns the actual LSP interaction logic, knows nothing about MCP, and is testable independently.
 
+### Next-step hints
+
+Every tool response includes a contextual `hint` field that suggests the logical next tool call. For example, after `get_references` the hint says "use get_change_impact to see the full blast radius." Hints are added at the `internal/tools/` handler layer as part of the `ToolResult` payload, so they travel through `makeCallToolResult` and appear in the final MCP response. This guides agents to chain tools correctly without requiring a skill, and helps less capable models navigate the tool surface.
+
 ---
 
 ## Concurrency Model
