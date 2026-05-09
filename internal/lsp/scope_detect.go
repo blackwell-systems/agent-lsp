@@ -53,7 +53,7 @@ func countSourceFiles(rootDir, languageID string) bool {
 	}
 
 	count := 0
-	_ = filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
+	if walkErr := filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil // skip inaccessible dirs
 		}
@@ -78,7 +78,9 @@ func countSourceFiles(rootDir, languageID string) bool {
 			}
 		}
 		return nil
-	})
+	}); walkErr != nil {
+		logging.Log(logging.LevelDebug, fmt.Sprintf("auto-scope: walk error counting source files: %v", walkErr))
+	}
 	return count >= autoScopeThreshold
 }
 

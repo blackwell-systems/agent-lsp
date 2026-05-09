@@ -7,6 +7,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **Selective indexing (Layer 2).** Auto-detects the package boundary for the agent's current file and generates scoped language server config (pyrightconfig.json, tsconfig.json) limited to that package and its direct local dependencies. Activates automatically when the workspace has 500+ source files for Python or TypeScript and no manual scope was specified. On `open_document`, if the file is in a different package, the config is regenerated automatically. Pyright and tsserver watch their config files and reload without a server restart. Combined with the persistent cache (Layer 3), previously-visited packages serve cached results while the current package gets full LSP precision.
+
 - **`detect_changes` MCP tool.** Single-call "what did I break?" workflow. Runs `git diff --name-only` (scopes: unstaged, staged, committed), filters to recognized language files, feeds them to `get_change_impact`, and enriches each symbol with risk classification: "high" (callers across multiple packages), "medium" (same-package callers only), "low" (zero non-test callers).
 
 - **`agent-lsp update` subcommand.** Self-update to the latest GitHub Release. Fetches the release API, compares versions, downloads the correct binary for the current OS/arch, and atomically replaces the running binary. Flags: `--check` (compare without downloading), `--force` (update even if already current).
