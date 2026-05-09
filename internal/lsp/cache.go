@@ -30,8 +30,9 @@ import (
 
 // SymbolRefCache is a persistent cache for symbol reference results.
 type SymbolRefCache struct {
-	mu sync.Mutex
-	db *sql.DB
+	mu     sync.Mutex
+	db     *sql.DB
+	dbPath string
 }
 
 // NewSymbolRefCache opens or creates a SQLite cache for the given workspace.
@@ -79,7 +80,15 @@ func NewSymbolRefCache(workspaceRoot string) *SymbolRefCache {
 		return nil
 	}
 
-	return &SymbolRefCache{db: db}
+	return &SymbolRefCache{db: db, dbPath: dbPath}
+}
+
+// DBPath returns the filesystem path to the underlying SQLite database.
+func (c *SymbolRefCache) DBPath() string {
+	if c == nil {
+		return ""
+	}
+	return c.dbPath
 }
 
 // CachedRefs represents a cached set of reference locations for a symbol.

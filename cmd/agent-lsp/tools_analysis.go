@@ -109,6 +109,11 @@ type GetChangeImpactArgs struct {
 	IncludeTransitive bool     `json:"include_transitive,omitempty" jsonschema:"If true, include second-order callers (callers of callers) in the results"`
 }
 
+type DetectChangesArgs struct {
+	WorkspaceRoot string `json:"workspace_root,omitempty" jsonschema:"Absolute path to the git repository root. Defaults to the LSP workspace root if omitted"`
+	Scope         string `json:"scope,omitempty" jsonschema:"Which changes to analyze: 'unstaged' (default), 'staged', or 'committed' (HEAD~1..HEAD)"`
+}
+
 type GetCrossRepoReferencesArgs struct {
 	SymbolFile    string   `json:"symbol_file" jsonschema:"Absolute path to the file containing the symbol to search for"`
 	Line          int      `json:"line" jsonschema:"1-indexed line number of the symbol in the file"`
@@ -297,6 +302,20 @@ func registerAnalysisTools(d toolDeps) {
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetCrossRepoReferencesArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleGetCrossRepoReferences(ctx, d.cs.get(), toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
+	addToolWithPhaseCheck(d, &mcp.Tool{
+		Name:        "detect_changes",
+		Description: "Run git diff to identify changed files, analyze their exported symbols via get_change_impact, and return affected symbols with risk classification. Risk levels: 'high' (callers from multiple packages), 'medium' (callers from same package only), 'low' (zero non-test callers). Use before committing to understand the blast radius of uncommitted or recently committed changes.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Detect Changes",
+			ReadOnlyHint:    true,
+			DestructiveHint: boolPtr(false),
+			OpenWorldHint:   boolPtr(false),
+		},
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args DetectChangesArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleDetectChanges(ctx, d.cs.get(), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 }

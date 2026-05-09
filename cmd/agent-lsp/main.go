@@ -47,6 +47,8 @@ func main() {
 		fmt.Println("Commands:")
 		fmt.Println("  agent-lsp init       Auto-detect servers and configure your AI tool")
 		fmt.Println("  agent-lsp doctor     Check all configured language servers")
+		fmt.Println("  agent-lsp update     Self-update to the latest release")
+		fmt.Println("  agent-lsp uninstall  Remove all agent-lsp configs, skills, and caches")
 		fmt.Println("  agent-lsp --version  Print version")
 		os.Exit(0)
 	}
@@ -74,6 +76,18 @@ func main() {
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "daemon-stop" {
 		runDaemonStop(os.Args[2:])
+		return
+	}
+
+	// Subcommand routing: agent-lsp update
+	if len(os.Args) >= 2 && os.Args[1] == "update" {
+		runUpdate(os.Args[2:])
+		return
+	}
+
+	// Subcommand routing: agent-lsp uninstall
+	if len(os.Args) >= 2 && os.Args[1] == "uninstall" {
+		runUninstall(os.Args[2:])
 		return
 	}
 

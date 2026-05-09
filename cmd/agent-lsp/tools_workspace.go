@@ -114,6 +114,14 @@ type GetTestsForFileArgs struct {
 	FilePath string `json:"file_path" jsonschema:"Source file path to find associated test files for"`
 }
 
+type ExportCacheArgs struct {
+	DestPath string `json:"dest_path" jsonschema:"Destination path for the compressed cache artifact (e.g. .agent-lsp/cache.db.gz)"`
+}
+
+type ImportCacheArgs struct {
+	SrcPath string `json:"src_path" jsonschema:"Path to the compressed cache artifact to import"`
+}
+
 func registerWorkspaceTools(d toolDeps) {
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "start_lsp",
@@ -469,6 +477,34 @@ func registerWorkspaceTools(d toolDeps) {
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args FormatRangeArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleFormatRange(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
+	addToolWithPhaseCheck(d, &mcp.Tool{
+		Name:        "export_cache",
+		Description: "Export the symbol reference cache as a gzip-compressed artifact for team sharing. The exported file can be committed to the repository (e.g. .agent-lsp/cache.db.gz) so teammates skip cold-start indexing. Requires start_lsp to have been called first.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Export Cache",
+			ReadOnlyHint:    false,
+			DestructiveHint: boolPtr(false),
+			OpenWorldHint:   boolPtr(false),
+		},
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args ExportCacheArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleExportCache(ctx, d.cs.get(), toolArgsToMap(args))
+		return makeCallToolResult(r), nil, err
+	})
+
+	addToolWithPhaseCheck(d, &mcp.Tool{
+		Name:        "import_cache",
+		Description: "Import a gzip-compressed cache artifact, replacing the current symbol reference cache. Use this to load a team-shared cache exported via export_cache. Validates database integrity after import. Requires start_lsp to have been called first.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Import Cache",
+			ReadOnlyHint:    false,
+			DestructiveHint: boolPtr(true),
+			OpenWorldHint:   boolPtr(false),
+		},
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args ImportCacheArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleImportCache(ctx, d.cs.get(), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 }

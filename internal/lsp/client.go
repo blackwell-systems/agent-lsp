@@ -761,6 +761,24 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 
 	c.rootDir = rootDir
 	c.refCache = NewSymbolRefCache(rootDir)
+
+	// Auto-import: if the cache is empty and a team-shared artifact exists
+	// in the workspace, load it to skip cold-start indexing.
+	if c.refCache != nil {
+		entries, _ := c.refCache.Stats()
+		artifactPath := filepath.Join(rootDir, ".agent-lsp", "cache.db.gz")
+		if entries == 0 {
+			if _, err := os.Stat(artifactPath); err == nil {
+				if importErr := c.refCache.ImportArtifact(artifactPath); importErr != nil {
+					logging.Log(logging.LevelInfo, fmt.Sprintf("cache: auto-import failed: %v", importErr))
+				} else {
+					imported, _ := c.refCache.Stats()
+					logging.Log(logging.LevelInfo, fmt.Sprintf("cache: auto-imported %d entries from %s", imported, artifactPath))
+				}
+			}
+		}
+	}
+
 	rootURI := (&url.URL{Scheme: "file", Path: rootDir}).String()
 	c.capsMu.Lock()
 	c.workspaceFolders = []workspaceFolder{{URI: rootURI, Name: rootDir}}
