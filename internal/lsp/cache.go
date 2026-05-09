@@ -114,8 +114,10 @@ func (c *SymbolRefCache) Get(filePath, symbolName string, symbolLine int) *Cache
 
 	if storedHash != currentHash {
 		// File changed since cache entry was written. Evict.
-		c.db.Exec(`DELETE FROM symbol_refs WHERE file_path = ? AND symbol_name = ? AND symbol_line = ?`,
-			filePath, symbolName, symbolLine)
+		if _, err := c.db.Exec(`DELETE FROM symbol_refs WHERE file_path = ? AND symbol_name = ? AND symbol_line = ?`,
+			filePath, symbolName, symbolLine); err != nil {
+			logging.Log(logging.LevelDebug, fmt.Sprintf("cache: evict stale entry: %v", err))
+		}
 		return nil
 	}
 
@@ -146,11 +148,13 @@ func (c *SymbolRefCache) Put(filePath, symbolName string, symbolLine int, locs [
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.db.Exec(
+	if _, err := c.db.Exec(
 		`INSERT OR REPLACE INTO symbol_refs (file_path, file_hash, symbol_name, symbol_line, locations, cached_at)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		filePath, currentHash, symbolName, symbolLine, string(locsJSON), time.Now().Unix(),
-	)
+	); err != nil {
+		logging.Log(logging.LevelDebug, fmt.Sprintf("cache: put %s/%s: %v", filePath, symbolName, err))
+	}
 }
 
 // InvalidateFile evicts all cached entries for a file.
@@ -163,7 +167,9 @@ func (c *SymbolRefCache) InvalidateFile(filePath string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.db.Exec(`DELETE FROM symbol_refs WHERE file_path = ?`, filePath)
+	if _, err := c.db.Exec(`DELETE FROM symbol_refs WHERE file_path = ?`, filePath); err != nil {
+		logging.Log(logging.LevelDebug, fmt.Sprintf("cache: invalidate %s: %v", filePath, err))
+	}
 }
 
 // Stats returns the number of cached entries and the database size.
@@ -175,7 +181,9 @@ func (c *SymbolRefCache) Stats() (entries int, sizeBytes int64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.db.QueryRow(`SELECT COUNT(*) FROM symbol_refs`).Scan(&entries)
+	if err := c.db.QueryRow(`SELECT COUNT(*) FROM symbol_refs`).Scan(&entries); err != nil {
+		logging.Log(logging.LevelDebug, fmt.Sprintf("cache: stats: %v", err))
+	}
 	// Size is approximate; SQLite doesn't expose exact file size via SQL.
 	return entries, 0
 }
