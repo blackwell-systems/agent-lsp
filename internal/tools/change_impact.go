@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -274,18 +275,42 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 // If recurseIntoChildren is false, struct fields and method children are skipped
 // to avoid inflating the symbol count with non-independently-callable members.
 func collectExportedSymbols(syms []types.DocumentSymbol, filePath, langID string, out *[]exportedSymbol, recurseIntoChildren bool) {
+	// Cache source lines for resolving symbol name positions.
+	// gopls returns SelectionRange.Start pointing to the keyword (e.g., "func")
+	// rather than the identifier name for functions and methods. We resolve the
+	// actual column by finding the symbol name in the source line.
+	var sourceLines []string
+	if data, err := os.ReadFile(filePath); err == nil {
+		sourceLines = strings.Split(string(data), "\n")
+	}
+
 	for _, sym := range syms {
 		exported := langID != "go" || (len(sym.Name) > 0 && sym.Name[0] >= 'A' && sym.Name[0] <= 'Z')
 		if exported {
+			line := sym.SelectionRange.Start.Line
+			char := sym.SelectionRange.Start.Character
+
+			// Resolve actual column of the symbol name in the source line.
+			// For methods, strip the receiver prefix (e.g., "(*LSPClient).Shutdown" -> "Shutdown").
+			searchName := sym.Name
+			if dotIdx := strings.LastIndex(searchName, "."); dotIdx >= 0 {
+				searchName = searchName[dotIdx+1:]
+			}
+			if line < len(sourceLines) {
+				if col := strings.Index(sourceLines[line], searchName); col >= 0 {
+					char = col
+				}
+			}
+
 			*out = append(*out, exportedSymbol{
 				Name:   sym.Name,
 				File:   filePath,
 				LangID: langID,
 				Position: types.Position{
-					Line:      sym.SelectionRange.Start.Line,
-					Character: sym.SelectionRange.Start.Character,
+					Line:      line,
+					Character: char,
 				},
-				Line: sym.SelectionRange.Start.Line + 1,
+				Line: line + 1,
 			})
 		}
 		if recurseIntoChildren {
