@@ -259,6 +259,7 @@ skills/            ← Agent Skills (SKILL.md directories)
   lsp-extract-function/ ← Extract code into a new function
   lsp-fix-all/     ← Fix all diagnostics in a file or workspace
   lsp-generate/    ← Generate code with LSP-aware validation
+  lsp-inspect/     ← Full code quality audit for a file or package
 
 experiments/token-savings/    Reproducible benchmark: LSP vs grep/read token cost
 ```
@@ -1152,6 +1153,7 @@ The installer scans for `SKILL.md` files up to two levels deep, creates `~/.clau
 | `lsp-extract-function` | Extract code into a new function |
 | `lsp-fix-all` | Fix all diagnostics in a file or workspace |
 | `lsp-generate` | Generate code with LSP-aware validation |
+| `lsp-inspect` | Full code quality audit: dead symbols, test coverage, error handling, doc drift |
 
 ---
 

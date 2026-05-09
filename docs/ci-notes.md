@@ -34,7 +34,7 @@ mcp-assert runs two separate CI jobs against agent-lsp. Together they cover both
 
 Validates that agent skills follow correct tool call sequences using inline traces embedded in YAML files. No live language server is required; all assertions run against pre-recorded traces and complete in 0ms each. Total job runtime is under 60 seconds.
 
-**Assertion files:** `examples/mcp-assert/trajectory/` (20 files, one per skill)
+**Assertion files:** `examples/mcp-assert/trajectory/` (21 files, one per skill)
 
 **What trajectory assertions verify:** Each `trajectory_*.yaml` file declares an `inline` trace (a sequence of tool calls with arguments) and a set of trajectory rules:
 
@@ -45,7 +45,7 @@ Validates that agent skills follow correct tool call sequences using inline trac
 | `order` | Tools appear in the correct sequence |
 | `args_contain` | A specific tool call includes expected argument values |
 
-**Skills covered:** All 20 skills have trajectory assertions.
+**Skills covered:** All 21 skills have trajectory assertions.
 
 | Skill | Assertion file |
 |-------|---------------|
@@ -61,6 +61,7 @@ Validates that agent skills follow correct tool call sequences using inline trac
 | `/lsp-generate` | `trajectory_generate_protocol.yaml` |
 | `/lsp-impact` | `trajectory_impact_protocol.yaml` |
 | `/lsp-implement` | `trajectory_implement_protocol.yaml` |
+| `/lsp-inspect` | `trajectory_inspect_protocol.yaml` |
 | `/lsp-local-symbols` | `trajectory_local_symbols_protocol.yaml` |
 | `/lsp-refactor` | `trajectory_refactor_protocol.yaml` |
 | `/lsp-rename` | `trajectory_rename_protocol.yaml` |
@@ -131,7 +132,7 @@ Runs deterministic assertions against agent-lsp through the MCP stdio transport 
 | `test/documentation_test.go` | `unit-and-smoke` | `get_symbol_documentation` |
 | `test/binary_test.go` | `unit-and-smoke` | Binary smoke tests (startup, missing args, help) |
 | `examples/mcp-assert/go/*.yaml` | `mcp-assert` | Protocol-level assertions via MCP stdio: tool correctness (hover, definition, references, diagnostics, symbols, completions, speculative) plus multi-step workflow assertions |
-| `examples/mcp-assert/trajectory/*.yaml` | `mcp-assert-trajectory` | 20 trajectory assertions (one per skill); inline traces, no server needed, 0ms each |
+| `examples/mcp-assert/trajectory/*.yaml` | `mcp-assert-trajectory` | 21 trajectory assertions (one per skill); inline traces, no server needed, 0ms each |
 
 ## Tool-specific notes
 

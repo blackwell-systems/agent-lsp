@@ -71,4 +71,4 @@ No other MCP tool provider enforces workflow ordering at runtime. Read more in t
 | Cross-repo references | multi-root workspace |
 | Auto-watch | always-on, debounced file watching |
 | HTTP+SSE transport | bearer token auth, non-root Docker |
-| Distribution | **single Go binary**, 8 install channels |
+| Distribution | **single Go binary**, 10 install channels |

@@ -243,6 +243,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `/lsp-extract-function` | `[file-path] [start-line] [end-line] [name]` | get_document_symbols, get_code_actions, execute_command, apply_edit, get_diagnostics, format_document | Extract code block into named function; LSP code action primary, manual fallback with captured-variable analysis |
 | `/lsp-generate` | `[file-path:line:col] [intent]` | get_code_actions, execute_command, apply_edit, format_document, get_diagnostics, go_to_symbol | Language server code generation: interface stubs, test skeletons, missing methods, mocks |
 | `/lsp-understand` | `[symbol-name \| file-path]` | get_info_on_location, go_to_implementation, call_hierarchy, get_references, get_symbol_source, get_document_symbols, go_to_symbol | Deep Code Map: type info + implementations + call hierarchy (2-level) + references + source; synthesizes cross-symbol relationships |
+| `/lsp-inspect` | `<file-or-directory> [--checks <types>] [--json]` | get_change_impact, get_references, get_document_symbols, get_info_on_location, get_diagnostics, call_hierarchy, go_to_definition, get_server_capabilities | Full code quality audit: dead symbols, test coverage, silent failures, error wrapping, doc drift, panics, context propagation; severity-tiered findings report |
 
 **User-facing reference:** `docs/skills.md` — one-page skill catalog with usage examples and trigger conditions
 
@@ -744,6 +745,8 @@ See [docs/phase-enforcement.md](./phase-enforcement.md) for the full design docu
 | Windows `install.ps1` | done (v0.2.0) | `irm https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.ps1 \| iex` — installs to `%LOCALAPPDATA%\agent-lsp`, adds to user PATH; no admin required |
 | Scoop | done (v0.2.0) | `scoop bucket add blackwell-systems https://github.com/blackwell-systems/agent-lsp && scoop install agent-lsp` — manifest at `bucket/agent-lsp.json` |
 | Winget | done (v0.2.0) | `winget install BlackwellSystems.agent-lsp` — manifests at `winget/manifests/` |
+| PyPI | done (v0.5.2) | `pip install agent-lsp` — platform-specific wheels, no Go toolchain required |
+| `go install` | done | `go install github.com/blackwell-systems/agent-lsp/cmd/agent-lsp@latest` |
 | Nix flake | planned | `nix run github:blackwell-systems/agent-lsp` |
 | Awesome MCP Servers | done (v0.4.0) | Listed in [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers) |
 | VS Code extension | planned | zero-CLI-setup for Copilot/Continue/Cline |
@@ -1212,7 +1215,7 @@ locs, err := client.GetDefinition(ctx, fileURI, lsp.Position{Line: 10, Character
 | `multi-lang-java` | Java | ubuntu-latest | continue-on-error; `-Xmx2G`; 15min timeout; isolated from `multi-lang-core` to avoid OOM |
 | `multi-lang-mongodb` | MongoDB | ubuntu-latest | continue-on-error; mongo:7 service container; mongosh health check |
 | `speculative-test` | session lifecycle (8 languages: Go, TypeScript, Python, Rust, C++, C#, Dart, Java) | ubuntu-latest | `TestSpeculativeSessions` table-driven in `test/speculative_test.go`; 20min timeout; Java 300s extended timeout for JVM startup |
-| `mcp-assert-trajectory` | (skill protocols, all 20 skills) | ubuntu-latest | inline traces, no server needed, 0ms per assertion; total under 60s |
+| `mcp-assert-trajectory` | (skill protocols, all 21 skills) | ubuntu-latest | inline traces, no server needed, 0ms per assertion; total under 60s |
 | `mcp-assert` | Go (tool correctness via gopls) | ubuntu-latest | full MCP stdio transport; 120s per assertion; ~2min total |
 
 **Test files:**
@@ -1243,7 +1246,7 @@ agent-lsp is tested through the MCP protocol layer using [mcp-assert](https://gi
 
 **Two CI jobs run mcp-assert on every push and PR:**
 
-**`mcp-assert-trajectory`** — validates that all 20 skills follow correct tool call sequences. Uses inline traces embedded in YAML files; no live language server needed. Each assertion completes in 0ms. Total job runtime under 60 seconds. Assertion files: `examples/mcp-assert/trajectory/` (20 files, one per skill). Trajectory assertions check `presence` (required tools appear), `absence` (forbidden tools do not appear), `order` (correct sequence), and `args_contain` (specific argument values).
+**`mcp-assert-trajectory`** — validates that all 21 skills follow correct tool call sequences. Uses inline traces embedded in YAML files; no live language server needed. Each assertion completes in 0ms. Total job runtime under 60 seconds. Assertion files: `examples/mcp-assert/trajectory/` (21 files, one per skill). Trajectory assertions check `presence` (required tools appear), `absence` (forbidden tools do not appear), `order` (correct sequence), and `args_contain` (specific argument values).
 
 **`mcp-assert`** — tests tool correctness through the full MCP stdio transport against real gopls. Assertion files: `examples/mcp-assert/go/*.yaml`. 120s per-assertion timeout; total runtime ~2 minutes.
 

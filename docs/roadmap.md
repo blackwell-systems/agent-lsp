@@ -146,13 +146,13 @@ Current skills are oriented around modifying existing code. These skills target 
 | `/lsp-bootstrap` | Project scaffolding with LSP verification. Create build files (go.mod, package.json, Cargo.toml), start LSP, confirm indexing works, verify initial diagnostics are clean before writing application code. |
 | `/lsp-wire` | After creating a new package/module, verify it's importable from the intended consumer, check the public API surface via `get_document_symbols`, confirm no dangling imports or missing exports. |
 
-### Inspection skill
+### Inspection skill (shipped)
 
 | Skill | Description |
 |-------|-------------|
 | `/lsp-inspect` | Full code quality audit for a file or package. Composes `get_change_impact` (batch dead symbol + test coverage), `get_references` (per-symbol verification), `get_diagnostics` (error detection), and LLM reasoning checks (silent failures, error wrapping, doc drift, coverage gaps). Produces a severity-tiered findings report. Replaces the external `agentskills-code-inspector` with a first-party skill that has direct access to the warm LSP session. Language-agnostic: works with any configured language server. |
 
-Rationale: The inspector workflow is currently a separate repo that orchestrates agent-lsp's tools via MCP round-trips. Shipping it as a bundled skill eliminates: (1) separate installation, (2) MCP permission setup for background agents, (3) warmup gate complexity, (4) redundant `start_lsp` calls. The mechanical checks (`dead_symbol`, `test_coverage`) use `get_change_impact` directly. The reasoning checks (`silent_failure`, `error_wrapping`, `doc_drift`) are LLM-driven heuristics defined in the skill markdown. All 20 existing skills remain unchanged; `/lsp-inspect` is additive.
+Rationale: The inspector workflow was previously a separate repo that orchestrated agent-lsp's tools via MCP round-trips. Shipping it as a bundled skill eliminated: (1) separate installation, (2) MCP permission setup for background agents, (3) warmup gate complexity, (4) redundant `start_lsp` calls. The mechanical checks (`dead_symbol`, `test_coverage`) use `get_change_impact` directly. The reasoning checks (`silent_failure`, `error_wrapping`, `doc_drift`) are LLM-driven heuristics defined in the skill markdown. `/lsp-inspect` is now the 21st shipped skill.
 
 ### Skill composition
 
@@ -203,7 +203,7 @@ Skills that target the "Strong" tier should avoid hard dependencies on `callHier
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **`required-capabilities` metadata** | **Shipped** | Space-separated list of LSP server capability keys in SKILL.md frontmatter `metadata` field. All 20 skills declare required and optional capabilities. |
+| **`required-capabilities` metadata** | **Shipped** | Space-separated list of LSP server capability keys in SKILL.md frontmatter `metadata` field. All 21 skills declare required and optional capabilities. |
 | **`optional-capabilities` metadata** | **Shipped** | Same format. Steps using these capabilities skip cleanly when unavailable. No warning on activation. |
 | **Capability check tool** | **Shipped** | Integrated into `get_server_capabilities`: `skills` array classifies all 21 skills as supported/partial/unsupported based on the current server's capabilities. |
 | **Degraded-mode skill variants** | Planned | For high-value skills like `/lsp-impact`, define a degraded path in the skill body that uses only `get_references` when call/type hierarchy are unavailable. Explicit in the prose, not a separate skill file. |
@@ -339,7 +339,7 @@ The agent-local pipeline (blast-radius → simulate → apply → verify → tes
 
 ### Shipped: deterministic trajectory assertions (skill protocol CI)
 
-All 20 skills now have deterministic trajectory assertions in `examples/mcp-assert/trajectory/`. These run in the `mcp-assert-trajectory` CI job on every push and PR: 20 inline-trace assertions, no server needed, 0ms each, under 60 seconds total. They validate `presence`, `absence`, `order`, and `args_contain` rules for each skill's required tool call sequence. This is the deterministic subset of Layer 2 skill workflow testing — not LLM-driven, but covering the structural protocol requirements that can be verified without a running agent. The LLM-driven pass@k/pass^k regression suite (below) remains planned.
+All 21 skills now have deterministic trajectory assertions in `examples/mcp-assert/trajectory/`. These run in the `mcp-assert-trajectory` CI job on every push and PR: 21 inline-trace assertions, no server needed, 0ms each, under 60 seconds total. They validate `presence`, `absence`, `order`, and `args_contain` rules for each skill's required tool call sequence. This is the deterministic subset of Layer 2 skill workflow testing — not LLM-driven, but covering the structural protocol requirements that can be verified without a running agent. The LLM-driven pass@k/pass^k regression suite (below) remains planned.
 
 ### Why existing eval frameworks don't fit
 

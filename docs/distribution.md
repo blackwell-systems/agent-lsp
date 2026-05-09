@@ -104,6 +104,12 @@ pip install agent-lsp
 ```
 Platform-specific wheels containing the Go binary. Each wheel is tagged with the correct platform (e.g. `macosx_11_0_arm64`, `manylinux2014_x86_64`), so pip resolves the right one automatically. No Go toolchain required. Built and published automatically by the `pypi-publish` CI job on every release tag. View at [pypi.org/project/agent-lsp](https://pypi.org/project/agent-lsp/).
 
+### Go install
+```bash
+go install github.com/blackwell-systems/agent-lsp/cmd/agent-lsp@latest
+```
+Requires a Go toolchain. Builds from source and installs to `$GOPATH/bin`.
+
 ### Smithery
 `smithery.yaml` in the repo root enables auto-indexing on Smithery. Auto-discovered from GitHub.
 
