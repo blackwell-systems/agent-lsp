@@ -269,7 +269,7 @@ metadata:
 # skill body (prompt for agent)
 ```
 
-**Capability metadata:** All 21 skills declare `required-capabilities` and `optional-capabilities` in frontmatter. Maps directly to LSP server capability keys from `get_server_capabilities`. Agents can check before activation whether the current language server supports the skill's requirements. Skills with zero required capabilities (lsp-safe-edit, lsp-simulate, lsp-verify, lsp-test-correlation) work with any language server.
+**Capability metadata:** All 22 skills declare `required-capabilities` and `optional-capabilities` in frontmatter. Maps directly to LSP server capability keys from `get_server_capabilities`. Agents can check before activation whether the current language server supports the skill's requirements. Skills with zero required capabilities (lsp-safe-edit, lsp-simulate, lsp-verify, lsp-test-correlation) work with any language server.
 
 **Runtime skill classification:** `get_server_capabilities` now includes a `skills` array in its response, classifying every skill as `supported` (all required capabilities present), `partial` (required present, some optional missing), or `unsupported` (missing required capabilities). One call at session start tells the agent exactly which skills to use and which to skip.
 
@@ -288,7 +288,7 @@ metadata:
 
 **Provider-agnostic:** Skills conform to the AgentSkills open standard and work with any conforming agent (Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and 30+ others). The `--dest` flag on `install.sh` installs to any agent's skill directory. The installer updates CLAUDE.md, AGENTS.md (Codex), and GEMINI.md instruction files when present.
 
-**MCP prompts:** All 21 skills are also exposed via `prompts/list` and `prompts/get`. Any MCP client discovers them on connection without manual installation. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`. Skill SKILL.md files are embedded in the binary at build time.
+**MCP prompts:** All 22 skills are also exposed via `prompts/list` and `prompts/get`. Any MCP client discovers them on connection without manual installation. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`. Skill SKILL.md files are embedded in the binary at build time.
 
 ---
 
@@ -1215,7 +1215,7 @@ locs, err := client.GetDefinition(ctx, fileURI, lsp.Position{Line: 10, Character
 | `multi-lang-java` | Java | ubuntu-latest | continue-on-error; `-Xmx2G`; 15min timeout; isolated from `multi-lang-core` to avoid OOM |
 | `multi-lang-mongodb` | MongoDB | ubuntu-latest | continue-on-error; mongo:7 service container; mongosh health check |
 | `speculative-test` | session lifecycle (8 languages: Go, TypeScript, Python, Rust, C++, C#, Dart, Java) | ubuntu-latest | `TestSpeculativeSessions` table-driven in `test/speculative_test.go`; 20min timeout; Java 300s extended timeout for JVM startup |
-| `mcp-assert-trajectory` | (skill protocols, all 21 skills) | ubuntu-latest | inline traces, no server needed, 0ms per assertion; total under 60s |
+| `mcp-assert-trajectory` | (skill protocols, all 22 skills) | ubuntu-latest | inline traces, no server needed, 0ms per assertion; total under 60s |
 | `mcp-assert` | Go (tool correctness via gopls) | ubuntu-latest | full MCP stdio transport; 120s per assertion; ~2min total |
 
 **Test files:**
@@ -1246,7 +1246,7 @@ agent-lsp is tested through the MCP protocol layer using [mcp-assert](https://gi
 
 **Two CI jobs run mcp-assert on every push and PR:**
 
-**`mcp-assert-trajectory`** — validates that all 21 skills follow correct tool call sequences. Uses inline traces embedded in YAML files; no live language server needed. Each assertion completes in 0ms. Total job runtime under 60 seconds. Assertion files: `examples/mcp-assert/trajectory/` (21 files, one per skill). Trajectory assertions check `presence` (required tools appear), `absence` (forbidden tools do not appear), `order` (correct sequence), and `args_contain` (specific argument values).
+**`mcp-assert-trajectory`** — validates that all 22 skills follow correct tool call sequences. Uses inline traces embedded in YAML files; no live language server needed. Each assertion completes in 0ms. Total job runtime under 60 seconds. Assertion files: `examples/mcp-assert/trajectory/` (21 files, one per skill). Trajectory assertions check `presence` (required tools appear), `absence` (forbidden tools do not appear), `order` (correct sequence), and `args_contain` (specific argument values).
 
 **`mcp-assert`** — tests tool correctness through the full MCP stdio transport against real gopls. Assertion files: `examples/mcp-assert/go/*.yaml`. 120s per-assertion timeout; total runtime ~2 minutes.
 

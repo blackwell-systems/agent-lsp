@@ -1,6 +1,6 @@
 # agent-lsp
 
-**The most complete MCP server for language intelligence.** 53 tools, 30 CI-verified languages, 21 agent workflows. Single Go binary.
+**The most complete MCP server for language intelligence.** 53 tools, 30 CI-verified languages, 22 agent workflows. Single Go binary.
 
 ---
 

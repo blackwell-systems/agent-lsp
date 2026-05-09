@@ -124,15 +124,15 @@ The gap between what clangd provides and what the broader toolchain offers is la
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **`agent-lsp update`** | Planned | Self-update to the latest release; fetches from GitHub Releases and replaces the binary in-place |
+| **`agent-lsp update`** | **Shipped** | Self-update to the latest release; fetches from GitHub Releases and replaces the binary in-place |
 | **Config file format** | Planned | `~/.agent-lsp.json` or `agent-lsp.json` project file for complex setups with per-server options |
 | **Continue.dev config support** | Planned | `agent-lsp init` currently skips Continue.dev; it uses a different config format than `mcpServers` |
-| **Skills as MCP prompts** | **Shipped** | Expose all 21 skills via `prompts/list` and `prompts/get` so any MCP client (Cursor, Windsurf, etc.) can discover and invoke them, not just Claude Code. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`. Skills continue to work as Claude Code slash commands in parallel. |
+| **Skills as MCP prompts** | **Shipped** | Expose all 22 skills via `prompts/list` and `prompts/get` so any MCP client (Cursor, Windsurf, etc.) can discover and invoke them, not just Claude Code. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`. Skills continue to work as Claude Code slash commands in parallel. |
 | **Proactive server notifications** | Planned | Push server-initiated MCP notifications to inform the agent about state changes without requiring a tool call. Four notification channels: (1) diagnostic changes: notify when gopls/pyright publishes new errors or resolves existing ones, so the agent knows "the file I just edited now has 3 errors" immediately. (2) workspace ready: notify when language server indexing completes (all `$/progress` tokens done), replacing the current poll/block pattern. (3) process health: notify immediately if the language server crashes or restarts, instead of waiting for the next tool call to fail. (4) stale references: notify when a watched file changes on disk, signaling that cached reference results may be outdated. Uses existing MCP notification primitives (`notifications/resources/updated`, `notifications/message`). Value depends on client support for reacting to server-initiated messages. |
 
 ## Skills
 
-21 skills shipped. See [skills.md](skills.md) for the full catalog.
+22 skills shipped. See [skills.md](skills.md) for the full catalog.
 
 ### Creation skills
 
@@ -203,9 +203,9 @@ Skills that target the "Strong" tier should avoid hard dependencies on `callHier
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **`required-capabilities` metadata** | **Shipped** | Space-separated list of LSP server capability keys in SKILL.md frontmatter `metadata` field. All 21 skills declare required and optional capabilities. |
+| **`required-capabilities` metadata** | **Shipped** | Space-separated list of LSP server capability keys in SKILL.md frontmatter `metadata` field. All 22 skills declare required and optional capabilities. |
 | **`optional-capabilities` metadata** | **Shipped** | Same format. Steps using these capabilities skip cleanly when unavailable. No warning on activation. |
-| **Capability check tool** | **Shipped** | Integrated into `get_server_capabilities`: `skills` array classifies all 21 skills as supported/partial/unsupported based on the current server's capabilities. |
+| **Capability check tool** | **Shipped** | Integrated into `get_server_capabilities`: `skills` array classifies all 22 skills as supported/partial/unsupported based on the current server's capabilities. |
 | **Degraded-mode skill variants** | Planned | For high-value skills like `/lsp-impact`, define a degraded path in the skill body that uses only `get_references` when call/type hierarchy are unavailable. Explicit in the prose, not a separate skill file. |
 
 ### Fits the AgentSkills spec
@@ -339,7 +339,7 @@ The agent-local pipeline (blast-radius → simulate → apply → verify → tes
 
 ### Shipped: deterministic trajectory assertions (skill protocol CI)
 
-All 21 skills now have deterministic trajectory assertions in `examples/mcp-assert/trajectory/`. These run in the `mcp-assert-trajectory` CI job on every push and PR: 21 inline-trace assertions, no server needed, 0ms each, under 60 seconds total. They validate `presence`, `absence`, `order`, and `args_contain` rules for each skill's required tool call sequence. This is the deterministic subset of Layer 2 skill workflow testing — not LLM-driven, but covering the structural protocol requirements that can be verified without a running agent. The LLM-driven pass@k/pass^k regression suite (below) remains planned.
+All 22 skills now have deterministic trajectory assertions in `examples/mcp-assert/trajectory/`. These run in the `mcp-assert-trajectory` CI job on every push and PR: 21 inline-trace assertions, no server needed, 0ms each, under 60 seconds total. They validate `presence`, `absence`, `order`, and `args_contain` rules for each skill's required tool call sequence. This is the deterministic subset of Layer 2 skill workflow testing — not LLM-driven, but covering the structural protocol requirements that can be verified without a running agent. The LLM-driven pass@k/pass^k regression suite (below) remains planned.
 
 ### Why existing eval frameworks don't fit
 
@@ -689,12 +689,12 @@ See [docs/phase-enforcement.md](phase-enforcement.md) for the full design docume
 |---------|--------|-------------|
 | **Observability** | Planned | Metrics (requests/sec, latency per tool, error rate) for production deployments, valuable for teams running agent-lsp as shared infrastructure |
 | **Persistent knowledge graph** | Planned | Language-agnostic infrastructure layer below the LSP clients. Caches LSP-derived data (symbol references, call hierarchies, type relationships, diagnostic baselines, clone fingerprints) in a persistent SQLite store. Schema is language-agnostic: a Go function calling a Python function via cross-repo lives in the same graph. This layer is the foundation for `detect_changes`, `/lsp-architecture`, near-clone detection, and the team-shared index artifact. Implementation: pure Go SQLite (`modernc.org/sqlite`) initially; CGo acceleration (`mattn/go-sqlite3` + C libraries) if clone detection or semantic search require bulk computation at scale. The server/concurrency/protocol layer stays pure Go; only compute-intensive graph operations would use C under the hood. **Lifecycle:** Storage at `~/.agent-lsp/cache/<workspace-hash>/graph.db`, created on first `start_lsp`. Population is opportunistic: every LSP response (`get_references`, `get_change_impact`, `get_document_symbols`) is cached as a side effect, no separate index step. Invalidation via file watcher: on file change, evict cached entries for that file plus transitive dependents (if known from cached call graph); next query re-queries the LSP server and re-caches. Staleness guard: on session start, check `max(cached_at)`; if older than configurable threshold, invalidate all and repopulate organically. Corruption handling: SQLite WAL mode for crash safety; on open, `PRAGMA integrity_check`; if corrupted, delete and start fresh (cache is disposable). Cleanup: `agent-lsp cleanup` removes caches for workspaces that no longer exist on disk; daemon auto-scans on startup. Size management: configurable max cache size (default 500MB), LRU eviction by workspace. The cache is not mandatory: agent-lsp works without it (queries LSP directly, like today). Missing, corrupted, or stale cache falls back to existing behavior transparently. |
-| **`detect_changes` tool** | Planned | Single-call "what did I break?" workflow. Runs `git diff` to identify changed files, feeds them to `get_change_impact`, returns affected symbols with risk classification. Eliminates the manual step of identifying which files to analyze. Inspired by codebase-memory-mcp's `detect_changes`. |
-| **`/lsp-architecture` skill** | Planned | Project-level architecture overview in one call. Runs `get_document_symbols` across all packages, synthesizes package dependency graph, entry points, layer structure, and hotspots (files with highest fan-out/fan-in). Currently `/lsp-understand` only does per-file analysis. |
+| **`detect_changes` tool** | **Shipped** | Single-call "what did I break?" workflow. Runs `git diff` to identify changed files, feeds them to `get_change_impact`, returns affected symbols with risk classification. Eliminates the manual step of identifying which files to analyze. Inspired by codebase-memory-mcp's `detect_changes`. |
+| **`/lsp-architecture` skill** | **Shipped** | Project-level architecture overview in one call. Runs `get_document_symbols` across all packages, synthesizes package dependency graph, entry points, layer structure, and hotspots (files with highest fan-out/fan-in). Currently `/lsp-understand` only does per-file analysis. |
 | **Near-clone detection in `/lsp-inspect`** | Planned | New check type `duplicate_semantics` that identifies functions with high structural similarity. Uses AST-level comparison (shared statement patterns, parameter shapes) rather than text similarity. Surfaces "these two functions are 90% identical, consider extracting a shared helper." |
-| **Team-shared index artifact** | Planned | Persist a warm-index snapshot (reference counts, symbol graph, diagnostic baseline) as a compressed file that can be committed to the repo. New sessions load cached state instead of re-indexing from scratch. Eliminates cold-start cost for teams. |
-| **`agent-lsp update`** | Planned | Self-update to the latest release; fetches from GitHub Releases and replaces the binary in-place. |
-| **`agent-lsp uninstall`** | Planned | Clean removal of all agent configs, skill installations, instruction file entries, and hooks across all supported agents. |
+| **Team-shared index artifact** | **Shipped** | Persist a warm-index snapshot (reference counts, symbol graph, diagnostic baseline) as a compressed file that can be committed to the repo. New sessions load cached state instead of re-indexing from scratch. Eliminates cold-start cost for teams. |
+| **`agent-lsp update`** | **Shipped** | Self-update to the latest release; fetches from GitHub Releases and replaces the binary in-place. |
+| **`agent-lsp uninstall`** | **Shipped** | Clean removal of all agent configs, skill installations, instruction file entries, and hooks across all supported agents. |
 | **Runtime trace correlation** | Planned | Ingest test execution traces and correlate with static call hierarchy from LSP. Identify "called at runtime but zero test coverage" and "test covers code paths that static analysis says are dead." Bridges the gap between static reference analysis and actual execution paths. |
 | **Louvain community detection** | Planned | Cluster symbols by call-edge density to discover functional modules. Enhances `/lsp-architecture` with automatically detected boundaries and module groupings, without requiring explicit package structure. |
 | **Cross-service HTTP route linking** | Planned | Match `fetch("/api/users")` call sites to `@app.route("/api/users")` handler definitions across files and repos. Extends `get_cross_repo_references` beyond symbol-level to HTTP route-level cross-service analysis. |

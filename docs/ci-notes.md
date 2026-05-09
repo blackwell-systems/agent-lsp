@@ -45,7 +45,7 @@ Validates that agent skills follow correct tool call sequences using inline trac
 | `order` | Tools appear in the correct sequence |
 | `args_contain` | A specific tool call includes expected argument values |
 
-**Skills covered:** All 21 skills have trajectory assertions.
+**Skills covered:** All 22 skills have trajectory assertions.
 
 | Skill | Assertion file |
 |-------|---------------|

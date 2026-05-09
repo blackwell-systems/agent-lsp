@@ -1,6 +1,6 @@
 # agent-lsp Skill Coverage Audit
 
-**Note:** This audit was conducted when 14 skills existed. The project now has 21 skills. The 7 additional skills (lsp-explore, lsp-extract-function, lsp-fix-all, lsp-generate, lsp-inspect, lsp-refactor, lsp-understand) are not covered here.
+**Note:** This audit was conducted when 14 skills existed. The project now has 22 skills. The 7 additional skills (lsp-explore, lsp-extract-function, lsp-fix-all, lsp-generate, lsp-inspect, lsp-refactor, lsp-understand) are not covered here.
 
 **Date:** 2026-04-09 (updated 2026-04-09 post-tools-sprint)  
 **Scope:** All 50 agent-lsp tools vs. 14 skills (10 at audit time, 4 added across sprints)  
