@@ -7,6 +7,16 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **`detect_changes` MCP tool.** Single-call "what did I break?" workflow. Runs `git diff --name-only` (scopes: unstaged, staged, committed), filters to recognized language files, feeds them to `get_change_impact`, and enriches each symbol with risk classification: "high" (callers across multiple packages), "medium" (same-package callers only), "low" (zero non-test callers).
+
+- **`agent-lsp update` subcommand.** Self-update to the latest GitHub Release. Fetches the release API, compares versions, downloads the correct binary for the current OS/arch, and atomically replaces the running binary. Flags: `--check` (compare without downloading), `--force` (update even if already current).
+
+- **`/lsp-architecture` skill (22nd skill).** Project-level architecture overview in one call. Composes `get_document_symbols`, `get_workspace_symbols`, and `get_change_impact` to produce: language distribution, package map (capped at 30), entry points, hotspots (top 10 files by reference count), and dependency flow. SKILL.md only, no Go code.
+
+- **Cache artifact export/import.** `export_cache` compresses the SQLite reference cache with `VACUUM INTO` + gzip. `import_cache` decompresses and validates with `PRAGMA integrity_check`. On `start_lsp`, if the local cache is empty and `.agent-lsp/cache.db.gz` exists in the workspace root, it auto-imports the artifact. Enables team-shared cache: commit the artifact, teammates skip the cold start.
+
+- **`agent-lsp uninstall` subcommand.** Clean removal of MCP server entries (from `.mcp.json`, `.cursor/mcp.json`, etc.), skill installations (`~/.claude/skills/lsp-*`), CLAUDE.md managed sections (between sentinel comments), and cache directories. Supports `--dry-run`. Preserves other MCP server configurations.
+
 - **Persistent reference cache (knowledge graph Layer 3).** `get_change_impact` results are now cached in a per-workspace SQLite database (`~/.agent-lsp/cache/<hash>/refs.db`). First call queries the language server and stores results keyed by file content hash. Subsequent calls for the same symbols return instantly from cache. File watcher automatically invalidates entries when source files change on disk. Cache is opportunistic: agent-lsp works without it, and missing or corrupted databases fall back to direct LSP queries transparently. Pure Go SQLite via `modernc.org/sqlite`, no CGo.
 
 - **Fix: progressMu deadlock in WaitForWorkspaceReadyTimeout.** The function locked `progressMu` at entry but did not unlock on the timeout or normal exit paths. When `get_change_impact` opened multiple files, gopls emitted `$/progress` notifications that required `progressMu` in `readLoop`. The held lock deadlocked the entire read pipeline: no LSP responses could be dispatched, blocking all pending requests indefinitely. Root cause of every multi-file `get_change_impact` hang. Fixed with `defer progressMu.Unlock()`.
