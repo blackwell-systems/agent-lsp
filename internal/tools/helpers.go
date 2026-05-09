@@ -117,6 +117,14 @@ func appendHint(result types.ToolResult, hint string) types.ToolResult {
 	if hint == "" || result.IsError || len(result.Content) == 0 || result.Content[0].Text == "" {
 		return result
 	}
-	result.Content[0].Text = result.Content[0].Text + "\n\n---\nNext step: " + hint
+	text := result.Content[0].Text
+	// If the content is JSON, inject the hint as a field instead of appending
+	// as text. This preserves JSON parseability for tools like simulate_edit_atomic
+	// whose responses are consumed programmatically by tests and agents.
+	if len(text) > 0 && text[0] == '{' && text[len(text)-1] == '}' {
+		result.Content[0].Text = text[:len(text)-1] + `,"_hint":"` + hint + `"}`
+		return result
+	}
+	result.Content[0].Text = text + "\n\n---\nNext step: " + hint
 	return result
 }
