@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/blackwell-systems/agent-lsp/internal/config"
@@ -278,7 +277,7 @@ func spawnDaemonProcess(rootDir, languageID string, command []string) error {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	// Detach: don't let the subprocess die with us.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	setSysProcAttr(cmd)
 
 	return cmd.Start()
 }
