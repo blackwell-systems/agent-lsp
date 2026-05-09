@@ -397,7 +397,11 @@ Security headers (`X-Content-Type-Options: nosniff`, `Cache-Control: no-store`) 
 
 ### Graceful shutdown
 
-When the context is cancelled (signal received), the HTTP server calls `Shutdown` with a 5-second deadline, draining in-flight requests before exiting.
+`resolver.Shutdown()` is called on every exit path: signal handler, panic recovery, and normal return (stdin EOF). This prevents orphaned language server processes when the MCP transport closes without triggering a signal.
+
+Each `LSPClient.Shutdown()` sends `shutdown`/`exit` via stdin, then waits up to 3 seconds for the process to exit. If it doesn't exit, the process is force-killed via `Process.Kill()`. If the `shutdown` request itself fails (broken pipe, server already dead), it goes straight to `killProcess()`.
+
+For HTTP mode, the HTTP server calls `Shutdown` with a 5-second deadline, draining in-flight requests before exiting.
 
 ---
 
@@ -593,6 +597,7 @@ When `readLoop` dispatches a `$/progress end` notification, it removes the token
 | Session manager map | `sync.RWMutex` | Reads (evaluate) vastly outnumber writes (create/destroy) |
 | Audit log | Buffered channel | Non-blocking producer guarantee; no mutex contention on hot path |
 | File watcher state | `sync.Mutex` | Guards `watcherStop` channel to prevent data race on reinit |
+| stdin writes | `writeMu sync.Mutex` | Separate from `c.mu` to prevent deadlock when gopls stdin pipe fills under heavy concurrent writes. `c.mu` guards state (setting stdin to nil on shutdown); `writeMu` guards the actual `Write()` call that can block on OS pipe backpressure |
 
 ### Process Orchestration on Crash
 

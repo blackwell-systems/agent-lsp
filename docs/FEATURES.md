@@ -287,6 +287,22 @@ metadata:
 
 **Provider-agnostic:** Skills conform to the AgentSkills open standard and work with any conforming agent (Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and 30+ others). The `--dest` flag on `install.sh` installs to any agent's skill directory. The installer updates CLAUDE.md, AGENTS.md (Codex), and GEMINI.md instruction files when present.
 
+**MCP prompts:** All 21 skills are also exposed via `prompts/list` and `prompts/get`. Any MCP client discovers them on connection without manual installation. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`. Skill SKILL.md files are embedded in the binary at build time.
+
+---
+
+## Reliability
+
+**Process lifecycle cleanup:** `Shutdown()` sends `shutdown`/`exit` to the language server, waits up to 3 seconds, then force-kills. `resolver.Shutdown()` runs on every exit path (signal, panic, stdin EOF). `StartForLanguage` shuts down the previous client before starting a new one. Prevents orphaned gopls/pyright processes across sessions.
+
+**Write mutex separation:** `writeRaw` uses a dedicated `writeMu` instead of the shared `c.mu`. Prevents stdin pipe backpressure from deadlocking the client when concurrent reference queries fill the OS pipe buffer (64KB on macOS).
+
+**Per-symbol timeout:** `get_change_impact` caps each reference query at 15 seconds. Prevents one slow symbol from blocking the entire batch. Timed-out symbols are skipped with a warning.
+
+**Diagnostic logging:** Every tool call logs latency via the central `addToolWithPhaseCheck` wrapper. Calls exceeding 5 seconds log at WARNING level. Process start/exit events log PID and uptime.
+
+**Daemon broker panic recovery:** All goroutines in `RunBroker` have `defer recover()`. Forwarded requests use the broker's lifecycle context (cancellable on shutdown).
+
 ### Skill Workflow Details
 
 **`/lsp-rename` phase structure:**
