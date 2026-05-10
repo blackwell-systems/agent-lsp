@@ -347,6 +347,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	registerWorkspaceTools(deps)
 	registerNavigationTools(deps)
+	registerSymbolEditTools(deps)
 	registerAnalysisTools(deps)
 	registerSessionTools(deps)
 	registerPhaseTools(deps)
