@@ -55,6 +55,22 @@ pyright-langserver (persistent, fully indexed)
 
 The daemon auto-spawns on first `start_lsp` for Python/TypeScript, indexes the workspace in the background, and serves queries to all subsequent sessions instantly. Auto-exits after 30 minutes of inactivity.
 
+**For language servers already running externally (any server with TCP listen mode),** passive mode connects over TCP without spawning or managing a subprocess:
+
+```
+AI agent
+    │
+    │  JSON-RPC over stdio (or HTTP+SSE)
+    ▼
+agent-lsp (ephemeral)
+    │
+    │  JSON-RPC over TCP (e.g. localhost:9999)
+    ▼
+gopls -listen=:9999  (externally managed, already running)
+```
+
+Passive mode is activated by passing `connect: "localhost:9999"` to `start_lsp`. agent-lsp dials the TCP address, performs a full LSP Initialize handshake, and uses the same readLoop, writeRaw, and tool handlers as subprocess and daemon clients. On Shutdown, the TCP connection is closed without killing the server process (since agent-lsp did not spawn it). Supported by gopls (`gopls -listen=:9999`), clangd (`clangd --port=9999`), and other servers with TCP listen mode.
+
 **What agent-lsp does:**
 
 1. Speaks MCP to the AI agent, exposing 56 tools the agent can call.
@@ -149,7 +165,8 @@ internal/httpauth/
 internal/lsp/
   client.go        ← LSPClient: subprocess lifecycle, JSON-RPC framing, request/response
                      correlation, server-initiated requests, file watcher;
-                     NewDaemonClient: socket-connected client for daemon mode
+                     NewDaemonClient: socket-connected client for daemon mode;
+                     NewPassiveClient: TCP-connected client for passive mode (externally-managed servers)
   manager.go       ← ServerManager: multi-server registry, ClientForFile routing by extension;
                      startOrConnectDaemon: transparent daemon lifecycle for Python/TypeScript
   resolver.go      ← ClientResolver interface
@@ -363,6 +380,24 @@ The broker process is detached from the agent-lsp process (`Setsid: true` on the
 - State files live at `~/.cache/agent-lsp/daemons/<hash>/`: `daemon.json` (metadata), `daemon.sock` (Unix socket), `daemon.pid` (process ID).
 - Go, Rust, C, and other fast-indexing servers bypass daemon mode entirely. `NeedsDaemon()` returns false for these languages, so the direct subprocess model is used with zero overhead.
 
+**Passive mode (externally-managed servers):**
+
+When `start_lsp` receives a `connect` parameter (e.g. `connect: "localhost:9999"`), agent-lsp enters passive mode. Instead of spawning a subprocess or connecting to a daemon broker, it dials the specified TCP address directly using `NewPassiveClient(addr)`. The client:
+
+1. **Dials TCP** to the provided address (e.g. `localhost:9999`).
+2. **Performs a real Initialize handshake** with the remote server (unlike daemon mode, which skips initialization because the broker already did it).
+3. **Sets `isPassive: true`** on the LSPClient, which changes shutdown behavior.
+4. **Uses the same `readLoop`, `writeRaw`, and tool handlers** as subprocess and daemon clients. From the tool layer's perspective, a passive client is indistinguishable from a subprocess client.
+5. **On Shutdown, closes the TCP connection** without sending a kill signal. The language server process continues running independently since agent-lsp did not spawn it.
+
+Passive mode is useful when:
+- A language server is shared across multiple editors or tools simultaneously.
+- The server runs in a container or on a remote host.
+- The server requires custom startup flags or environment that agent-lsp cannot provide.
+- CI/CD environments pre-start language servers for faster feedback loops.
+
+Supported servers include gopls (`gopls -listen=:9999`), clangd (`clangd --port=9999`), and any server that accepts TCP connections with Content-Length framed JSON-RPC.
+
 **Communication direction (direct mode, e.g. Go/Rust):**
 
 ```
@@ -377,7 +412,14 @@ AI agent ──MCP JSON-RPC──► agent-lsp ──JSON-RPC──► daemon-br
                             (Unix socket)              (stdin/stdout pipes)
 ```
 
-In direct mode, the Go process communicates with language servers through `os/exec` pipe pairs. In daemon mode, agent-lsp connects to the broker via a Unix domain socket; the broker owns the pipe pair to the language server.
+**Communication direction (passive mode, e.g. externally-managed gopls/clangd):**
+
+```
+AI agent ──MCP JSON-RPC──► agent-lsp ──LSP JSON-RPC──► language server (TCP :9999)
+AI agent ◄──MCP JSON-RPC── agent-lsp ◄──LSP JSON-RPC── language server (TCP :9999)
+```
+
+In direct mode, the Go process communicates with language servers through `os/exec` pipe pairs. In daemon mode, agent-lsp connects to the broker via a Unix domain socket; the broker owns the pipe pair to the language server. In passive mode, agent-lsp connects directly to an already-running language server via TCP; no subprocess management or broker is involved.
 
 ---
 
@@ -1355,6 +1397,33 @@ tool calls now available
 ```
 
 `initialized` is set to `true` before `initialized` notification is sent (not after) to prevent a race where the server's first request arrives in the window between sending `initialized` and setting the flag.
+
+### Passive mode lifecycle
+
+When `start_lsp` receives a `connect` parameter, the lifecycle differs:
+
+```
+start_lsp (tool call with connect: "localhost:9999")
+    ↓
+NewPassiveClient("localhost:9999")
+    ↓
+net.Dial("tcp", "localhost:9999")
+    ↓  establishes TCP connection; wraps conn as reader/writer
+    ↓  starts readLoop goroutine (same as subprocess mode)
+    ↓
+sendRequest("initialize", {capabilities, rootUri, workspaceFolders})
+    ↓  full handshake (unlike daemon mode which skips this)
+receive initialize response
+    ↓  captures serverCapabilities
+client.initialized = true
+sendNotification("initialized", {})
+    ↓
+startWatcher(rootDir)
+    ↓
+tool calls now available
+```
+
+The key difference from subprocess mode: no `exec.Command`, no stdin/stdout pipes, no `drainStderr` goroutine, and no exit-monitor goroutine (the server is externally managed). On `Shutdown`, the TCP connection is closed via `conn.Close()` without sending a process kill signal.
 
 ### Request/response correlation
 
