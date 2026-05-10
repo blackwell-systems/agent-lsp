@@ -9,7 +9,21 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 - **`/lsp-onboard` skill (23rd skill).** First-session project onboarding. Explores the project structure via LSP tools: detects languages and build system, identifies entry points, maps package structure, finds hotspots (most-referenced files), and checks for pre-existing diagnostics. Produces a structured project profile for the agent's reference throughout the session.
 
+- **`get_editing_context` composite tool (tool #61).** Single call returns file symbols with signatures, callers partitioned by test/non-test, callees, and imports. Supports `if_none_match` for conditional responses. Replaces the 3-5 tool sequence agents previously used to gather pre-edit context.
+
+- **Token savings metadata.** `list_symbols`, `get_symbol_source`, and `get_editing_context` now include `_meta.token_savings` in responses showing tokens returned vs full file size. Makes the efficiency story visible on every call.
+
+- **ETag/conditional responses.** File-scoped tools accept `if_none_match` parameter. When the file's content hash matches, returns `not_modified` instead of recomputing.
+
 ### Fixed
+
+- **`get_change_impact` now includes exported methods.** Previously only top-level functions and types were analyzed; methods on types (e.g., `(*Hub).Send`) were skipped because `collectExportedSymbols` didn't recurse into children. Now recurses into type children while filtering out struct fields. Found by GPT-5.5 agent evaluation.
+
+- **`safe_delete_symbol` column resolution.** Same `SelectionRange.Start` bug as the v0.8.1 symbol position fix: gopls returns positions pointing to the `func` keyword, not the identifier name. Unexported symbols like `appendHint` returned "no identifier found" when checking references. Fixed by resolving the actual identifier column from the source line. Found by GPT-5.5 agent evaluation.
+
+- **Token savings wiring.** `AppendTokenMeta` was implemented but not wired into `list_symbols` or `get_symbol_source` handlers (Agent D's merge didn't land). Manually wired.
+
+- **Flaky `TestSubscribeHealth_Stop`.** Timing race on CI: health poller could fire one message before the stop channel was read. Fixed by comparing message count before/after stop instead of asserting absolute zero.
 
 - **`get_change_impact` discoverability.** Promoted to IMPORTANT in MCP Instructions with "replaces manual loops over find_references." Agent evaluations showed agents manually looping over exports instead of calling it.
 - **`find_callers` type confusion.** Description now clarifies it works on functions/methods only; for types, use `find_references`. Both agent evaluations showed confusion when call hierarchy returned nothing for types.
