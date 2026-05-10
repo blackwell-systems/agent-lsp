@@ -226,7 +226,7 @@ Probes each configured language server and reports capabilities. Fix any failure
 agent-lsp init
 ```
 
-Detects language servers on your PATH, asks which AI tool you use, and writes the correct MCP config. For CI or scripted use: `agent-lsp init --non-interactive`.
+Detects language servers on your PATH, asks which AI tool you use, writes the correct MCP config, and installs skill awareness rules for your AI provider (CLAUDE.md for Claude Code, `.cursor/rules/` for Cursor, `.clinerules` for Cline, `.windsurfrules` for Windsurf, `GEMINI.md` for Gemini CLI). For CI or scripted use: `agent-lsp init --non-interactive`.
 
 The generated config looks like:
 
