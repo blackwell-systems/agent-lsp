@@ -451,6 +451,8 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		}, nil
 	})
 
+	registerInspectResources(server, cs)
+
 	// Register URI templates for dynamic resource discovery.
 	for _, tmpl := range resources.ResourceTemplates() {
 		t := tmpl // capture loop variable
