@@ -2,10 +2,13 @@ package tools
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 func TestIsTestFile(t *testing.T) {
@@ -145,5 +148,36 @@ func TestHandleGetChangeImpact_NilClient(t *testing.T) {
 	want := "LSP client not initialized"
 	if !strings.Contains(got, want) {
 		t.Errorf("error text %q does not contain %q", got, want)
+	}
+}
+
+func TestCollectAllSymbols(t *testing.T) {
+	// Create temp file for source line resolution
+	dir := t.TempDir()
+	src := filepath.Join(dir, "test.go")
+	content := "package test\n\nfunc ExportedFunc() {}\n\nfunc unexportedHelper() {}\n\ntype myField struct{}\n"
+	os.WriteFile(src, []byte(content), 0644)
+
+	syms := []types.DocumentSymbol{
+		{Name: "ExportedFunc", Kind: 12, Range: types.Range{Start: types.Position{Line: 2}, End: types.Position{Line: 2}}, SelectionRange: types.Range{Start: types.Position{Line: 2, Character: 5}}},
+		{Name: "unexportedHelper", Kind: 12, Range: types.Range{Start: types.Position{Line: 4}, End: types.Position{Line: 4}}, SelectionRange: types.Range{Start: types.Position{Line: 4, Character: 5}}},
+		{Name: "myField", Kind: 8, Range: types.Range{Start: types.Position{Line: 6}, End: types.Position{Line: 6}}, SelectionRange: types.Range{Start: types.Position{Line: 6, Character: 5}}},
+	}
+
+	// collectAllSymbols should include both exported and unexported, but not fields
+	var all []exportedSymbol
+	collectAllSymbols(syms, src, "go", &all, false)
+	if len(all) != 2 {
+		t.Fatalf("expected 2 symbols, got %d", len(all))
+	}
+
+	// collectExportedSymbols should only include exported
+	var exported []exportedSymbol
+	collectExportedSymbols(syms, src, "go", &exported, false)
+	if len(exported) != 1 {
+		t.Fatalf("expected 1 exported symbol, got %d", len(exported))
+	}
+	if exported[0].Name != "ExportedFunc" {
+		t.Errorf("expected ExportedFunc, got %s", exported[0].Name)
 	}
 }

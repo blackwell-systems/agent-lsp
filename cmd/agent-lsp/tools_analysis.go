@@ -107,6 +107,7 @@ type GetSymbolDocumentationArgs struct {
 type GetChangeImpactArgs struct {
 	ChangedFiles      []string `json:"changed_files" jsonschema:"List of absolute file paths to analyze for exported symbol impact"`
 	IncludeTransitive bool     `json:"include_transitive,omitempty" jsonschema:"If true, include second-order callers (callers of callers) in the results"`
+	Scope             string   `json:"scope,omitempty" jsonschema:"Symbol scope: 'exported' (default) or 'all' (includes unexported symbols for dead code detection)"`
 }
 
 type DetectChangesArgs struct {
@@ -280,7 +281,7 @@ func registerAnalysisTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "get_change_impact",
-		Description: "Enumerate all exported symbols in the specified files, resolve their references across the workspace, and partition callers into test vs non-test. Returns affected_symbols (name, file, line), test_callers (with enclosing test function names), and non_test_callers. Use before editing a file to understand blast radius. Set include_transitive=true to surface second-order callers (callers of callers).",
+		Description: "Enumerate all exported symbols in the specified files, resolve their references across the workspace, and partition callers into test vs non-test. Returns affected_symbols (name, file, line), test_callers (with enclosing test function names), and non_test_callers. Use before editing a file to understand blast radius. Set include_transitive=true to surface second-order callers (callers of callers). Set scope='all' to include unexported symbols for comprehensive dead code detection.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Get Change Impact",
 			ReadOnlyHint:    true,
