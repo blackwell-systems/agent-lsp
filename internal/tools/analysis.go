@@ -69,12 +69,29 @@ func HandleGetDiagnostics(ctx context.Context, client *lsp.LSPClient, args map[s
 		}
 	}
 
+	// group_by=symbol: group diagnostics under their owning symbol.
+	groupBy, _ := args["group_by"].(string)
+	if groupBy == "symbol" && filePath != "" {
+		result, gErr := groupDiagnosticsBySymbol(ctx, client, filePath, diagMap)
+		if gErr == nil {
+			data, err := json.Marshal(result)
+			if err != nil {
+				return types.ErrorResult(fmt.Sprintf("marshaling diagnostics: %s", err)), nil
+			}
+			hint := "No errors. Safe to proceed."
+			if len(result.Symbols) > 0 || len(result.Ungrouped) > 0 {
+				hint = "Use suggest_fixes at each error location for quick fixes."
+			}
+			return appendHint(types.TextResult(string(data)), hint), nil
+		}
+		// Fall through to ungrouped if symbol grouping fails.
+	}
+
 	data, err := json.Marshal(diagMap)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling diagnostics: %s", err)), nil
 	}
 
-	// Contextual hint: suggest code actions if errors found, otherwise confirm clean.
 	hasErrors := false
 	for _, diags := range diagMap {
 		if len(diags) > 0 {
@@ -87,6 +104,101 @@ func HandleGetDiagnostics(ctx context.Context, client *lsp.LSPClient, args map[s
 		hint = "Use suggest_fixes at each error location for quick fixes."
 	}
 	return appendHint(types.TextResult(string(data)), hint), nil
+}
+
+// symbolDiagGroup groups diagnostics under a named symbol.
+type symbolDiagGroup struct {
+	Name        string               `json:"name"`
+	Kind        string               `json:"kind"`
+	Line        int                  `json:"line"`
+	Diagnostics []types.LSPDiagnostic `json:"diagnostics"`
+}
+
+// groupedDiagnostics is the response format for group_by=symbol.
+type groupedDiagnostics struct {
+	Symbols   []symbolDiagGroup     `json:"symbols"`
+	Ungrouped []types.LSPDiagnostic `json:"ungrouped"`
+}
+
+// groupDiagnosticsBySymbol assigns each diagnostic to its owning symbol
+// based on range containment. Diagnostics outside any symbol range go
+// into the ungrouped list.
+func groupDiagnosticsBySymbol(ctx context.Context, client *lsp.LSPClient, filePath string, diagMap map[string][]types.LSPDiagnostic) (*groupedDiagnostics, error) {
+	fileURI := CreateFileURI(filePath)
+	symbols, err := client.GetDocumentSymbols(ctx, fileURI)
+	if err != nil {
+		return nil, err
+	}
+
+	diags := diagMap[fileURI]
+	if len(diags) == 0 {
+		return &groupedDiagnostics{}, nil
+	}
+
+	// Build a flat list of symbols with their ranges for containment checks.
+	type flatSymbol struct {
+		name      string
+		kind      string
+		startLine int
+		endLine   int
+	}
+	var flat []flatSymbol
+	var flatten func(syms []types.DocumentSymbol, prefix string)
+	flatten = func(syms []types.DocumentSymbol, prefix string) {
+		for _, s := range syms {
+			name := s.Name
+			if prefix != "" {
+				name = prefix + "." + name
+			}
+			flat = append(flat, flatSymbol{
+				name:      name,
+				kind:      symbolKindName(int(s.Kind)),
+				startLine: s.Range.Start.Line,
+				endLine:   s.Range.End.Line,
+			})
+			if len(s.Children) > 0 {
+				flatten(s.Children, name)
+			}
+		}
+	}
+	flatten(symbols, "")
+
+	// Assign each diagnostic to the innermost containing symbol.
+	grouped := make(map[string]*symbolDiagGroup)
+	var ungrouped []types.LSPDiagnostic
+
+	for _, d := range diags {
+		line := d.Range.Start.Line
+		var bestMatch *flatSymbol
+		for i := range flat {
+			s := &flat[i]
+			if line >= s.startLine && line <= s.endLine {
+				if bestMatch == nil || (s.endLine-s.startLine) < (bestMatch.endLine-bestMatch.startLine) {
+					bestMatch = s
+				}
+			}
+		}
+		if bestMatch != nil {
+			g, ok := grouped[bestMatch.name]
+			if !ok {
+				g = &symbolDiagGroup{
+					Name: bestMatch.name,
+					Kind: bestMatch.kind,
+					Line: bestMatch.startLine + 1,
+				}
+				grouped[bestMatch.name] = g
+			}
+			g.Diagnostics = append(g.Diagnostics, d)
+		} else {
+			ungrouped = append(ungrouped, d)
+		}
+	}
+
+	result := &groupedDiagnostics{Ungrouped: ungrouped}
+	for _, g := range grouped {
+		result.Symbols = append(result.Symbols, *g)
+	}
+	return result, nil
 }
 
 // HandleGetInfoOnLocation retrieves hover information at a source location.

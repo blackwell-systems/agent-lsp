@@ -55,6 +55,7 @@ type CloseDocumentArgs struct {
 
 type GetDiagnosticsArgs struct {
 	FilePath string `json:"file_path,omitempty" jsonschema:"File path to get diagnostics for. If omitted, returns diagnostics for all open files"`
+	GroupBy  string `json:"group_by,omitempty" jsonschema:"Set to 'symbol' to group diagnostics by their owning symbol. Returns symbols with their diagnostics instead of a flat list. Helps understand which function or type is broken."`
 }
 
 type ApplyEditArgs struct {
