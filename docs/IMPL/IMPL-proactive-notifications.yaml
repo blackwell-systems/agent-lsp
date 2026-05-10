@@ -86,6 +86,18 @@ file_ownership:
       agent: E
       wave: 2
       action: new
+    - file: cmd/agent-lsp/server.go
+      agent: E
+      wave: 2
+      action: modify
+    - file: cmd/agent-lsp/tools_workspace.go
+      agent: E
+      wave: 2
+      action: modify
+    - file: internal/lsp/client.go
+      agent: E
+      wave: 2
+      action: modify
 interface_contracts:
     - name: NotificationSender
       description: |
@@ -735,7 +747,7 @@ pre_mortem:
           impact: low
           mitigation: 5-minute timeout ensures polling stops; warmup gate already handles non-progress servers
 critic_report:
-    verdict: ISSUES
+    verdict: PASS
     agent_reviews:
         A:
             agent_id: A
@@ -751,14 +763,8 @@ critic_report:
             verdict: PASS
         E:
             agent_id: E
-            verdict: ISSUES
-            issues:
-                - check: side_effect_completeness
-                  severity: error
-                  description: 'Agent E brief instructs modifying cmd/agent-lsp/server.go, cmd/agent-lsp/tools_workspace.go, and internal/lsp/client.go to wire the notification hub, but these files are missing from file_ownership. Without ownership entries (action: modify), the agent cannot touch them. Add all three to file_ownership for Agent E wave 2.'
-                  file: cmd/agent-lsp/server.go
-                  symbol: toolDeps
-    summary: 'Agent E''s brief instructs modifications to cmd/agent-lsp/server.go, cmd/agent-lsp/tools_workspace.go, and internal/lsp/client.go, but these files are not in the file_ownership table. Without ownership, the agent cannot modify them per I1 disjoint rules, yet the task fundamentally requires those changes to wire the notification hub into the server lifecycle. These three files must be added to Agent E''s file_ownership with action: modify.'
-    reviewed_at: "2026-05-10T06:38:47Z"
-    issue_count: 1
+            verdict: PASS
+    summary: 'All briefs verified against codebase. The previous issue (Agent E missing file_ownership for server.go, tools_workspace.go, and client.go) has been correctly fixed: all three files now appear with action: modify in Agent E''s wave 2 ownership. File existence checks pass (modify targets exist, new targets do not). Symbol accuracy verified: toolDeps, workspaceLoaded, watcherMu, SubscribeToDiagnostics, UnsubscribeFromDiagnostics, DiagnosticUpdateCallback, FileChangeEvent, DidChangeWatchedFiles, isDaemon, isPassive, cmd all exist at referenced locations. Line number references in Agent E''s brief match actual code. Import paths are correct (module is github.com/blackwell-systems/agent-lsp, MCP SDK at github.com/modelcontextprotocol/go-sdk). No i1 disjoint ownership violations. No complexity balance issues.'
+    reviewed_at: "2026-05-10T06:41:46Z"
+    issue_count: 0
 state: SCOUT_PENDING
