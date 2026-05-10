@@ -75,3 +75,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-mcp-tool-metadata.yaml
 - **proactive-notifications**: completed 2026-05-10, 2 waves, 6 agents
   - IMPL doc: docs/IMPL/complete/IMPL-proactive-notifications.yaml
+- **symbol-level-editing**: completed 2026-05-10, 1 waves, 2 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-symbol-level-editing.yaml
