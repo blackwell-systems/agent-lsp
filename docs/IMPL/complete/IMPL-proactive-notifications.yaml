@@ -1,3 +1,4 @@
+completion_date: "2026-05-10"
 title: Proactive Server Notifications
 feature_slug: proactive-notifications
 verdict: SUITABLE
@@ -744,6 +745,14 @@ quality_gates:
         - type: test
           command: GOWORK=off go test ./internal/... ./cmd/...
           required: true
+post_merge_checklist:
+    groups:
+        - title: Background Service Initialization
+          items:
+            - description: Verify if hub_test.go needs initialization in Server constructor
+            - description: Verify if workspace.go needs initialization in Server constructor
+            - description: Verify if health.go needs initialization in Server constructor
+            - description: Verify if notifications.go needs initialization in Server constructor
 scaffolds:
     - file_path: internal/notify/hub.go
       contents: |
@@ -852,6 +861,24 @@ completion_reports:
             - TestAdaptFileChangeEvents
         verification: PASS
         notes: 'Build fails only because Hub.Send and Hub.SendResourceUpdate methods not yet in hub.go (another agent scope). Code correct per interface contract. Committed with --no-verify per parallel wave rule. Out-of-scope dep: Hub.Send and Hub.SendResourceUpdate must be added to hub.go.'
+    E:
+        status: complete
+        branch: saw/proactive-notifications/wave2-agent-E
+        commit: d62569b
+        files_changed:
+            - cmd/agent-lsp/notifications.go
+            - cmd/agent-lsp/notifications_test.go
+            - cmd/agent-lsp/server.go
+            - cmd/agent-lsp/tools_workspace.go
+        files_created:
+            - cmd/agent-lsp/notifications.go
+            - cmd/agent-lsp/notifications_test.go
+        tests_added:
+            - TestMcpNotifySender
+            - TestSetupNotificationHub
+            - TestWireNotificationsToClient
+        verification: PASS
+        notes: MCP notification wiring complete. Hub created in Run(), sender set in InitializedHandler, all start_lsp paths wire channels to client. Build, vet, and tests pass.
     F:
         status: complete
         branch: saw/proactive-notifications/wave1-agent-F
@@ -918,4 +945,4 @@ critic_report:
     summary: 'All briefs verified against codebase. The previous issue (Agent E missing file_ownership for server.go, tools_workspace.go, and client.go) has been correctly fixed: all three files now appear with action: modify in Agent E''s wave 2 ownership. File existence checks pass (modify targets exist, new targets do not). Symbol accuracy verified: toolDeps, workspaceLoaded, watcherMu, SubscribeToDiagnostics, UnsubscribeFromDiagnostics, DiagnosticUpdateCallback, FileChangeEvent, DidChangeWatchedFiles, isDaemon, isPassive, cmd all exist at referenced locations. Line number references in Agent E''s brief match actual code. Import paths are correct (module is github.com/blackwell-systems/agent-lsp, MCP SDK at github.com/modelcontextprotocol/go-sdk). No i1 disjoint ownership violations. No complexity balance issues.'
     reviewed_at: "2026-05-10T06:41:46Z"
     issue_count: 0
-state: REVIEWED
+state: COMPLETE

@@ -73,3 +73,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-five-new-skills.yaml
 - **mcp-tool-metadata**: completed 2026-04-20, 1 waves, 4 agents
   - IMPL doc: docs/IMPL/complete/IMPL-mcp-tool-metadata.yaml
+- **proactive-notifications**: completed 2026-05-10, 2 waves, 6 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-proactive-notifications.yaml
