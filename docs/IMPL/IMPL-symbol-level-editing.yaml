@@ -1,483 +1,464 @@
 title: Symbol-Level Editing Tools
 feature_slug: symbol-level-editing
 verdict: SUITABLE
-state: SCOUT_PENDING
-
 suitability_assessment: |
-  1. File decomposition: The work decomposes cleanly into 2 disjoint files:
-     internal/tools/symbol_edit.go (handler logic + shared resolver) and
-     cmd/agent-lsp/tools_symbol_edit.go (MCP registration). A test file
-     (internal/tools/symbol_edit_test.go) accompanies the handler.
+    1. File decomposition: The work decomposes cleanly into 2 disjoint files:
+       internal/tools/symbol_edit.go (handler logic + shared resolver) and
+       cmd/agent-lsp/tools_symbol_edit.go (MCP registration). A test file
+       (internal/tools/symbol_edit_test.go) accompanies the handler.
 
-  2. Investigation-first: No unknowns. All infrastructure exists (WithDocument,
-     GetDocumentSymbols, GetReferences, apply_edit patterns, bestSymbolMatch).
+    2. Investigation-first: No unknowns. All infrastructure exists (WithDocument,
+       GetDocumentSymbols, GetReferences, apply_edit patterns, bestSymbolMatch).
 
-  3. Interface discoverability: The shared ResolveSymbolByNamePath function can be
-     fully specified upfront. All LSP client methods are known.
+    3. Interface discoverability: The shared ResolveSymbolByNamePath function can be
+       fully specified upfront. All LSP client methods are known.
 
-  4. Pre-implementation status: All four tools are new; nothing exists yet.
+    4. Pre-implementation status: All four tools are new; nothing exists yet.
 
-  5. Parallelization value: Two agents with 2-3 files each. Build/test cycle
-     is ~30s (go test ./internal/... ./cmd/...). Clear speedup from parallel
-     execution since both agents implement non-trivial logic and tests.
+    5. Parallelization value: Two agents with 2-3 files each. Build/test cycle
+       is ~30s (go test ./internal/... ./cmd/...). Clear speedup from parallel
+       execution since both agents implement non-trivial logic and tests.
 
-  Estimated times:
-  - Scout phase: ~5 min
-  - Agent execution: ~8 min (2 agents x 8 min avg, parallel in one wave)
-  - Merge and verification: ~3 min
-  Total SAW time: ~16 min
+    Estimated times:
+    - Scout phase: ~5 min
+    - Agent execution: ~8 min (2 agents x 8 min avg, parallel in one wave)
+    - Merge and verification: ~3 min
+    Total SAW time: ~16 min
 
-  Sequential baseline: ~20 min (2 agents x 10 min sequential)
-  Time savings: ~4 min (20% faster)
+    Sequential baseline: ~20 min (2 agents x 10 min sequential)
+    Time savings: ~4 min (20% faster)
 
-  Recommendation: Clear speedup with coordination value from interface contract.
-
+    Recommendation: Clear speedup with coordination value from interface contract.
 test_command: GOWORK=off go test ./internal/... ./cmd/...
 lint_command: go vet ./...
-
-quality_gates:
-  level: standard
-  gates:
-    - type: build
-      command: GOWORK=off go build ./...
-      required: true
-    - type: lint
-      command: go vet ./...
-      required: true
-    - type: test
-      command: GOWORK=off go test ./internal/... ./cmd/...
-      required: true
-
-scaffolds: []
-
-interface_contracts:
-  - name: ResolveSymbolByNamePath
-    description: |
-      Exported shared resolver that resolves a symbol name path (e.g.
-      "MyStruct.Method", "Method[0]") to its precise location. This is the
-      foundation for all symbol-by-name operations: the four new editing tools
-      are the first consumers, and existing tools (get_references,
-      go_to_definition, get_info_on_location, call_hierarchy) will later gain
-      an optional "symbol" parameter that delegates to this function.
-
-      Behavior:
-      - If filePath is provided: uses GetDocumentSymbols on that file directly.
-      - If filePath is empty: uses GetWorkspaceSymbols to locate the file first,
-        then GetDocumentSymbols for precise range resolution.
-      - Supports dot-notation nesting ("Type.Method", "Package.Type.Method").
-      - Supports overload indexing ("Method[0]", "Method[1]") for disambiguation.
-    definition: |
-      // SymbolLocation holds the resolved position of a symbol.
-      type SymbolLocation struct {
-          FilePath  string // absolute file path
-          StartLine int    // 0-indexed start line
-          StartCol  int    // 0-indexed start column
-          EndLine   int    // 0-indexed end line
-          EndCol    int    // 0-indexed end column
-          Range     types.Range // full symbol range (for body replacement)
-          SelectionRange types.Range // name/signature range
-      }
-
-      // ResolveSymbolByNamePath resolves a symbol name path to its location.
-      // If filePath is empty, workspace symbols are searched first to find the file.
-      // If filePath is provided, document symbols are used directly.
-      //
-      // Name path resolution:
-      //   - "Foo" matches top-level symbol named Foo
-      //   - "Foo.Bar" matches child Bar under parent Foo
-      //   - "Foo.Bar.Baz" matches arbitrarily nested paths
-      //   - "Bar[0]", "Bar[1]" disambiguates when multiple symbols share a name
-      //
-      // Returns error if symbol not found, index out of range, or LSP calls fail.
-      func ResolveSymbolByNamePath(ctx context.Context, client *lsp.LSPClient, filePath string, namePath string) (*SymbolLocation, error)
-    location: internal/tools/symbol_edit.go
-
-  - name: resolveInDocumentSymbols
-    description: |
-      Internal helper that walks a []types.DocumentSymbol tree to find a symbol
-      by name path. Used by ResolveSymbolByNamePath after document symbols are
-      retrieved. Unexported; tested indirectly through ResolveSymbolByNamePath
-      and directly via unit tests on the tree-walking logic.
-    definition: |
-      // resolveInDocumentSymbols walks the document symbol tree to find the
-      // symbol matching namePath. Returns the matched DocumentSymbol or error.
-      func resolveInDocumentSymbols(symbols []types.DocumentSymbol, namePath string) (*types.DocumentSymbol, error)
-    location: internal/tools/symbol_edit.go
-
-  - name: HandleReplaceSymbolBody
-    description: |
-      Replaces the body of a named symbol, preserving the declaration/signature line.
-      Uses ResolveSymbolByNamePath to find the symbol, then constructs a text edit that
-      replaces from the line after the signature through the end of the symbol range.
-    definition: |
-      func HandleReplaceSymbolBody(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
-      // Required args: file_path (string), symbol_path (string), new_body (string)
-      // Optional args: language_id (string)
-    location: internal/tools/symbol_edit.go
-
-  - name: HandleInsertAfterSymbol
-    description: |
-      Inserts code immediately after a named symbol definition.
-    definition: |
-      func HandleInsertAfterSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
-      // Required args: file_path (string), symbol_path (string), code (string)
-      // Optional args: language_id (string)
-    location: internal/tools/symbol_edit.go
-
-  - name: HandleInsertBeforeSymbol
-    description: |
-      Inserts code immediately before a named symbol definition.
-    definition: |
-      func HandleInsertBeforeSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
-      // Required args: file_path (string), symbol_path (string), code (string)
-      // Optional args: language_id (string)
-    location: internal/tools/symbol_edit.go
-
-  - name: HandleSafeDeleteSymbol
-    description: |
-      Deletes a symbol only if it has zero references (verified via GetReferences
-      with include_declaration=false). Returns error with caller count if references exist.
-    definition: |
-      func HandleSafeDeleteSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
-      // Required args: file_path (string), symbol_path (string)
-      // Optional args: language_id (string)
-    location: internal/tools/symbol_edit.go
-
 file_ownership:
-  - file: internal/tools/symbol_edit.go
-    agent: A
-    wave: 1
-    action: new
-    depends_on: []
-  - file: internal/tools/symbol_edit_test.go
-    agent: A
-    wave: 1
-    action: new
-    depends_on: []
-  - file: cmd/agent-lsp/tools_symbol_edit.go
-    agent: B
-    wave: 1
-    action: new
-    depends_on: []
+    - file: internal/tools/symbol_edit.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/tools/symbol_edit_test.go
+      agent: A
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/tools_symbol_edit.go
+      agent: B
+      wave: 1
+      action: new
+interface_contracts:
+    - name: ResolveSymbolByNamePath
+      description: |
+        Exported shared resolver that resolves a symbol name path (e.g.
+        "MyStruct.Method", "Method[0]") to its precise location. This is the
+        foundation for all symbol-by-name operations: the four new editing tools
+        are the first consumers, and existing tools (get_references,
+        go_to_definition, get_info_on_location, call_hierarchy) will later gain
+        an optional "symbol" parameter that delegates to this function.
 
+        Behavior:
+        - If filePath is provided: uses GetDocumentSymbols on that file directly.
+        - If filePath is empty: uses GetWorkspaceSymbols to locate the file first,
+          then GetDocumentSymbols for precise range resolution.
+        - Supports dot-notation nesting ("Type.Method", "Package.Type.Method").
+        - Supports overload indexing ("Method[0]", "Method[1]") for disambiguation.
+      definition: |
+        // SymbolLocation holds the resolved position of a symbol.
+        type SymbolLocation struct {
+            FilePath  string // absolute file path
+            StartLine int    // 0-indexed start line
+            StartCol  int    // 0-indexed start column
+            EndLine   int    // 0-indexed end line
+            EndCol    int    // 0-indexed end column
+            Range     types.Range // full symbol range (for body replacement)
+            SelectionRange types.Range // name/signature range
+        }
+
+        // ResolveSymbolByNamePath resolves a symbol name path to its location.
+        // If filePath is empty, workspace symbols are searched first to find the file.
+        // If filePath is provided, document symbols are used directly.
+        //
+        // Name path resolution:
+        //   - "Foo" matches top-level symbol named Foo
+        //   - "Foo.Bar" matches child Bar under parent Foo
+        //   - "Foo.Bar.Baz" matches arbitrarily nested paths
+        //   - "Bar[0]", "Bar[1]" disambiguates when multiple symbols share a name
+        //
+        // Returns error if symbol not found, index out of range, or LSP calls fail.
+        func ResolveSymbolByNamePath(ctx context.Context, client *lsp.LSPClient, filePath string, namePath string) (*SymbolLocation, error)
+      location: internal/tools/symbol_edit.go
+    - name: resolveInDocumentSymbols
+      description: |
+        Internal helper that walks a []types.DocumentSymbol tree to find a symbol
+        by name path. Used by ResolveSymbolByNamePath after document symbols are
+        retrieved. Unexported; tested indirectly through ResolveSymbolByNamePath
+        and directly via unit tests on the tree-walking logic.
+      definition: |
+        // resolveInDocumentSymbols walks the document symbol tree to find the
+        // symbol matching namePath. Returns the matched DocumentSymbol or error.
+        func resolveInDocumentSymbols(symbols []types.DocumentSymbol, namePath string) (*types.DocumentSymbol, error)
+      location: internal/tools/symbol_edit.go
+    - name: HandleReplaceSymbolBody
+      description: |
+        Replaces the body of a named symbol, preserving the declaration/signature line.
+        Uses ResolveSymbolByNamePath to find the symbol, then constructs a text edit that
+        replaces from the line after the signature through the end of the symbol range.
+      definition: |
+        func HandleReplaceSymbolBody(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
+        // Required args: file_path (string), symbol_path (string), new_body (string)
+        // Optional args: language_id (string)
+      location: internal/tools/symbol_edit.go
+    - name: HandleInsertAfterSymbol
+      description: |
+        Inserts code immediately after a named symbol definition.
+      definition: |
+        func HandleInsertAfterSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
+        // Required args: file_path (string), symbol_path (string), code (string)
+        // Optional args: language_id (string)
+      location: internal/tools/symbol_edit.go
+    - name: HandleInsertBeforeSymbol
+      description: |
+        Inserts code immediately before a named symbol definition.
+      definition: |
+        func HandleInsertBeforeSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
+        // Required args: file_path (string), symbol_path (string), code (string)
+        // Optional args: language_id (string)
+      location: internal/tools/symbol_edit.go
+    - name: HandleSafeDeleteSymbol
+      description: |
+        Deletes a symbol only if it has zero references (verified via GetReferences
+        with include_declaration=false). Returns error with caller count if references exist.
+      definition: |
+        func HandleSafeDeleteSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
+        // Required args: file_path (string), symbol_path (string)
+        // Optional args: language_id (string)
+      location: internal/tools/symbol_edit.go
 waves:
-  - number: 1
-    agents:
-      - id: A
-        task: |
-          ## What to implement
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## What to implement
 
-          Create `internal/tools/symbol_edit.go` with:
+            Create `internal/tools/symbol_edit.go` with:
 
-          ### 1. SymbolLocation type (exported)
+            ### 1. SymbolLocation type (exported)
 
-          ```go
-          // SymbolLocation holds the resolved position of a symbol.
-          type SymbolLocation struct {
-              FilePath       string      // absolute file path
-              StartLine      int         // 0-indexed start line
-              StartCol       int         // 0-indexed start column
-              EndLine        int         // 0-indexed end line
-              EndCol         int         // 0-indexed end column
-              Range          types.Range // full symbol range (for body replacement)
-              SelectionRange types.Range // name/signature range
-          }
-          ```
+            ```go
+            // SymbolLocation holds the resolved position of a symbol.
+            type SymbolLocation struct {
+                FilePath       string      // absolute file path
+                StartLine      int         // 0-indexed start line
+                StartCol       int         // 0-indexed start column
+                EndLine        int         // 0-indexed end line
+                EndCol         int         // 0-indexed end column
+                Range          types.Range // full symbol range (for body replacement)
+                SelectionRange types.Range // name/signature range
+            }
+            ```
 
-          ### 2. ResolveSymbolByNamePath (exported, the core resolver)
+            ### 2. ResolveSymbolByNamePath (exported, the core resolver)
 
-          ```go
-          func ResolveSymbolByNamePath(ctx context.Context, client *lsp.LSPClient, filePath string, namePath string) (*SymbolLocation, error)
-          ```
+            ```go
+            func ResolveSymbolByNamePath(ctx context.Context, client *lsp.LSPClient, filePath string, namePath string) (*SymbolLocation, error)
+            ```
 
-          Logic:
-          - If filePath is empty:
-            - Extract the leaf name from namePath (last segment after splitting on ".")
-            - Call client.GetWorkspaceSymbols(ctx, leafName)
-            - Use bestSymbolMatch (from symbol_path.go, already in this package) to
-              find the best candidate
-            - Extract filePath from the candidate's Location URI via URIToFilePath
-          - If filePath is provided (or resolved above):
-            - Open document via WithDocument, call client.GetDocumentSymbols
-            - Call resolveInDocumentSymbols to walk the tree
-            - Build and return SymbolLocation from the matched DocumentSymbol
+            Logic:
+            - If filePath is empty:
+              - Extract the leaf name from namePath (last segment after splitting on ".")
+              - Call client.GetWorkspaceSymbols(ctx, leafName)
+              - Use bestSymbolMatch (from symbol_path.go, already in this package) to
+                find the best candidate
+              - Extract filePath from the candidate's Location URI via URIToFilePath
+            - If filePath is provided (or resolved above):
+              - Open document via WithDocument, call client.GetDocumentSymbols
+              - Call resolveInDocumentSymbols to walk the tree
+              - Build and return SymbolLocation from the matched DocumentSymbol
 
-          ### 3. resolveInDocumentSymbols (unexported tree walker)
+            ### 3. resolveInDocumentSymbols (unexported tree walker)
 
-          ```go
-          func resolveInDocumentSymbols(symbols []types.DocumentSymbol, namePath string) (*types.DocumentSymbol, error)
-          ```
+            ```go
+            func resolveInDocumentSymbols(symbols []types.DocumentSymbol, namePath string) (*types.DocumentSymbol, error)
+            ```
 
-          Logic:
-          - Parse namePath: split on "." for path segments
-          - For each segment, check for "[N]" suffix (overload index)
-          - Walk the tree: at each level, find all children matching the segment name
-          - If no index specified, take the first match
-          - If "[N]" specified, take the Nth match (0-indexed); error if out of bounds
-          - Return the final matched DocumentSymbol, or error if any segment not found
+            Logic:
+            - Parse namePath: split on "." for path segments
+            - For each segment, check for "[N]" suffix (overload index)
+            - Walk the tree: at each level, find all children matching the segment name
+            - If no index specified, take the first match
+            - If "[N]" specified, take the Nth match (0-indexed); error if out of bounds
+            - Return the final matched DocumentSymbol, or error if any segment not found
 
-          ### 4. HandleReplaceSymbolBody
+            ### 4. HandleReplaceSymbolBody
 
-          ```go
-          func HandleReplaceSymbolBody(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
-          ```
+            ```go
+            func HandleReplaceSymbolBody(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
+            ```
 
-          - Required args: file_path, symbol_path, new_body
-          - Call ResolveSymbolByNamePath(ctx, client, filePath, symbolPath)
-          - The "body" starts at the line after SelectionRange.End.Line
-          - Replace from (SelectionRange.End.Line + 1, 0) through Range.End with new_body
-          - Construct workspace edit via CreateFileURI + ApplyWorkspaceEdit
-          - Return success text result with hint
+            - Required args: file_path, symbol_path, new_body
+            - Call ResolveSymbolByNamePath(ctx, client, filePath, symbolPath)
+            - The "body" starts at the line after SelectionRange.End.Line
+            - Replace from (SelectionRange.End.Line + 1, 0) through Range.End with new_body
+            - Construct workspace edit via CreateFileURI + ApplyWorkspaceEdit
+            - Return success text result with hint
 
-          ### 5. HandleInsertAfterSymbol
+            ### 5. HandleInsertAfterSymbol
 
-          - Required args: file_path, symbol_path, code
-          - Resolve symbol, insert at Range.End position
-          - newText = "\n" + code
-          - Apply via workspace edit
+            - Required args: file_path, symbol_path, code
+            - Resolve symbol, insert at Range.End position
+            - newText = "\n" + code
+            - Apply via workspace edit
 
-          ### 6. HandleInsertBeforeSymbol
+            ### 6. HandleInsertBeforeSymbol
 
-          - Required args: file_path, symbol_path, code
-          - Resolve symbol, insert at (Range.Start.Line, 0)
-          - newText = code + "\n"
-          - Apply via workspace edit
+            - Required args: file_path, symbol_path, code
+            - Resolve symbol, insert at (Range.Start.Line, 0)
+            - newText = code + "\n"
+            - Apply via workspace edit
 
-          ### 7. HandleSafeDeleteSymbol
+            ### 7. HandleSafeDeleteSymbol
 
-          - Required args: file_path, symbol_path
-          - Resolve symbol to get SelectionRange.Start position
-          - Call client.GetReferences(ctx, fileURI, SelectionRange.Start, false)
-          - If len(refs) > 0: return ErrorResult with "symbol has N references; cannot safely delete"
-          - If zero refs: replace Range with "" via workspace edit, return success
+            - Required args: file_path, symbol_path
+            - Resolve symbol to get SelectionRange.Start position
+            - Call client.GetReferences(ctx, fileURI, SelectionRange.Start, false)
+            - If len(refs) > 0: return ErrorResult with "symbol has N references; cannot safely delete"
+            - If zero refs: replace Range with "" via workspace edit, return success
 
-          ## Interfaces used
+            ## Interfaces used
 
-          From internal/lsp (LSPClient methods):
-          - GetDocumentSymbols(ctx, uri) ([]types.DocumentSymbol, error)
-          - GetWorkspaceSymbols(ctx, query) ([]types.SymbolInformation, error)
-          - GetReferences(ctx, uri, pos, includeDecl) ([]types.Location, error)
-          - ApplyWorkspaceEdit(ctx, edit) error
+            From internal/lsp (LSPClient methods):
+            - GetDocumentSymbols(ctx, uri) ([]types.DocumentSymbol, error)
+            - GetWorkspaceSymbols(ctx, query) ([]types.SymbolInformation, error)
+            - GetReferences(ctx, uri, pos, includeDecl) ([]types.Location, error)
+            - ApplyWorkspaceEdit(ctx, edit) error
 
-          From internal/tools (existing helpers in same package):
-          - WithDocument[T](ctx, client, filePath, languageID, cb) (T, error)
-          - CheckInitialized(client) error
-          - CreateFileURI(filePath) string
-          - URIToFilePath(uri) (string, error)
-          - bestSymbolMatch(candidates []types.SymbolInformation, symbolPath string) *types.SymbolInformation
+            From internal/tools (existing helpers in same package):
+            - WithDocument[T](ctx, client, filePath, languageID, cb) (T, error)
+            - CheckInitialized(client) error
+            - CreateFileURI(filePath) string
+            - URIToFilePath(uri) (string, error)
+            - bestSymbolMatch(candidates []types.SymbolInformation, symbolPath string) *types.SymbolInformation
 
-          types.DocumentSymbol has: Name, Range, SelectionRange, Children []DocumentSymbol
-          types.Range has: Start types.Position, End types.Position
-          types.Position has: Line int, Character int
+            types.DocumentSymbol has: Name, Range, SelectionRange, Children []DocumentSymbol
+            types.Range has: Start types.Position, End types.Position
+            types.Position has: Line int, Character int
 
-          ## Tests
+            ## Tests
 
-          Create `internal/tools/symbol_edit_test.go` with:
+            Create `internal/tools/symbol_edit_test.go` with:
 
-          1. TestResolveInDocumentSymbols_Simple - single top-level symbol "Foo"
-          2. TestResolveInDocumentSymbols_Nested - "Parent.Child" path
-          3. TestResolveInDocumentSymbols_DeeplyNested - "A.B.C" three levels
-          4. TestResolveInDocumentSymbols_OverloadIndex - "Method[1]" picks second match
-          5. TestResolveInDocumentSymbols_NotFound - returns error
-          6. TestResolveInDocumentSymbols_IndexOutOfBounds - returns error
-          7. TestResolveSymbolByNamePath_NilClient - returns error
-          8. TestResolveSymbolByNamePath_EmptyNamePath - returns error
-          9. TestHandleReplaceSymbolBody_NilClient - returns initialization error
-          10. TestHandleInsertAfterSymbol_NilClient - returns initialization error
-          11. TestHandleInsertBeforeSymbol_NilClient - returns initialization error
-          12. TestHandleSafeDeleteSymbol_NilClient - returns initialization error
-          13. TestHandleReplaceSymbolBody_MissingArgs - error on missing symbol_path
-          14. TestHandleSafeDeleteSymbol_MissingArgs - error on missing file_path
+            1. TestResolveInDocumentSymbols_Simple - single top-level symbol "Foo"
+            2. TestResolveInDocumentSymbols_Nested - "Parent.Child" path
+            3. TestResolveInDocumentSymbols_DeeplyNested - "A.B.C" three levels
+            4. TestResolveInDocumentSymbols_OverloadIndex - "Method[1]" picks second match
+            5. TestResolveInDocumentSymbols_NotFound - returns error
+            6. TestResolveInDocumentSymbols_IndexOutOfBounds - returns error
+            7. TestResolveSymbolByNamePath_NilClient - returns error
+            8. TestResolveSymbolByNamePath_EmptyNamePath - returns error
+            9. TestHandleReplaceSymbolBody_NilClient - returns initialization error
+            10. TestHandleInsertAfterSymbol_NilClient - returns initialization error
+            11. TestHandleInsertBeforeSymbol_NilClient - returns initialization error
+            12. TestHandleSafeDeleteSymbol_NilClient - returns initialization error
+            13. TestHandleReplaceSymbolBody_MissingArgs - error on missing symbol_path
+            14. TestHandleSafeDeleteSymbol_MissingArgs - error on missing file_path
 
-          Use the same newNilClient() pattern from symbol_path_test.go for client tests.
-          For resolveInDocumentSymbols tests, construct []types.DocumentSymbol directly
-          with known Range/SelectionRange values and verify the returned symbol.
+            Use the same newNilClient() pattern from symbol_path_test.go for client tests.
+            For resolveInDocumentSymbols tests, construct []types.DocumentSymbol directly
+            with known Range/SelectionRange values and verify the returned symbol.
 
-          ## Verification gate
+            ## Verification gate
 
-          ```bash
-          GOWORK=off go build ./internal/tools/...
-          go vet ./internal/tools/...
-          GOWORK=off go test ./internal/tools/ -run "TestResolveInDocumentSymbols|TestResolveSymbolByNamePath|TestHandle.*Symbol"
-          # Postconditions:
-          grep -c "func ResolveSymbolByNamePath" internal/tools/symbol_edit.go
-          # Expected: 1
-          grep -c "func resolveInDocumentSymbols" internal/tools/symbol_edit.go
-          # Expected: 1
-          grep -c "func Handle" internal/tools/symbol_edit.go
-          # Expected: 4
-          grep -c "type SymbolLocation struct" internal/tools/symbol_edit.go
-          # Expected: 1
-          ```
+            ```bash
+            GOWORK=off go build ./internal/tools/...
+            go vet ./internal/tools/...
+            GOWORK=off go test ./internal/tools/ -run "TestResolveInDocumentSymbols|TestResolveSymbolByNamePath|TestHandle.*Symbol"
+            # Postconditions:
+            grep -c "func ResolveSymbolByNamePath" internal/tools/symbol_edit.go
+            # Expected: 1
+            grep -c "func resolveInDocumentSymbols" internal/tools/symbol_edit.go
+            # Expected: 1
+            grep -c "func Handle" internal/tools/symbol_edit.go
+            # Expected: 4
+            grep -c "type SymbolLocation struct" internal/tools/symbol_edit.go
+            # Expected: 1
+            ```
 
-          ## Constraints
+            ## Constraints
 
-          - Do NOT modify any existing files. All code goes in the two new files.
-          - Do NOT register MCP tools; that is Agent B's responsibility.
-          - Do NOT duplicate types from internal/types; import them.
-          - Use 0-indexed LSP positions internally; the registration layer handles
-            any 1-indexed conversion if needed.
-          - ResolveSymbolByNamePath and SymbolLocation MUST be exported (capitalized)
-            so other packages (cmd/agent-lsp, future tools) can call them.
-          - bestSymbolMatch is already in symbol_path.go in the same package; just call it.
-        files:
-          - internal/tools/symbol_edit.go
-          - internal/tools/symbol_edit_test.go
-        dependencies: []
+            - Do NOT modify any existing files. All code goes in the two new files.
+            - Do NOT register MCP tools; that is Agent B's responsibility.
+            - Do NOT duplicate types from internal/types; import them.
+            - Use 0-indexed LSP positions internally; the registration layer handles
+              any 1-indexed conversion if needed.
+            - ResolveSymbolByNamePath and SymbolLocation MUST be exported (capitalized)
+              so other packages (cmd/agent-lsp, future tools) can call them.
+            - bestSymbolMatch is already in symbol_path.go in the same package; just call it.
+          files:
+            - internal/tools/symbol_edit.go
+            - internal/tools/symbol_edit_test.go
+        - id: B
+          task: |
+            ## What to implement
 
-      - id: B
-        task: |
-          ## What to implement
+            Create `cmd/agent-lsp/tools_symbol_edit.go` with MCP tool registrations
+            for the four symbol-level editing tools. Follow the exact pattern of
+            tools_navigation.go and tools_workspace.go.
 
-          Create `cmd/agent-lsp/tools_symbol_edit.go` with MCP tool registrations
-          for the four symbol-level editing tools. Follow the exact pattern of
-          tools_navigation.go and tools_workspace.go.
+            File structure:
+            1. Package declaration and doc comment
+            2. Args structs with jsonschema tags
+            3. registerSymbolEditTools(d toolDeps) function
 
-          File structure:
-          1. Package declaration and doc comment
-          2. Args structs with jsonschema tags
-          3. registerSymbolEditTools(d toolDeps) function
+            ### Args structs
 
-          ### Args structs
+            ```go
+            type ReplaceSymbolBodyArgs struct {
+                FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
+                LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier. Optional; auto-detected"`
+                SymbolPath string `json:"symbol_path" jsonschema:"Dot-notation symbol path (e.g. MyStruct.Method, Function, Method[0] for overload disambiguation)"`
+                NewBody    string `json:"new_body" jsonschema:"New body text to replace the symbol's body (signature/declaration preserved)"`
+            }
 
-          ```go
-          type ReplaceSymbolBodyArgs struct {
-              FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
-              LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier. Optional; auto-detected"`
-              SymbolPath string `json:"symbol_path" jsonschema:"Dot-notation symbol path (e.g. MyStruct.Method, Function, Method[0] for overload disambiguation)"`
-              NewBody    string `json:"new_body" jsonschema:"New body text to replace the symbol's body (signature/declaration preserved)"`
-          }
+            type InsertAfterSymbolArgs struct {
+                FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
+                LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier. Optional; auto-detected"`
+                SymbolPath string `json:"symbol_path" jsonschema:"Dot-notation symbol path to insert after"`
+                Code       string `json:"code" jsonschema:"Code to insert after the symbol definition"`
+            }
 
-          type InsertAfterSymbolArgs struct {
-              FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
-              LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier. Optional; auto-detected"`
-              SymbolPath string `json:"symbol_path" jsonschema:"Dot-notation symbol path to insert after"`
-              Code       string `json:"code" jsonschema:"Code to insert after the symbol definition"`
-          }
+            type InsertBeforeSymbolArgs struct {
+                FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
+                LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier. Optional; auto-detected"`
+                SymbolPath string `json:"symbol_path" jsonschema:"Dot-notation symbol path to insert before"`
+                Code       string `json:"code" jsonschema:"Code to insert before the symbol definition"`
+            }
 
-          type InsertBeforeSymbolArgs struct {
-              FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
-              LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier. Optional; auto-detected"`
-              SymbolPath string `json:"symbol_path" jsonschema:"Dot-notation symbol path to insert before"`
-              Code       string `json:"code" jsonschema:"Code to insert before the symbol definition"`
-          }
+            type SafeDeleteSymbolArgs struct {
+                FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
+                LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier. Optional; auto-detected"`
+                SymbolPath string `json:"symbol_path" jsonschema:"Dot-notation symbol path of the symbol to delete"`
+            }
+            ```
 
-          type SafeDeleteSymbolArgs struct {
-              FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
-              LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier. Optional; auto-detected"`
-              SymbolPath string `json:"symbol_path" jsonschema:"Dot-notation symbol path of the symbol to delete"`
-          }
-          ```
+            ### registerSymbolEditTools function
 
-          ### registerSymbolEditTools function
+            Register four tools using addToolWithPhaseCheck(d, ...):
 
-          Register four tools using addToolWithPhaseCheck(d, ...):
+            1. **replace_symbol_body**
+               - Description: "Replace the body of a named symbol (function, method, class) by dot-notation path, preserving the declaration/signature line. Resolves the symbol via document symbols without requiring line/column positions. Use symbol_path like 'MyStruct.Method' or 'Function'. For overload disambiguation, append [N] index (e.g. 'Handle[1]')."
+               - Annotations: Title="Replace Symbol Body", ReadOnlyHint=false, DestructiveHint=boolPtr(true), OpenWorldHint=boolPtr(false)
+               - Handler: call tools.HandleReplaceSymbolBody(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 
-          1. **replace_symbol_body**
-             - Description: "Replace the body of a named symbol (function, method, class) by dot-notation path, preserving the declaration/signature line. Resolves the symbol via document symbols without requiring line/column positions. Use symbol_path like 'MyStruct.Method' or 'Function'. For overload disambiguation, append [N] index (e.g. 'Handle[1]')."
-             - Annotations: Title="Replace Symbol Body", ReadOnlyHint=false, DestructiveHint=boolPtr(true), OpenWorldHint=boolPtr(false)
-             - Handler: call tools.HandleReplaceSymbolBody(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+            2. **insert_after_symbol**
+               - Description: "Insert code immediately after a named symbol definition. Resolves the symbol's end position via document symbols. Use for adding new methods after existing ones, appending related functions, etc."
+               - Annotations: Title="Insert After Symbol", ReadOnlyHint=false, DestructiveHint=boolPtr(false), OpenWorldHint=boolPtr(false)
+               - Handler: call tools.HandleInsertAfterSymbol(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 
-          2. **insert_after_symbol**
-             - Description: "Insert code immediately after a named symbol definition. Resolves the symbol's end position via document symbols. Use for adding new methods after existing ones, appending related functions, etc."
-             - Annotations: Title="Insert After Symbol", ReadOnlyHint=false, DestructiveHint=boolPtr(false), OpenWorldHint=boolPtr(false)
-             - Handler: call tools.HandleInsertAfterSymbol(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+            3. **insert_before_symbol**
+               - Description: "Insert code immediately before a named symbol definition. Resolves the symbol's start position via document symbols. Use for adding imports, comments, decorators, or type definitions before their first consumer."
+               - Annotations: Title="Insert Before Symbol", ReadOnlyHint=false, DestructiveHint=boolPtr(false), OpenWorldHint=boolPtr(false)
+               - Handler: call tools.HandleInsertBeforeSymbol(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 
-          3. **insert_before_symbol**
-             - Description: "Insert code immediately before a named symbol definition. Resolves the symbol's start position via document symbols. Use for adding imports, comments, decorators, or type definitions before their first consumer."
-             - Annotations: Title="Insert Before Symbol", ReadOnlyHint=false, DestructiveHint=boolPtr(false), OpenWorldHint=boolPtr(false)
-             - Handler: call tools.HandleInsertBeforeSymbol(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+            4. **safe_delete_symbol**
+               - Description: "Delete a named symbol only if it has zero references across the workspace (verified via LSP references before deletion). Returns an error with the caller count if the symbol is still in use. Prevents accidental removal of active code."
+               - Annotations: Title="Safe Delete Symbol", ReadOnlyHint=false, DestructiveHint=boolPtr(true), OpenWorldHint=boolPtr(false)
+               - Handler: call tools.HandleSafeDeleteSymbol(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 
-          4. **safe_delete_symbol**
-             - Description: "Delete a named symbol only if it has zero references across the workspace (verified via LSP references before deletion). Returns an error with the caller count if the symbol is still in use. Prevents accidental removal of active code."
-             - Annotations: Title="Safe Delete Symbol", ReadOnlyHint=false, DestructiveHint=boolPtr(true), OpenWorldHint=boolPtr(false)
-             - Handler: call tools.HandleSafeDeleteSymbol(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+            ### Registration call site
 
-          ### Registration call site
+            The registerSymbolEditTools function must be called from server.go.
+            Find the block that calls register*Tools functions. Add
+            `registerSymbolEditTools(deps)` after the existing register calls.
 
-          The registerSymbolEditTools function must be called from server.go.
-          Find the block that calls register*Tools functions. Add
-          `registerSymbolEditTools(deps)` after the existing register calls.
+            Look for this exact text in cmd/agent-lsp/server.go:
+            ```go
+            registerNavigationTools(deps)
+            registerWorkspaceTools(deps)
+            ```
 
-          Look for this exact text in cmd/agent-lsp/server.go:
-          ```go
-          registerNavigationTools(deps)
-          registerWorkspaceTools(deps)
-          ```
+            Add `registerSymbolEditTools(deps)` on the line after the last
+            existing register*Tools call in that block.
 
-          Add `registerSymbolEditTools(deps)` on the line after the last
-          existing register*Tools call in that block.
+            ## Interfaces used
 
-          ## Interfaces used
+            From internal/tools package (Agent A creates these):
+            - tools.HandleReplaceSymbolBody(ctx, client, args) (types.ToolResult, error)
+            - tools.HandleInsertAfterSymbol(ctx, client, args) (types.ToolResult, error)
+            - tools.HandleInsertBeforeSymbol(ctx, client, args) (types.ToolResult, error)
+            - tools.HandleSafeDeleteSymbol(ctx, client, args) (types.ToolResult, error)
 
-          From internal/tools package (Agent A creates these):
-          - tools.HandleReplaceSymbolBody(ctx, client, args) (types.ToolResult, error)
-          - tools.HandleInsertAfterSymbol(ctx, client, args) (types.ToolResult, error)
-          - tools.HandleInsertBeforeSymbol(ctx, client, args) (types.ToolResult, error)
-          - tools.HandleSafeDeleteSymbol(ctx, client, args) (types.ToolResult, error)
+            From cmd/agent-lsp (existing patterns):
+            - addToolWithPhaseCheck[T](d toolDeps, tool *mcp.Tool, handler)
+            - toolArgsToMap(v any) map[string]any
+            - makeCallToolResult(r any) *mcp.CallToolResult
+            - boolPtr(b bool) *bool
+            - d.clientForFileWithAutoInit(filePath string) *lsp.LSPClient
 
-          From cmd/agent-lsp (existing patterns):
-          - addToolWithPhaseCheck[T](d toolDeps, tool *mcp.Tool, handler)
-          - toolArgsToMap(v any) map[string]any
-          - makeCallToolResult(r any) *mcp.CallToolResult
-          - boolPtr(b bool) *bool
-          - d.clientForFileWithAutoInit(filePath string) *lsp.LSPClient
+            ## Verification gate
 
-          ## Verification gate
+            ```bash
+            GOWORK=off go build ./cmd/agent-lsp/...
+            go vet ./cmd/agent-lsp/...
+            # Postconditions:
+            grep -c "func registerSymbolEditTools" cmd/agent-lsp/tools_symbol_edit.go
+            # Expected: 1
+            grep -c "addToolWithPhaseCheck" cmd/agent-lsp/tools_symbol_edit.go
+            # Expected: 4
+            grep "registerSymbolEditTools" cmd/agent-lsp/server.go
+            # Expected: 1 line showing the registration call
+            ```
 
-          ```bash
-          GOWORK=off go build ./cmd/agent-lsp/...
-          go vet ./cmd/agent-lsp/...
-          # Postconditions:
-          grep -c "func registerSymbolEditTools" cmd/agent-lsp/tools_symbol_edit.go
-          # Expected: 1
-          grep -c "addToolWithPhaseCheck" cmd/agent-lsp/tools_symbol_edit.go
-          # Expected: 4
-          grep "registerSymbolEditTools" cmd/agent-lsp/server.go
-          # Expected: 1 line showing the registration call
-          ```
+            ## Constraints
 
-          ## Constraints
-
-          - Do NOT implement handler logic; only register tools that delegate to
-            internal/tools.Handle* functions.
-          - Do NOT modify tools_navigation.go or tools_workspace.go.
-          - The ONLY existing file you may modify is cmd/agent-lsp/server.go (to add
-            the registerSymbolEditTools call). All other code goes in the new file.
-          - Follow the exact import pattern of tools_navigation.go.
-        files:
-          - cmd/agent-lsp/tools_symbol_edit.go
-        dependencies: []
-
+            - Do NOT implement handler logic; only register tools that delegate to
+              internal/tools.Handle* functions.
+            - Do NOT modify tools_navigation.go or tools_workspace.go.
+            - The ONLY existing file you may modify is cmd/agent-lsp/server.go (to add
+              the registerSymbolEditTools call). All other code goes in the new file.
+            - Follow the exact import pattern of tools_navigation.go.
+          files:
+            - cmd/agent-lsp/tools_symbol_edit.go
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
 pre_mortem:
-  overall_risk: low
-  rows:
-    - scenario: Agent B's registration file fails to compile because Agent A's handler functions don't exist yet in the worktree
-      likelihood: medium
-      impact: low
-      mitigation: |
-        Both agents are in wave 1 (parallel). Agent B's build gate compiles
-        cmd/agent-lsp/... which imports internal/tools. If Agent A's file is
-        missing, it won't compile. However, since both files are new and both
-        agents work in isolated worktrees, each agent's branch is merged
-        sequentially. The post-merge build gate catches any signature mismatch.
-        Agent B should use the exact function signatures from the interface
-        contract.
-    - scenario: resolveInDocumentSymbols mishandles the [N] overload index parsing
-      likelihood: low
-      impact: low
-      mitigation: |
-        Agent A has explicit test cases for overload indexing. The parsing is
-        straightforward (strings.TrimSuffix + strconv.Atoi).
-    - scenario: Agent B forgets to add registerSymbolEditTools call to server.go
-      likelihood: low
-      impact: medium
-      mitigation: |
-        Postcondition grep check in verification gate catches this. Agent prompt
-        explicitly states this requirement with the exact code pattern to find.
-    - scenario: ResolveSymbolByNamePath with empty filePath calls GetWorkspaceSymbols but no server is initialized
-      likelihood: low
-      impact: low
-      mitigation: |
-        CheckInitialized guard at the top of all Handle* functions catches nil
-        client before any LSP calls. The resolver itself also checks client != nil.
+    overall_risk: low
+    rows:
+        - scenario: Agent B's registration file fails to compile because Agent A's handler functions don't exist yet in the worktree
+          likelihood: medium
+          impact: low
+          mitigation: |
+            Both agents are in wave 1 (parallel). Agent B's build gate compiles
+            cmd/agent-lsp/... which imports internal/tools. If Agent A's file is
+            missing, it won't compile. However, since both files are new and both
+            agents work in isolated worktrees, each agent's branch is merged
+            sequentially. The post-merge build gate catches any signature mismatch.
+            Agent B should use the exact function signatures from the interface
+            contract.
+        - scenario: resolveInDocumentSymbols mishandles the [N] overload index parsing
+          likelihood: low
+          impact: low
+          mitigation: |
+            Agent A has explicit test cases for overload indexing. The parsing is
+            straightforward (strings.TrimSuffix + strconv.Atoi).
+        - scenario: Agent B forgets to add registerSymbolEditTools call to server.go
+          likelihood: low
+          impact: medium
+          mitigation: |
+            Postcondition grep check in verification gate catches this. Agent prompt
+            explicitly states this requirement with the exact code pattern to find.
+        - scenario: ResolveSymbolByNamePath with empty filePath calls GetWorkspaceSymbols but no server is initialized
+          likelihood: low
+          impact: low
+          mitigation: |
+            CheckInitialized guard at the top of all Handle* functions catches nil
+            client before any LSP calls. The resolver itself also checks client != nil.
+state: SCOUT_PENDING
+original_branch: main
