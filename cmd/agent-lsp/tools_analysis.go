@@ -21,8 +21,8 @@ import (
 type GetInfoOnLocationArgs struct {
 	FilePath        string `json:"file_path" jsonschema:"Absolute path to the source file"`
 	LanguageID      string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go, typescript, python). Optional; auto-detected from file extension"`
-	Line            int    `json:"line" jsonschema:"1-indexed line number in the file"`
-	Column          int    `json:"column" jsonschema:"1-indexed column (character offset) in the line"`
+	Line            int    `json:"line,omitempty" jsonschema:"1-indexed line number in the file"`
+	Column          int    `json:"column,omitempty" jsonschema:"1-indexed column (character offset) in the line"`
 	PositionPattern string `json:"position_pattern,omitempty" jsonschema:"Alternative to line/column: use @@pattern@@ syntax to match text near the target position"`
 }
 
@@ -65,8 +65,8 @@ type GetWorkspaceSymbolsArgs struct {
 type GetReferencesArgs struct {
 	FilePath           string `json:"file_path" jsonschema:"Absolute path to the source file"`
 	LanguageID         string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go, typescript, python). Optional; auto-detected from file extension"`
-	Line               int    `json:"line" jsonschema:"1-indexed line number in the file"`
-	Column             int    `json:"column" jsonschema:"1-indexed column (character offset) in the line"`
+	Line               int    `json:"line,omitempty" jsonschema:"1-indexed line number in the file"`
+	Column             int    `json:"column,omitempty" jsonschema:"1-indexed column (character offset) in the line"`
 	IncludeDeclaration bool   `json:"include_declaration,omitempty" jsonschema:"Whether to include the declaration site in the results"`
 	PositionPattern    string `json:"position_pattern,omitempty" jsonschema:"Alternative to line/column: use @@pattern@@ syntax to match text near the target position"`
 }

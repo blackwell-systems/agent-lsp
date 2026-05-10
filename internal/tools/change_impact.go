@@ -294,7 +294,14 @@ func collectExportedSymbols(syms []types.DocumentSymbol, filePath, langID string
 		if sym.Kind == 8 {
 			continue
 		}
-		exported := langID != "go" || (len(sym.Name) > 0 && sym.Name[0] >= 'A' && sym.Name[0] <= 'Z')
+		// For Go, check if the symbol is exported. Method names from gopls
+		// include the receiver prefix (e.g., "(*Hub).SetSender"), so extract
+		// the actual name after the last dot before checking case.
+		exportName := sym.Name
+		if dotIdx := strings.LastIndex(exportName, "."); dotIdx >= 0 {
+			exportName = exportName[dotIdx+1:]
+		}
+		exported := langID != "go" || (len(exportName) > 0 && exportName[0] >= 'A' && exportName[0] <= 'Z')
 		if exported {
 			line := sym.SelectionRange.Start.Line
 			char := sym.SelectionRange.Start.Character
