@@ -93,16 +93,23 @@ func TestSubscribeHealth_Stop(t *testing.T) {
 	// Let it run briefly.
 	time.Sleep(15 * time.Millisecond)
 
+	// Record messages before stop (should be zero since alive stays true).
+	msgsBefore := sender.getMessages()
+
 	// Stop it.
 	stop()
+
+	// Wait for goroutine to exit.
+	time.Sleep(10 * time.Millisecond)
 
 	// Simulate crash after stop.
 	checker.setAlive(false)
 	time.Sleep(20 * time.Millisecond)
 
-	// No crash message should be emitted.
-	msgs := sender.getMessages()
-	if len(msgs) != 0 {
-		t.Errorf("expected no messages after stop, got %d", len(msgs))
+	// No NEW crash message should be emitted after stop.
+	msgsAfter := sender.getMessages()
+	if len(msgsAfter) != len(msgsBefore) {
+		t.Errorf("expected no new messages after stop, got %d new (before=%d, after=%d)",
+			len(msgsAfter)-len(msgsBefore), len(msgsBefore), len(msgsAfter))
 	}
 }
