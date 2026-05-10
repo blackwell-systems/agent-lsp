@@ -17,13 +17,15 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Fixed
 
-- **`get_change_impact` now includes exported methods.** Previously only top-level functions and types were analyzed; methods on types (e.g., `(*Hub).Send`) were skipped because `collectExportedSymbols` didn't recurse into children. Now recurses into type children while filtering out struct fields. Found by GPT-5.5 agent evaluation.
+- **`get_change_impact` now includes exported methods.** Methods like `(*Hub).SetSender` were missed because the name starts with `(`, failing the uppercase export check. Now extracts the method name after the last dot before checking case. Previously only top-level functions and types were analyzed; methods on types (e.g., `(*Hub).Send`) were skipped because `collectExportedSymbols` didn't recurse into children. Now recurses into type children while filtering out struct fields. Found by GPT-5.5 agent evaluation.
 
 - **`safe_delete_symbol` column resolution.** Same `SelectionRange.Start` bug as the v0.8.1 symbol position fix: gopls returns positions pointing to the `func` keyword, not the identifier name. Unexported symbols like `appendHint` returned "no identifier found" when checking references. Fixed by resolving the actual identifier column from the source line. Found by GPT-5.5 agent evaluation.
 
 - **Token savings wiring.** `AppendTokenMeta` was implemented but not wired into `list_symbols` or `get_symbol_source` handlers (Agent D's merge didn't land). Manually wired.
 
 - **Flaky `TestSubscribeHealth_Stop`.** Timing race on CI: health poller could fire one message before the stop channel was read. Fixed by comparing message count before/after stop instead of asserting absolute zero.
+
+- **`find_references` and `inspect_symbol` schema fix.** `line` and `column` were required in the JSON schema even when `position_pattern` was provided as an alternative. Made them optional so agents can use `position_pattern` alone without validation errors.
 
 - **`get_change_impact` discoverability.** Promoted to IMPORTANT in MCP Instructions with "replaces manual loops over find_references." Agent evaluations showed agents manually looping over exports instead of calling it.
 - **`find_callers` type confusion.** Description now clarifies it works on functions/methods only; for types, use `find_references`. Both agent evaluations showed confusion when call hierarchy returned nothing for types.
