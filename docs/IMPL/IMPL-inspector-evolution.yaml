@@ -279,7 +279,6 @@ waves:
           files:
             - skills/lsp-inspect/SKILL.md
             - docs/FEATURES.md
-          dependencies: []
         - id: B
           task: |
             ## What to implement
@@ -831,4 +830,5 @@ critic_report:
     reviewed_at: "2026-05-10T22:56:51Z"
     issue_count: 0
 state: REVIEWED
+original_branch: main
 injection_method: hook
