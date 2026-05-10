@@ -234,11 +234,13 @@ agent-lsp already works with any IDE that has an MCP client (VS Code via Continu
 
 ### Passive mode (connect to existing language servers)
 
-agent-lsp currently launches and manages its own language server processes. In IDE environments, the IDE already has gopls/pyright/rust-analyzer running and indexed. Passive mode would connect to an already-running server instead of spawning a duplicate, eliminating double-indexing and double memory usage.
+The `connect` parameter on `start_lsp` connects to an already-running language server via TCP instead of spawning a duplicate process. In IDE environments where gopls/pyright/rust-analyzer is already running and indexed, passive mode eliminates double-indexing and double memory usage.
 
-`agent-lsp --connect go:localhost:9999 typescript:localhost:9998`
+```json
+{ "tool": "start_lsp", "args": { "root_dir": "/project", "connect": "localhost:9999" } }
+```
 
-Some language servers support multi-client connections over TCP (gopls supports `gopls -listen=:9999`). Passive mode would connect to these sockets and share the IDE's warm index. No IDE plugin required for this path.
+Language servers that support multi-client TCP connections (gopls via `gopls -listen=:9999`, clangd, etc.) share their warm index with agent-lsp. No IDE plugin required.
 
 | Feature | Status | Description |
 |---------|--------|-------------|
