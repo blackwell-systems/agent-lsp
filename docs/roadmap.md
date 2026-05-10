@@ -129,7 +129,30 @@ The gap between what clangd provides and what the broader toolchain offers is la
 | **Config file format** | Planned | `~/.agent-lsp.json` or `agent-lsp.json` project file for complex setups with per-server options |
 | **Continue.dev config support** | Planned | `agent-lsp init` currently skips Continue.dev; it uses a different config format than `mcpServers` |
 | **Skills as MCP prompts** | **Shipped** | Expose all 22 skills via `prompts/list` and `prompts/get` so any MCP client (Cursor, Windsurf, etc.) can discover and invoke them, not just Claude Code. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`. Skills continue to work as Claude Code slash commands in parallel. |
-| **Proactive server notifications** | **Shipped** (Wave 1) | Server-initiated MCP notifications across four channels: (1) diagnostic changes (2s debounce), (2) workspace ready (one-shot on indexing complete), (3) process health (crash/recovery), (4) stale references (3s debounce on file changes). Infrastructure in `internal/notify/` with Hub coordinator, per-channel subscribers, and LSPClient hooks (`client_notify.go`). Wave 2 (MCP server wiring) in progress. |
+| **Proactive server notifications** | **Shipped** | Server-initiated MCP notifications across four channels: (1) diagnostic changes (2s debounce), (2) workspace ready (one-shot on indexing complete), (3) process health (crash/recovery), (4) stale references (3s debounce on file changes). Hub coordinator in `internal/notify/`, MCP wiring in `cmd/agent-lsp/notifications.go`. All channels wired automatically on `start_lsp`. |
+
+### Symbol-level editing tools
+
+Current editing tools (`apply_edit`, `rename_symbol`) operate on raw text or LSP-level coordinates. Agents must determine exact text to match or line/column positions. Symbol-level tools would accept a symbol name and perform the operation structurally, reducing error-prone coordinate resolution.
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **`replace_symbol_body`** | Planned | Replace the body of a named function, method, or type. Resolves the symbol via `get_document_symbols`, extracts its full range, applies the replacement. The agent says "replace function X with this new implementation" without knowing line numbers. |
+| **`insert_after_symbol`** | Planned | Insert code after a named symbol definition. Useful for adding a new method after an existing one, or a new function after a related helper. |
+| **`insert_before_symbol`** | Planned | Insert code before a named symbol definition. Useful for adding imports, comments, or related types before their first consumer. |
+| **`safe_delete_symbol`** | Planned | Delete a symbol only if it has zero references (verified via `get_references` before deletion). Prevents accidental removal of active code. |
+
+These complement the existing `apply_edit` (which remains available for raw text edits) and `/lsp-edit-symbol` skill (which orchestrates a multi-step workflow). The difference: symbol-level tools are single atomic calls, not multi-step skills. Higher-level abstraction, lower error rate.
+
+### Agent memory system
+
+Structured knowledge persistence across sessions. Agents accumulate understanding of a codebase (architecture decisions, naming conventions, known pitfalls) that is lost when the session ends. A memory system would store this knowledge and make it available to future sessions.
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Session memory** | Planned | Key-value store persisted to `~/.agent-lsp/memory/<workspace-hash>/`. Agents write observations during a session; future sessions read them on connect. |
+| **Cross-session context** | Planned | MCP resource at `memory://` exposing stored knowledge. Agents read it at session start to recover prior understanding without re-exploring the codebase. |
+| **Memory pruning** | Planned | Automatic expiration and relevance scoring. Stale entries (referencing deleted files, outdated patterns) are pruned on access. |
 
 ### Provider-agnostic skill awareness
 
