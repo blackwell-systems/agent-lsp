@@ -186,9 +186,9 @@ func TestHandleStartLsp_ShutdownsExistingClient(t *testing.T) {
 	// Provide a real (but unconfigured) client as existing.
 	existing := lsp.NewLSPClient("/nonexistent/lsp", []string{})
 
-	called := false
+	getClientCalled := false
 	getClient := func() *lsp.LSPClient {
-		called = true
+		getClientCalled = true
 		return existing
 	}
 	var setCalledWith *lsp.LSPClient
@@ -209,7 +209,7 @@ func TestHandleStartLsp_ShutdownsExistingClient(t *testing.T) {
 	}
 
 	// getClient should have been called to retrieve the existing client.
-	if !called {
+	if !getClientCalled {
 		t.Error("expected getClient to be called")
 	}
 

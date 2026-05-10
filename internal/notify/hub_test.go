@@ -34,11 +34,11 @@ func (m *mockSender) SendResourceUpdated(uri string) error {
 }
 
 func TestHub_NilSender(t *testing.T) {
-	h := NewHub(nil)
+	hub := NewHub(nil)
 
 	// Should not panic with nil sender
-	h.Send("info", "test", "hello")
-	h.SendResourceUpdate("file:///a.go")
+	hub.Send("info", "test", "hello")
+	hub.SendResourceUpdate("file:///a.go")
 
 	// No way to observe calls since sender is nil; just verify no panic.
 }
@@ -66,12 +66,12 @@ func TestHub_SetSender(t *testing.T) {
 	}
 
 	// Replace sender
-	msNew := &mockSender{}
-	h.SetSender(msNew)
+	replacementSender := &mockSender{}
+	h.SetSender(replacementSender)
 	h.Send("error", "diag", "new sender")
 
-	if len(msNew.logs) != 1 {
-		t.Fatalf("expected 1 log on new sender, got %d", len(msNew.logs))
+	if len(replacementSender.logs) != 1 {
+		t.Fatalf("expected 1 log on new sender, got %d", len(replacementSender.logs))
 	}
 	// Original sender should not get new calls
 	if len(ms.logs) != 1 {
@@ -80,12 +80,12 @@ func TestHub_SetSender(t *testing.T) {
 }
 
 func TestHub_Close(t *testing.T) {
-	ms := &mockSender{}
-	h := NewHub(ms)
+	sender := &mockSender{}
+	h := NewHub(sender)
 
 	h.Send("info", "test", "before close")
-	if len(ms.logs) != 1 {
-		t.Fatalf("expected 1 log before close, got %d", len(ms.logs))
+	if len(sender.logs) != 1 {
+		t.Fatalf("expected 1 log before close, got %d", len(sender.logs))
 	}
 
 	var stopCalled atomic.Bool
@@ -101,8 +101,8 @@ func TestHub_Close(t *testing.T) {
 	h.Send("info", "test", "after close")
 	h.SendResourceUpdate("file:///c.go")
 
-	if len(ms.logs) != 1 {
-		t.Fatalf("expected no new logs after close, got %d", len(ms.logs))
+	if len(sender.logs) != 1 {
+		t.Fatalf("expected no new logs after close, got %d", len(sender.logs))
 	}
 
 	// Double close is safe
@@ -110,8 +110,8 @@ func TestHub_Close(t *testing.T) {
 }
 
 func TestHub_ConcurrentAccess(t *testing.T) {
-	ms := &mockSender{}
-	h := NewHub(ms)
+	concurrentSender := &mockSender{}
+	h := NewHub(concurrentSender)
 
 	var wg sync.WaitGroup
 	const goroutines = 50
@@ -129,7 +129,7 @@ func TestHub_ConcurrentAccess(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			h.SetSender(ms)
+			h.SetSender(concurrentSender)
 		}()
 	}
 	wg.Wait()

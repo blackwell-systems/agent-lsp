@@ -211,6 +211,28 @@ Agents default to built-in tools (Read, Grep, Edit) over MCP tools even when the
 | **Per-client tool description overrides** | Planned | Tune tool descriptions based on which client is connected. In Claude Code, `list_symbols` description says "use this instead of Read for file structure." In Cursor, skip that guidance since Cursor has its own LSP. Requires detecting the client from the MCP initialize handshake. |
 | **Cross-referencing in tool descriptions** | **Shipped** | Tools suggest related tools where applicable. `apply_edit` recommends `replace_symbol_body` for full function replacements and `preview_edit` before applying. `find_references` recommends `safe_delete_symbol` for zero-reference symbols and `get_change_impact` for blast-radius analysis. `suggest_fixes` points to `/lsp-fix-all` skill. `rename_symbol` recommends `find_references` before renaming exports. |
 
+### Inspector evolution (`/lsp-inspect`)
+
+The inspector skill is agent-lsp's most powerful quality tool: it found a nil sender crash path and dead exports that tests missed. These improvements make it stronger for systematic codebase auditing.
+
+**Skill-level improvements (SKILL.md changes):**
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Severity calibration** | Planned | Weight findings by "would a maintainer accept a PR for this?" Crash paths rank higher than style nits. Filter out findings that produce noise without actionable value. |
+| **Fix suggestions** | Planned | Each finding includes the specific fix: "remove lines 42-58" for dead code, "change `return err` to `fmt.Errorf('context: %w', err)`" for error wrapping. Agents can generate a PR directly from inspector output without additional analysis. |
+| **Batch mode** | Planned | Accept a directory and walk all packages, producing a ranked report. "Top 10 findings in this repo, sorted by severity and blast radius." Currently requires listing individual files. |
+| **Comparison mode** | Planned | Run on a PR diff: "what did this change introduce?" Compare before/after inspection results to surface new dead code, new silent failures, or new coverage gaps introduced by the change. |
+
+**Underlying tool improvements (Go code changes):**
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Cross-file impact scoring** | Planned | Weight each finding by its blast radius using `get_change_impact` data. A silent failure in a function with 50 callers ranks higher than one with 2. Requires the inspector to call `get_change_impact` per finding and include `caller_count` in the output. |
+| **Confidence tiers** | Planned | Replace "high/medium/low" with actionable labels: "verified" (LSP confirmed, act immediately), "suspected" (pattern match, investigate first), "advisory" (style suggestion, optional). Requires changes to the inspector output format and the check taxonomy in the SKILL.md. |
+| **Unexported dead code detection** | Planned | Extend `get_change_impact` or add a new tool parameter (`scope: "all"`) to check unexported symbols in addition to exported ones. Currently only exported symbols are checked because `collectExportedSymbols` filters by uppercase. Requires walking all document symbols and checking references for each. |
+| **Inspector result as MCP resource** | Planned | Expose the last inspector run as an MCP resource at `inspect://` so agents can re-read findings without re-running the full analysis. Useful for iterative fix-verify cycles. |
+
 ## Skills
 
 23 skills shipped. See [skills.md](skills.md) for the full catalog.
