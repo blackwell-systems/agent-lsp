@@ -95,7 +95,7 @@ file_ownership:
       wave: 2
       action: modify
     - file: internal/lsp/client.go
-      agent: E
+      agent: F
       wave: 2
       action: modify
 interface_contracts:
@@ -497,6 +497,7 @@ waves:
           files:
             - internal/notify/stale.go
             - internal/notify/stale_test.go
+      base_commit: 348f3a781c0f60062044215980bba36d18c682f7
     - number: 2
       agents:
         - id: E
@@ -668,7 +669,8 @@ waves:
             - Keep client.go changes to < 20 lines of additions.
             - Do NOT modify any files except: cmd/agent-lsp/notifications.go,
               cmd/agent-lsp/notifications_test.go, cmd/agent-lsp/server.go,
-              cmd/agent-lsp/tools_workspace.go, internal/lsp/client.go.
+              cmd/agent-lsp/tools_workspace.go.
+            - Do NOT modify internal/lsp/client.go (owned by Agent F).
           files:
             - cmd/agent-lsp/notifications.go
             - cmd/agent-lsp/notifications_test.go
@@ -677,6 +679,33 @@ waves:
             - B
             - C
             - D
+        - id: F
+          task: |
+            ## Agent F: LSPClient Notification Hooks
+
+            ### What to implement
+
+            Add three methods and one callback field to LSPClient in internal/lsp/client.go to support proactive notifications.
+
+            1. Add field `fileChangeCbs []func([]types.FileChangeEvent)` to LSPClient struct
+            2. Add `SubscribeToFileChanges(cb func([]types.FileChangeEvent))` method (uses watcherMu)
+            3. In watcher flush path after `DidChangeWatchedFiles(changes)`, invoke all registered callbacks
+            4. Add `IsAlive() bool` method (check cmd.ProcessState, return true for daemon/passive)
+            5. Add `IsWorkspaceLoaded() bool` method (returns workspaceLoaded.Load())
+
+            ### Tests
+            - TestSubscribeToFileChanges: verify callback invoked
+            - TestIsAlive_Subprocess: verify true when process running
+            - TestIsAlive_Passive: verify true for passive mode
+            - TestIsWorkspaceLoaded: verify returns workspaceLoaded state
+
+            ### Constraints
+            - Do NOT modify any files except internal/lsp/client.go
+            - Keep changes under 40 lines total
+          files:
+            - internal/lsp/client.go
+          dependencies:
+            - A
 quality_gates:
     level: standard
     gates:
@@ -767,5 +796,5 @@ critic_report:
     summary: 'All briefs verified against codebase. The previous issue (Agent E missing file_ownership for server.go, tools_workspace.go, and client.go) has been correctly fixed: all three files now appear with action: modify in Agent E''s wave 2 ownership. File existence checks pass (modify targets exist, new targets do not). Symbol accuracy verified: toolDeps, workspaceLoaded, watcherMu, SubscribeToDiagnostics, UnsubscribeFromDiagnostics, DiagnosticUpdateCallback, FileChangeEvent, DidChangeWatchedFiles, isDaemon, isPassive, cmd all exist at referenced locations. Line number references in Agent E''s brief match actual code. Import paths are correct (module is github.com/blackwell-systems/agent-lsp, MCP SDK at github.com/modelcontextprotocol/go-sdk). No i1 disjoint ownership violations. No complexity balance issues.'
     reviewed_at: "2026-05-10T06:41:46Z"
     issue_count: 0
-state: "REVIEWED"
+state: REVIEWED
 original_branch: main
