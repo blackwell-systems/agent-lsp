@@ -14,7 +14,7 @@
   <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
 </p>
 
-**The most complete MCP server for language intelligence.** 60 tools, 30 CI-verified languages, 22 agent workflows. Single Go binary.
+**The most complete MCP server for language intelligence.** 60 tools, 30 CI-verified languages, 23 agent workflows. Single Go binary.
 
 AI agents make incorrect code changes because they can't see the full picture: who calls this function, what breaks if I rename it, does the build still pass. Language servers have the answers, but existing MCP bridges either cold-start on every request or expose raw tools that agents use incorrectly.
 
@@ -97,6 +97,12 @@ See [docs/skills.md](./docs/skills.md) for full descriptions and usage guidance.
 | `/lsp-edit-symbol` | Edit a named symbol without knowing its file or position |
 | `/lsp-edit-export` | Safe editing of exported symbols, finds all callers first |
 | `/lsp-rename` | `prepare_rename` safety gate, preview all sites, confirm, apply atomically |
+
+**Getting started**
+
+| Skill | Purpose |
+|-------|---------|
+| `/lsp-onboard` | First-session project onboarding: detect languages, map packages, find entry points and hotspots, check diagnostics |
 
 **Understanding unfamiliar code**
 
@@ -300,7 +306,7 @@ This is what the agent does, not something you type. Then use any of the 60 tool
 |------------|---------|
 | Tools | **60** |
 | Languages (CI-verified) | **30**, end-to-end integration tests on every push |
-| Agent workflows (skills) | **22**, named multi-step procedures, discoverable via MCP `prompts/list` |
+| Agent workflows (skills) | **23**, named multi-step procedures, discoverable via MCP `prompts/list` |
 | Speculative execution | **8 tools**, simulate changes before writing to disk |
 | Phase enforcement | **4 skills**, runtime blocks out-of-order tool calls with recovery guidance |
 | Connection model | **persistent**, warm index across files and projects |

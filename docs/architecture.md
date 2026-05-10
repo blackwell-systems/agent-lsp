@@ -1164,7 +1164,7 @@ InitializedHandler: func(_ context.Context, req *mcp.InitializedRequest) {
 
 Skills are structured workflow definitions that tell agents how to orchestrate MCP tools in the correct multi-step sequence. They are defined as SKILL.md Markdown files in the `skills/` directory and are delivered through two channels:
 
-1. **MCP prompts (embedded):** All 22 skills are embedded in the binary via `//go:embed` and served through the MCP protocol's `prompts/list` and `prompts/get` methods. Any MCP client discovers them automatically. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`.
+1. **MCP prompts (embedded):** All 23 skills are embedded in the binary via `//go:embed` and served through the MCP protocol's `prompts/list` and `prompts/get` methods. Any MCP client discovers them automatically. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`.
 
 2. **AgentSkills (file-based):** The same SKILL.md files can be installed into the AI client's skill directory (`~/.claude/skills/`) via `install.sh` for slash command access in Claude Code and other AgentSkills-compatible clients.
 

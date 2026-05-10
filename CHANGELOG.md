@@ -5,6 +5,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **`/lsp-onboard` skill (23rd skill).** First-session project onboarding. Explores the project structure via LSP tools: detects languages and build system, identifies entry points, maps package structure, finds hotspots (most-referenced files), and checks for pre-existing diagnostics. Produces a structured project profile for the agent's reference throughout the session.
+
 ### Fixed
 
 - **`get_change_impact` discoverability.** Promoted to IMPORTANT in MCP Instructions with "replaces manual loops over find_references." Agent evaluations showed agents manually looping over exports instead of calling it.

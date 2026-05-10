@@ -1,15 +1,15 @@
 # Skills Reference
 
-agent-lsp ships 22 skills, named workflows that encode correct tool sequences so
+agent-lsp ships 23 skills, named workflows that encode correct tool sequences so
 multi-step operations happen reliably. This doc is a developer reference: what each
 skill does, when to reach for it, and what it does that raw tool calls miss.
 
-All 22 skills conform to the [Agent Skills](https://agentskills.io/) open standard, the cross-agent skill format adopted by Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and [30+ other tools](https://agentskills.io/clients). Each `SKILL.md` includes the required `name` and `description` frontmatter fields, plus `license`, `compatibility`, and `allowed-tools`.
+All 23 skills conform to the [Agent Skills](https://agentskills.io/) open standard, the cross-agent skill format adopted by Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and [30+ other tools](https://agentskills.io/clients). Each `SKILL.md` includes the required `name` and `description` frontmatter fields, plus `license`, `compatibility`, and `allowed-tools`.
 
 **agent-lsp skills are not locked to any single AI provider.** Because they follow the AgentSkills open standard, they work with any conforming agent: Claude, Copilot, Cursor, Gemini, Codex, Roo Code, OpenHands, and the rest. The MCP server handles the LSP runtime; the skills are portable workflow definitions that any agent can load and execute.
 
 **Two discovery paths:**
-- **MCP prompts:** Any MCP client discovers all 22 skills via `prompts/list` and retrieves full workflow instructions via `prompts/get`. No installation step required; skill definitions are embedded in the binary.
+- **MCP prompts:** Any MCP client discovers all 23 skills via `prompts/list` and retrieves full workflow instructions via `prompts/get`. No installation step required; skill definitions are embedded in the binary.
 - **AgentSkills install:** `./skills/install.sh` copies SKILL.md files to your AI tool's skill directory for slash command access.
 
 See the [Setup guide](getting-started/quickstart.md) for installation instructions. For the individual tools that skills compose, see [docs/tools.md](./tools.md). For the full AgentSkills specification, see [agentskills.io/specification](https://agentskills.io/specification).
@@ -149,6 +149,33 @@ confirm, then apply atomically via the language server.
 
 **What it does that raw tools miss:**
 Uses `prepare_rename` as a safety gate. The language server validates the rename is legal at that position before anything is touched. The dry-run produces the full `workspace_edit` preview (all files and line numbers) before asking for confirmation. Atomically applies all changes in one `apply_edit` call rather than editing file by file.
+
+---
+
+## Getting started
+
+First-session onboarding builds a project profile so the agent understands the
+codebase structure before making any changes.
+
+### `/lsp-onboard`
+
+First-session project onboarding. Explores the project structure via LSP tools:
+detects languages and build system, identifies entry points, maps package structure,
+finds hotspots (most-referenced files), and checks for pre-existing diagnostics.
+Produces a structured project profile for the agent's reference throughout the session.
+
+**When to reach for it:**
+- First time working in a new codebase.
+- After major structural changes (new packages, build system migration).
+- When the agent seems confused about project conventions.
+
+**What it does that raw tools miss:**
+Composes `detect_lsp_servers`, `find_symbol`, `list_symbols`, `get_change_impact`,
+`run_build`, `run_tests`, and `get_diagnostics` into a single cohesive workflow
+that produces a structured project profile (languages, entry points, package map,
+hotspots, diagnostic baseline) in under 2 minutes. Without this skill, agents
+spend the first several minutes of a session rediscovering the same structural
+information through ad-hoc exploration.
 
 ---
 

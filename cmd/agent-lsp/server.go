@@ -314,7 +314,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:    "agent-lsp",
 		Version: Version,
 	}, &mcp.ServerOptions{
-		Instructions: "This server provides 60 code intelligence tools and 22 multi-step workflow skills across 30 languages. " +
+		Instructions: "This server provides 60 code intelligence tools and 23 multi-step workflow skills across 30 languages. " +
 			"IMPORTANT: call get_change_impact before editing any file. It returns all exported symbols with their callers partitioned into test vs non-test in one call. This replaces manual loops over find_references. " +
 			"Task-to-tool mapping: " +
 			"all callers of all exports in a file -> get_change_impact (one call); " +

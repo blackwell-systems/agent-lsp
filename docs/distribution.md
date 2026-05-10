@@ -129,7 +129,7 @@ Requires a Go toolchain. Builds from source and installs to `$GOPATH/bin`.
 `smithery.yaml` in the repo root enables auto-indexing on Smithery. Auto-discovered from GitHub.
 
 ### cursor.directory
-Submitted. Cursor detects 22 skill components from SKILL.md files. Listed under Developer Tools.
+Submitted. Cursor detects 23 skill components from SKILL.md files. Listed under Developer Tools.
 
 ### mcpservers.org
 Manually submitted. Free listing.

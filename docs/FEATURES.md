@@ -252,7 +252,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 
 ---
 
-## Skills (22 total)
+## Skills (23 total)
 
 | Skill | Invocation | Allowed Tools | Description |
 |-------|-----------|---------------|-------------|
@@ -278,6 +278,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `/lsp-understand` | `[symbol-name \| file-path]` | inspect_symbol, go_to_implementation, find_callers, find_references, get_symbol_source, list_symbols, go_to_symbol | Deep Code Map: type info + implementations + call hierarchy (2-level) + references + source; synthesizes cross-symbol relationships |
 | `/lsp-inspect` | `<file-or-directory> [--checks <types>] [--json]` | get_change_impact, find_references, list_symbols, inspect_symbol, get_diagnostics, find_callers, go_to_definition, get_server_capabilities | Full code quality audit: dead symbols, test coverage, silent failures, error wrapping, doc drift, panics, context propagation; severity-tiered findings report |
 | `/lsp-architecture` | `[workspace-root-path]` | start_lsp, list_symbols, get_change_impact, detect_lsp_servers, find_symbol | Project-level architecture overview: language distribution, package map (capped at 30), entry points, hotspots (top 10 by reference count), dependency flow. Read-only. |
+| `/lsp-onboard` | `[workspace-root-path]` | start_lsp, detect_lsp_servers, list_symbols, find_symbol, get_change_impact, run_build, run_tests, get_diagnostics, get_editing_context | First-session project onboarding: detect languages, build system, entry points, package map, hotspots, diagnostics baseline. Produces a structured project profile. |
 
 **User-facing reference:** `docs/skills.md` (one-page skill catalog with usage examples and trigger conditions)
 
@@ -303,7 +304,7 @@ metadata:
 # skill body (prompt for agent)
 ```
 
-**Capability metadata:** All 22 skills declare `required-capabilities` and `optional-capabilities` in frontmatter. Maps directly to LSP server capability keys from `get_server_capabilities`. Agents can check before activation whether the current language server supports the skill's requirements. Skills with zero required capabilities (lsp-safe-edit, lsp-simulate, lsp-verify, lsp-test-correlation) work with any language server.
+**Capability metadata:** All 23 skills declare `required-capabilities` and `optional-capabilities` in frontmatter. Maps directly to LSP server capability keys from `get_server_capabilities`. Agents can check before activation whether the current language server supports the skill's requirements. Skills with zero required capabilities (lsp-safe-edit, lsp-simulate, lsp-verify, lsp-test-correlation) work with any language server.
 
 **Runtime skill classification:** `get_server_capabilities` now includes a `skills` array in its response, classifying every skill as `supported` (all required capabilities present), `partial` (required present, some optional missing), or `unsupported` (missing required capabilities). One call at session start tells the agent exactly which skills to use and which to skip.
 
@@ -322,7 +323,7 @@ metadata:
 
 **Provider-agnostic:** Skills conform to the AgentSkills open standard and work with any conforming agent (Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and 30+ others). The `--dest` flag on `install.sh` installs to any agent's skill directory. The installer updates CLAUDE.md, AGENTS.md (Codex), and GEMINI.md instruction files when present.
 
-**MCP prompts:** All 22 skills are also exposed via `prompts/list` and `prompts/get`. Any MCP client discovers them on connection without manual installation. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`. Skill SKILL.md files are embedded in the binary at build time.
+**MCP prompts:** All 23 skills are also exposed via `prompts/list` and `prompts/get`. Any MCP client discovers them on connection without manual installation. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`. Skill SKILL.md files are embedded in the binary at build time.
 
 ---
 
@@ -803,7 +804,7 @@ Shipped. Both waves complete: notification infrastructure (`internal/notify/`) a
 
 ## Provider-Agnostic Skill Awareness
 
-Four-layer reinforcement architecture ensures agents know about the 22 skills regardless of which AI provider or MCP client is used.
+Four-layer reinforcement architecture ensures agents know about the 23 skills regardless of which AI provider or MCP client is used.
 
 | Layer | Mechanism | Durability |
 |-------|-----------|------------|
@@ -1129,7 +1130,7 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
 - Each package has smoke tests verifying alias targets are non-nil at compile time
 
 **skills/:**
-- 22 skill directories; each contains `SKILL.md` with frontmatter + prompt body
+- 23 skill directories; each contains `SKILL.md` with frontmatter + prompt body
 - `install.sh` — symlinks/copies skill dirs to `~/.claude/skills/`; maintains CLAUDE.md managed block
 
 ### Key Architectural Facts
@@ -1327,7 +1328,7 @@ locs, err := client.GetDefinition(ctx, fileURI, lsp.Position{Line: 10, Character
 | `multi-lang-java` | Java | ubuntu-latest | continue-on-error; `-Xmx2G`; 15min timeout; isolated from `multi-lang-core` to avoid OOM |
 | `multi-lang-mongodb` | MongoDB | ubuntu-latest | continue-on-error; mongo:7 service container; mongosh health check |
 | `speculative-test` | session lifecycle (8 languages: Go, TypeScript, Python, Rust, C++, C#, Dart, Java) | ubuntu-latest | `TestSpeculativeSessions` table-driven in `test/speculative_test.go`; 20min timeout; Java 300s extended timeout for JVM startup |
-| `mcp-assert-trajectory` | (skill protocols, all 22 skills) | ubuntu-latest | inline traces, no server needed, 0ms per assertion; total under 60s |
+| `mcp-assert-trajectory` | (skill protocols, all 23 skills) | ubuntu-latest | inline traces, no server needed, 0ms per assertion; total under 60s |
 | `mcp-assert` | Go (tool correctness via gopls) | ubuntu-latest | full MCP stdio transport; 120s per assertion; ~2min total |
 
 **Test files:**
@@ -1358,7 +1359,7 @@ agent-lsp is tested through the MCP protocol layer using [mcp-assert](https://gi
 
 **Two CI jobs run mcp-assert on every push and PR:**
 
-**`mcp-assert-trajectory`** — validates that all 22 skills follow correct tool call sequences. Uses inline traces embedded in YAML files; no live language server needed. Each assertion completes in 0ms. Total job runtime under 60 seconds. Assertion files: `examples/mcp-assert/trajectory/` (22 files, one per skill). Trajectory assertions check `presence` (required tools appear), `absence` (forbidden tools do not appear), `order` (correct sequence), and `args_contain` (specific argument values).
+**`mcp-assert-trajectory`** — validates that all 23 skills follow correct tool call sequences. Uses inline traces embedded in YAML files; no live language server needed. Each assertion completes in 0ms. Total job runtime under 60 seconds. Assertion files: `examples/mcp-assert/trajectory/` (23 files, one per skill). Trajectory assertions check `presence` (required tools appear), `absence` (forbidden tools do not appear), `order` (correct sequence), and `args_contain` (specific argument values).
 
 **`mcp-assert`** — tests tool correctness through the full MCP stdio transport against real gopls. Assertion files: `examples/mcp-assert/go/*.yaml`. 120s per-assertion timeout; total runtime ~2 minutes.
 
