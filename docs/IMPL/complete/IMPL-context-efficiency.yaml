@@ -1,3 +1,4 @@
+completion_date: "2026-05-10"
 title: 'Context and Efficiency Features: get_editing_context, Token Savings, ETag'
 feature_slug: context-efficiency
 verdict: SUITABLE
@@ -692,6 +693,7 @@ waves:
             - A
             - B
             - C
+          context_source: prepared-brief
 quality_gates:
     level: standard
     gates:
@@ -713,7 +715,7 @@ post_merge_checklist:
 completion_reports:
     A:
         status: complete
-        branch: worktree-agent-ac699336
+        branch: saw/context-efficiency/wave1-agent-A
         commit: 74003a6
         files_changed:
             - internal/tools/context.go
@@ -750,7 +752,7 @@ completion_reports:
         notes: Token savings helper complete. Both functions exported and tested. Ready for integration by Agent A/C.
     C:
         status: complete
-        branch: worktree-agent-afbfc4ba
+        branch: saw/context-efficiency/wave1-agent-C
         commit: 462546f
         files_changed:
             - internal/tools/etag.go
@@ -768,6 +770,20 @@ completion_reports:
             - TestCheckETagMatch_EmptyIfNoneMatch
         verification: PASS
         notes: All 3 exported functions implemented per contract. 7 tests passing. Build and vet clean.
+    D:
+        status: complete
+        branch: worktree-agent-ac699336
+        commit: 7b5bd57
+        files_changed:
+            - internal/tools/context_meta.go
+            - cmd/agent-lsp/tools_context.go
+            - cmd/agent-lsp/tools_analysis.go
+            - internal/tools/analysis.go
+            - internal/tools/symbol_source.go
+        files_created:
+            - internal/tools/context_meta.go
+        verification: PASS
+        notes: All wave 2 wiring complete. HandleGetEditingContextWithMeta wraps core handler with ETag+token meta. AppendTokenMeta added to list_symbols and get_symbol_source returns. if_none_match params added to arg structs. All tests pass.
 pre_mortem:
     overall_risk: low
     rows:
@@ -805,5 +821,4 @@ critic_report:
     summary: 'Re-review after fix: Agent A now correctly references GetInfoOnLocation(ctx, uri, pos) (string, error) instead of the non-existent GetHover. All symbols verified against source: GetInfoOnLocation, GetDocumentSymbols, GetReferencesRaw, PrepareCallHierarchy, GetOutgoingCalls, LanguageIDFromPath, ValidateFilePath, WithDocument, CreateFileURI, isTestFile all exist with matching signatures. File existence checks pass (all 8 new files do not exist, all 3 modify files exist). Pattern accuracy confirmed for Agent D (appendHint/TextResult returns in analysis.go match brief). Registration pattern (addToolWithPhaseCheck, registerSessionTools) confirmed. Ownership is disjoint across waves. No errors found.'
     reviewed_at: "2026-05-10T19:12:40Z"
     issue_count: 0
-state: REVIEWED
-original_branch: main
+state: COMPLETE
