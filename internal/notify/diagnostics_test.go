@@ -162,25 +162,25 @@ func (m *mockSubscriber) UnsubscribeFromDiagnostics(cb types.DiagnosticUpdateCal
 	m.cb = nil
 }
 
-// mockSender implements NotificationSender for testing.
-type mockSender struct {
+// diagMockSender implements NotificationSender for testing.
+type diagMockSender struct {
 	mu       sync.Mutex
 	messages []string
 }
 
-func (s *mockSender) SendLog(level, logger, message string) error {
+func (s *diagMockSender) SendLog(level, logger, message string) error {
 	s.mu.Lock()
 	s.messages = append(s.messages, message)
 	s.mu.Unlock()
 	return nil
 }
 
-func (s *mockSender) SendResourceUpdated(uri string) error {
+func (s *diagMockSender) SendResourceUpdated(uri string) error {
 	return nil
 }
 
 func TestSubscribeDiagnostics(t *testing.T) {
-	sender := &mockSender{}
+	sender := &diagMockSender{}
 	hub := NewHub(sender)
 	sub := &mockSubscriber{}
 

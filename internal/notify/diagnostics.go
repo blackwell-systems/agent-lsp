@@ -15,13 +15,6 @@ type DiagUpdate struct {
 	WarnCount  int    `json:"warnings"`
 }
 
-// DiagnosticSubscriber allows registration of diagnostic update callbacks.
-// Implemented by the LSP client/manager.
-type DiagnosticSubscriber interface {
-	SubscribeToDiagnostics(cb types.DiagnosticUpdateCallback)
-	UnsubscribeFromDiagnostics(cb types.DiagnosticUpdateCallback)
-}
-
 // diagState holds error/warning counts for a single URI.
 type diagState struct {
 	ErrorCount int
