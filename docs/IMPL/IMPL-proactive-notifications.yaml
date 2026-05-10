@@ -718,7 +718,7 @@ scaffolds:
             h.sender = s
         }
       import_path: github.com/blackwell-systems/agent-lsp/internal/notify
-      status: pending
+      status: committed (761afc8)
 pre_mortem:
     overall_risk: medium
     rows:
