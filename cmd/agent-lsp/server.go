@@ -34,6 +34,7 @@ import (
 	"github.com/blackwell-systems/agent-lsp/internal/httpauth"
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
+	"github.com/blackwell-systems/agent-lsp/internal/notify"
 	"github.com/blackwell-systems/agent-lsp/internal/phase"
 	"github.com/blackwell-systems/agent-lsp/internal/resources"
 	"github.com/blackwell-systems/agent-lsp/internal/session"
@@ -282,6 +283,7 @@ type toolDeps struct {
 	serverArgs               []string
 	auditLogger              *audit.Logger
 	phaseTracker             *phase.Tracker
+	notifyHub                *notify.Hub
 }
 
 // Run creates and starts the MCP server.
@@ -304,7 +306,11 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	}
 	defer auditLogger.Close()
 
-	server := mcp.NewServer(&mcp.Implementation{
+	notifyHub := setupNotificationHub()
+	defer notifyHub.Close()
+
+	var server *mcp.Server
+	server = mcp.NewServer(&mcp.Implementation{
 		Name:    "agent-lsp",
 		Version: Version,
 	}, &mcp.ServerOptions{
@@ -312,6 +318,10 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		InitializedHandler: func(_ context.Context, req *mcp.InitializedRequest) {
 			logging.SetServer(&mcpSessionSender{ss: req.Session})
 			logging.MarkServerInitialized()
+			notifyHub.SetSender(&mcpNotifySender{ss: req.Session, server: server})
+			if c := cs.get(); c != nil {
+				wireNotificationsToClient(notifyHub, c)
+			}
 		},
 	})
 
@@ -327,6 +337,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		serverArgs:               serverArgs,
 		auditLogger:              auditLogger,
 		phaseTracker:             phaseTracker,
+		notifyHub:                notifyHub,
 	}
 
 	registerWorkspaceTools(deps)

@@ -149,6 +149,9 @@ func registerWorkspaceTools(d toolDeps) {
 				return makeCallToolResult(types.ErrorResult(fmt.Sprintf("passive initialize failed: %s", err))), nil, nil
 			}
 			d.cs.set(client)
+			if d.notifyHub != nil {
+				wireNotificationsToClient(d.notifyHub, client)
+			}
 			return makeCallToolResult(types.TextResult("Connected to existing language server at " + args.Connect)), nil, nil
 		}
 
@@ -175,6 +178,9 @@ func registerWorkspaceTools(d toolDeps) {
 					return makeCallToolResult(types.ErrorResult(err.Error())), nil, nil
 				}
 				d.cs.set(client)
+				if d.notifyHub != nil {
+					wireNotificationsToClient(d.notifyHub, client)
+				}
 				// Block until workspace indexing completes if requested.
 				if args.ReadyTimeoutSeconds > 0 {
 					client.WaitForWorkspaceReadyTimeout(ctx, time.Duration(args.ReadyTimeoutSeconds)*time.Second)
@@ -186,6 +192,9 @@ func registerWorkspaceTools(d toolDeps) {
 			}
 			if c := d.resolver.DefaultClient(); c != nil {
 				d.cs.set(c)
+				if d.notifyHub != nil {
+					wireNotificationsToClient(d.notifyHub, c)
+				}
 			}
 			// Block until workspace indexing completes if requested.
 			// Servers like jdtls emit $/progress tokens during Maven/Gradle
@@ -198,6 +207,11 @@ func registerWorkspaceTools(d toolDeps) {
 			return makeCallToolResult(types.TextResult("LSP server started successfully")), nil, nil
 		}
 		r, err := tools.HandleStartLsp(ctx, d.cs.get, d.cs.set, d.serverPath, d.serverArgs, toolArgsToMap(args))
+		if err == nil && d.notifyHub != nil {
+			if c := d.cs.get(); c != nil {
+				wireNotificationsToClient(d.notifyHub, c)
+			}
+		}
 		return makeCallToolResult(r), nil, err
 	})
 
