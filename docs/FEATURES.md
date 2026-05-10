@@ -1,10 +1,10 @@
 # agent-lsp Features Dump
 
-Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. All 60 tools have `ToolAnnotations` (Title, ReadOnlyHint, DestructiveHint, IdempotentHint, OpenWorldHint) and 171+ `jsonschema` struct tags providing parameter semantics in the schema itself.
+Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. All 61 tools have `ToolAnnotations` (Title, ReadOnlyHint, DestructiveHint, IdempotentHint, OpenWorldHint) and 171+ `jsonschema` struct tags providing parameter semantics in the schema itself.
 
 ---
 
-## Tools (60 total, 60 CI-verified)
+## Tools (61 total, 61 CI-verified)
 
 ### Session & Lifecycle (8 tools)
 
@@ -68,17 +68,17 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Single tool handles `textDocument/prepareTypeHierarchy` + `typeHierarchy/supertypes` + `typeHierarchy/subtypes`
 - Tested on Java (jdtls) and TypeScript; TypeScript skips when server does not return hierarchy item
 
-### Analysis (14 tools)
+### Analysis (15 tools)
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `inspect_symbol` | Hover information at position | `file_path` (string, req), `line` (int, req), `column` (int, req), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
+| `inspect_symbol` | Hover information at position | `file_path` (string, req), `line` (int, opt), `column` (int, opt), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
 | `get_completions` | Code completions at position | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `get_signature_help` | Function signature at cursor | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `suggest_fixes` | Available refactorings/fixes | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req) |
 | `list_symbols` | All symbols in file | `file_path` (string, req), `language_id` (string, opt), `format` (string, opt: "outline") |
 | `find_symbol` | Symbols across workspace | `query` (string, req), `detail_level` (string, opt: "basic", "hover"), `limit` (int, opt), `offset` (int, opt) |
-| `find_references` | All usages of symbol | `file_path` (string, req), `line` (int, req), `column` (int, req), `include_declaration` (bool, opt), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
+| `find_references` | All usages of symbol | `file_path` (string, req), `line` (int, opt), `column` (int, opt), `include_declaration` (bool, opt), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
 | `get_inlay_hints` | Type annotations/param labels | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req) |
 | `get_semantic_tokens` | Token type classification | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req) |
 | `get_symbol_source` | Extract source text for symbol | `file_path` (string, req), `line` (int, req), `column` (int, opt), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
@@ -86,6 +86,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `get_change_impact` | Blast-radius analysis | `changed_files` (array, req), `include_transitive` (bool, opt) |
 | `get_cross_repo_references` | Find usages across consumer repos | `symbol_file` (string, req), `line` (int, req), `column` (int, req), `consumer_roots` (array, req), `language_id` (string, opt) |
 | `detect_changes` | Git diff + impact analysis + risk classification | `workspace_root` (string, opt), `scope` (string, opt: "unstaged", "staged", "committed"), `range` (string, opt) |
+| `get_editing_context` | Complete pre-edit context in one call | `file_path` (string, req), `language_id` (string, opt), `if_none_match` (string, opt) |
 
 **`detect_changes` notes:**
 - Runs `git diff --name-only` for the specified scope (default: unstaged)
@@ -118,10 +119,20 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 
 **`get_change_impact` notes:**
 - Enumerates all exported symbols in `changed_files` via `list_symbols`
+- Includes exported methods (receiver prefix fix): methods like `(*Hub).SetSender` are now detected correctly; the method name after the last dot is checked for uppercase, not the full name starting with `(`
+- Recurses into type children to find methods on types (e.g., `(*Hub).Send`), while filtering out struct fields
 - Resolves references for each symbol via `find_references`
 - Partitions results: test callers (with enclosing test function names extracted) vs non-test callers
+- `affected_symbols` field includes per-symbol `test_callers` and `non_test_callers` lists; agents can see which tests cover each specific method, not just a flat list for the file
 - `include_transitive: true` follows one level of transitive callers
 - Errors from per-symbol reference lookups surfaced in `warnings` field (not silently discarded)
+
+**`get_editing_context` notes:**
+- Composite tool: returns file symbols with signatures, callers partitioned by test/non-test, callees, and imports in one call
+- Replaces the 3-5 tool sequence agents previously used to gather pre-edit context (`list_symbols` + `find_references` per symbol + `find_callers`)
+- Supports `if_none_match`: pass an ETag from a previous response; if the file content hash matches, returns `not_modified` without recomputing
+- Includes `_meta.token_savings` showing tokens returned vs full file size (via `AppendTokenMeta`)
+- Handler: `HandleGetEditingContextWithMeta` wraps the core handler with token metadata
 
 **`get_cross_repo_references` notes:**
 - Adds each consumer root as workspace folder via `add_workspace_folder`
@@ -241,14 +252,22 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Self-contained: requires `file_path` + (optionally) `workspace_root` + `language`; `session_id` is an optional bypass; if provided, uses an existing session instead of creating/destroying one
 - Internally: create → apply → evaluate → discard → destroy
 - Returns `EvaluationResult` directly
+- `net_delta` filters out severity 3 (info) and 4 (hint) diagnostics from DiffDiagnostics; only errors and warnings count toward the delta
 
-**Total: 60 tools** (57 core + 3 phase enforcement)
-- **CI-verified: 60** (including `set_log_level` verified separately across all 30 languages, and 3 phase enforcement tools verified via mcp-assert)
-- **ToolAnnotations:** All 60 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
+**`destroy_session` notes:**
+- Returns success with `status: "already_destroyed"` instead of an error when the session does not exist or was already cleaned up
+- Agents calling `destroy_session` after `preview_edit` (which auto-cleans up) no longer see a confusing error
+
+**Total: 61 tools** (58 core + 3 phase enforcement)
+- **CI-verified: 61** (including `set_log_level` verified separately across all 30 languages, and 3 phase enforcement tools verified via mcp-assert)
+- **ToolAnnotations:** All 61 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
 - **jsonschema struct tags:** 171+ tags across all Args structs; 100% parameter description coverage
 - **1-indexed coordinates:** All line/column parameters are 1-based (editor convention)
 - **0-based conversion:** `extractRange` helper converts to 0-based for LSP protocol internally
-- **Next-step hints:** Every tool response includes a contextual `hint` field suggesting the logical next tool call. For example, `find_references` hints "use get_change_impact to see the full blast radius"; `detect_changes` hints "use get_change_impact on specific files for detailed analysis." Helps agents chain tools correctly without skills, and helps less capable models navigate the 60-tool surface. Zero-cost addition: one extra field in the JSON response.
+- **Next-step hints:** Every tool response includes a contextual `hint` field suggesting the logical next tool call. For example, `find_references` hints "use get_change_impact to see the full blast radius"; `detect_changes` hints "use get_change_impact on specific files for detailed analysis." Helps agents chain tools correctly without skills, and helps less capable models navigate the 61-tool surface. Zero-cost addition: one extra field in the JSON response.
+- **Token savings metadata:** `list_symbols`, `get_symbol_source`, and `get_editing_context` include `_meta.token_savings` in responses, showing tokens returned vs full file size. Makes the efficiency story visible on every call.
+- **ETag/conditional responses:** `get_editing_context`, `list_symbols`, and `get_symbol_source` accept an `if_none_match` parameter. When the file's content hash matches, returns `not_modified` instead of recomputing. Eliminates redundant computation for unchanged files.
+- **Position pattern without line/column:** `find_references` and `inspect_symbol` accept `position_pattern` without requiring `line`/`column` (fields are `*int` pointers, omittable). Agents can locate symbols by text pattern alone.
 
 ---
 
@@ -1381,3 +1400,15 @@ agent-lsp is tested through the MCP protocol layer using [mcp-assert](https://gi
 - `preview_edit_standalone` — asserts `net_delta == 0` for comment edit
 - `error_detection` — applies `return 42` in `func ... string` body; asserts `net_delta > 0` and `errors_introduced` non-empty
 
+---
+
+## Agent Self-Evaluations
+
+Four independent AI agents evaluated agent-lsp across 10 coding tasks (find callers, rename safely, preview edits, detect dead code). Each model wrote an honest assessment comparing LSP tools against grep/read equivalents. Results documented in [docs/agent-evaluations.md](./agent-evaluations.md).
+
+| Model | Verdict | Top-rated tools |
+|-------|---------|----------------|
+| Claude (Opus 4.6) | Recommend | `get_change_impact`, `go_to_implementation`, simulation sessions |
+| Cursor (auto) | Recommend | rename, references, implementations, simulation |
+| GPT-5.5 (Codex) | Recommend | references, implementations, rename previews, diagnostics |
+| Gemini 2.5 Pro | Highly recommend | rename, implementations, diagnostic preview |

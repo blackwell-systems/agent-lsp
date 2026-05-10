@@ -73,7 +73,7 @@ Passive mode is activated by passing `connect: "localhost:9999"` to `start_lsp`.
 
 **What agent-lsp does:**
 
-1. Speaks MCP to the AI agent, exposing 60 tools the agent can call.
+1. Speaks MCP to the AI agent, exposing 61 tools the agent can call.
 2. Translates each tool call into one or more LSP JSON-RPC requests, sent over stdin/stdout pipes to the appropriate language server subprocess.
 3. Maintains a persistent session: the language server index stays warm across all tool calls, all files, all packages. There is no cold-start on each request.
 4. Adds a speculative execution layer on top: edits can be applied in-memory to the live LSP state, evaluated for diagnostic impact, then committed to disk or discarded, without ever touching the file system until explicitly requested.
@@ -125,6 +125,9 @@ cmd/agent-lsp/
                            find_symbol, find_references, get_inlay_hints,
                            get_semantic_tokens, get_symbol_source, get_symbol_documentation,
                            get_change_impact, get_cross_repo_references, detect_changes
+  tools_context.go      ← 1 composite context tool: get_editing_context
+                           (file symbols + callers + callees + imports in one call;
+                           supports if_none_match ETag and token savings metadata)
   tools_workspace.go    ← 21 workspace/lifecycle tools: start_lsp, restart_lsp_server,
                            add_workspace_folder, remove_workspace_folder, list_workspace_folders,
                            open_document, close_document, get_diagnostics, get_server_capabilities,
@@ -224,6 +227,10 @@ internal/tools/
   simulation.go    ← Tool handlers for the speculative execution layer
   build.go         ← run_build, run_tests, get_tests_for_file
   change_impact.go ← get_change_impact (enumerate exported symbols, resolve references, partition test/non-test callers)
+  context_meta.go  ← HandleGetEditingContextWithMeta: wraps get_editing_context handler with
+                     AppendTokenMeta for token savings metadata
+  token_savings.go ← EstimateTokenSavings, AppendTokenMeta: token savings metadata helpers;
+                     appends _meta.token_savings to list_symbols, get_symbol_source, get_editing_context
   cross_repo.go    ← get_cross_repo_references (add consumer repos as workspace folders, partition references by repo)
   detect_changes.go ← detect_changes (git diff + filter to recognized languages + get_change_impact + per-symbol risk classification)
   cache_artifact.go ← export_cache and import_cache tool handlers (delegate to SymbolRefCache.ExportArtifact/ImportArtifact)
@@ -318,6 +325,8 @@ skills/            ← Agent Skills (SKILL.md directories)
   lsp-inspect/     ← Full code quality audit for a file or package
   lsp-architecture/ ← Project-level architecture overview: language distribution, package map,
                       entry points, hotspots, dependency flow
+  lsp-onboard/     ← First-session project onboarding: detect languages, build system,
+                      entry points, package map, hotspots, diagnostics baseline
 
 experiments/token-savings/    Reproducible benchmark: LSP vs grep/read token cost
 ```
@@ -491,7 +500,7 @@ For HTTP mode, the HTTP server calls `Shutdown` with a 5-second deadline, draini
 
 ## Tool Registration Model
 
-60 MCP tools are exposed to the AI agent. In MCP, a "tool" is a named function with a JSON Schema for its arguments that the AI can invoke via a JSON-RPC `tools/call` request. Tools are defined in five files under `cmd/agent-lsp/` and dispatched through a shared pattern.
+61 MCP tools are exposed to the AI agent. In MCP, a "tool" is a named function with a JSON Schema for its arguments that the AI can invoke via a JSON-RPC `tools/call` request. Tools are defined in seven files under `cmd/agent-lsp/` and dispatched through a shared pattern.
 
 ### How a tool is defined
 
@@ -516,18 +525,19 @@ mcp.AddTool(d.server, &mcp.Tool{
 })
 ```
 
-### The six registration files
+### The seven registration files
 
 | File | Tools registered | Count |
 |------|-----------------|-------|
 | `tools_workspace.go` | Session lifecycle, build/test, workspace management, cache export/import | 21 |
 | `tools_navigation.go` | go_to_definition, references, call hierarchy, rename | 10 |
 | `tools_analysis.go` | hover, diagnostics, completions, symbols, change impact, detect_changes | 14 |
+| `tools_context.go` | Composite context tool (get_editing_context) | 1 |
 | `tools_session.go` | Speculative execution (simulate, evaluate, commit) | 8 |
 | `tools_symbol_edit.go` | Symbol-level editing (replace_symbol_body, insert_after_symbol, insert_before_symbol, safe_delete_symbol) | 4 |
 | `tools_phase.go` | Phase enforcement (activate_skill, deactivate_skill, get_skill_phase) | 3 |
 
-All six registration functions are called from `Run()` in `server.go` via the `toolDeps` bundle, which carries shared dependencies: the MCP server, the client resolver, the session manager, the phase tracker, and the `clientForFileWithAutoInit` closure. The 57 non-phase tools are wrapped via `addToolWithPhaseCheck` (generic wrapper that checks phase permissions before each handler). The 3 phase tools use raw `mcp.AddTool` to avoid circular enforcement.
+All seven registration functions are called from `Run()` in `server.go` via the `toolDeps` bundle, which carries shared dependencies: the MCP server, the client resolver, the session manager, the phase tracker, and the `clientForFileWithAutoInit` closure. The 58 non-phase tools are wrapped via `addToolWithPhaseCheck` (generic wrapper that checks phase permissions before each handler). The 3 phase tools use raw `mcp.AddTool` to avoid circular enforcement.
 
 ### Handler separation
 
@@ -1171,7 +1181,7 @@ Skills are structured workflow definitions that tell agents how to orchestrate M
 ```
 Go binary (agent-lsp)                     skills/ directory
 ─────────────────────                     ──────────────────
-Exposes 60 MCP tools                      Source SKILL.md definitions
+Exposes 61 MCP tools                      Source SKILL.md definitions
 Serves skills via prompts/list + get      Installed to ~/.claude/skills/ for slash commands
 Embeds skill definitions at build time    Used by AgentSkills clients directly
 ```

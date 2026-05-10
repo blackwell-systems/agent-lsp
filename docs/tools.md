@@ -1,6 +1,6 @@
 # agent-lsp Tool Reference
 
-All 60 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
+All 61 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
 both `line` and `column` in every tool call; the server converts internally to
 the 0-based values the LSP spec requires.
 
@@ -10,6 +10,7 @@ the 0-based values the LSP spec requires.
 
 - [Session tools](#session-tools): `start_lsp`, `restart_lsp_server`, `open_document`, `close_document`, `add_workspace_folder`, `remove_workspace_folder`, `list_workspace_folders`
 - [Analysis tools](#analysis-tools): `get_diagnostics`, `inspect_symbol`, `get_completions`, `get_signature_help`, `suggest_fixes`, `list_symbols`, `find_symbol`, `get_change_impact`, `get_cross_repo_references`, `detect_changes`
+- [Context tools](#context-tools): `get_editing_context`
 - [Navigation tools](#navigation-tools): `find_references`, `go_to_definition`, `go_to_type_definition`, `go_to_implementation`, `go_to_declaration`
 - [Refactoring tools](#refactoring-tools): `rename_symbol`, `prepare_rename`, `format_document`, `format_range`, `apply_edit`, `execute_command`
 - [Symbol editing tools](#symbol-editing-tools): `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, `safe_delete_symbol`
@@ -873,6 +874,50 @@ call that answers "what did I break?" without manually listing changed files.
 - Risk classification: `"high"` (callers from multiple packages), `"medium"` (callers from the same package only), `"low"` (zero non-test callers).
 - Filters out non-source files (plaintext, deleted) before analysis.
 - Delegates to `get_change_impact` internally, so results benefit from the persistent reference cache.
+
+---
+
+## Context tools
+
+### `get_editing_context`
+
+Get complete editing context for a file in one call: all symbols with signatures,
+callers partitioned by test/non-test, callees, and imports. Use before making
+changes to understand the file structure and blast radius without multiple
+round-trips.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | Absolute path to the file to get editing context for |
+| `language_id` | string | no | Language identifier. Optional; auto-detected from file extension |
+| `if_none_match` | string | no | ETag from a previous response. If file has not changed, returns a short `not_modified` response instead of recomputing |
+
+**Example call**
+
+```json
+{
+  "file_path": "/home/user/projects/myapp/internal/hub.go"
+}
+```
+
+**Actual output**
+
+Returns a structured response containing:
+- `symbols`: all symbols in the file with signatures
+- `callers`: per-symbol caller lists partitioned into `test_callers` and `non_test_callers`
+- `callees`: outgoing calls from each function
+- `imports`: file import list
+- `_meta.token_savings`: tokens returned vs full file size
+- `etag`: content hash for use in subsequent `if_none_match` calls
+
+**Notes**
+
+- Replaces the 3-5 tool sequence agents previously used (`list_symbols` + `find_references` per symbol + `find_callers`).
+- Includes `_meta.token_savings` showing tokens returned vs full file size (via `AppendTokenMeta`).
+- When `if_none_match` matches the current file content hash, returns `not_modified` immediately without recomputing.
+- Handler: `HandleGetEditingContextWithMeta` wraps the core handler with token metadata.
 
 ---
 
