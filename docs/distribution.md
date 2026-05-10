@@ -160,9 +160,9 @@ Docker images are built inside the `release` job by GoReleaser (`dockers:` secti
 
 | Channel | Status | Notes |
 |---------|--------|-------|
-| **LinkedIn** | Ready | Token savings post drafted. |
+| **LinkedIn** | Posted | v0.7.0/v0.8.0/v0.8.1 roundup posted 2026-05-10. |
+| **Reddit** | Posted | r/mcp, r/ClaudeCode. |
 | **Hacker News** | Not submitted | Token savings blog post is HN-ready. |
-| **Reddit** | Not submitted | r/LocalLLaMA, r/golang, r/programming. |
 | **Go Weekly** | Not submitted | Submit blog post link. |
 | **Twitter/X** | Not active | Thread format works for the data. |
 | **glama.ai** | Listed (A grade) | MCP server discovery. |
@@ -174,14 +174,17 @@ Docker images are built inside the `release` job by GoReleaser (`dockers:` secti
 | List | Stars | Status | Section |
 |------|------:|--------|---------|
 | punkpeye/awesome-mcp-servers | 86K | **Listed** | Already on the list |
-| bradAGI/awesome-cli-coding-agents | 308 | **PR #75 open** | Agent infrastructure |
+| ComposioHQ/awesome-claude-skills | 59K | **PR #793 open** | Development & Code Tools |
+| hesreallyhim/awesome-claude-code | 43K | Needs manual issue form | Tooling |
+| travisvn/awesome-claude-skills | 12K | **PR #703 open** | Collections & Libraries |
 | appcypher/awesome-mcp-servers | 5.5K | Branch pushed, needs PR from browser | Development Tools |
-| wong2/awesome-mcp-servers | 4K | Not submitted | Community Servers |
+| wong2/awesome-mcp-servers | 4K | Needs mcpservers.org/submit | Community Servers |
+| ai-for-developers/awesome-ai-coding-tools | 1.7K | **PR #308 open** | MCP Servers and Directories |
+| rohitg00/awesome-devops-mcp-servers | 980 | **PR #200 open** | Coding Agents |
 | TensorBlock/awesome-mcp-servers | 656 | Not submitted | Code Analysis & Quality |
 | ai-boost/awesome-harness-engineering | 705 | Not submitted | Skills & MCP |
-| ai-for-developers/awesome-ai-coding-tools | 1.7K | Not submitted | Code Search and Navigation |
-| rohitg00/awesome-devops-mcp-servers | 979 | Not submitted | Coding Agents |
-| hesreallyhim/awesome-claude-code | 42K | Not submitted | Tooling > Orchestrators |
+| bradAGI/awesome-cli-coding-agents | 308 | **PR #75 open** | Agent infrastructure |
+| Hexlet/awesome-lsp-servers | 62 | **PR #16 open** | Multi-language & Bridges |
 | avelino/awesome-go | 172K | **Blocked until Sep 2026** (5-month history req) | Go Tools |
 
 ## Planned
