@@ -131,6 +131,14 @@ The gap between what clangd provides and what the broader toolchain offers is la
 | **Skills as MCP prompts** | **Shipped** | Expose all 22 skills via `prompts/list` and `prompts/get` so any MCP client (Cursor, Windsurf, etc.) can discover and invoke them, not just Claude Code. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`. Skills continue to work as Claude Code slash commands in parallel. |
 | **Proactive server notifications** | **Shipped** | Server-initiated MCP notifications across four channels: (1) diagnostic changes (2s debounce), (2) workspace ready (one-shot on indexing complete), (3) process health (crash/recovery), (4) stale references (3s debounce on file changes). Hub coordinator in `internal/notify/`, MCP wiring in `cmd/agent-lsp/notifications.go`. All channels wired automatically on `start_lsp`. |
 
+### Context and efficiency
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **`get_editing_context` (composite tool)** | Planned | Single "give me everything I need before editing this file" call. Returns: all symbols with signatures, callers (test/non-test partitioned), callees, imports. Composes existing `list_symbols` + `get_change_impact` data into one response. Eliminates the 3-5 tool call sequence agents currently use to gather pre-edit context. |
+| **Token savings in responses** | Planned | Include token count metadata in tool responses: "returned 847 tokens (vs ~12,400 for full file read)." Makes the efficiency story visible on every call without requiring a dashboard. |
+| **ETag/conditional responses** | Planned | Support `If-None-Match` style caching on tool responses. If the file hasn't changed since the last query, return a "not modified" stub instead of re-computing. Reduces redundant work on repeat queries (common in agent loops that re-check diagnostics or references). |
+
 ### Symbol-level editing tools
 
 Symbol-level tools accept a symbol name and perform the operation structurally, eliminating error-prone coordinate resolution. All four share a `ResolveSymbolByNamePath` resolver that locates symbols by dot-notation path (e.g. `"Buffer.Reset"`) across the workspace.
