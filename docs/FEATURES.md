@@ -825,6 +825,20 @@ Four-layer reinforcement architecture ensures agents know about the 22 skills re
 
 ---
 
+## Agent Tool Adoption Enforcement
+
+Features that actively guide agents toward using the correct MCP tools instead of defaulting to built-in tools (Grep, Read, Edit).
+
+| Feature | Description |
+|---------|-------------|
+| **Disallowed reasoning patterns** | Claude Code init rules include a "use this, not that" table (e.g., "find all usages: use `find_references`, not Grep"). Provider-agnostic Instructions use softer "prefer these tools" language. |
+| **Task-to-tool mapping table** | 10-entry task-to-tool mapping in the MCP Instructions string. Claude Code rules files include a full comparison table with "Not this" column. |
+| **Recovery-oriented error messages** | Symbol resolution errors suggest `list_symbols`. `safe_delete_symbol` with references suggests `find_references` to see callers. `CheckInitialized` suggests `start_lsp`. |
+| **Cross-referencing in tool descriptions** | Tools suggest related tools where applicable. `apply_edit` recommends `replace_symbol_body` for full function replacements and `preview_edit` before applying. `find_references` recommends `safe_delete_symbol` for zero-reference symbols and `get_change_impact` for blast-radius analysis. `suggest_fixes` points to `/lsp-fix-all` skill. `rename_symbol` recommends `find_references` before renaming exports. |
+| **"No verification needed" assertions** | `preview_edit` description states: "If net_delta is 0, the edit is safe to apply without further verification." Reduces unnecessary follow-up tool calls after clean previews. |
+
+---
+
 ## Distribution Channels
 
 | Channel | Status | Command/URL |
