@@ -94,10 +94,14 @@ file_ownership:
       agent: E
       wave: 2
       action: modify
-    - file: internal/lsp/client.go
+    - file: internal/lsp/client_notify.go
       agent: F
-      wave: 2
-      action: modify
+      wave: 1
+      action: new
+    - file: internal/lsp/client_notify_test.go
+      agent: F
+      wave: 1
+      action: new
 interface_contracts:
     - name: NotificationSender
       description: |
@@ -497,7 +501,53 @@ waves:
           files:
             - internal/notify/stale.go
             - internal/notify/stale_test.go
-      base_commit: 348f3a781c0f60062044215980bba36d18c682f7
+        - id: F
+          task: |
+            ## Agent F: LSPClient Notification Hooks
+
+            Create `internal/lsp/client_notify.go` with receiver methods on `*LSPClient`
+            for proactive notification support. Go allows methods on a type to be defined
+            in any file in the same package; this keeps notification-related methods
+            separate from the 2700-line client.go.
+
+            ### Files to create
+            - `internal/lsp/client_notify.go`
+            - `internal/lsp/client_notify_test.go`
+
+            ### What to implement
+
+            1. Add `fileChangeCbs` field to the LSPClient struct in client.go (one line,
+               after the watcher fields around line 197):
+               `fileChangeCbs []func([]types.FileChangeEvent)`
+               This is the ONLY change to client.go.
+
+            2. In `client_notify.go`, implement three methods:
+
+            `SubscribeToFileChanges(cb func([]types.FileChangeEvent))`:
+            Lock watcherMu, append cb to fileChangeCbs, unlock.
+
+            `IsAlive() bool`:
+            Lock mu, check cmd/ProcessState. Return true for daemon/passive modes.
+
+            `IsWorkspaceLoaded() bool`:
+            Return workspaceLoaded.Load().
+
+            3. In the watcher flush path in client.go (after DidChangeWatchedFiles call
+               around line 2451), add callback invocation (~5 lines). Copy the slice
+               under watcherMu, then invoke each callback outside the lock.
+
+            ### Tests (client_notify_test.go)
+            - TestIsWorkspaceLoaded: verify returns workspaceLoaded state
+            - TestIsAlive_NilCmd: verify returns false when cmd is nil and not daemon/passive
+
+            ### Constraints
+            - client.go changes: ONE new struct field + ~5 lines in watcher flush. Nothing else.
+            - All methods go in client_notify.go, not client.go.
+            - Do NOT modify any other files.
+          files:
+            - internal/lsp/client_notify.go
+            - internal/lsp/client_notify_test.go
+      base_commit: b5f8006c9152466c340a3c012544520ef181e90d
     - number: 2
       agents:
         - id: E
@@ -666,11 +716,12 @@ waves:
             - The notification system must be entirely opt-in: if the MCP client ignores
               notifications, no errors propagate. All send errors are silently dropped.
             - Keep server.go changes to < 10 lines of additions.
-            - Keep client.go changes to < 20 lines of additions.
             - Do NOT modify any files except: cmd/agent-lsp/notifications.go,
               cmd/agent-lsp/notifications_test.go, cmd/agent-lsp/server.go,
               cmd/agent-lsp/tools_workspace.go.
-            - Do NOT modify internal/lsp/client.go (owned by Agent F).
+            - Do NOT modify internal/lsp/client.go or client_notify.go (owned by Agent F).
+            - Agent F adds SubscribeToFileChanges, IsAlive, IsWorkspaceLoaded to
+              LSPClient in client_notify.go. Use these methods in wireNotificationsToClient.
           files:
             - cmd/agent-lsp/notifications.go
             - cmd/agent-lsp/notifications_test.go
@@ -679,33 +730,7 @@ waves:
             - B
             - C
             - D
-        - id: F
-          task: |
-            ## Agent F: LSPClient Notification Hooks
-
-            ### What to implement
-
-            Add three methods and one callback field to LSPClient in internal/lsp/client.go to support proactive notifications.
-
-            1. Add field `fileChangeCbs []func([]types.FileChangeEvent)` to LSPClient struct
-            2. Add `SubscribeToFileChanges(cb func([]types.FileChangeEvent))` method (uses watcherMu)
-            3. In watcher flush path after `DidChangeWatchedFiles(changes)`, invoke all registered callbacks
-            4. Add `IsAlive() bool` method (check cmd.ProcessState, return true for daemon/passive)
-            5. Add `IsWorkspaceLoaded() bool` method (returns workspaceLoaded.Load())
-
-            ### Tests
-            - TestSubscribeToFileChanges: verify callback invoked
-            - TestIsAlive_Subprocess: verify true when process running
-            - TestIsAlive_Passive: verify true for passive mode
-            - TestIsWorkspaceLoaded: verify returns workspaceLoaded state
-
-            ### Constraints
-            - Do NOT modify any files except internal/lsp/client.go
-            - Keep changes under 40 lines total
-          files:
-            - internal/lsp/client.go
-          dependencies:
-            - A
+            - F
 quality_gates:
     level: standard
     gates:
