@@ -170,6 +170,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - `file_path` validates via `ValidateFilePath` before `CreateFileURI` (path traversal prevented)
 - Calls `WaitForDiagnostics` with 500ms stabilization window and configurable timeout
 - Returns errors then warnings ranked by severity
+- `group_by: "symbol"` groups diagnostics under their owning function/type/method. Each diagnostic is assigned to the innermost containing symbol via range containment. Helps agents understand "this function is broken" vs "this file has problems."
 
 **`did_change_watched_files` notes:**
 - Not required for normal editing; auto-watcher sends these automatically
@@ -797,6 +798,30 @@ Server-initiated MCP notifications that inform the agent about state changes wit
 ### Status
 
 Shipped. Both waves complete: notification infrastructure (`internal/notify/`) and MCP server wiring (`cmd/agent-lsp/notifications.go`). All four channels are wired automatically on `start_lsp`.
+
+---
+
+## Provider-Agnostic Skill Awareness
+
+Four-layer reinforcement architecture ensures agents know about the 22 skills regardless of which AI provider or MCP client is used.
+
+| Layer | Mechanism | Durability |
+|-------|-----------|------------|
+| Connect-time | `ServerOptions.Instructions` in MCP `initialize` response; condensed skill overview, tool count, key workflows | Decays over long conversations |
+| Per-response | Content[1] "Next step:" hint in every tool response | Renewed on every tool call |
+| On-demand | `prompts/get("lsp-refactor")` returns full workflow instructions | Loaded when needed |
+| Phase enforcement | Error messages with recovery guidance when agent skips steps | Fires on violations |
+
+**Init rules files:** `agent-lsp init` writes a provider-specific rules file alongside the MCP config. Content generated from embedded SKILL.md files at runtime. All files use managed sections (sentinel comments) for idempotent updates.
+
+| Platform | Rules File |
+|----------|------------|
+| Claude Code (project) | `CLAUDE.md` managed section |
+| Claude Code (global) | `~/.claude/CLAUDE.md` managed section |
+| Cursor | `.cursor/rules/agent-lsp.mdc` |
+| Cline | `.clinerules` |
+| Windsurf | `~/.windsurfrules` |
+| Gemini CLI | `GEMINI.md` |
 
 ---
 
