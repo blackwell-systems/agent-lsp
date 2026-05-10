@@ -84,10 +84,11 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `get_symbol_documentation` | Toolchain docs (go doc, pydoc, cargo doc) | `symbol` (string, req), `language_id` (string, req), `format` (string, opt) |
 | `get_change_impact` | Blast-radius analysis | `changed_files` (array, req), `include_transitive` (bool, opt) |
 | `get_cross_repo_references` | Find usages across consumer repos | `symbol_file` (string, req), `line` (int, req), `column` (int, req), `consumer_roots` (array, req), `language_id` (string, opt) |
-| `detect_changes` | Git diff + impact analysis + risk classification | `workspace_root` (string, opt), `scope` (string, opt: "unstaged", "staged", "committed") |
+| `detect_changes` | Git diff + impact analysis + risk classification | `workspace_root` (string, opt), `scope` (string, opt: "unstaged", "staged", "committed"), `range` (string, opt) |
 
 **`detect_changes` notes:**
 - Runs `git diff --name-only` for the specified scope (default: unstaged)
+- `range` parameter (for "committed" scope only): accepts arbitrary git ranges like `"v0.7.0..HEAD"`, `"abc123..def456"`, or a single ref like `"main"` (expands to `main~1..main`). Ignored for unstaged/staged scopes.
 - Filters to recognized source files (skips plaintext, deleted files)
 - Feeds filtered files to `get_change_impact` for symbol-level analysis
 - Enriches each symbol with risk classification: "high" (callers across multiple packages), "medium" (same-package callers only), "low" (zero non-test callers)
