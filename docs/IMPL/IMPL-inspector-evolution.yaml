@@ -727,7 +727,7 @@ waves:
           files:
             - docs/roadmap.md
             - CHANGELOG.md
-      base_commit: 8cd4c2a9089bfed46a8eb70b31ec8e5aac232cba
+      base_commit: e06b7044b837194953d2d6486c33021433f27711
     - number: 2
       type: integration
       agents:
@@ -830,5 +830,4 @@ critic_report:
     reviewed_at: "2026-05-10T22:56:51Z"
     issue_count: 0
 state: REVIEWED
-original_branch: main
 injection_method: hook
