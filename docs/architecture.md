@@ -272,6 +272,20 @@ pkg/
     doc.go         ← package-level doc comment + all 32 type aliases, 5 constants, 2 constructor vars
     types_test.go  ← smoke tests verifying alias targets are non-nil
 
+internal/notify/
+  hub.go             ← notify.Hub: central coordinator with NotificationSender interface,
+                       SetSender, Send, SendResourceUpdate, AddStopFunc, Close;
+                       thread-safe via sync.RWMutex
+  diagnostics.go     ← DiagUpdate struct, diagDebouncer: coalesces rapid publishDiagnostics
+                       updates during indexing with configurable debounce interval (default 2s);
+                       SubscribeDiagnostics registers a callback
+  workspace.go       ← SubscribeWorkspaceReady: polls IsWorkspaceLoaded, emits JSON notification
+                       when indexing completes; 5-minute timeout
+  health.go          ← SubscribeHealth: polls IsAlive, emits crash/recovery notifications
+                       on state transitions
+  stale.go           ← StaleNotifier: 3-second debounce, emits ResourceUpdated + log notification
+                       when files change on disk
+
 Nine internal packages (`lsp`, `session`, `tools`, `resources`, `types`, `uri`,
 `logging`, `extensions`, `phase`) have a `doc.go` with a package-level doc comment.
 `internal/config`, `internal/audit`, and `internal/httpauth` use inline file-level comments instead.
