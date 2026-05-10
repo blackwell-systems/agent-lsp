@@ -126,9 +126,9 @@ type GetCrossRepoReferencesArgs struct {
 func registerAnalysisTools(d toolDeps) {
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "inspect_symbol",
-		Description: "Get information on a specific location in a file via LSP hover. Use this tool to retrieve detailed type information, documentation, and other contextual details about symbols in your code. Particularly useful for understanding variable types, function signatures, and module documentation at a specific location in the code. Use this whenever you need to get a better idea on what a particular function is doing in that context.",
+		Description: "Get type information, documentation, and signature for a symbol at a specific location. Use this to understand what a function does, what type a variable has, or what a module exports before editing it.",
 		Annotations: &mcp.ToolAnnotations{
-			Title:           "Get Hover Info",
+			Title:           "Inspect Symbol",
 			ReadOnlyHint:    true,
 			DestructiveHint: boolPtr(false),
 			OpenWorldHint:   boolPtr(false),
@@ -168,9 +168,9 @@ func registerAnalysisTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "suggest_fixes",
-		Description: "Get code actions for a specific range in a file. Use this tool to obtain available refactorings, quick fixes, and other code modifications that can be applied to a selected code range. Examples include adding imports, fixing errors, or implementing interfaces.",
+		Description: "Get available quick fixes and code actions for a diagnostic or code range. Returns actionable fixes (add missing import, implement interface, fix type error) that can be applied via apply_edit.",
 		Annotations: &mcp.ToolAnnotations{
-			Title:           "Get Code Actions",
+			Title:           "Suggest Fixes",
 			ReadOnlyHint:    true,
 			DestructiveHint: boolPtr(false),
 			OpenWorldHint:   boolPtr(false),
@@ -182,9 +182,9 @@ func registerAnalysisTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "list_symbols",
-		Description: "Get all symbols defined in a document via LSP (functions, classes, variables, methods, etc.). Returns a hierarchical DocumentSymbol tree or flat SymbolInformation list depending on server support. Use this to get a structural overview of a file. Pass format: \"outline\" for compact markdown output (name [Kind] :line) optimized for LLM consumption — ~5x fewer tokens than JSON for the same structural information.",
+		Description: "List all symbols defined in a file (functions, types, methods, variables). Returns a hierarchical tree showing the file's structure. Use to get an overview before editing, or to find the exact name of a symbol for use with replace_symbol_body or find_references. Pass format: \"outline\" for compact markdown output optimized for LLM consumption.",
 		Annotations: &mcp.ToolAnnotations{
-			Title:           "Get Document Symbols",
+			Title:           "List Symbols",
 			ReadOnlyHint:    true,
 			DestructiveHint: boolPtr(false),
 			OpenWorldHint:   boolPtr(false),
@@ -196,9 +196,9 @@ func registerAnalysisTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "find_symbol",
-		Description: "Search for symbols across the entire workspace via LSP. Returns all matching symbols with name, kind, and location. detail_level controls enrichment: omit or use \"basic\" for names/locations only; use \"hover\" to also return hover info (type signature + docs) for a paginated window of results. limit (default 3) and offset (default 0) control which symbols get enriched — use offset to step through results without re-running the search.",
+		Description: "Search for a symbol by name across the entire workspace. Returns matching symbols with name, kind, file, and location. Use when you know a symbol's name but not its file. Use detail_level: \"hover\" to also get type signatures and docs for each match.",
 		Annotations: &mcp.ToolAnnotations{
-			Title:           "Get Workspace Symbols",
+			Title:           "Find Symbol",
 			ReadOnlyHint:    true,
 			DestructiveHint: boolPtr(false),
 			OpenWorldHint:   boolPtr(false),
@@ -210,7 +210,7 @@ func registerAnalysisTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "find_references",
-		Description: "Find all references to a symbol at a specific location in a file via LSP. Returns every location in the codebase where the symbol is used. Use this to determine if a symbol is dead (zero references), to understand call sites before refactoring, or to trace data flow. Results include file path and line/column for each reference.",
+		Description: "Find all usages of a symbol across the codebase. Use before renaming, deleting, or changing any symbol to understand who calls it. Zero references means the symbol may be dead code. Always call this before editing exported symbols.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Find References",
 			ReadOnlyHint:    true,

@@ -214,9 +214,9 @@ func registerSessionTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "preview_edit",
-		Description: "One-shot atomic operation: create session, apply edit, evaluate, and destroy. Returns evaluation result. Use for quick what-if checks without managing session lifecycle manually. Requires start_lsp to be called first. All line/column positions are 1-indexed. net_delta: 0 means the edit is safe to apply.",
+		Description: "Preview the impact of an edit before writing to disk. Shows what errors would be introduced or resolved without touching the file. net_delta: 0 means safe to apply. Use before every apply_edit to catch problems early. All line/column positions are 1-indexed.",
 		Annotations: &mcp.ToolAnnotations{
-			Title:           "Simulate Edit (Atomic)",
+			Title:           "Preview Edit",
 			ReadOnlyHint:    false,
 			DestructiveHint: boolPtr(false),
 			OpenWorldHint:   boolPtr(false),

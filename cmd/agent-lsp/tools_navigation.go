@@ -239,9 +239,9 @@ func registerNavigationTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "find_callers",
-		Description: "Show call hierarchy for a symbol at a position. Returns callers (incoming), callees (outgoing), or both depending on the direction parameter. Direction defaults to \"both\". Use this to understand code flow -- which functions call this function and which functions it calls.",
+		Description: "Find what calls this function and what it calls. Returns incoming callers, outgoing callees, or both (default). Use before deleting or refactoring a function to understand its role in the call graph.",
 		Annotations: &mcp.ToolAnnotations{
-			Title:           "Call Hierarchy",
+			Title:           "Find Callers",
 			ReadOnlyHint:    true,
 			DestructiveHint: boolPtr(false),
 			OpenWorldHint:   boolPtr(false),
