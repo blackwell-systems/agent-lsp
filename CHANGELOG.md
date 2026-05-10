@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- **`get_change_impact` discoverability.** Promoted to IMPORTANT in MCP Instructions with "replaces manual loops over find_references." Agent evaluations showed agents manually looping over exports instead of calling it.
+- **`find_callers` type confusion.** Description now clarifies it works on functions/methods only; for types, use `find_references`. Both agent evaluations showed confusion when call hierarchy returned nothing for types.
+- **`format_document` scope clarity.** Description now clarifies single-file scope and suggests shell (e.g. `gofmt -l`) for discovering which files need formatting.
+
 ## [0.9.0] - 2026-05-10
 
 ### Changed
