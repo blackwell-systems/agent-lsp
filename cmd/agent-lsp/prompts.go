@@ -46,6 +46,11 @@ func parseSkillMD(content string) (skillMeta, bool) {
 	var meta skillMeta
 	meta.Body = body
 	for _, line := range strings.Split(fm, "\n") {
+		// Only parse top-level keys (no leading whitespace). Nested keys
+		// like tool_permissions.phases.*.description must be skipped.
+		if len(line) > 0 && (line[0] == ' ' || line[0] == '\t') {
+			continue
+		}
 		line = strings.TrimSpace(line)
 		k, v, ok := strings.Cut(line, ":")
 		if !ok {

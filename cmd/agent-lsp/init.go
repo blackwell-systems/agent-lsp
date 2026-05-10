@@ -118,7 +118,30 @@ func runInit(args []string) {
 		os.Exit(1)
 	}
 
-	// Step 8: Print result and next step.
+	// Step 8: Write provider-specific rules file for skill awareness.
+	rulesPath := resolveRulesPath(choice)
+	if rulesPath != "" {
+		rulesContent := generateRulesContent()
+		if choice == 1 || choice == 2 {
+			// Claude Code: inject managed section into CLAUDE.md.
+			if err := writeManagedSection(rulesPath, rulesContent); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not write rules to %s: %v\n", rulesPath, err)
+			} else {
+				fmt.Printf("Wrote skill awareness rules to: %s\n", rulesPath)
+			}
+		} else {
+			// Other providers: write/overwrite the rules file.
+			if err := os.MkdirAll(filepath.Dir(rulesPath), 0o755); err == nil {
+				if err := os.WriteFile(rulesPath, []byte(rulesContent), 0o644); err != nil {
+					fmt.Fprintf(os.Stderr, "warning: could not write rules to %s: %v\n", rulesPath, err)
+				} else {
+					fmt.Printf("Wrote skill awareness rules to: %s\n", rulesPath)
+				}
+			}
+		}
+	}
+
+	// Step 9: Print result and next step.
 	data, err := os.ReadFile(targetPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error reading written config: %v\n", err)
@@ -227,4 +250,99 @@ func writeOrMergeConfig(path string, lspArgs []string) error {
 	}
 
 	return nil
+}
+
+const (
+	managedSectionStart = "<!-- agent-lsp:rules:start -->"
+	managedSectionEnd   = "<!-- agent-lsp:rules:end -->"
+)
+
+// resolveRulesPath returns the provider-specific rules file path for the given
+// init choice. Returns empty string for providers that don't support rules files.
+func resolveRulesPath(choice int) string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	homeDir, _ := os.UserHomeDir()
+
+	switch choice {
+	case 1:
+		return filepath.Join(cwd, "CLAUDE.md")
+	case 2:
+		return filepath.Join(homeDir, ".claude", "CLAUDE.md")
+	case 3:
+		return "" // Claude Desktop: no rules file, uses Instructions only
+	case 4:
+		return filepath.Join(cwd, ".cursor", "rules", "agent-lsp.mdc")
+	case 5:
+		return filepath.Join(cwd, ".clinerules")
+	case 6:
+		return filepath.Join(homeDir, ".windsurfrules")
+	case 7:
+		return filepath.Join(cwd, "GEMINI.md")
+	default:
+		return ""
+	}
+}
+
+// generateRulesContent builds the skill awareness rules from embedded SKILL.md
+// files. The content is the same for all providers; only the target file differs.
+func generateRulesContent() string {
+	var b strings.Builder
+	b.WriteString("## agent-lsp Skills\n\n")
+	b.WriteString("agent-lsp provides 56 code intelligence tools and 22 workflow skills.\n")
+	b.WriteString("Prefer LSP tools over Grep/Glob/Read for code navigation.\n\n")
+	b.WriteString("**Before editing code:** call `get_change_impact` for blast-radius analysis.\n")
+	b.WriteString("**Before applying edits:** call `simulate_edit_atomic` to preview the diagnostic delta.\n")
+	b.WriteString("**After any change:** call `get_diagnostics`, then `run_build` and `run_tests`.\n\n")
+	b.WriteString("| Skill | Description |\n")
+	b.WriteString("|-------|-------------|\n")
+
+	for _, meta := range loadSkills() {
+		desc := meta.Description
+		// Truncate long descriptions for the table.
+		if len(desc) > 120 {
+			desc = desc[:117] + "..."
+		}
+		fmt.Fprintf(&b, "| `/%s` | %s |\n", meta.Name, desc)
+	}
+
+	b.WriteString("\nCall `prompts/get` with any skill name for full workflow instructions.\n")
+	return b.String()
+}
+
+// writeManagedSection inserts or replaces a managed section in an existing
+// file (e.g., CLAUDE.md). Content between sentinel comments is replaced;
+// content outside the sentinels is preserved.
+func writeManagedSection(path, content string) error {
+	managed := managedSectionStart + "\n" + content + managedSectionEnd + "\n"
+
+	existing, err := os.ReadFile(path)
+	if err != nil {
+		// File doesn't exist: create it with just the managed section.
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(path, []byte(managed), 0o644)
+	}
+
+	text := string(existing)
+	startIdx := strings.Index(text, managedSectionStart)
+	endIdx := strings.Index(text, managedSectionEnd)
+
+	if startIdx >= 0 && endIdx >= 0 {
+		// Replace existing managed section.
+		result := text[:startIdx] + managed + text[endIdx+len(managedSectionEnd):]
+		// Trim any trailing double newlines from the replacement.
+		result = strings.TrimRight(result, "\n") + "\n"
+		return os.WriteFile(path, []byte(result), 0o644)
+	}
+
+	// No existing section: append.
+	if !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	text += "\n" + managed
+	return os.WriteFile(path, []byte(text), 0o644)
 }
