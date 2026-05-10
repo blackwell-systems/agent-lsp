@@ -29,7 +29,9 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 - **`destroy_session` error message improved.** Now explains that `preview_edit` creates and destroys sessions automatically, so a separate `destroy_session` call is not needed. Addresses confusion from agent evaluations where models called destroy_session after preview_edit and got errors.
 
-- **`find_references` and `inspect_symbol` schema fix.** `line` and `column` were required in the JSON schema even when `position_pattern` was provided as an alternative. Made them optional so agents can use `position_pattern` alone without validation errors.
+- **`position_pattern` now works without line/column.** `find_references` and `inspect_symbol` handlers called `extractPosition` (requires line/column) instead of `ExtractPositionWithPattern` (supports position_pattern fallback). Also changed line/column fields to `*int` pointers so the JSON Schema generator marks them as truly optional. Previously, agents using position_pattern got "line: missing required argument." Found in all three GPT-5.5 agent evaluations.
+
+- **`find_references` and `inspect_symbol` schema fix (superseded).** `line` and `column` were required in the JSON schema even when `position_pattern` was provided as an alternative. Made them optional so agents can use `position_pattern` alone without validation errors.
 
 - **`get_change_impact` discoverability.** Promoted to IMPORTANT in MCP Instructions with "replaces manual loops over find_references." Agent evaluations showed agents manually looping over exports instead of calling it.
 - **`find_callers` type confusion.** Description now clarifies it works on functions/methods only; for types, use `find_references`. Both agent evaluations showed confusion when call hierarchy returned nothing for types.
