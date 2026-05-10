@@ -66,12 +66,12 @@ func TestHub_SetSender(t *testing.T) {
 	}
 
 	// Replace sender
-	ms2 := &mockSender{}
-	h.SetSender(ms2)
+	msNew := &mockSender{}
+	h.SetSender(msNew)
 	h.Send("error", "diag", "new sender")
 
-	if len(ms2.logs) != 1 {
-		t.Fatalf("expected 1 log on new sender, got %d", len(ms2.logs))
+	if len(msNew.logs) != 1 {
+		t.Fatalf("expected 1 log on new sender, got %d", len(msNew.logs))
 	}
 	// Original sender should not get new calls
 	if len(ms.logs) != 1 {

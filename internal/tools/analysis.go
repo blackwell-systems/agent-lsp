@@ -108,9 +108,9 @@ func HandleGetDiagnostics(ctx context.Context, client *lsp.LSPClient, args map[s
 
 // symbolDiagGroup groups diagnostics under a named symbol.
 type symbolDiagGroup struct {
-	Name        string               `json:"name"`
-	Kind        string               `json:"kind"`
-	Line        int                  `json:"line"`
+	Name        string                `json:"name"`
+	Kind        string                `json:"kind"`
+	Line        int                   `json:"line"`
 	Diagnostics []types.LSPDiagnostic `json:"diagnostics"`
 }
 
