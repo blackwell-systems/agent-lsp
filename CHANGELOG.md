@@ -23,6 +23,18 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 - **Passive mode (`connect` parameter on `start_lsp`).** Connect to an already-running language server via TCP instead of spawning a new process. Pass `connect: "localhost:9999"` to reuse the IDE's warm index with zero duplicate memory or indexing. Supported by gopls (`gopls -listen=:9999`), clangd, and other servers with TCP listen mode. On shutdown, agent-lsp closes the TCP connection without killing the server process.
 
+### Fixed
+
+- **Nil sender crash in notification channels.** workspace.go, health.go, and diagnostics.go called `hub.sender.SendLog()` directly, bypassing Hub.Send()'s nil-sender and closed-state guards. This would panic during the window between `start_lsp` and MCP session initialization when sender is nil. Fixed to route through `hub.Send()`. Found by `/lsp-inspect`.
+
+- **Dead code removal (`AdaptFileChangeEvents`).** Exported but never called; the conversion was done inline in notifications.go. Removed along with its test. Found by `/lsp-dead-code`.
+
+- **`CleanupStaleDaemons` wiring.** Exported and tested but never called from production code. Wired into `startOrConnectDaemon` before `FindRunningDaemon` so stale daemon state directories are purged before lookup. Found by `/lsp-dead-code`.
+
+### Refactored
+
+- **`interface{}` to `any` across codebase.** Go 1.18+ alias applied via `gofmt -r`. 85 files, ~930 replacements. No behavioral change.
+
 ## [0.8.1] - 2026-05-09
 
 ### Added
