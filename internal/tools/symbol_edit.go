@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -319,8 +320,23 @@ func HandleSafeDeleteSymbol(ctx context.Context, client *lsp.LSPClient, args map
 	}
 
 	// Check references (excluding the declaration itself).
+	// Resolve the actual identifier column: gopls SelectionRange.Start may
+	// point to the keyword (e.g., "func") rather than the symbol name.
 	fileURI := CreateFileURI(loc.FilePath)
-	refs, err := client.GetReferences(ctx, fileURI, loc.SelectionRange.Start, false)
+	refPos := loc.SelectionRange.Start
+	if data, readErr := os.ReadFile(loc.FilePath); readErr == nil {
+		lines := strings.Split(string(data), "\n")
+		if refPos.Line < len(lines) {
+			searchName := symbolPath
+			if dotIdx := strings.LastIndex(searchName, "."); dotIdx >= 0 {
+				searchName = searchName[dotIdx+1:]
+			}
+			if col := strings.Index(lines[refPos.Line], searchName); col >= 0 {
+				refPos.Character = col
+			}
+		}
+	}
+	refs, err := client.GetReferences(ctx, fileURI, refPos, false)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("get references: %s", err)), nil
 	}

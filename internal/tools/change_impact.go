@@ -126,7 +126,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 			warnings = append(warnings, fmt.Sprintf("warning: could not get symbols for %s: %s", file, err))
 			continue
 		}
-		collectExportedSymbols(symbols, file, langID, &allExports, false)
+		collectExportedSymbols(symbols, file, langID, &allExports, true)
 	}
 
 	// Phase 1.5: Warmup. The first reference query on a cold workspace forces
@@ -289,6 +289,11 @@ func collectExportedSymbols(syms []types.DocumentSymbol, filePath, langID string
 	}
 
 	for _, sym := range syms {
+		// Skip struct fields (kind 8): they're not independently callable and
+		// inflate the symbol count without adding blast-radius value.
+		if sym.Kind == 8 {
+			continue
+		}
 		exported := langID != "go" || (len(sym.Name) > 0 && sym.Name[0] >= 'A' && sym.Name[0] <= 'Z')
 		if exported {
 			line := sym.SelectionRange.Start.Line
