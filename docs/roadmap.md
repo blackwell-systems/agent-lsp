@@ -12,7 +12,7 @@ title: Roadmap
 
 ## Extensions
 
-Extensions add language-specific tools beyond what LSP exposes. The core 56 tools cover 26 of the most agent-relevant LSP 3.17 methods (navigation, analysis, refactoring, diagnostics, formatting) plus 27 tools that go beyond the LSP spec (speculative execution, build/test, change impact analysis, cross-repo references, cache management, git-based change detection, audit). Three low-value LSP methods are intentionally omitted: `selectionRange`, `foldingRange`, and `codeLens`. Extensions run arbitrary toolchain logic for a specific language.
+Extensions add language-specific tools beyond what LSP exposes. The core 60 tools cover 26 of the most agent-relevant LSP 3.17 methods (navigation, analysis, refactoring, diagnostics, formatting) plus 31 tools that go beyond the LSP spec (speculative execution, build/test, change impact analysis, cross-repo references, cache management, git-based change detection, symbol-level editing, audit). Three low-value LSP methods are intentionally omitted: `selectionRange`, `foldingRange`, and `codeLens`. Extensions run arbitrary toolchain logic for a specific language.
 
 ### Go extension (Wave 1: test + module intelligence)
 
@@ -133,14 +133,14 @@ The gap between what clangd provides and what the broader toolchain offers is la
 
 ### Symbol-level editing tools
 
-Current editing tools (`apply_edit`, `rename_symbol`) operate on raw text or LSP-level coordinates. Agents must determine exact text to match or line/column positions. Symbol-level tools would accept a symbol name and perform the operation structurally, reducing error-prone coordinate resolution.
+Symbol-level tools accept a symbol name and perform the operation structurally, eliminating error-prone coordinate resolution. All four share a `ResolveSymbolByNamePath` resolver that locates symbols by dot-notation path (e.g. `"Buffer.Reset"`) across the workspace.
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **`replace_symbol_body`** | Planned | Replace the body of a named function, method, or type. Resolves the symbol via `list_symbols`, extracts its full range, applies the replacement. The agent says "replace function X with this new implementation" without knowing line numbers. |
-| **`insert_after_symbol`** | Planned | Insert code after a named symbol definition. Useful for adding a new method after an existing one, or a new function after a related helper. |
-| **`insert_before_symbol`** | Planned | Insert code before a named symbol definition. Useful for adding imports, comments, or related types before their first consumer. |
-| **`safe_delete_symbol`** | Planned | Delete a symbol only if it has zero references (verified via `find_references` before deletion). Prevents accidental removal of active code. |
+| **`replace_symbol_body`** | **Shipped** | Replace the body of a named function, method, or type. Resolves the symbol via `list_symbols`, extracts its full range, applies the replacement. The agent says "replace function X with this new implementation" without knowing line numbers. |
+| **`insert_after_symbol`** | **Shipped** | Insert code after a named symbol definition. Useful for adding a new method after an existing one, or a new function after a related helper. |
+| **`insert_before_symbol`** | **Shipped** | Insert code before a named symbol definition. Useful for adding imports, comments, or related types before their first consumer. |
+| **`safe_delete_symbol`** | **Shipped** | Delete a symbol only if it has zero references (verified via `find_references` before deletion). Prevents accidental removal of active code. |
 
 These complement the existing `apply_edit` (which remains available for raw text edits) and `/lsp-edit-symbol` skill (which orchestrates a multi-step workflow). The difference: symbol-level tools are single atomic calls, not multi-step skills. Higher-level abstraction, lower error rate.
 
@@ -160,7 +160,7 @@ AI agents using agent-lsp need to know about the 22 skills and when to use them.
 
 | Layer | Mechanism | Status | Scope | Durability |
 |-------|-----------|--------|-------|------------|
-| **1. Connect-time instructions** | `ServerOptions.Instructions` in MCP `initialize` response | Planned | Every MCP client automatically | Decays over long conversations |
+| **1. Connect-time instructions** | `ServerOptions.Instructions` in MCP `initialize` response | **Shipped** | Every MCP client automatically | Decays over long conversations |
 | **2. Per-response hints** | Content[1] "Next step:" in every tool response | **Shipped** (v0.8.1) | Every MCP client | Renewed on every tool call |
 | **3. On-demand workflows** | `prompts/get("lsp-refactor")` returns full skill workflow | **Shipped** (v0.7.0) | Any client that calls prompts/list | Loaded when needed |
 | **4. Phase enforcement** | Error messages with recovery guidance when agent skips steps | **Shipped** (v0.5.0) | Every MCP client | Fires on violations |
@@ -249,7 +249,7 @@ Based on CI testing across 30 languages, the capability landscape clusters into 
 
 | Tier | Capabilities | Languages |
 |------|-------------|-----------|
-| Full | All 56 tools viable | Go (gopls), TypeScript, Rust, C/C++ (clangd), C# |
+| Full | All 60 tools viable | Go (gopls), TypeScript, Rust, C/C++ (clangd), C# |
 | Strong | Most tools; missing call/type hierarchy | Python, Ruby, PHP, Kotlin, Swift, Dart, Gleam, Elixir |
 | Basic | Navigation + diagnostics; limited refactoring | YAML, JSON, Dockerfile, CSS, HTML, Terraform, SQL |
 
@@ -478,7 +478,7 @@ mcp-assert run --suite ./assertions --server "npx -y @modelcontextprotocol/serve
 
 ### Layer 1: Tool Correctness (deterministic, no LLM)
 
-For each of 56 tools across N languages, maintain test fixtures with expected outputs. Call the MCP tool directly, compare output against expected results. Organized as Go table-driven tests with per-language, per-tool coverage tracking.
+For each of 60 tools across N languages, maintain test fixtures with expected outputs. Call the MCP tool directly, compare output against expected results. Organized as Go table-driven tests with per-language, per-tool coverage tracking.
 
 **What this looks like in practice:**
 
@@ -515,7 +515,7 @@ func TestToolCorrectness(t *testing.T) {
                 assert.Contains(t, result, "greeter.gleam")
             },
         },
-        // ... 56 tools x 30 languages
+        // ... 60 tools x 30 languages
     }
 }
 ```
@@ -759,7 +759,7 @@ See [docs/phase-enforcement.md](phase-enforcement.md) for the full design docume
 | **Cross-service HTTP route linking** | Planned | Match `fetch("/api/users")` call sites to `@app.route("/api/users")` handler definitions across files and repos. Extends `get_cross_repo_references` beyond symbol-level to HTTP route-level cross-service analysis. |
 | **Git coupling analysis** | Planned | Identify files that change together frequently (e.g., "payment_handler.py changes alongside user_service.py 80% of the time"). Mine `git log` for co-change patterns. Integrate with `detect_changes`: when a file is modified, surface coupled files the agent should also review. Implementation: `git log --name-only --format=""` parsed into a co-occurrence matrix, filtered by threshold (default 60%). Lightweight addition to `detect_changes` response. Inspired by Axon's coupling heatmap. |
 | **Async execution flow tracing** | Planned | Trace call chains across async boundaries (callbacks, goroutine launches, event emitters, promise chains). LSP's call hierarchy is synchronous: `go func() { doWork() }()` doesn't show `doWork` as a caller of the launching function. Static analysis of `go func`, `asyncio.create_task`, `.then()`, `EventEmitter.on()` patterns to build async edges in the call graph. Enhances `/lsp-inspect` (find unrecovered panics in async paths) and `/lsp-impact` (blast radius across async boundaries). |
-| **Next-step hints in tool responses** | **Shipped** | Every tool response includes a contextual `hint` field suggesting the logical next tool call. Example: `find_references` returns "use get_change_impact to see the full blast radius." Helps agents chain tools correctly without skills, and helps less capable models navigate the 56-tool surface. Zero-cost addition: one extra field in the JSON response. |
+| **Next-step hints in tool responses** | **Shipped** | Every tool response includes a contextual `hint` field suggesting the logical next tool call. Example: `find_references` returns "use get_change_impact to see the full blast radius." Helps agents chain tools correctly without skills, and helps less capable models navigate the 60-tool surface. Zero-cost addition: one extra field in the JSON response. |
 | **Tree-sitter fallback** | Planned | See Massive Codebase Strategy section below. |
 | **Selective indexing** | **Shipped** | Auto-detects package boundary for Python/TypeScript on workspaces with 500+ source files. Generates scoped language server config. Scope shifts automatically on `open_document`. See Massive Codebase Strategy section below. |
 

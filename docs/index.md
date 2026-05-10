@@ -1,6 +1,6 @@
 # agent-lsp
 
-**The most complete MCP server for language intelligence.** 56 tools, 30 CI-verified languages, 22 agent workflows. Single Go binary.
+**The most complete MCP server for language intelligence.** 60 tools, 30 CI-verified languages, 22 agent workflows. Single Go binary.
 
 ---
 
@@ -60,7 +60,7 @@ No other MCP tool provider enforces workflow ordering at runtime. Read more in t
 
 | Capability | Details |
 |------------|---------|
-| Tools | **56** |
+| Tools | **60** |
 | Languages (CI-verified) | **30**, end-to-end integration tests on every push |
 | Agent workflows (skills) | **22**, named multi-step procedures, discoverable via MCP `prompts/list` |
 | Speculative execution | **8 tools**, simulate changes before writing to disk |

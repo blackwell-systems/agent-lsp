@@ -23,7 +23,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Shuts down existing LSP process before starting new one, no resource leak
 - Language server initialized but may not have finished indexing on return
 - `connect` parameter enables passive mode: connect to an already-running language server via TCP (e.g. `gopls -listen=:9999`) instead of spawning a new process. Reuses the IDE's warm index with zero duplicate memory. Supported by gopls, clangd, and other servers with TCP listen mode.
-- `ready_timeout_seconds` — blocks until all `$/progress` workspace-indexing tokens complete before returning, up to the specified timeout; fires as soon as indexing completes (does not always wait the full timeout); grace period for late-emitting servers; also exports `WaitForWorkspaceReadyTimeout` on `LSPClient` for programmatic use beyond the default 60s cap
+- `ready_timeout_seconds`: blocks until all `$/progress` workspace-indexing tokens complete before returning, up to the specified timeout; fires as soon as indexing completes (does not always wait the full timeout); grace period for late-emitting servers; also exports `WaitForWorkspaceReadyTimeout` on `LSPClient` for programmatic use beyond the default 60s cap
 - `find_references` waits for all `$/progress end` events before returning on large projects
 - `language_id` selects specific server in multi-server mode; omit to start all
 
@@ -53,7 +53,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 
 **`rename_symbol` notes:**
 - `dry_run: true` returns `workspace_edit` preview without applying changes
-- `exclude_globs` — array of glob patterns; matched against both full path and basename using `filepath.Match` syntax; useful for `**/*_gen.go`, `vendor/**`, `testdata/**`
+- `exclude_globs`: array of glob patterns; matched against both full path and basename using `filepath.Match` syntax; useful for `**/*_gen.go`, `vendor/**`, `testdata/**`
 - Returns `workspace_edit` on both dry-run and live runs; caller passes to `apply_edit` to commit
 
 **`go_to_symbol` notes:**
@@ -96,7 +96,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Returns `changed_files`, `affected_symbols` (with risk), and `scope`
 
 **`suggest_fixes` notes:**
-- `CodeActionContext.diagnostics` auto-populated with overlapping diagnostics from current diagnostic state — enables diagnostic-specific quick fixes; empty array would suppress fixes tied to visible errors
+- `CodeActionContext.diagnostics` auto-populated with overlapping diagnostics from current diagnostic state; enables diagnostic-specific quick fixes; empty array would suppress fixes tied to visible errors
 - Returns `(Command | CodeAction)[]`; normalized to `[]CodeAction`; bare commands wrapped in synthetic CodeAction
 
 **`list_symbols` notes:**
@@ -142,14 +142,19 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `format_document` | Format entire file | `file_path` (string, req), `language_id` (string, opt), `insert_spaces` (bool, opt), `tab_size` (int, opt) |
 | `format_range` | Format selection | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req), `language_id` (string, opt), `tab_size` (int, opt), `insert_spaces` (bool, opt) |
 | `apply_edit` | Apply workspace edit | `file_path` (string, req), `old_text` (string, req), `new_text` (string, req) OR `workspace_edit` (object, req) |
-| `replace_symbol_body` | Replace a symbol's body by name | `file_path` (string, req), `symbol_path` (string, req), `new_body` (string, req) |
-| `insert_after_symbol` | Insert code after a named symbol | `file_path` (string, req), `symbol_path` (string, req), `code` (string, req) |
-| `insert_before_symbol` | Insert code before a named symbol | `file_path` (string, req), `symbol_path` (string, req), `code` (string, req) |
-| `safe_delete_symbol` | Delete a symbol only if zero references | `file_path` (string, req), `symbol_path` (string, req) |
 | `execute_command` | Run LSP workspace command | `command` (string, req), `arguments` (array, opt) |
 | `did_change_watched_files` | Notify of file changes | `changes` (array, req) |
 | `export_cache` | Export reference cache as gzip artifact | `dest_path` (string, req) |
 | `import_cache` | Import reference cache from gzip artifact | `src_path` (string, req) |
+
+### Symbol-Level Editing (4 tools)
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `replace_symbol_body` | Replace a symbol's body by name | `file_path` (string, req), `symbol_path` (string, req), `new_body` (string, req) |
+| `insert_after_symbol` | Insert code after a named symbol | `file_path` (string, req), `symbol_path` (string, req), `code` (string, req) |
+| `insert_before_symbol` | Insert code before a named symbol | `file_path` (string, req), `symbol_path` (string, req), `code` (string, req) |
+| `safe_delete_symbol` | Delete a symbol only if zero references | `file_path` (string, req), `symbol_path` (string, req) |
 
 **`export_cache` notes:**
 - Compacts the SQLite reference cache with `VACUUM INTO`, then gzip-compresses to dest_path
@@ -167,7 +172,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Returns errors then warnings ranked by severity
 
 **`did_change_watched_files` notes:**
-- Not required for normal editing — auto-watcher sends these automatically
+- Not required for normal editing; auto-watcher sends these automatically
 - Use when caller manages file changes outside the watched directory
 
 **`set_log_level` (tool 50, workspace category):**
@@ -226,13 +231,13 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 ```
 
 **`commit_session` semantics:**
-- Default (`apply: false`): returns `CommitResult{session_id, files_written: 0, patch}` — no disk write; `patch` is `map[string]string` (file URI → full file content)
+- Default (`apply: false`): returns `CommitResult{session_id, files_written: 0, patch}` (no disk write); `patch` is `map[string]string` (file URI → full file content)
 - `apply: true`: writes changed files to disk, notifies LSP via `didChange`, returns same `CommitResult` shape with `files_written > 0`
 - `target: "/path"`: writes to target path + returns patch
 - Prohibited on `dirty` or `created` sessions; valid from `mutated` or `evaluated` state
 
 **`preview_edit` notes:**
-- Self-contained: requires `file_path` + (optionally) `workspace_root` + `language`; `session_id` is an optional bypass — if provided, uses an existing session instead of creating/destroying one
+- Self-contained: requires `file_path` + (optionally) `workspace_root` + `language`; `session_id` is an optional bypass; if provided, uses an existing session instead of creating/destroying one
 - Internally: create → apply → evaluate → discard → destroy
 - Returns `EvaluationResult` directly
 
@@ -262,7 +267,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `/lsp-docs` | symbol name | go_to_symbol, inspect_symbol, get_symbol_documentation, get_symbol_source | Three-tier documentation: hover → offline toolchain (go doc/pydoc/cargo doc) → source |
 | `/lsp-cross-repo` | symbol + consumer-roots | start_lsp, find_symbol, get_cross_repo_references, add_workspace_folder, list_workspace_folders, go_to_implementation, find_callers, inspect_symbol | Multi-root cross-repo caller analysis; results partitioned by repo |
 | `/lsp-explore` | `[symbol-name]` | start_lsp, go_to_symbol, inspect_symbol, go_to_implementation, find_callers, find_references, open_document, get_server_capabilities | hover + implementations + call hierarchy + references in one pass; capability-gated steps; produces Explore Report |
-| `/lsp-local-symbols` | `[file-path]` | list_symbols, find_references, inspect_symbol | File-scoped symbol list, usages within file, type info — faster than workspace search |
+| `/lsp-local-symbols` | `[file-path]` | list_symbols, find_references, inspect_symbol | File-scoped symbol list, usages within file, type info; faster than workspace search |
 | `/lsp-test-correlation` | `[source-file]` | get_tests_for_file, run_tests | Find and run only tests covering an edited file |
 | `/lsp-format-code` | `[file-path]` | format_document, format_range, apply_edit | Format file or selection via language server formatter; applies edits to disk |
 | `/lsp-fix-all` | `[file-path]` | get_diagnostics, suggest_fixes, apply_edit, open_document, format_document | Sequential quick-fix loop: collect diagnostics → apply one fix → re-collect; quick-fix kind only; never batches |
@@ -273,13 +278,13 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `/lsp-inspect` | `<file-or-directory> [--checks <types>] [--json]` | get_change_impact, find_references, list_symbols, inspect_symbol, get_diagnostics, find_callers, go_to_definition, get_server_capabilities | Full code quality audit: dead symbols, test coverage, silent failures, error wrapping, doc drift, panics, context propagation; severity-tiered findings report |
 | `/lsp-architecture` | `[workspace-root-path]` | start_lsp, list_symbols, get_change_impact, detect_lsp_servers, find_symbol | Project-level architecture overview: language distribution, package map (capped at 30), entry points, hotspots (top 10 by reference count), dependency flow. Read-only. |
 
-**User-facing reference:** `docs/skills.md` — one-page skill catalog with usage examples and trigger conditions
+**User-facing reference:** `docs/skills.md` (one-page skill catalog with usage examples and trigger conditions)
 
 **Discovery:** Skills are available through two channels:
 - **MCP prompts:** Any MCP client discovers skills via `prompts/list` (short descriptions) and retrieves full instructions via `prompts/get`. No manual installation required. Skill definitions are embedded in the binary.
 - **AgentSkills install:** `cd skills && ./install.sh` copies SKILL.md files to `~/.claude/skills/` for Claude Code slash command access. Flags: `--copy`, `--force`, `--dry-run`. Scans for `SKILL.md` files up to two levels deep.
 
-**CLAUDE.md sync:** `install.sh` maintains managed skills table in `~/.claude/CLAUDE.md` between sentinel comments (`<!-- agent-lsp:skills:start/end -->`). Auto-discovers skills from SKILL.md frontmatter — re-running keeps CLAUDE.md in sync without touching surrounding content.
+**CLAUDE.md sync:** `install.sh` maintains managed skills table in `~/.claude/CLAUDE.md` between sentinel comments (`<!-- agent-lsp:skills:start/end -->`). Auto-discovers skills from SKILL.md frontmatter; re-running keeps CLAUDE.md in sync without touching surrounding content.
 
 **SKILL.md format ([AgentSkills](https://agentskills.io/specification) conformant):**
 ```markdown
@@ -346,8 +351,8 @@ metadata:
 **`/lsp-safe-edit` step structure:**
 1. open_document for each target file
 2. Capture BEFORE diagnostics
-3. preview_edit (step 3) — decision on net_delta ≤ 0 vs > 0
-4. (Step 3b) simulate_chain for renames/signature changes — check cumulative_delta + safe_to_apply_through_step
+3. preview_edit (step 3): decision on net_delta ≤ 0 vs > 0
+4. (Step 3b) simulate_chain for renames/signature changes: check cumulative_delta + safe_to_apply_through_step
 5. Apply edit to disk (Edit/Write tool)
 6. Capture AFTER diagnostics
 7. Compute diff: introduced = AFTER not in BEFORE; resolved = BEFORE not in AFTER
@@ -359,12 +364,12 @@ metadata:
 | net_delta | confidence | Action |
 |-----------|------------|--------|
 | 0 | high | Safe. Commit or apply. |
-| 0 | eventual | Likely safe. Workspace scope — re-evaluate if risk matters. |
+| 0 | eventual | Likely safe. Workspace scope; re-evaluate if risk matters. |
 | > 0 | any | Do NOT apply. Inspect errors_introduced. Discard. |
 | > 0 | partial | Timeout. Results incomplete. Discard and retry smaller scope. |
 
 **`/lsp-dead-code` caveats (false zero-reference cases):**
-- Registration patterns: `server.AddTool(HandleFoo)` — handler passed as value, no static call site
+- Registration patterns: `server.AddTool(HandleFoo)` (handler passed as value, no static call site)
 - Reflection/dynamic dispatch
 - `//go:linkname` and assembly references in Go
 - External package consumers not in workspace
@@ -426,7 +431,7 @@ warnings: [roots that failed indexing]
 | Dart | `dart` | passing | Ships with Dart SDK; `brew install dart` |
 | MongoDB | `mongodb-language-server` | investigating | extracted from vscode VSIX at `dist/languageServer.js`; mongo:7 service container |
 
-**Tier 1 (Core 4 tools):** `start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol` — verified for all 30 languages
+**Tier 1 (Core 4 tools):** `start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`, verified for all 30 languages
 **Tier 2 (Extended 34 tools):** verified per-language; coverage varies by server capabilities
 
 ### CI Tool Coverage Matrix (Tier 2)
@@ -791,7 +796,7 @@ Server-initiated MCP notifications that inform the agent about state changes wit
 
 ### Status
 
-Wave 1 (notification infrastructure): shipped. Wave 2 (MCP server wiring via `cmd/agent-lsp/notifications.go`): in progress.
+Shipped. Both waves complete: notification infrastructure (`internal/notify/`) and MCP server wiring (`cmd/agent-lsp/notifications.go`). All four channels are wired automatically on `start_lsp`.
 
 ---
 
@@ -1174,7 +1179,7 @@ type Extension interface {
     ToolHandlers() map[string]ToolHandler
     ResourceHandlers() map[string]ResourceHandler
     SubscriptionHandlers() map[string]ResourceHandler
-    PromptHandlers() map[string]interface{}
+    PromptHandlers() map[string]any
 }
 ```
 

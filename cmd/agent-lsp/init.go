@@ -289,7 +289,7 @@ func resolveRulesPath(choice int) string {
 func generateRulesContent() string {
 	var b strings.Builder
 	b.WriteString("## agent-lsp Skills\n\n")
-	b.WriteString("agent-lsp provides 56 code intelligence tools and 22 workflow skills.\n")
+	b.WriteString("agent-lsp provides 60 code intelligence tools and 22 workflow skills.\n")
 	b.WriteString("Prefer LSP tools over Grep/Glob/Read for code navigation.\n\n")
 	b.WriteString("**Before editing code:** call `get_change_impact` for blast-radius analysis.\n")
 	b.WriteString("**Before applying edits:** call `preview_edit` to preview the diagnostic delta.\n")

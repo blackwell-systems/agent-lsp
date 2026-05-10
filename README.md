@@ -20,7 +20,7 @@ AI agents make incorrect code changes because they can't see the full picture: w
 
 agent-lsp is a **stateful runtime** over real language servers. It indexes your workspace once, keeps the index warm, and adds a **skill layer** that encodes correct multi-step operations so they actually complete.
 
-**How the pieces fit together:** [LSP](https://microsoft.github.io/language-server-protocol/) (Language Server Protocol) is how editors get code intelligence — completions, diagnostics, go-to-definition. [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) is the standard way AI tools like Claude Code discover and call external tools. agent-lsp bridges the two: language server intelligence, accessible to AI agents.
+**How the pieces fit together:** [LSP](https://microsoft.github.io/language-server-protocol/) (Language Server Protocol) is how editors get code intelligence: completions, diagnostics, go-to-definition. [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) is the standard way AI tools like Claude Code discover and call external tools. agent-lsp bridges the two: language server intelligence, accessible to AI agents.
 
 ### How it works
 
@@ -276,17 +276,17 @@ This is what the agent does, not something you type. Then use any of the 60 tool
 | Capability | Details |
 |------------|---------|
 | Tools | **60** |
-| Languages (CI-verified) | **30** — end-to-end integration tests on every push |
-| Agent workflows (skills) | **22** — named multi-step procedures, discoverable via MCP `prompts/list` |
-| Speculative execution | **8 tools** — simulate changes before writing to disk |
-| Phase enforcement | **4 skills** — runtime blocks out-of-order tool calls with recovery guidance |
-| Connection model | **persistent** — warm index across files and projects |
-| Call hierarchy | **✓** — single tool, direction param |
-| Type hierarchy | **✓** — CI-verified |
-| Cross-repo references | **✓** — multi-root workspace |
-| Auto-watch | **✓** — always-on, debounced file watching |
-| HTTP+SSE transport | **✓** — bearer token auth, non-root Docker |
-| Distribution | **single Go binary** — 10 install channels |
+| Languages (CI-verified) | **30**, end-to-end integration tests on every push |
+| Agent workflows (skills) | **22**, named multi-step procedures, discoverable via MCP `prompts/list` |
+| Speculative execution | **8 tools**, simulate changes before writing to disk |
+| Phase enforcement | **4 skills**, runtime blocks out-of-order tool calls with recovery guidance |
+| Connection model | **persistent**, warm index across files and projects |
+| Call hierarchy | **✓**, single tool, direction param |
+| Type hierarchy | **✓**, CI-verified |
+| Cross-repo references | **✓**, multi-root workspace |
+| Auto-watch | **✓**, always-on, debounced file watching |
+| HTTP+SSE transport | **✓**, bearer token auth, non-root Docker |
+| Distribution | **single Go binary**, 10 install channels |
 
 ## Use Cases
 
@@ -315,18 +315,18 @@ See [docs/tools.md](./docs/tools.md) for the full reference with parameters and 
 
 ### Documentation
 
-- [Tools reference](./docs/tools.md) — full tool reference with parameters and examples
-- [Skills reference](./docs/skills.md) — skill reference: workflows, use cases, and composition
-- [Language support](./docs/language-support.md) — language coverage matrix
-- [Architecture](./docs/architecture.md) — system design and internals
-- [Speculative execution](./docs/speculative-execution.md) — simulate-before-apply workflows
-- [LSP conformance](./docs/lsp-conformance.md) — LSP 3.17 spec coverage
-- [Docker](./DOCKER.md) — Docker tags, compose, and volume caching
+- [Tools reference](./docs/tools.md): full tool reference with parameters and examples
+- [Skills reference](./docs/skills.md): skill reference, workflows, use cases, and composition
+- [Language support](./docs/language-support.md): language coverage matrix
+- [Architecture](./docs/architecture.md): system design and internals
+- [Speculative execution](./docs/speculative-execution.md): simulate-before-apply workflows
+- [LSP conformance](./docs/lsp-conformance.md): LSP 3.17 spec coverage
+- [Docker](./DOCKER.md): Docker tags, compose, and volume caching
 
 ### Contributing
 
-- [CI notes](./docs/ci-notes.md) — CI quirks and test harness details
-- [Distribution](./docs/distribution.md) — install channels and release pipeline
+- [CI notes](./docs/ci-notes.md): CI quirks and test harness details
+- [Distribution](./docs/distribution.md): install channels and release pipeline
 
 ## Development
 

@@ -39,7 +39,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
-- **Next-step hints in tool responses.** Every tool response now includes a contextual `hint` field suggesting the logical next tool call. For example, `find_references` returns "use get_change_impact to see the full blast radius"; `preview_edit` returns "call get_diagnostics to check for remaining issues." Helps agents chain tools correctly without skills and helps less capable models navigate the 56-tool surface.
+- **Next-step hints in tool responses.** Every tool response now includes a contextual `hint` field suggesting the logical next tool call. For example, `find_references` returns "use get_change_impact to see the full blast radius"; `preview_edit` returns "call get_diagnostics to check for remaining issues." Helps agents chain tools correctly without skills and helps less capable models navigate the 60-tool surface.
 
 - **`detect_changes` range parameter.** The `committed` scope now accepts a `range` parameter for arbitrary git ranges: `"v0.7.0..HEAD"`, `"abc123..def456"`, or a single ref like `"main"` (expands to `main~1..main`). Ignored for unstaged/staged scopes. Previously only compared `HEAD~1..HEAD`.
 

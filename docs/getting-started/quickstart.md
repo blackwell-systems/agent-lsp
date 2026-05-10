@@ -68,7 +68,7 @@ Your AI agent calls tools automatically. The first call initializes the workspac
 start_lsp(root_dir="/your/project")
 ```
 
-This is what the agent does, not something you type. Then use any of the 56 tools. The session stays warm; no restart needed when switching files.
+This is what the agent does, not something you type. Then use any of the 60 tools. The session stays warm; no restart needed when switching files.
 
 **What to try first:** Ask your AI agent to "find all references to [some function]" or "rename [function] to [new name]." The agent will call `find_references` or the `/lsp-rename` skill automatically. You can also ask "what calls this function?" (triggers `find_callers`) or "check for errors in this file" (triggers `get_diagnostics`).
 

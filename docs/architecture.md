@@ -73,7 +73,7 @@ Passive mode is activated by passing `connect: "localhost:9999"` to `start_lsp`.
 
 **What agent-lsp does:**
 
-1. Speaks MCP to the AI agent, exposing 56 tools the agent can call.
+1. Speaks MCP to the AI agent, exposing 60 tools the agent can call.
 2. Translates each tool call into one or more LSP JSON-RPC requests, sent over stdin/stdout pipes to the appropriate language server subprocess.
 3. Maintains a persistent session: the language server index stays warm across all tool calls, all files, all packages. There is no cold-start on each request.
 4. Adds a speculative execution layer on top: edits can be applied in-memory to the live LSP state, evaluated for diagnostic impact, then committed to disk or discarded, without ever touching the file system until explicitly requested.
@@ -111,7 +111,7 @@ cmd/agent-lsp/
                            addToolWithPhaseCheck[T] generic wrapper for phase enforcement;
                            PhaseTracker initialization with BuiltinSkills();
                            (tool registration was extracted from server.go in a decomposition wave;
-                           server.go now delegates to the five tool files below)
+                           server.go now delegates to the six tool files below)
   helpers.go            ← shared helpers for the cmd layer (toolArgsToMap, clientForFile, autoInitClient)
   http_test.go          ← tests for HTTP transport and --http/--port/--token flag parsing
   schema_fix.go         ← fixes nullable array types in JSON Schemas for Gemini compatibility;
@@ -134,6 +134,9 @@ cmd/agent-lsp/
   tools_session.go      ← 8 simulation/session tools: create_simulation_session, simulate_edit,
                            evaluate_session, simulate_chain, commit_session, discard_session,
                            destroy_session, preview_edit
+  tools_symbol_edit.go  ← 4 symbol-level editing tools: replace_symbol_body,
+                           insert_after_symbol, insert_before_symbol, safe_delete_symbol;
+                           shared ResolveSymbolByNamePath resolver
   tools_phase.go        ← 3 phase enforcement tools: activate_skill, deactivate_skill,
                            get_skill_phase; checkPhasePermission helper
   audit_helpers.go      ← Diagnostic snapshot helpers for audit trail (pre/post edit)
@@ -348,7 +351,7 @@ implementation evolves.
 
 ### Layer rules
 
-- `cmd/agent-lsp/` owns the MCP server lifecycle and routes requests to handlers via the five tool files
+- `cmd/agent-lsp/` owns the MCP server lifecycle and routes requests to handlers via the six tool files
 - `internal/tools/` and `internal/resources/` import from `internal/lsp/`, `internal/session/`, and `internal/types/`. They do not import from each other
 - `internal/lsp/` imports from `internal/types/`, `internal/logging/`, and `internal/uri/` (no upward dependencies)
 - `internal/session/` imports from `internal/lsp/`, `internal/types/`, `internal/logging/`, and `internal/uri/`
@@ -488,7 +491,7 @@ For HTTP mode, the HTTP server calls `Shutdown` with a 5-second deadline, draini
 
 ## Tool Registration Model
 
-56 MCP tools are exposed to the AI agent. In MCP, a "tool" is a named function with a JSON Schema for its arguments that the AI can invoke via a JSON-RPC `tools/call` request. Tools are defined in five files under `cmd/agent-lsp/` and dispatched through a shared pattern.
+60 MCP tools are exposed to the AI agent. In MCP, a "tool" is a named function with a JSON Schema for its arguments that the AI can invoke via a JSON-RPC `tools/call` request. Tools are defined in five files under `cmd/agent-lsp/` and dispatched through a shared pattern.
 
 ### How a tool is defined
 
@@ -513,7 +516,7 @@ mcp.AddTool(d.server, &mcp.Tool{
 })
 ```
 
-### The five registration files
+### The six registration files
 
 | File | Tools registered | Count |
 |------|-----------------|-------|
@@ -521,9 +524,10 @@ mcp.AddTool(d.server, &mcp.Tool{
 | `tools_navigation.go` | go_to_definition, references, call hierarchy, rename | 10 |
 | `tools_analysis.go` | hover, diagnostics, completions, symbols, change impact, detect_changes | 14 |
 | `tools_session.go` | Speculative execution (simulate, evaluate, commit) | 8 |
+| `tools_symbol_edit.go` | Symbol-level editing (replace_symbol_body, insert_after_symbol, insert_before_symbol, safe_delete_symbol) | 4 |
 | `tools_phase.go` | Phase enforcement (activate_skill, deactivate_skill, get_skill_phase) | 3 |
 
-All five registration functions are called from `Run()` in `server.go` via the `toolDeps` bundle, which carries shared dependencies: the MCP server, the client resolver, the session manager, the phase tracker, and the `clientForFileWithAutoInit` closure. The 53 non-phase tools are wrapped via `addToolWithPhaseCheck` (generic wrapper that checks phase permissions before each handler). The 3 phase tools use raw `mcp.AddTool` to avoid circular enforcement.
+All six registration functions are called from `Run()` in `server.go` via the `toolDeps` bundle, which carries shared dependencies: the MCP server, the client resolver, the session manager, the phase tracker, and the `clientForFileWithAutoInit` closure. The 57 non-phase tools are wrapped via `addToolWithPhaseCheck` (generic wrapper that checks phase permissions before each handler). The 3 phase tools use raw `mcp.AddTool` to avoid circular enforcement.
 
 ### Handler separation
 
@@ -659,7 +663,7 @@ Language servers report long-running work (like indexing a workspace) via `$/pro
 
 ```go
 progressMu     sync.Mutex
-progressTokens map[interface{}]struct{} // active begin tokens
+progressTokens map[any]struct{} // active begin tokens
 progressCond   *sync.Cond              // signalled when progressTokens becomes empty
 
 // waitForWorkspaceReady blocks until all $/progress tokens complete or 60s elapses.
@@ -1167,7 +1171,7 @@ Skills are structured workflow definitions that tell agents how to orchestrate M
 ```
 Go binary (agent-lsp)                     skills/ directory
 ─────────────────────                     ──────────────────
-Exposes 56 MCP tools                      Source SKILL.md definitions
+Exposes 60 MCP tools                      Source SKILL.md definitions
 Serves skills via prompts/list + get      Installed to ~/.claude/skills/ for slash commands
 Embeds skill definitions at build time    Used by AgentSkills clients directly
 ```
@@ -1492,7 +1496,7 @@ Converts `(Command | CodeAction)[]` to `[]types.CodeAction`. Discriminates each 
 
 ### Why normalization exists
 
-Before `normalize.go`, handlers received `[]interface{}` from `json.Unmarshal` and had to type-assert their way through arbitrary JSON trees. This was fragile and made the response structure opaque to callers. Concrete types give handlers compile-time safety and make the wire format explicit. The normalization is centralized rather than per-handler because the same polymorphism appears in multiple places (e.g. `list_symbols`, `get_symbol_source` both need `DocumentSymbol`).
+Before `normalize.go`, handlers received `[]any` from `json.Unmarshal` and had to type-assert their way through arbitrary JSON trees. This was fragile and made the response structure opaque to callers. Concrete types give handlers compile-time safety and make the wire format explicit. The normalization is centralized rather than per-handler because the same polymorphism appears in multiple places (e.g. `list_symbols`, `get_symbol_source` both need `DocumentSymbol`).
 
 ---
 
@@ -1516,7 +1520,7 @@ type Extension interface {
     ToolHandlers() map[string]ToolHandler
     ResourceHandlers() map[string]ResourceHandler
     SubscriptionHandlers() map[string]ResourceHandler
-    PromptHandlers() map[string]interface{}
+    PromptHandlers() map[string]any
 }
 ```
 
@@ -1604,9 +1608,9 @@ Three methods on `LSPClient` support the notification subscribers:
 - `IsAlive() bool`: returns whether the language server subprocess is still running.
 - `IsWorkspaceLoaded() bool`: returns whether all `$/progress` indexing tokens have completed.
 
-### Wiring (Wave 2, not yet merged)
+### Wiring
 
-Wave 2 will connect the Hub to the MCP server in `cmd/agent-lsp/notifications.go`, calling `hub.SetSender` once the MCP session initializes and `hub.Close` on shutdown.
+The Hub is connected to the MCP server in `cmd/agent-lsp/notifications.go`. `hub.SetSender` is called once the MCP session initializes, and `hub.Close` is called on shutdown. All four notification channels are wired automatically on `start_lsp`.
 
 ---
 

@@ -550,7 +550,7 @@ Do not frame it as a testing tool or a linting tool. Frame it as **planning infr
 **V1 tool handler (atomic wrapper):**
 
 ```go
-func HandleSimulateEditAtomic(ctx context.Context, mgr *SessionManager, args map[string]interface{}) (types.ToolResult, error) {
+func HandlePreviewEdit(ctx context.Context, mgr *SessionManager, args map[string]any) (types.ToolResult, error) {
     // 1. Validate args (file_path, range, new_text)
     // 2. ValidateFilePath
     // 3. session = mgr.Create(ctx, workspaceRoot, language)
