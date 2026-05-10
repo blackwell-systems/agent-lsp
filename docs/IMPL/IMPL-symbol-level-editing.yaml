@@ -460,5 +460,5 @@ pre_mortem:
           mitigation: |
             CheckInitialized guard at the top of all Handle* functions catches nil
             client before any LSP calls. The resolver itself also checks client != nil.
-state: SCOUT_PENDING
+state: "REVIEWED"
 original_branch: main
