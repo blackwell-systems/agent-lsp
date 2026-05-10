@@ -7,6 +7,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **Proactive notifications infrastructure (Wave 1).** New `internal/notify/` package with four server-initiated notification channels: (1) diagnostic changes with 2-second debouncing to coalesce rapid `publishDiagnostics` updates during indexing, (2) workspace ready (one-shot notification when all `$/progress` indexing tokens complete, 5-minute timeout), (3) process health (crash/recovery notifications on language server state transitions), (4) stale references (3-second debounce, signals when watched files change on disk). Central `notify.Hub` coordinator with `NotificationSender` interface, thread-safe via `sync.RWMutex`. LSPClient hooks in `internal/lsp/client_notify.go`: `SubscribeToFileChanges`, `IsAlive`, `IsWorkspaceLoaded`. Wave 2 (MCP server wiring) will connect the Hub to the transport layer.
+
 - **Passive mode (`connect` parameter on `start_lsp`).** Connect to an already-running language server via TCP instead of spawning a new process. Pass `connect: "localhost:9999"` to reuse the IDE's warm index with zero duplicate memory or indexing. Supported by gopls (`gopls -listen=:9999`), clangd, and other servers with TCP listen mode. On shutdown, agent-lsp closes the TCP connection without killing the server process.
 
 ## [0.8.1] - 2026-05-09
