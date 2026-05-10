@@ -704,6 +704,70 @@ quality_gates:
         - type: test
           command: GOWORK=off go test ./internal/... ./cmd/...
           required: true
+post_merge_checklist:
+    groups:
+        - title: Background Service Initialization
+          items:
+            - description: Verify if context.go needs initialization in Server constructor
+            - description: Verify if context_test.go needs initialization in Server constructor
+completion_reports:
+    A:
+        status: complete
+        branch: worktree-agent-ac699336
+        commit: 74003a6
+        files_changed:
+            - internal/tools/context.go
+            - internal/tools/context_test.go
+            - cmd/agent-lsp/tools_context.go
+            - cmd/agent-lsp/server.go
+        files_created:
+            - internal/tools/context.go
+            - internal/tools/context_test.go
+            - cmd/agent-lsp/tools_context.go
+        tests_added:
+            - TestHandleGetEditingContext_NilClient
+            - TestHandleGetEditingContext_MissingFilePath
+            - TestExtractImports_Go
+            - TestExtractImports_Generic
+        verification: PASS
+        notes: 'get_editing_context tool complete: handler, tests, registration all passing. Build, vet, and focused tests clean.'
+    B:
+        status: complete
+        branch: saw/context-efficiency/wave1-agent-B
+        commit: "6491789"
+        files_changed:
+            - internal/tools/token_savings.go
+            - internal/tools/token_savings_test.go
+        files_created:
+            - internal/tools/token_savings.go
+            - internal/tools/token_savings_test.go
+        tests_added:
+            - TestEstimateTokenSavings_Basic
+            - TestEstimateTokenSavings_MissingFile
+            - TestAppendTokenMeta_ErrorResult
+            - TestAppendTokenMeta_AddsMetaContent
+        verification: PASS
+        notes: Token savings helper complete. Both functions exported and tested. Ready for integration by Agent A/C.
+    C:
+        status: complete
+        branch: worktree-agent-afbfc4ba
+        commit: 462546f
+        files_changed:
+            - internal/tools/etag.go
+            - internal/tools/etag_test.go
+        files_created:
+            - internal/tools/etag.go
+            - internal/tools/etag_test.go
+        tests_added:
+            - TestComputeFileETag_Basic
+            - TestComputeFileETag_MissingFile
+            - TestComputeETag_Deterministic
+            - TestComputeETag_DifferentContent
+            - TestCheckETagMatch_Match
+            - TestCheckETagMatch_NoMatch
+            - TestCheckETagMatch_EmptyIfNoneMatch
+        verification: PASS
+        notes: All 3 exported functions implemented per contract. 7 tests passing. Build and vet clean.
 pre_mortem:
     overall_risk: low
     rows:
@@ -742,3 +806,4 @@ critic_report:
     reviewed_at: "2026-05-10T19:12:40Z"
     issue_count: 0
 state: REVIEWED
+original_branch: main
