@@ -768,3 +768,4 @@ critic_report:
     reviewed_at: "2026-05-10T06:41:46Z"
     issue_count: 0
 state: SCOUT_PENDING
+original_branch: main
