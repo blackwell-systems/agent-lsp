@@ -9,7 +9,7 @@ import (
 // IsError=true without panicking.
 func TestHandleGetSemanticTokens_NilClient(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"file_path":    "/some/file.go",
 		"start_line":   float64(1),
 		"start_column": float64(1),
@@ -31,7 +31,7 @@ func TestHandleGetSemanticTokens_NilClient(t *testing.T) {
 // the handler returns ErrorResult not a Go error).
 func TestHandleGetSemanticTokens_MissingFilePath(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"start_line":   float64(1),
 		"start_column": float64(1),
 		"end_line":     float64(10),
@@ -51,7 +51,7 @@ func TestHandleGetSemanticTokens_MissingFilePath(t *testing.T) {
 // no panic. Range validation is separately tested via extractRange.
 func TestHandleGetSemanticTokens_InvalidRange(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"file_path":    "/some/file.go",
 		"start_line":   float64(10),
 		"start_column": float64(1),

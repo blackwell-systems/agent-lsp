@@ -9,7 +9,7 @@ import (
 // --- extractRange: start-after-end and same-position edge cases ---
 
 func TestExtractRange_StartAfterEnd_SameLine(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"start_line":   float64(5),
 		"start_column": float64(10),
 		"end_line":     float64(5),
@@ -22,7 +22,7 @@ func TestExtractRange_StartAfterEnd_SameLine(t *testing.T) {
 }
 
 func TestExtractRange_StartAfterEnd_DifferentLines(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"start_line":   float64(10),
 		"start_column": float64(1),
 		"end_line":     float64(5),
@@ -35,7 +35,7 @@ func TestExtractRange_StartAfterEnd_DifferentLines(t *testing.T) {
 }
 
 func TestExtractRange_ZeroWidthRange(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"start_line":   float64(3),
 		"start_column": float64(7),
 		"end_line":     float64(3),
@@ -51,7 +51,7 @@ func TestExtractRange_ZeroWidthRange(t *testing.T) {
 }
 
 func TestExtractRange_NonNumericTypes(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"start_line":   "not-a-number",
 		"start_column": float64(1),
 		"end_line":     float64(2),
@@ -66,7 +66,7 @@ func TestExtractRange_NonNumericTypes(t *testing.T) {
 // --- toInt: nil and bool variants ---
 
 func TestToInt_NilValue(t *testing.T) {
-	args := map[string]interface{}{"val": nil}
+	args := map[string]any{"val": nil}
 	_, err := toInt(args, "val")
 	if err == nil {
 		t.Error("expected error for nil value")
@@ -74,7 +74,7 @@ func TestToInt_NilValue(t *testing.T) {
 }
 
 func TestToInt_BoolValue(t *testing.T) {
-	args := map[string]interface{}{"val": true}
+	args := map[string]any{"val": true}
 	_, err := toInt(args, "val")
 	if err == nil {
 		t.Error("expected error for bool value")
@@ -142,7 +142,7 @@ func TestBestSymbolMatch_NonDotted_OnlyTestFiles(t *testing.T) {
 // --- HandleSetLogLevel edge cases ---
 
 func TestHandleSetLogLevel_NonStringLevel(t *testing.T) {
-	args := map[string]interface{}{"level": 42}
+	args := map[string]any{"level": 42}
 	result, err := HandleSetLogLevel(nil, nil, args)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -157,13 +157,13 @@ func TestHandleSetLogLevel_NonStringLevel(t *testing.T) {
 func TestRenderOutline_DeepNesting(t *testing.T) {
 	symbols := []types.DocumentSymbol{
 		{
-			Name: "L0",
-			Kind: 5, // Class
+			Name:  "L0",
+			Kind:  5, // Class
 			Range: types.Range{Start: types.Position{Line: 1}},
 			Children: []types.DocumentSymbol{
 				{
-					Name: "L1",
-					Kind: 6, // Method
+					Name:  "L1",
+					Kind:  6, // Method
 					Range: types.Range{Start: types.Position{Line: 3}},
 					Children: []types.DocumentSymbol{
 						{
@@ -259,7 +259,7 @@ func TestAppendHint_NoContent(t *testing.T) {
 // --- ParseScopePaths: additional edge case ---
 
 func TestParseScopePaths_SliceWithAllEmpty(t *testing.T) {
-	raw := []interface{}{"", "", ""}
+	raw := []any{"", "", ""}
 	paths := ParseScopePaths(raw)
 	if len(paths) != 0 {
 		t.Errorf("expected 0 paths for all-empty slice, got %v", paths)
@@ -267,7 +267,7 @@ func TestParseScopePaths_SliceWithAllEmpty(t *testing.T) {
 }
 
 func TestParseScopePaths_SingleItemSlice(t *testing.T) {
-	raw := []interface{}{"src/main"}
+	raw := []any{"src/main"}
 	paths := ParseScopePaths(raw)
 	if len(paths) != 1 || paths[0] != "src/main" {
 		t.Errorf("got %v, want [src/main]", paths)

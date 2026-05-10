@@ -54,7 +54,7 @@ func locationsResult(locs []types.Location) (types.ToolResult, error) {
 }
 
 // HandleGetReferences retrieves all references to the symbol at the given location.
-func HandleGetReferences(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetReferences(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -106,7 +106,7 @@ func HandleGetReferences(ctx context.Context, client *lsp.LSPClient, args map[st
 }
 
 // HandleGoToDefinition finds the definition of the symbol at the given location.
-func HandleGoToDefinition(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGoToDefinition(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -150,7 +150,7 @@ func HandleGoToDefinition(ctx context.Context, client *lsp.LSPClient, args map[s
 }
 
 // HandleGoToTypeDefinition finds the type definition of the symbol at the given location.
-func HandleGoToTypeDefinition(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGoToTypeDefinition(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -181,7 +181,7 @@ func HandleGoToTypeDefinition(ctx context.Context, client *lsp.LSPClient, args m
 }
 
 // HandleGoToImplementation finds implementations of the symbol at the given location.
-func HandleGoToImplementation(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGoToImplementation(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -216,7 +216,7 @@ func HandleGoToImplementation(ctx context.Context, client *lsp.LSPClient, args m
 }
 
 // HandleGoToDeclaration finds the declaration of the symbol at the given location.
-func HandleGoToDeclaration(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGoToDeclaration(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}

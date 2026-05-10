@@ -7,11 +7,11 @@
 // edits in memory, measure the diagnostic delta, and decide whether to apply
 // or discard before touching disk. The flow:
 //
-//   1. create_simulation_session: snapshot current LSP state.
-//   2. simulate_edit (one or more): apply edits in memory.
-//   3. evaluate_session: collect diagnostics, compute net_delta.
-//   4. commit_session (if safe) or discard_session (if not).
-//   5. destroy_session: release resources.
+//  1. create_simulation_session: snapshot current LSP state.
+//  2. simulate_edit (one or more): apply edits in memory.
+//  3. evaluate_session: collect diagnostics, compute net_delta.
+//  4. commit_session (if safe) or discard_session (if not).
+//  5. destroy_session: release resources.
 //
 // simulate_edit_atomic combines steps 2-3 into a single call: apply one edit,
 // evaluate immediately, and return the delta. This is the most common path
@@ -32,7 +32,7 @@ import (
 )
 
 // HandleCreateSimulationSession creates a new isolated simulation session.
-func HandleCreateSimulationSession(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error) {
+func HandleCreateSimulationSession(ctx context.Context, mgr *session.SessionManager, args map[string]any) (types.ToolResult, error) {
 	workspaceRoot, ok := args["workspace_root"].(string)
 	if !ok || workspaceRoot == "" {
 		return types.ErrorResult("workspace_root is required"), nil
@@ -55,7 +55,7 @@ func HandleCreateSimulationSession(ctx context.Context, mgr *session.SessionMana
 		return types.ErrorResult(fmt.Sprintf("create_session failed: %s", err)), nil
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"session_id": sessionID,
 		"status":     "created",
 	}
@@ -67,7 +67,7 @@ func HandleCreateSimulationSession(ctx context.Context, mgr *session.SessionMana
 }
 
 // HandleSimulateEdit applies a single edit to a session without evaluating.
-func HandleSimulateEdit(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error) {
+func HandleSimulateEdit(ctx context.Context, mgr *session.SessionManager, args map[string]any) (types.ToolResult, error) {
 	sessionID, ok := args["session_id"].(string)
 	if !ok || sessionID == "" {
 		return types.ErrorResult("session_id is required"), nil
@@ -106,7 +106,7 @@ func HandleSimulateEdit(ctx context.Context, mgr *session.SessionManager, args m
 }
 
 // HandleEvaluateSession evaluates the current state of a session.
-func HandleEvaluateSession(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error) {
+func HandleEvaluateSession(ctx context.Context, mgr *session.SessionManager, args map[string]any) (types.ToolResult, error) {
 	sessionID, ok := args["session_id"].(string)
 	if !ok || sessionID == "" {
 		return types.ErrorResult("session_id is required"), nil
@@ -138,13 +138,13 @@ func HandleEvaluateSession(ctx context.Context, mgr *session.SessionManager, arg
 }
 
 // HandleSimulateChain applies a sequence of edits and evaluates after each step.
-func HandleSimulateChain(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error) {
+func HandleSimulateChain(ctx context.Context, mgr *session.SessionManager, args map[string]any) (types.ToolResult, error) {
 	sessionID, ok := args["session_id"].(string)
 	if !ok || sessionID == "" {
 		return types.ErrorResult("session_id is required"), nil
 	}
 
-	editsRaw, ok := args["edits"].([]interface{})
+	editsRaw, ok := args["edits"].([]any)
 	if !ok || len(editsRaw) == 0 {
 		return types.ErrorResult("edits array is required and must not be empty"), nil
 	}
@@ -152,7 +152,7 @@ func HandleSimulateChain(ctx context.Context, mgr *session.SessionManager, args 
 	// Parse edits
 	chainEdits := make([]session.ChainEdit, 0, len(editsRaw))
 	for i, editRaw := range editsRaw {
-		editMap, ok := editRaw.(map[string]interface{})
+		editMap, ok := editRaw.(map[string]any)
 		if !ok {
 			return types.ErrorResult(fmt.Sprintf("edit[%d] must be an object", i)), nil
 		}
@@ -201,7 +201,7 @@ func HandleSimulateChain(ctx context.Context, mgr *session.SessionManager, args 
 }
 
 // HandleCommitSession commits session changes to disk or returns a patch.
-func HandleCommitSession(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error) {
+func HandleCommitSession(ctx context.Context, mgr *session.SessionManager, args map[string]any) (types.ToolResult, error) {
 	sessionID, ok := args["session_id"].(string)
 	if !ok || sessionID == "" {
 		return types.ErrorResult("session_id is required"), nil
@@ -231,7 +231,7 @@ func HandleCommitSession(ctx context.Context, mgr *session.SessionManager, args 
 }
 
 // HandleDiscardSession discards all session changes without committing.
-func HandleDiscardSession(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error) {
+func HandleDiscardSession(ctx context.Context, mgr *session.SessionManager, args map[string]any) (types.ToolResult, error) {
 	sessionID, ok := args["session_id"].(string)
 	if !ok || sessionID == "" {
 		return types.ErrorResult("session_id is required"), nil
@@ -243,7 +243,7 @@ func HandleDiscardSession(ctx context.Context, mgr *session.SessionManager, args
 		return types.ErrorResult(fmt.Sprintf("discard_session failed: %s", err)), nil
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"session_id": sessionID,
 		"status":     "discarded",
 	}
@@ -255,7 +255,7 @@ func HandleDiscardSession(ctx context.Context, mgr *session.SessionManager, args
 }
 
 // HandleDestroySession destroys a session and releases all resources.
-func HandleDestroySession(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error) {
+func HandleDestroySession(ctx context.Context, mgr *session.SessionManager, args map[string]any) (types.ToolResult, error) {
 	sessionID, ok := args["session_id"].(string)
 	if !ok || sessionID == "" {
 		return types.ErrorResult("session_id is required"), nil
@@ -267,7 +267,7 @@ func HandleDestroySession(ctx context.Context, mgr *session.SessionManager, args
 		return types.ErrorResult(fmt.Sprintf("destroy_session failed: %s", err)), nil
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"session_id": sessionID,
 		"status":     "destroyed",
 	}
@@ -279,7 +279,7 @@ func HandleDestroySession(ctx context.Context, mgr *session.SessionManager, args
 }
 
 // HandleSimulateEditAtomic creates a session, applies an edit, evaluates, and destroys atomically.
-func HandleSimulateEditAtomic(ctx context.Context, mgr *session.SessionManager, args map[string]interface{}) (types.ToolResult, error) {
+func HandleSimulateEditAtomic(ctx context.Context, mgr *session.SessionManager, args map[string]any) (types.ToolResult, error) {
 	// Extract workspace_root
 	workspaceRoot, ok := args["workspace_root"].(string)
 	if !ok || workspaceRoot == "" {

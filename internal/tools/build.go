@@ -33,7 +33,7 @@ import (
 // HandleRunBuild is an MCP tool handler for run_build. It runs the language's
 // build tool in the specified workspace directory and returns structured output.
 // No *lsp.LSPClient parameter — runs shell commands independently of any LSP session.
-func HandleRunBuild(ctx context.Context, args map[string]interface{}) (types.ToolResult, error) {
+func HandleRunBuild(ctx context.Context, args map[string]any) (types.ToolResult, error) {
 	workspaceDir, _ := args["workspace_dir"].(string)
 	if workspaceDir == "" {
 		return types.ErrorResult("workspace_dir is required"), nil
@@ -76,7 +76,7 @@ func HandleRunBuild(ctx context.Context, args map[string]interface{}) (types.Too
 // HandleRunTests is an MCP tool handler for run_tests. It runs the language's
 // test tool in the specified workspace directory and returns structured output.
 // No *lsp.LSPClient parameter — runs shell commands independently of any LSP session.
-func HandleRunTests(ctx context.Context, args map[string]interface{}) (types.ToolResult, error) {
+func HandleRunTests(ctx context.Context, args map[string]any) (types.ToolResult, error) {
 	workspaceDir, _ := args["workspace_dir"].(string)
 	if workspaceDir == "" {
 		return types.ErrorResult("workspace_dir is required"), nil
@@ -119,7 +119,7 @@ func HandleRunTests(ctx context.Context, args map[string]interface{}) (types.Too
 // HandleGetTestsForFile is an MCP tool handler for get_tests_for_file.
 // Returns test files that exercise the given source file.
 // No *lsp.LSPClient parameter — performs static file lookup without LSP.
-func HandleGetTestsForFile(ctx context.Context, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetTestsForFile(ctx context.Context, args map[string]any) (types.ToolResult, error) {
 	filePath, _ := args["file_path"].(string)
 	if filePath == "" {
 		return types.ErrorResult("file_path is required"), nil
@@ -671,10 +671,10 @@ func parseGoTestFailures(root string, output []byte) []TestFailure {
 
 // rustTestEvent is a JSON line from cargo test --message-format=json.
 type rustTestEvent struct {
-	Type    string `json:"type"`
-	Event   string `json:"event"`
-	Name    string `json:"name"`
-	Stdout  string `json:"stdout"`
+	Type   string `json:"type"`
+	Event  string `json:"event"`
+	Name   string `json:"name"`
+	Stdout string `json:"stdout"`
 }
 
 func parseRustTestFailures(output []byte) []TestFailure {

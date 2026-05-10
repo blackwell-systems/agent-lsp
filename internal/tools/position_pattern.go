@@ -143,7 +143,7 @@ func ResolvePositionPatternInRange(filePath, pattern string, startLine, endLine 
 // If args["position_pattern"] is non-empty, it calls ResolvePositionPatternInRange
 // with optional line_scope_start and line_scope_end args (0 means no restriction).
 // Otherwise it falls through to extractPosition(args).
-func ExtractPositionWithPattern(args map[string]interface{}, filePath string) (line, col int, err error) {
+func ExtractPositionWithPattern(args map[string]any, filePath string) (line, col int, err error) {
 	pp, _ := args["position_pattern"].(string)
 	if pp != "" {
 		scopeStart, _ := toIntOptional(args, "line_scope_start")
@@ -154,7 +154,7 @@ func ExtractPositionWithPattern(args map[string]interface{}, filePath string) (l
 }
 
 // toIntOptional reads an integer arg, returning 0 and no error when absent.
-func toIntOptional(args map[string]interface{}, key string) (int, error) {
+func toIntOptional(args map[string]any, key string) (int, error) {
 	v, ok := args[key]
 	if !ok || v == nil {
 		return 0, nil

@@ -12,21 +12,21 @@ import (
 
 func TestClassifySkills_AllSupported(t *testing.T) {
 	// Provide every capability any skill could need.
-	caps := map[string]interface{}{
-		"hoverProvider":                  true,
-		"completionProvider":             map[string]interface{}{},
-		"definitionProvider":             true,
-		"referencesProvider":             true,
-		"documentSymbolProvider":         true,
-		"workspaceSymbolProvider":        true,
-		"implementationProvider":         true,
-		"callHierarchyProvider":          true,
-		"typeHierarchyProvider":          true,
-		"codeActionProvider":             true,
-		"documentFormattingProvider":     true,
+	caps := map[string]any{
+		"hoverProvider":                   true,
+		"completionProvider":              map[string]any{},
+		"definitionProvider":              true,
+		"referencesProvider":              true,
+		"documentSymbolProvider":          true,
+		"workspaceSymbolProvider":         true,
+		"implementationProvider":          true,
+		"callHierarchyProvider":           true,
+		"typeHierarchyProvider":           true,
+		"codeActionProvider":              true,
+		"documentFormattingProvider":      true,
 		"documentRangeFormattingProvider": true,
-		"renameProvider":                 true,
-		"documentHighlightProvider":      true,
+		"renameProvider":                  true,
+		"documentHighlightProvider":       true,
 	}
 	result := classifySkills(caps)
 	for _, s := range result {
@@ -38,7 +38,7 @@ func TestClassifySkills_AllSupported(t *testing.T) {
 }
 
 func TestClassifySkills_NoCaps(t *testing.T) {
-	caps := map[string]interface{}{}
+	caps := map[string]any{}
 	result := classifySkills(caps)
 	if len(result) == 0 {
 		t.Fatal("expected non-empty skill list")
@@ -60,7 +60,7 @@ func TestClassifySkills_NoCaps(t *testing.T) {
 func TestClassifySkills_PartialStatus(t *testing.T) {
 	// Provide only the required capabilities for lsp-explore (hoverProvider),
 	// but not the optional ones (implementationProvider, callHierarchyProvider, referencesProvider).
-	caps := map[string]interface{}{
+	caps := map[string]any{
 		"hoverProvider": true,
 	}
 	result := classifySkills(caps)
@@ -126,9 +126,9 @@ func TestSymbolKindName(t *testing.T) {
 		{13, "Variable"},
 		{23, "Struct"},
 		{26, "TypeParameter"},
-		{99, "Kind99"},    // unknown kind
-		{0, "Kind0"},      // zero
-		{-1, "Kind-1"},    // negative
+		{99, "Kind99"}, // unknown kind
+		{0, "Kind0"},   // zero
+		{-1, "Kind-1"}, // negative
 	}
 	for _, tc := range cases {
 		got := symbolKindName(tc.kind)

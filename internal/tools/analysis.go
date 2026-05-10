@@ -24,7 +24,7 @@ import (
 )
 
 // HandleGetDiagnostics retrieves LSP diagnostics for a file or all open documents.
-func HandleGetDiagnostics(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetDiagnostics(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -90,7 +90,7 @@ func HandleGetDiagnostics(ctx context.Context, client *lsp.LSPClient, args map[s
 }
 
 // HandleGetInfoOnLocation retrieves hover information at a source location.
-func HandleGetInfoOnLocation(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetInfoOnLocation(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -121,7 +121,7 @@ func HandleGetInfoOnLocation(ctx context.Context, client *lsp.LSPClient, args ma
 }
 
 // HandleGetCompletions retrieves completion suggestions at a source location.
-func HandleGetCompletions(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetCompletions(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -157,7 +157,7 @@ func HandleGetCompletions(ctx context.Context, client *lsp.LSPClient, args map[s
 }
 
 // HandleGetSignatureHelp retrieves signature help at a source location.
-func HandleGetSignatureHelp(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetSignatureHelp(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -177,7 +177,7 @@ func HandleGetSignatureHelp(ctx context.Context, client *lsp.LSPClient, args map
 		languageID = "plaintext"
 	}
 
-	result, wErr := WithDocument[interface{}](ctx, client, filePath, languageID, func(fileURI string) (interface{}, error) {
+	result, wErr := WithDocument[any](ctx, client, filePath, languageID, func(fileURI string) (any, error) {
 		pos := types.Position{Line: line - 1, Character: col - 1}
 		return client.GetSignatureHelp(ctx, fileURI, pos)
 	})
@@ -193,7 +193,7 @@ func HandleGetSignatureHelp(ctx context.Context, client *lsp.LSPClient, args map
 }
 
 // HandleGetCodeActions retrieves code actions for a range in a document.
-func HandleGetCodeActions(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetCodeActions(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -228,7 +228,7 @@ func HandleGetCodeActions(ctx context.Context, client *lsp.LSPClient, args map[s
 }
 
 // HandleGetDocumentSymbols retrieves the symbols defined in a document.
-func HandleGetDocumentSymbols(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetDocumentSymbols(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -280,9 +280,9 @@ type workspaceSymbolEnriched struct {
 // the hover-enriched window defined by offset and limit. pagination describes
 // the current window position.
 type workspaceSymbolsResponse struct {
-	Total      int                       `json:"total"`
-	Symbols    []types.SymbolInformation `json:"symbols"`
-	Enriched   []workspaceSymbolEnriched `json:"enriched,omitempty"`
+	Total      int                        `json:"total"`
+	Symbols    []types.SymbolInformation  `json:"symbols"`
+	Enriched   []workspaceSymbolEnriched  `json:"enriched,omitempty"`
 	Pagination *workspaceSymbolPagination `json:"pagination,omitempty"`
 }
 
@@ -302,7 +302,7 @@ type workspaceSymbolPagination struct {
 // limit (default 3) and offset (default 0) control the enrichment window.
 // The AI can paginate: read symbols[] to see all results, use offset to step
 // through enriched detail windows without re-running the workspace search.
-func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -369,7 +369,7 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 }
 
 // toIntOpt reads an integer argument without error — returns (value, true) if present and valid.
-func toIntOpt(args map[string]interface{}, key string) (int, bool) {
+func toIntOpt(args map[string]any, key string) (int, bool) {
 	v, err := toInt(args, key)
 	return v, err == nil
 }
@@ -393,7 +393,7 @@ func symbolPaginationWindow(total, offset, limit int) (start, end int, p *worksp
 }
 
 // extractPosition reads line and column from args, validates 1-indexed.
-func extractPosition(args map[string]interface{}) (line, col int, err error) {
+func extractPosition(args map[string]any) (line, col int, err error) {
 	line, err = toInt(args, "line")
 	if err != nil {
 		return 0, 0, fmt.Errorf("line: %w", err)
@@ -414,7 +414,7 @@ func extractPosition(args map[string]interface{}) (line, col int, err error) {
 }
 
 // extractRange reads start/end line and column from args, validates 1-indexed and ordering.
-func extractRange(args map[string]interface{}) (types.Range, error) {
+func extractRange(args map[string]any) (types.Range, error) {
 	startLine, err := toInt(args, "start_line")
 	if err != nil {
 		return types.Range{}, fmt.Errorf("start_line: %w", err)
@@ -507,7 +507,7 @@ func symbolKindName(kind int) string {
 }
 
 // toInt extracts an integer from args[key]. Handles float64 (JSON default) and int.
-func toInt(args map[string]interface{}, key string) (int, error) {
+func toInt(args map[string]any, key string) (int, error) {
 	v, ok := args[key]
 	if !ok {
 		return 0, fmt.Errorf("missing required argument %q", key)

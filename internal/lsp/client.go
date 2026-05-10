@@ -9,12 +9,12 @@
 // pendingMu for in-flight requests, diagMu for diagnostics, etc.).
 //
 // Lifecycle:
-//   1. NewLSPClient creates an unstarted client.
-//   2. Initialize spawns the subprocess, performs the LSP handshake,
-//      stores server capabilities, and starts the auto-watcher.
-//   3. Tool handlers call methods like GetReferences, GetDefinition, etc.
-//   4. Shutdown sends shutdown+exit and stops the watcher.
-//   5. Restart combines Shutdown + Initialize for server recovery.
+//  1. NewLSPClient creates an unstarted client.
+//  2. Initialize spawns the subprocess, performs the LSP handshake,
+//     stores server capabilities, and starts the auto-watcher.
+//  3. Tool handlers call methods like GetReferences, GetDefinition, etc.
+//  4. Shutdown sends shutdown+exit and stops the watcher.
+//  5. Restart combines Shutdown + Initialize for server recovery.
 //
 // The readLoop goroutine dispatches all incoming messages: responses are
 // matched to pending requests by ID; notifications (diagnostics, progress)
@@ -49,30 +49,30 @@ import (
 // in src/lspClient.ts for parity. References require full workspace indexing;
 // initialize can be slow on cold-start JVM-based servers.
 var requestTimeouts = map[string]time.Duration{
-	"initialize":                    300 * time.Second,
-	"textDocument/references":       120 * time.Second,
-	"textDocument/hover":            30 * time.Second,
-	"textDocument/completion":       30 * time.Second,
-	"textDocument/codeAction":       30 * time.Second,
-	"textDocument/definition":       30 * time.Second,
-	"textDocument/documentSymbol":   30 * time.Second,
-	"workspace/symbol":              30 * time.Second,
-	"textDocument/signatureHelp":    30 * time.Second,
-	"textDocument/formatting":       30 * time.Second,
-	"textDocument/rename":           30 * time.Second,
-	"workspace/executeCommand":      30 * time.Second,
-	"textDocument/declaration":      30 * time.Second,
-	"textDocument/prepareRename":    30 * time.Second,
+	"initialize":                        300 * time.Second,
+	"textDocument/references":           120 * time.Second,
+	"textDocument/hover":                30 * time.Second,
+	"textDocument/completion":           30 * time.Second,
+	"textDocument/codeAction":           30 * time.Second,
+	"textDocument/definition":           30 * time.Second,
+	"textDocument/documentSymbol":       30 * time.Second,
+	"workspace/symbol":                  30 * time.Second,
+	"textDocument/signatureHelp":        30 * time.Second,
+	"textDocument/formatting":           30 * time.Second,
+	"textDocument/rename":               30 * time.Second,
+	"workspace/executeCommand":          30 * time.Second,
+	"textDocument/declaration":          30 * time.Second,
+	"textDocument/prepareRename":        30 * time.Second,
 	"textDocument/prepareCallHierarchy": 30 * time.Second,
-	"callHierarchy/incomingCalls":        60 * time.Second,
-	"callHierarchy/outgoingCalls":         60 * time.Second,
+	"callHierarchy/incomingCalls":       60 * time.Second,
+	"callHierarchy/outgoingCalls":       60 * time.Second,
 	"textDocument/prepareTypeHierarchy": 30 * time.Second,
-	"typeHierarchy/supertypes":           60 * time.Second,
-	"typeHierarchy/subtypes":             60 * time.Second,
-	"textDocument/inlayHint":              30 * time.Second,
-	"textDocument/documentHighlight":      10 * time.Second,
-	"textDocument/semanticTokens/range":   30 * time.Second,
-	"textDocument/semanticTokens/full":    30 * time.Second,
+	"typeHierarchy/supertypes":          60 * time.Second,
+	"typeHierarchy/subtypes":            60 * time.Second,
+	"textDocument/inlayHint":            30 * time.Second,
+	"textDocument/documentHighlight":    10 * time.Second,
+	"textDocument/semanticTokens/range": 30 * time.Second,
+	"textDocument/semanticTokens/full":  30 * time.Second,
 }
 
 const defaultTimeout = 30 * time.Second
@@ -147,17 +147,17 @@ type LSPClient struct {
 	pending   map[int]*pendingRequest
 
 	// open documents
-	openDocs  map[string]docMeta // uri -> meta
+	openDocs map[string]docMeta // uri -> meta
 
 	// diagnostics
-	diagMu    sync.RWMutex
-	diags     map[string][]types.LSPDiagnostic
-	diagSubs  []types.DiagnosticUpdateCallback
+	diagMu   sync.RWMutex
+	diags    map[string][]types.LSPDiagnostic
+	diagSubs []types.DiagnosticUpdateCallback
 
 	// workspace readiness ($/progress)
 	progressMu     sync.Mutex
-	progressTokens map[interface{}]struct{} // active begin tokens
-	progressCond   *sync.Cond // signalled when progressTokens becomes empty
+	progressTokens map[any]struct{} // active begin tokens
+	progressCond   *sync.Cond       // signalled when progressTokens becomes empty
 
 	// workspace scoping (generated config for large repos)
 	scopeConfig  *ScopeConfig
@@ -177,10 +177,10 @@ type LSPClient struct {
 	workspaceLoaded atomic.Bool
 
 	// server capabilities and identity (from initialize response)
-	capsMu          sync.RWMutex
-	capabilities    map[string]interface{}
-	serverName      string
-	serverVersion   string
+	capsMu           sync.RWMutex
+	capabilities     map[string]any
+	serverName       string
+	serverVersion    string
 	workspaceFolders []workspaceFolder
 
 	// semantic token legend (from initialize response)
@@ -194,10 +194,10 @@ type LSPClient struct {
 
 	// auto-watcher: watches the workspace root and notifies the server
 	// of file changes automatically, keeping the LSP index fresh.
-	watcherMu      sync.Mutex // guards watcherStop, fileChangeCbs (C2: prevents data race)
-	watcherStop    chan struct{}
-	watcher        *fsnotify.Watcher  // C1: held so addWatcherRoot can Add() new dirs
-	fileChangeCbs  []func([]types.FileChangeEvent) // proactive notification callbacks
+	watcherMu     sync.Mutex // guards watcherStop, fileChangeCbs (C2: prevents data race)
+	watcherStop   chan struct{}
+	watcher       *fsnotify.Watcher               // C1: held so addWatcherRoot can Add() new dirs
+	fileChangeCbs []func([]types.FileChangeEvent) // proactive notification callbacks
 }
 
 // NewLSPClient creates a new, unstarted LSP client.
@@ -208,8 +208,8 @@ func NewLSPClient(serverPath string, serverArgs []string) *LSPClient {
 		pending:        make(map[int]*pendingRequest),
 		openDocs:       make(map[string]docMeta),
 		diags:          make(map[string][]types.LSPDiagnostic),
-		progressTokens: make(map[interface{}]struct{}),
-		capabilities:   make(map[string]interface{}),
+		progressTokens: make(map[any]struct{}),
+		capabilities:   make(map[string]any),
 		warmup:         newWarmupState(),
 	}
 	c.nextID.Store(0)
@@ -230,24 +230,24 @@ func NewDaemonClient(info *DaemonInfo) (*LSPClient, error) {
 	// server already advertised its capabilities during initialize; we trust that
 	// any tool call routed to a daemon client is valid. This avoids needing a
 	// capability exchange protocol over the socket.
-	allCaps := map[string]interface{}{
-		"referencesProvider":       true,
-		"hoverProvider":            true,
-		"definitionProvider":       true,
-		"typeDefinitionProvider":   true,
-		"declarationProvider":      true,
-		"implementationProvider":   true,
-		"documentSymbolProvider":   true,
-		"workspaceSymbolProvider":  true,
-		"completionProvider":       true,
-		"signatureHelpProvider":    true,
-		"codeActionProvider":       true,
-		"renameProvider":           true,
+	allCaps := map[string]any{
+		"referencesProvider":         true,
+		"hoverProvider":              true,
+		"definitionProvider":         true,
+		"typeDefinitionProvider":     true,
+		"declarationProvider":        true,
+		"implementationProvider":     true,
+		"documentSymbolProvider":     true,
+		"workspaceSymbolProvider":    true,
+		"completionProvider":         true,
+		"signatureHelpProvider":      true,
+		"codeActionProvider":         true,
+		"renameProvider":             true,
 		"documentFormattingProvider": true,
-		"documentHighlightProvider": true,
-		"callHierarchyProvider":    true,
-		"semanticTokensProvider":   true,
-		"inlayHintProvider":        true,
+		"documentHighlightProvider":  true,
+		"callHierarchyProvider":      true,
+		"semanticTokensProvider":     true,
+		"inlayHintProvider":          true,
 	}
 
 	c := &LSPClient{
@@ -255,7 +255,7 @@ func NewDaemonClient(info *DaemonInfo) (*LSPClient, error) {
 		pending:        make(map[int]*pendingRequest),
 		openDocs:       make(map[string]docMeta),
 		diags:          make(map[string][]types.LSPDiagnostic),
-		progressTokens: make(map[interface{}]struct{}),
+		progressTokens: make(map[any]struct{}),
 		capabilities:   allCaps,
 		warmup:         newWarmupState(),
 		isDaemon:       true,
@@ -295,8 +295,8 @@ func NewPassiveClient(addr string) (*LSPClient, error) {
 		pending:        make(map[int]*pendingRequest),
 		openDocs:       make(map[string]docMeta),
 		diags:          make(map[string][]types.LSPDiagnostic),
-		progressTokens: make(map[interface{}]struct{}),
-		capabilities:   make(map[string]interface{}),
+		progressTokens: make(map[any]struct{}),
+		capabilities:   make(map[string]any),
 		warmup:         newWarmupState(),
 		isPassive:      true,
 		socketConn:     conn,
@@ -464,7 +464,7 @@ func (c *LSPClient) dispatch(raw []byte) {
 	case "window/workDoneProgress/create":
 		// Pre-register token; respond null.
 		var p struct {
-			Token interface{} `json:"token"`
+			Token any `json:"token"`
 		}
 		if err := json.Unmarshal(msg.Params, &p); err == nil && p.Token != nil {
 			c.progressMu.Lock()
@@ -489,9 +489,9 @@ func (c *LSPClient) dispatch(raw []byte) {
 			if err := json.Unmarshal(msg.Params, &p); err != nil {
 				logging.Log(logging.LevelDebug, fmt.Sprintf("workspace/configuration: unmarshal params: %v", err))
 			}
-			results := make([]interface{}, len(p.Items))
+			results := make([]any, len(p.Items))
 			for i := range results {
-				results[i] = map[string]interface{}{}
+				results[i] = map[string]any{}
 			}
 			c.sendResponse(msg.ID, results)
 		}
@@ -500,7 +500,7 @@ func (c *LSPClient) dispatch(raw []byte) {
 		// Per LSP spec: respond applied=false with failureReason on error.
 		if msg.ID != nil {
 			var p struct {
-				Edit interface{} `json:"edit"`
+				Edit any `json:"edit"`
 			}
 			var applyErr error
 			if err := json.Unmarshal(msg.Params, &p); err == nil && p.Edit != nil {
@@ -511,7 +511,7 @@ func (c *LSPClient) dispatch(raw []byte) {
 				applyErr = c.ApplyWorkspaceEdit(applyCtx, p.Edit)
 				applyCancel()
 			}
-			result := map[string]interface{}{"applied": applyErr == nil}
+			result := map[string]any{"applied": applyErr == nil}
 			if applyErr != nil {
 				result["failureReason"] = applyErr.Error()
 			}
@@ -532,8 +532,8 @@ func (c *LSPClient) dispatch(raw []byte) {
 // sendResponse sends a JSON-RPC response for a server-initiated request.
 // id is echoed back verbatim as json.RawMessage, preserving the original type
 // (integer or string) as required by JSON-RPC 2.0.
-func (c *LSPClient) sendResponse(id json.RawMessage, result interface{}) {
-	resp := map[string]interface{}{
+func (c *LSPClient) sendResponse(id json.RawMessage, result any) {
+	resp := map[string]any{
 		"jsonrpc": "2.0",
 		"id":      id,
 		"result":  result,
@@ -572,7 +572,7 @@ func (c *LSPClient) handlePublishDiagnostics(params json.RawMessage) {
 // handleProgress processes $/progress notifications.
 func (c *LSPClient) handleProgress(params json.RawMessage) {
 	var p struct {
-		Token interface{} `json:"token"`
+		Token any `json:"token"`
 		Value struct {
 			Kind string `json:"kind"`
 		} `json:"value"`
@@ -696,12 +696,12 @@ func (c *LSPClient) writeRaw(body []byte) error {
 // Use the typed methods (GetReferences, GetInfoOnLocation, etc.) for normal
 // usage. SendRequest is useful for batch/measurement scenarios where the
 // workspace is already indexed.
-func (c *LSPClient) SendRequest(ctx context.Context, method string, params interface{}) (json.RawMessage, error) {
+func (c *LSPClient) SendRequest(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	return c.sendRequest(ctx, method, params)
 }
 
 // sendRequest sends a JSON-RPC request and waits for the response.
-func (c *LSPClient) sendRequest(ctx context.Context, method string, params interface{}) (json.RawMessage, error) {
+func (c *LSPClient) sendRequest(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	id := int(c.nextID.Add(1))
 
 	p, err := json.Marshal(params)
@@ -757,7 +757,7 @@ func (c *LSPClient) sendRequest(ctx context.Context, method string, params inter
 }
 
 // sendNotification sends a JSON-RPC notification (no ID, no response expected).
-func (c *LSPClient) sendNotification(method string, params interface{}) error {
+func (c *LSPClient) sendNotification(method string, params any) error {
 	p, err := json.Marshal(params)
 	if err != nil {
 		return fmt.Errorf("sendNotification %s: marshal params: %w", method, err)
@@ -828,98 +828,98 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	c.workspaceFolders = []workspaceFolder{{URI: rootURI, Name: rootDir}}
 	c.capsMu.Unlock()
 
-	initParams := map[string]interface{}{
+	initParams := map[string]any{
 		"processId": os.Getpid(),
 		"rootUri":   rootURI,
 		// rootPath is deprecated in favour of rootUri; omitted per LSP 3.17.
-		"clientInfo": map[string]interface{}{
+		"clientInfo": map[string]any{
 			"name":    "agent-lsp",
 			"version": "0.1.0",
 		},
-		"capabilities": map[string]interface{}{
-			"workspace": map[string]interface{}{
+		"capabilities": map[string]any{
+			"workspace": map[string]any{
 				"configuration":    true,
 				"workDoneProgress": true,
 				"applyEdit":        true,
-				"workspaceEdit": map[string]interface{}{
+				"workspaceEdit": map[string]any{
 					"documentChanges": true,
 				},
-				"didChangeConfiguration": map[string]interface{}{
+				"didChangeConfiguration": map[string]any{
 					"dynamicRegistration": true,
 				},
-				"didChangeWatchedFiles": map[string]interface{}{
+				"didChangeWatchedFiles": map[string]any{
 					"dynamicRegistration": true,
 				},
 			},
-			"textDocument": map[string]interface{}{
-				"hover": map[string]interface{}{
+			"textDocument": map[string]any{
+				"hover": map[string]any{
 					"dynamicRegistration": true,
 					"contentFormat":       []string{"markdown", "plaintext"},
 				},
-				"completion": map[string]interface{}{
-					"dynamicRegistration":  true,
-					"completionItem":       map[string]interface{}{},
-					"contextSupport":       true,
+				"completion": map[string]any{
+					"dynamicRegistration": true,
+					"completionItem":      map[string]any{},
+					"contextSupport":      true,
 				},
-				"references": map[string]interface{}{
+				"references": map[string]any{
 					"dynamicRegistration": true,
 				},
-				"definition": map[string]interface{}{
-					"dynamicRegistration": true,
-					"linkSupport":         true,
-				},
-				"implementation": map[string]interface{}{
+				"definition": map[string]any{
 					"dynamicRegistration": true,
 					"linkSupport":         true,
 				},
-				"typeDefinition": map[string]interface{}{
+				"implementation": map[string]any{
 					"dynamicRegistration": true,
 					"linkSupport":         true,
 				},
-				"declaration": map[string]interface{}{
+				"typeDefinition": map[string]any{
 					"dynamicRegistration": true,
 					"linkSupport":         true,
 				},
-				"codeAction": map[string]interface{}{
+				"declaration": map[string]any{
+					"dynamicRegistration": true,
+					"linkSupport":         true,
+				},
+				"codeAction": map[string]any{
 					"dynamicRegistration": true,
 				},
-				"signatureHelp": map[string]interface{}{
+				"signatureHelp": map[string]any{
 					"dynamicRegistration": true,
 				},
-				"documentSymbol": map[string]interface{}{
+				"documentSymbol": map[string]any{
 					"dynamicRegistration": true,
 				},
-				"rename": map[string]interface{}{
+				"rename": map[string]any{
 					"dynamicRegistration": true,
 					"prepareSupport":      true,
 				},
-				"formatting": map[string]interface{}{
+				"formatting": map[string]any{
 					"dynamicRegistration": true,
 				},
-				"rangeFormatting": map[string]interface{}{
+				"rangeFormatting": map[string]any{
 					"dynamicRegistration": true,
 				},
-				"publishDiagnostics": map[string]interface{}{
+				"publishDiagnostics": map[string]any{
 					"relatedInformation": true,
-					"tagSupport": map[string]interface{}{
+					"tagSupport": map[string]any{
 						"valueSet": []int{1, 2},
 					},
 				},
-				"callHierarchy": map[string]interface{}{
+				"callHierarchy": map[string]any{
 					"dynamicRegistration": true,
 				},
-				"typeHierarchy": map[string]interface{}{
+				"typeHierarchy": map[string]any{
 					"dynamicRegistration": true,
 				},
-				"inlayHint": map[string]interface{}{
+				"inlayHint": map[string]any{
 					"dynamicRegistration": true,
 				},
-				"documentHighlight": map[string]interface{}{
+				"documentHighlight": map[string]any{
 					"dynamicRegistration": true,
 				},
-				"semanticTokens": map[string]interface{}{
+				"semanticTokens": map[string]any{
 					"dynamicRegistration": true,
-					"requests": map[string]interface{}{
+					"requests": map[string]any{
 						"range": true,
 						"full":  true,
 					},
@@ -930,11 +930,11 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 					"multilineTokenSupport":   false,
 				},
 			},
-			"window": map[string]interface{}{
+			"window": map[string]any{
 				"workDoneProgress": true,
 			},
 		},
-		"workspaceFolders": []map[string]interface{}{
+		"workspaceFolders": []map[string]any{
 			{"uri": rootURI, "name": rootDir},
 		},
 	}
@@ -944,33 +944,33 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	// and emit $/progress tokens during workspace indexing. Without these,
 	// jdtls starts but silently skips project import and never indexes.
 	if c.isJDTLS() {
-		initParams["initializationOptions"] = map[string]interface{}{
-			"settings": map[string]interface{}{
-				"java": map[string]interface{}{
-					"import": map[string]interface{}{
-						"maven": map[string]interface{}{
+		initParams["initializationOptions"] = map[string]any{
+			"settings": map[string]any{
+				"java": map[string]any{
+					"import": map[string]any{
+						"maven": map[string]any{
 							"enabled": true,
 						},
-						"gradle": map[string]interface{}{
+						"gradle": map[string]any{
 							"enabled": true,
 						},
 					},
-					"autobuild": map[string]interface{}{
+					"autobuild": map[string]any{
 						"enabled": true,
 					},
 				},
 			},
-			"extendedClientCapabilities": map[string]interface{}{
-				"progressReportProvider":    true,
-				"classFileContentsSupport":  true,
-				"overrideMethodsPromptSupport": true,
-				"hashCodeEqualsPromptSupport":  true,
-				"advancedOrganizeImportsSupport": true,
-				"generateToStringPromptSupport": true,
-				"advancedGenerateAccessorsSupport": true,
-				"generateConstructorsPromptSupport": true,
+			"extendedClientCapabilities": map[string]any{
+				"progressReportProvider":               true,
+				"classFileContentsSupport":             true,
+				"overrideMethodsPromptSupport":         true,
+				"hashCodeEqualsPromptSupport":          true,
+				"advancedOrganizeImportsSupport":       true,
+				"generateToStringPromptSupport":        true,
+				"advancedGenerateAccessorsSupport":     true,
+				"generateConstructorsPromptSupport":    true,
 				"generateDelegateMethodsPromptSupport": true,
-				"advancedExtractRefactoringSupport": true,
+				"advancedExtractRefactoringSupport":    true,
 			},
 		}
 	}
@@ -982,7 +982,7 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 
 	// Store server capabilities and identity.
 	var initResult struct {
-		Capabilities map[string]interface{} `json:"capabilities"`
+		Capabilities map[string]any `json:"capabilities"`
 		ServerInfo   *struct {
 			Name    string `json:"name"`
 			Version string `json:"version"`
@@ -1003,7 +1003,7 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	// Extract semantic token legend if advertised.
 	var fullResult struct {
 		Capabilities struct {
-			SemanticTokensProvider interface{} `json:"semanticTokensProvider"`
+			SemanticTokensProvider any `json:"semanticTokensProvider"`
 		} `json:"capabilities"`
 	}
 	if err := json.Unmarshal(result, &fullResult); err == nil && fullResult.Capabilities.SemanticTokensProvider != nil {
@@ -1040,7 +1040,7 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	// without requiring manual did_change_watched_files calls.
 	c.startWatcher(rootDir)
 
-	return c.sendNotification("initialized", map[string]interface{}{})
+	return c.sendNotification("initialized", map[string]any{})
 }
 
 // Shutdown gracefully shuts down the LSP server.
@@ -1160,10 +1160,10 @@ func (c *LSPClient) Restart(ctx context.Context, rootDir string) error {
 	c.pending = make(map[int]*pendingRequest)
 	c.pendingMu.Unlock()
 	c.progressMu.Lock()
-	c.progressTokens = make(map[interface{}]struct{})
+	c.progressTokens = make(map[any]struct{})
 	c.progressMu.Unlock()
 	c.capsMu.Lock()
-	c.capabilities = make(map[string]interface{})
+	c.capabilities = make(map[string]any)
 	c.capsMu.Unlock()
 
 	// C1: clear per-session state so the fresh server receives didOpen
@@ -1194,12 +1194,12 @@ func (c *LSPClient) OpenDocument(ctx context.Context, uri, text, languageID stri
 		meta.version++
 		c.openDocs[uri] = meta
 		c.mu.Unlock()
-		return c.sendNotification("textDocument/didChange", map[string]interface{}{
-			"textDocument": map[string]interface{}{
+		return c.sendNotification("textDocument/didChange", map[string]any{
+			"textDocument": map[string]any{
 				"uri":     uri,
 				"version": meta.version,
 			},
-			"contentChanges": []map[string]interface{}{
+			"contentChanges": []map[string]any{
 				{"text": text},
 			},
 		})
@@ -1213,8 +1213,8 @@ func (c *LSPClient) OpenDocument(ctx context.Context, uri, text, languageID stri
 	}
 	c.mu.Unlock()
 
-	return c.sendNotification("textDocument/didOpen", map[string]interface{}{
-		"textDocument": map[string]interface{}{
+	return c.sendNotification("textDocument/didOpen", map[string]any{
+		"textDocument": map[string]any{
 			"uri":        uri,
 			"languageId": languageID,
 			"version":    1,
@@ -1228,8 +1228,8 @@ func (c *LSPClient) CloseDocument(ctx context.Context, uri string) error {
 	c.mu.Lock()
 	delete(c.openDocs, uri)
 	c.mu.Unlock()
-	return c.sendNotification("textDocument/didClose", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	return c.sendNotification("textDocument/didClose", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 	})
 }
 
@@ -1374,8 +1374,8 @@ func (c *LSPClient) ReopenDocument(ctx context.Context, uri string) error {
 	}
 
 	// didClose without removing metadata.
-	if err := c.sendNotification("textDocument/didClose", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	if err := c.sendNotification("textDocument/didClose", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 	}); err != nil {
 		return err
 	}
@@ -1392,8 +1392,8 @@ func (c *LSPClient) ReopenDocument(ctx context.Context, uri string) error {
 	c.openDocs[uri] = meta
 	c.mu.Unlock()
 
-	return c.sendNotification("textDocument/didOpen", map[string]interface{}{
-		"textDocument": map[string]interface{}{
+	return c.sendNotification("textDocument/didOpen", map[string]any{
+		"textDocument": map[string]any{
 			"uri":        uri,
 			"languageId": meta.languageID,
 			"version":    meta.version,
@@ -1506,8 +1506,8 @@ func (c *LSPClient) GetInfoOnLocation(ctx context.Context, uri string, pos types
 		logging.Log(logging.LevelDebug, "server does not support hover")
 		return "", nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/hover", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/hover", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"position":     pos,
 	})
 	if err != nil {
@@ -1517,7 +1517,7 @@ func (c *LSPClient) GetInfoOnLocation(ctx context.Context, uri string, pos types
 		return "", nil
 	}
 	var hover struct {
-		Contents interface{} `json:"contents"`
+		Contents any `json:"contents"`
 	}
 	if err := json.Unmarshal(result, &hover); err != nil {
 		return "", err
@@ -1525,20 +1525,20 @@ func (c *LSPClient) GetInfoOnLocation(ctx context.Context, uri string, pos types
 	switch v := hover.Contents.(type) {
 	case string:
 		return v, nil
-	case map[string]interface{}:
+	case map[string]any:
 		// MarkupContent: {kind: "markdown"|"plaintext", value: "..."}
 		if val, ok := v["value"].(string); ok {
 			return val, nil
 		}
 		return fmt.Sprintf("%v", v), nil
-	case []interface{}:
+	case []any:
 		// MarkedString array: each element is string or {language, value}
 		var parts []string
 		for _, item := range v {
 			switch s := item.(type) {
 			case string:
 				parts = append(parts, s)
-			case map[string]interface{}:
+			case map[string]any:
 				if val, ok := s["value"].(string); ok {
 					parts = append(parts, val)
 				}
@@ -1558,8 +1558,8 @@ func (c *LSPClient) GetCompletion(ctx context.Context, uri string, pos types.Pos
 		logging.Log(logging.LevelDebug, "server does not support completion")
 		return types.CompletionList{Items: []types.CompletionItem{}}, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/completion", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/completion", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"position":     pos,
 	})
 	if err != nil {
@@ -1595,10 +1595,10 @@ func (c *LSPClient) GetCodeActions(ctx context.Context, uri string, rng types.Ra
 	if overlapping == nil {
 		overlapping = []types.LSPDiagnostic{}
 	}
-	result, err := c.sendRequest(ctx, "textDocument/codeAction", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/codeAction", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"range":        rng,
-		"context":      map[string]interface{}{"diagnostics": overlapping},
+		"context":      map[string]any{"diagnostics": overlapping},
 	})
 	if err != nil {
 		return nil, err
@@ -1612,8 +1612,8 @@ func (c *LSPClient) GetDefinition(ctx context.Context, uri string, pos types.Pos
 		logging.Log(logging.LevelDebug, "server does not support definition")
 		return []types.Location{}, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/definition", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/definition", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"position":     pos,
 	})
 	if err != nil {
@@ -1628,8 +1628,8 @@ func (c *LSPClient) GetTypeDefinition(ctx context.Context, uri string, pos types
 		logging.Log(logging.LevelDebug, "server does not support typeDefinition")
 		return []types.Location{}, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/typeDefinition", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/typeDefinition", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"position":     pos,
 	})
 	if err != nil {
@@ -1644,8 +1644,8 @@ func (c *LSPClient) GetImplementation(ctx context.Context, uri string, pos types
 		logging.Log(logging.LevelDebug, "server does not support implementation")
 		return []types.Location{}, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/implementation", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/implementation", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"position":     pos,
 	})
 	if err != nil {
@@ -1660,8 +1660,8 @@ func (c *LSPClient) GetDeclaration(ctx context.Context, uri string, pos types.Po
 		logging.Log(logging.LevelDebug, "server does not support declaration")
 		return []types.Location{}, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/declaration", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/declaration", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"position":     pos,
 	})
 	if err != nil {
@@ -1704,10 +1704,10 @@ func (c *LSPClient) GetReferencesRaw(ctx context.Context, uri string, pos types.
 }
 
 func (c *LSPClient) getReferencesInternal(ctx context.Context, uri string, pos types.Position, includeDecl bool) ([]types.Location, error) {
-	result, err := c.sendRequest(ctx, "textDocument/references", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/references", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"position":     pos,
-		"context":      map[string]interface{}{"includeDeclaration": includeDecl},
+		"context":      map[string]any{"includeDeclaration": includeDecl},
 	})
 	if err != nil {
 		return nil, err
@@ -1723,8 +1723,8 @@ func (c *LSPClient) GetDocumentSymbols(ctx context.Context, uri string) ([]types
 		logging.Log(logging.LevelDebug, "server does not support documentSymbol")
 		return []types.DocumentSymbol{}, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/documentSymbol", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/documentSymbol", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 	})
 	if err != nil {
 		return nil, err
@@ -1738,7 +1738,7 @@ func (c *LSPClient) GetWorkspaceSymbols(ctx context.Context, query string) ([]ty
 		logging.Log(logging.LevelDebug, "server does not support workspaceSymbol")
 		return []types.SymbolInformation{}, nil
 	}
-	result, err := c.sendRequest(ctx, "workspace/symbol", map[string]interface{}{
+	result, err := c.sendRequest(ctx, "workspace/symbol", map[string]any{
 		"query": query,
 	})
 	if err != nil {
@@ -1761,8 +1761,8 @@ func (c *LSPClient) PrepareCallHierarchy(ctx context.Context, uri string, pos ty
 		logging.Log(logging.LevelDebug, "server does not support callHierarchy")
 		return []types.CallHierarchyItem{}, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/prepareCallHierarchy", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/prepareCallHierarchy", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"position":     pos,
 	})
 	if err != nil {
@@ -1780,7 +1780,7 @@ func (c *LSPClient) PrepareCallHierarchy(ctx context.Context, uri string, pos ty
 
 // GetIncomingCalls returns all callers of the given call hierarchy item.
 func (c *LSPClient) GetIncomingCalls(ctx context.Context, item types.CallHierarchyItem) ([]types.CallHierarchyIncomingCall, error) {
-	result, err := c.sendRequest(ctx, "callHierarchy/incomingCalls", map[string]interface{}{
+	result, err := c.sendRequest(ctx, "callHierarchy/incomingCalls", map[string]any{
 		"item": item,
 	})
 	if err != nil {
@@ -1798,7 +1798,7 @@ func (c *LSPClient) GetIncomingCalls(ctx context.Context, item types.CallHierarc
 
 // GetOutgoingCalls returns all functions called by the given call hierarchy item.
 func (c *LSPClient) GetOutgoingCalls(ctx context.Context, item types.CallHierarchyItem) ([]types.CallHierarchyOutgoingCall, error) {
-	result, err := c.sendRequest(ctx, "callHierarchy/outgoingCalls", map[string]interface{}{
+	result, err := c.sendRequest(ctx, "callHierarchy/outgoingCalls", map[string]any{
 		"item": item,
 	})
 	if err != nil {
@@ -1822,8 +1822,8 @@ func (c *LSPClient) GetInlayHints(ctx context.Context, uri string, rng types.Ran
 		logging.Log(logging.LevelDebug, "server does not support inlayHint")
 		return []types.InlayHint{}, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/inlayHint", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/inlayHint", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"range":        rng,
 	})
 	if err != nil {
@@ -1846,8 +1846,8 @@ func (c *LSPClient) PrepareTypeHierarchy(ctx context.Context, uri string, pos ty
 		logging.Log(logging.LevelDebug, "server does not support typeHierarchy")
 		return []types.TypeHierarchyItem{}, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/prepareTypeHierarchy", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/prepareTypeHierarchy", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"position":     pos,
 	})
 	if err != nil {
@@ -1865,7 +1865,7 @@ func (c *LSPClient) PrepareTypeHierarchy(ctx context.Context, uri string, pos ty
 
 // GetSupertypes returns all supertypes (parent classes/interfaces) of the given type hierarchy item.
 func (c *LSPClient) GetSupertypes(ctx context.Context, item types.TypeHierarchyItem) ([]types.TypeHierarchyItem, error) {
-	result, err := c.sendRequest(ctx, "typeHierarchy/supertypes", map[string]interface{}{
+	result, err := c.sendRequest(ctx, "typeHierarchy/supertypes", map[string]any{
 		"item": item,
 	})
 	if err != nil {
@@ -1883,7 +1883,7 @@ func (c *LSPClient) GetSupertypes(ctx context.Context, item types.TypeHierarchyI
 
 // GetSubtypes returns all subtypes (subclasses/implementations) of the given type hierarchy item.
 func (c *LSPClient) GetSubtypes(ctx context.Context, item types.TypeHierarchyItem) ([]types.TypeHierarchyItem, error) {
-	result, err := c.sendRequest(ctx, "typeHierarchy/subtypes", map[string]interface{}{
+	result, err := c.sendRequest(ctx, "typeHierarchy/subtypes", map[string]any{
 		"item": item,
 	})
 	if err != nil {
@@ -1900,13 +1900,13 @@ func (c *LSPClient) GetSubtypes(ctx context.Context, item types.TypeHierarchyIte
 }
 
 // GetSignatureHelp returns signature help at a position.
-func (c *LSPClient) GetSignatureHelp(ctx context.Context, uri string, pos types.Position) (interface{}, error) {
+func (c *LSPClient) GetSignatureHelp(ctx context.Context, uri string, pos types.Position) (any, error) {
 	if !c.hasCapability("signatureHelpProvider") {
 		logging.Log(logging.LevelDebug, "server does not support signatureHelp")
 		return nil, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/signatureHelp", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/signatureHelp", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"position":     pos,
 	})
 	if err != nil {
@@ -1915,7 +1915,7 @@ func (c *LSPClient) GetSignatureHelp(ctx context.Context, uri string, pos types.
 	if result == nil || string(result) == "null" {
 		return nil, nil
 	}
-	var v interface{}
+	var v any
 	if err := json.Unmarshal(result, &v); err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
@@ -1928,9 +1928,9 @@ func (c *LSPClient) FormatDocument(ctx context.Context, uri string, tabSize int,
 		logging.Log(logging.LevelDebug, "server does not support formatting")
 		return []types.TextEdit{}, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/formatting", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
-		"options": map[string]interface{}{
+	result, err := c.sendRequest(ctx, "textDocument/formatting", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
+		"options": map[string]any{
 			"tabSize":      tabSize,
 			"insertSpaces": insertSpaces,
 		},
@@ -1954,10 +1954,10 @@ func (c *LSPClient) FormatRange(ctx context.Context, uri string, rng types.Range
 		logging.Log(logging.LevelDebug, "server does not support rangeFormatting")
 		return []types.TextEdit{}, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/rangeFormatting", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/rangeFormatting", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"range":        rng,
-		"options": map[string]interface{}{
+		"options": map[string]any{
 			"tabSize":      tabSize,
 			"insertSpaces": insertSpaces,
 		},
@@ -1976,13 +1976,13 @@ func (c *LSPClient) FormatRange(ctx context.Context, uri string, rng types.Range
 }
 
 // RenameSymbol performs a rename refactor.
-func (c *LSPClient) RenameSymbol(ctx context.Context, uri string, pos types.Position, newName string) (interface{}, error) {
+func (c *LSPClient) RenameSymbol(ctx context.Context, uri string, pos types.Position, newName string) (any, error) {
 	if !c.hasCapability("renameProvider") {
 		logging.Log(logging.LevelDebug, "server does not support rename")
 		return nil, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/rename", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/rename", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"position":     pos,
 		"newName":      newName,
 	})
@@ -1992,7 +1992,7 @@ func (c *LSPClient) RenameSymbol(ctx context.Context, uri string, pos types.Posi
 	if result == nil || string(result) == "null" {
 		return nil, nil
 	}
-	var v interface{}
+	var v any
 	if err := json.Unmarshal(result, &v); err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
@@ -2000,10 +2000,10 @@ func (c *LSPClient) RenameSymbol(ctx context.Context, uri string, pos types.Posi
 }
 
 // PrepareRename checks if the symbol at position can be renamed.
-func (c *LSPClient) PrepareRename(ctx context.Context, uri string, pos types.Position) (interface{}, error) {
+func (c *LSPClient) PrepareRename(ctx context.Context, uri string, pos types.Position) (any, error) {
 	cap := c.getCapabilityRaw("renameProvider")
 	switch v := cap.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		if pp, ok := v["prepareProvider"].(bool); !ok || !pp {
 			logging.Log(logging.LevelDebug, "server does not support prepareRename")
 			return nil, nil
@@ -2016,8 +2016,8 @@ func (c *LSPClient) PrepareRename(ctx context.Context, uri string, pos types.Pos
 		logging.Log(logging.LevelDebug, "server does not support rename/prepareRename")
 		return nil, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/prepareRename", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/prepareRename", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"position":     pos,
 	})
 	if err != nil {
@@ -2026,7 +2026,7 @@ func (c *LSPClient) PrepareRename(ctx context.Context, uri string, pos types.Pos
 	if result == nil || string(result) == "null" {
 		return nil, nil
 	}
-	var v interface{}
+	var v any
 	if err := json.Unmarshal(result, &v); err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
@@ -2034,8 +2034,8 @@ func (c *LSPClient) PrepareRename(ctx context.Context, uri string, pos types.Pos
 }
 
 // ExecuteCommand runs a workspace command.
-func (c *LSPClient) ExecuteCommand(ctx context.Context, command string, args []interface{}) (interface{}, error) {
-	result, err := c.sendRequest(ctx, "workspace/executeCommand", map[string]interface{}{
+func (c *LSPClient) ExecuteCommand(ctx context.Context, command string, args []any) (any, error) {
+	result, err := c.sendRequest(ctx, "workspace/executeCommand", map[string]any{
 		"command":   command,
 		"arguments": args,
 	})
@@ -2045,7 +2045,7 @@ func (c *LSPClient) ExecuteCommand(ctx context.Context, command string, args []i
 	if result == nil || string(result) == "null" {
 		return nil, nil
 	}
-	var v interface{}
+	var v any
 	if err := json.Unmarshal(result, &v); err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
@@ -2054,14 +2054,14 @@ func (c *LSPClient) ExecuteCommand(ctx context.Context, command string, args []i
 
 // DidChangeWatchedFiles notifies the server of watched file changes.
 func (c *LSPClient) DidChangeWatchedFiles(changes []types.FileChangeEvent) error {
-	items := make([]map[string]interface{}, len(changes))
+	items := make([]map[string]any, len(changes))
 	for i, ch := range changes {
-		items[i] = map[string]interface{}{
+		items[i] = map[string]any{
 			"uri":  ch.URI,
 			"type": ch.Type,
 		}
 	}
-	return c.sendNotification("workspace/didChangeWatchedFiles", map[string]interface{}{
+	return c.sendNotification("workspace/didChangeWatchedFiles", map[string]any{
 		"changes": items,
 	})
 }
@@ -2069,7 +2069,7 @@ func (c *LSPClient) DidChangeWatchedFiles(changes []types.FileChangeEvent) error
 // applyDocumentChanges handles the documentChanges branch of a WorkspaceEdit.
 // documentChanges is (TextDocumentEdit | CreateFile | RenameFile | DeleteFile)[].
 // Each entry is discriminated by the presence of a "kind" field.
-func (c *LSPClient) applyDocumentChanges(ctx context.Context, dc interface{}) error {
+func (c *LSPClient) applyDocumentChanges(ctx context.Context, dc any) error {
 	b, _ := json.Marshal(dc)
 	var raw []json.RawMessage
 	if err := json.Unmarshal(b, &raw); err != nil {
@@ -2138,8 +2138,8 @@ func (c *LSPClient) applyDocumentChanges(ctx context.Context, dc interface{}) er
 
 // ApplyWorkspaceEdit applies a workspace edit received from the server or a tool.
 // Supports both changes (map<uri, TextEdit[]>) and documentChanges (TextDocumentEdit[]).
-func (c *LSPClient) ApplyWorkspaceEdit(ctx context.Context, edit interface{}) error {
-	editMap, ok := edit.(map[string]interface{})
+func (c *LSPClient) ApplyWorkspaceEdit(ctx context.Context, edit any) error {
+	editMap, ok := edit.(map[string]any)
 	if !ok {
 		// Try re-marshal/unmarshal to get a map.
 		b, err := json.Marshal(edit)
@@ -2207,12 +2207,12 @@ func (c *LSPClient) applyEditsToFile(ctx context.Context, uri string, edits []te
 	}
 	c.mu.Unlock()
 
-	return c.sendNotification("textDocument/didChange", map[string]interface{}{
-		"textDocument": map[string]interface{}{
+	return c.sendNotification("textDocument/didChange", map[string]any{
+		"textDocument": map[string]any{
 			"uri":     uri,
 			"version": version,
 		},
-		"contentChanges": []map[string]interface{}{
+		"contentChanges": []map[string]any{
 			{"text": newContent},
 		},
 	})
@@ -2233,7 +2233,7 @@ func (c *LSPClient) hasCapability(key string) bool {
 	return v != nil
 }
 
-func (c *LSPClient) getCapabilityRaw(key string) interface{} {
+func (c *LSPClient) getCapabilityRaw(key string) any {
 	c.capsMu.RLock()
 	defer c.capsMu.RUnlock()
 	return c.capabilities[key]
@@ -2241,10 +2241,10 @@ func (c *LSPClient) getCapabilityRaw(key string) interface{} {
 
 // GetCapabilities returns a shallow copy of the server's capability map.
 // The map reflects what the server advertised in the initialize response.
-func (c *LSPClient) GetCapabilities() map[string]interface{} {
+func (c *LSPClient) GetCapabilities() map[string]any {
 	c.capsMu.RLock()
 	defer c.capsMu.RUnlock()
-	out := make(map[string]interface{}, len(c.capabilities))
+	out := make(map[string]any, len(c.capabilities))
 	for k, v := range c.capabilities {
 		out[k] = v
 	}
@@ -2291,8 +2291,8 @@ func (c *LSPClient) AddWorkspaceFolder(ctx context.Context, path string) error {
 	c.workspaceFolders = append(c.workspaceFolders, folder)
 	c.capsMu.Unlock()
 
-	if err := c.sendNotification("workspace/didChangeWorkspaceFolders", map[string]interface{}{
-		"event": map[string]interface{}{
+	if err := c.sendNotification("workspace/didChangeWorkspaceFolders", map[string]any{
+		"event": map[string]any{
 			"added":   []workspaceFolder{folder},
 			"removed": []workspaceFolder{},
 		},
@@ -2330,8 +2330,8 @@ func (c *LSPClient) RemoveWorkspaceFolder(ctx context.Context, path string) erro
 	c.workspaceFolders = updated
 	c.capsMu.Unlock()
 
-	return c.sendNotification("workspace/didChangeWorkspaceFolders", map[string]interface{}{
-		"event": map[string]interface{}{
+	return c.sendNotification("workspace/didChangeWorkspaceFolders", map[string]any{
+		"event": map[string]any{
 			"added":   []workspaceFolder{},
 			"removed": []workspaceFolder{folder},
 		},
@@ -2341,19 +2341,19 @@ func (c *LSPClient) RemoveWorkspaceFolder(ctx context.Context, path string) erro
 // watcherSkipDirs are directory names that the auto-watcher skips entirely.
 // These directories change frequently but are not part of the source index.
 var watcherSkipDirs = map[string]bool{
-	".git":        true,
+	".git":         true,
 	"node_modules": true,
-	"target":      true,
-	"build":       true,
-	"dist":        true,
-	"vendor":      true,
-	"__pycache__": true,
-	".venv":       true,
-	"venv":        true,
-	".next":       true,
-	".cache":      true,
-	".idea":       true,
-	".vscode":     true,
+	"target":       true,
+	"build":        true,
+	"dist":         true,
+	"vendor":       true,
+	"__pycache__":  true,
+	".venv":        true,
+	"venv":         true,
+	".next":        true,
+	".cache":       true,
+	".idea":        true,
+	".vscode":      true,
 }
 
 // GetDocumentHighlights returns all occurrences of the symbol at the given
@@ -2365,8 +2365,8 @@ func (c *LSPClient) GetDocumentHighlights(ctx context.Context, uri string, pos t
 		logging.Log(logging.LevelDebug, "server does not support documentHighlight")
 		return []types.DocumentHighlight{}, nil
 	}
-	result, err := c.sendRequest(ctx, "textDocument/documentHighlight", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": uri},
+	result, err := c.sendRequest(ctx, "textDocument/documentHighlight", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
 		"position":     pos,
 	})
 	if err != nil {
@@ -2581,8 +2581,8 @@ func (c *LSPClient) GetSemanticTokens(ctx context.Context, uri string, rng types
 	// Try range request first; fall back to full if not supported.
 	useRange := false
 	switch v := cap.(type) {
-	case map[string]interface{}:
-		if req, ok := v["requests"].(map[string]interface{}); ok {
+	case map[string]any:
+		if req, ok := v["requests"].(map[string]any); ok {
 			_, useRange = req["range"]
 		}
 	case bool:
@@ -2593,13 +2593,13 @@ func (c *LSPClient) GetSemanticTokens(ctx context.Context, uri string, rng types
 	var raw json.RawMessage
 	var err error
 	if useRange {
-		raw, err = c.sendRequest(ctx, "textDocument/semanticTokens/range", map[string]interface{}{
-			"textDocument": map[string]interface{}{"uri": uri},
+		raw, err = c.sendRequest(ctx, "textDocument/semanticTokens/range", map[string]any{
+			"textDocument": map[string]any{"uri": uri},
 			"range":        rng,
 		})
 	} else {
-		raw, err = c.sendRequest(ctx, "textDocument/semanticTokens/full", map[string]interface{}{
-			"textDocument": map[string]interface{}{"uri": uri},
+		raw, err = c.sendRequest(ctx, "textDocument/semanticTokens/full", map[string]any{
+			"textDocument": map[string]any{"uri": uri},
 		})
 	}
 	if err != nil {
@@ -2622,7 +2622,9 @@ func (c *LSPClient) GetSemanticTokens(ctx context.Context, uri string, rng types
 // decodeSemanticTokens converts the flat delta-encoded int array from LSP into
 // absolute-position SemanticToken values. The LSP spec encodes tokens as a
 // flat []int with 5 integers per token:
-//   [deltaLine, deltaStartChar, length, tokenTypeIndex, tokenModifierBitmask]
+//
+//	[deltaLine, deltaStartChar, length, tokenTypeIndex, tokenModifierBitmask]
+//
 // Positions are delta-encoded: deltaLine is relative to previous token's line;
 // deltaStartChar is relative to previous token's startChar on the SAME line
 // (resets to absolute when line changes).
@@ -2755,6 +2757,3 @@ func removeEnv(env []string, key string) []string {
 	}
 	return out
 }
-
-
-

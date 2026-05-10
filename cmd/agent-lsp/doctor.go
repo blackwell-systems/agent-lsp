@@ -58,8 +58,8 @@ var alwaysAvailableDoctorTools = []string{
 type DoctorResult struct {
 	LanguageID    string
 	Binary        string
-	Status        string   // "ok" | "failed"
-	Error         string   // non-empty when Status=="failed"
+	Status        string // "ok" | "failed"
+	Error         string // non-empty when Status=="failed"
 	ServerName    string
 	ServerVersion string
 	Capabilities  []string // sorted capability keys
@@ -142,7 +142,7 @@ func probeServer(entry config.ServerEntry) DoctorResult {
 }
 
 // doctorHasCapability checks whether a capability key is present and truthy.
-func doctorHasCapability(caps map[string]interface{}, key string) bool {
+func doctorHasCapability(caps map[string]any, key string) bool {
 	v, ok := caps[key]
 	if !ok {
 		return false

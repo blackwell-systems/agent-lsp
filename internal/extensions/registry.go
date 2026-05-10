@@ -119,11 +119,11 @@ func (r *ExtensionRegistry) SubscriptionHandlers() map[string]types.ResourceHand
 
 // PromptHandlers returns the merged map of all prompt handlers across active extensions.
 // Keys are prefixed with "<languageID>." to avoid conflicts.
-func (r *ExtensionRegistry) PromptHandlers() map[string]interface{} {
+func (r *ExtensionRegistry) PromptHandlers() map[string]any {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	result := map[string]interface{}{}
+	result := map[string]any{}
 	for langID, ext := range r.extensions {
 		for name, handler := range ext.PromptHandlers() {
 			result[langID+"."+name] = handler

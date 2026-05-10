@@ -57,9 +57,9 @@ func TestRunDoctor_NilAutodetectGraceful(t *testing.T) {
 }
 
 func TestDoctorHasCapability_TrueValues(t *testing.T) {
-	caps := map[string]interface{}{
+	caps := map[string]any{
 		"hoverProvider":      true,
-		"completionProvider": map[string]interface{}{"triggerCharacters": []string{"."}},
+		"completionProvider": map[string]any{"triggerCharacters": []string{"."}},
 		"missingProvider":    nil,
 	}
 
@@ -78,7 +78,7 @@ func TestDoctorHasCapability_TrueValues(t *testing.T) {
 }
 
 func TestDoctorHasCapability_FalseValue(t *testing.T) {
-	caps := map[string]interface{}{
+	caps := map[string]any{
 		"referencesProvider": false,
 	}
 	if doctorHasCapability(caps, "referencesProvider") {

@@ -15,7 +15,7 @@ import (
 // ---- test helpers ----
 
 // writeMsg writes a Content-Length-framed JSON-RPC message to w.
-func writeMsg(w io.Writer, v interface{}) error {
+func writeMsg(w io.Writer, v any) error {
 	body, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -51,9 +51,9 @@ func newTestClient(t *testing.T) (*LSPClient, io.WriteCloser, io.ReadCloser) {
 }
 
 // readNextMsg reads the next framed message from r with a timeout.
-func readNextMsg(t *testing.T, r io.Reader) map[string]interface{} {
+func readNextMsg(t *testing.T, r io.Reader) map[string]any {
 	t.Helper()
-	ch := make(chan map[string]interface{}, 1)
+	ch := make(chan map[string]any, 1)
 	go func() {
 		fr := NewFrameReader(r)
 		raw, err := fr.ReadMessage()
@@ -61,7 +61,7 @@ func readNextMsg(t *testing.T, r io.Reader) map[string]interface{} {
 			ch <- nil
 			return
 		}
-		var v map[string]interface{}
+		var v map[string]any
 		json.Unmarshal(raw, &v)
 		ch <- v
 	}()
@@ -83,11 +83,11 @@ func TestLSPClient_ServerRequestHandling(t *testing.T) {
 	c, serverW, clientR := newTestClient(t)
 
 	id := 42
-	if err := writeMsg(serverW, map[string]interface{}{
+	if err := writeMsg(serverW, map[string]any{
 		"jsonrpc": "2.0",
 		"id":      id,
 		"method":  "window/workDoneProgress/create",
-		"params":  map[string]interface{}{"token": "testToken"},
+		"params":  map[string]any{"token": "testToken"},
 	}); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -121,12 +121,12 @@ func TestLSPClient_ProgressTracking(t *testing.T) {
 	c, serverW, _ := newTestClient(t)
 
 	// Send $/progress begin.
-	if err := writeMsg(serverW, map[string]interface{}{
+	if err := writeMsg(serverW, map[string]any{
 		"jsonrpc": "2.0",
 		"method":  "$/progress",
-		"params": map[string]interface{}{
+		"params": map[string]any{
 			"token": "work1",
-			"value": map[string]interface{}{"kind": "begin", "title": "Loading"},
+			"value": map[string]any{"kind": "begin", "title": "Loading"},
 		},
 	}); err != nil {
 		t.Fatalf("write begin: %v", err)
@@ -141,12 +141,12 @@ func TestLSPClient_ProgressTracking(t *testing.T) {
 	c.progressMu.Unlock()
 
 	// Send $/progress end.
-	if err := writeMsg(serverW, map[string]interface{}{
+	if err := writeMsg(serverW, map[string]any{
 		"jsonrpc": "2.0",
 		"method":  "$/progress",
-		"params": map[string]interface{}{
+		"params": map[string]any{
 			"token": "work1",
-			"value": map[string]interface{}{"kind": "end"},
+			"value": map[string]any{"kind": "end"},
 		},
 	}); err != nil {
 		t.Fatalf("write end: %v", err)
@@ -226,16 +226,16 @@ func TestLSPClient_PublishDiagnostics(t *testing.T) {
 	})
 	c.SubscribeToDiagnostics(cb)
 
-	if err := writeMsg(serverW, map[string]interface{}{
+	if err := writeMsg(serverW, map[string]any{
 		"jsonrpc": "2.0",
 		"method":  "textDocument/publishDiagnostics",
-		"params": map[string]interface{}{
+		"params": map[string]any{
 			"uri": "file:///bar.go",
-			"diagnostics": []interface{}{
-				map[string]interface{}{
-					"range": map[string]interface{}{
-						"start": map[string]interface{}{"line": 0, "character": 0},
-						"end":   map[string]interface{}{"line": 0, "character": 5},
+			"diagnostics": []any{
+				map[string]any{
+					"range": map[string]any{
+						"start": map[string]any{"line": 0, "character": 0},
+						"end":   map[string]any{"line": 0, "character": 5},
 					},
 					"severity": 1,
 					"message":  "undefined: foo",
@@ -288,12 +288,12 @@ func TestLSPClient_UnsubscribeFromDiagnostics(t *testing.T) {
 	c.SubscribeToDiagnostics(cb)
 	c.UnsubscribeFromDiagnostics(cb)
 
-	if err := writeMsg(serverW, map[string]interface{}{
+	if err := writeMsg(serverW, map[string]any{
 		"jsonrpc": "2.0",
 		"method":  "textDocument/publishDiagnostics",
-		"params": map[string]interface{}{
+		"params": map[string]any{
 			"uri":         "file:///baz.go",
-			"diagnostics": []interface{}{},
+			"diagnostics": []any{},
 		},
 	}); err != nil {
 		t.Fatalf("write: %v", err)
@@ -321,9 +321,9 @@ func TestLSPClient_RequestResponse(t *testing.T) {
 		c.capsMu.Lock()
 		c.capabilities["hoverProvider"] = true
 		c.capsMu.Unlock()
-		r, err := c.sendRequest(ctx, "textDocument/hover", map[string]interface{}{
-			"textDocument": map[string]interface{}{"uri": "file:///x.go"},
-			"position":     map[string]interface{}{"line": 0, "character": 0},
+		r, err := c.sendRequest(ctx, "textDocument/hover", map[string]any{
+			"textDocument": map[string]any{"uri": "file:///x.go"},
+			"position":     map[string]any{"line": 0, "character": 0},
 		})
 		if err != nil {
 			errCh <- err
@@ -340,10 +340,10 @@ func TestLSPClient_RequestResponse(t *testing.T) {
 	id := reqMsg["id"]
 
 	// Server responds.
-	if err := writeMsg(serverW, map[string]interface{}{
+	if err := writeMsg(serverW, map[string]any{
 		"jsonrpc": "2.0",
 		"id":      id,
-		"result":  map[string]interface{}{"contents": "hover text"},
+		"result":  map[string]any{"contents": "hover text"},
 	}); err != nil {
 		t.Fatalf("write response: %v", err)
 	}
@@ -368,14 +368,14 @@ func TestLSPClient_WorkspaceConfiguration(t *testing.T) {
 	c, serverW, clientR := newTestClient(t)
 	_ = c
 
-	if err := writeMsg(serverW, map[string]interface{}{
+	if err := writeMsg(serverW, map[string]any{
 		"jsonrpc": "2.0",
 		"id":      99,
 		"method":  "workspace/configuration",
-		"params": map[string]interface{}{
-			"items": []interface{}{
-				map[string]interface{}{"section": "go"},
-				map[string]interface{}{"section": "editor"},
+		"params": map[string]any{
+			"items": []any{
+				map[string]any{"section": "go"},
+				map[string]any{"section": "editor"},
 			},
 		},
 	}); err != nil {
@@ -389,7 +389,7 @@ func TestLSPClient_WorkspaceConfiguration(t *testing.T) {
 	if resp["id"] != float64(99) {
 		t.Errorf("expected id=99, got %v", resp["id"])
 	}
-	result, ok := resp["result"].([]interface{})
+	result, ok := resp["result"].([]any)
 	if !ok {
 		t.Fatalf("expected array result, got %T: %v", resp["result"], resp["result"])
 	}
@@ -397,7 +397,7 @@ func TestLSPClient_WorkspaceConfiguration(t *testing.T) {
 		t.Errorf("expected 2 items, got %d", len(result))
 	}
 	for i, item := range result {
-		obj, ok := item.(map[string]interface{})
+		obj, ok := item.(map[string]any)
 		if !ok {
 			t.Errorf("result[%d]: expected empty object, got %T: %v", i, item, item)
 			continue

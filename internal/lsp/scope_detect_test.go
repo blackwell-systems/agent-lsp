@@ -123,11 +123,11 @@ from ..parent import foo
 	// Should include: os, sys, pathlib, mypackage.submod, json
 	// Should exclude: . (relative), ..parent (relative)
 	wantSet := map[string]bool{
-		"os":                true,
-		"sys":               true,
-		"pathlib":           true,
-		"mypackage.submod":  true,
-		"json":              true,
+		"os":               true,
+		"sys":              true,
+		"pathlib":          true,
+		"mypackage.submod": true,
+		"json":             true,
 	}
 
 	for _, imp := range imports {

@@ -13,7 +13,7 @@ import (
 // Uses textDocument/semanticTokens/range (or full as fallback).
 // Returns an array of SemanticToken objects with 1-based positions and
 // human-readable token type and modifier names.
-func HandleGetSemanticTokens(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetSemanticTokens(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}

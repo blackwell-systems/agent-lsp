@@ -8,18 +8,18 @@ func testSkill() *SkillPhaseConfig {
 		SkillName: "test-skill",
 		Phases: []PhaseDefinition{
 			{
-				Name:    "phase1",
-				Allowed: []string{"tool_a", "tool_b"},
+				Name:      "phase1",
+				Allowed:   []string{"tool_a", "tool_b"},
 				Forbidden: []string{"tool_x"},
 			},
 			{
-				Name:    "phase2",
-				Allowed: []string{"tool_c", "tool_d"},
+				Name:      "phase2",
+				Allowed:   []string{"tool_c", "tool_d"},
 				Forbidden: []string{"tool_a"},
 			},
 			{
-				Name:    "phase3",
-				Allowed: []string{"tool_e", "simulate_*"},
+				Name:      "phase3",
+				Allowed:   []string{"tool_e", "simulate_*"},
 				Forbidden: []string{"tool_a", "tool_c"},
 			},
 		},

@@ -12,7 +12,7 @@ import (
 // TestHandleRunBuild_MissingWorkspaceDir verifies that an empty args map
 // returns an error result requiring workspace_dir.
 func TestHandleRunBuild_MissingWorkspaceDir(t *testing.T) {
-	r, err := HandleRunBuild(context.Background(), map[string]interface{}{})
+	r, err := HandleRunBuild(context.Background(), map[string]any{})
 	if err != nil {
 		t.Fatalf("unexpected Go error: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestHandleRunBuild_MissingWorkspaceDir(t *testing.T) {
 // TestHandleRunTests_MissingWorkspaceDir verifies that an empty args map
 // returns an error result requiring workspace_dir.
 func TestHandleRunTests_MissingWorkspaceDir(t *testing.T) {
-	r, err := HandleRunTests(context.Background(), map[string]interface{}{})
+	r, err := HandleRunTests(context.Background(), map[string]any{})
 	if err != nil {
 		t.Fatalf("unexpected Go error: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestHandleRunTests_MissingWorkspaceDir(t *testing.T) {
 // TestHandleGetTestsForFile_MissingFilePath verifies that an empty args map
 // returns an error result requiring file_path.
 func TestHandleGetTestsForFile_MissingFilePath(t *testing.T) {
-	r, err := HandleGetTestsForFile(context.Background(), map[string]interface{}{})
+	r, err := HandleGetTestsForFile(context.Background(), map[string]any{})
 	if err != nil {
 		t.Fatalf("unexpected Go error: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestHandleGetTestsForFile_MissingFilePath(t *testing.T) {
 // language returns an error result.
 func TestHandleRunBuild_UnsupportedLanguage(t *testing.T) {
 	dir := t.TempDir()
-	r, err := HandleRunBuild(context.Background(), map[string]interface{}{
+	r, err := HandleRunBuild(context.Background(), map[string]any{
 		"workspace_dir": dir,
 		"language":      "cobol",
 	})
@@ -68,7 +68,7 @@ func TestHandleRunBuild_UnsupportedLanguage(t *testing.T) {
 // language returns an error result.
 func TestHandleRunTests_UnsupportedLanguage(t *testing.T) {
 	dir := t.TempDir()
-	r, err := HandleRunTests(context.Background(), map[string]interface{}{
+	r, err := HandleRunTests(context.Background(), map[string]any{
 		"workspace_dir": dir,
 		"language":      "cobol",
 	})

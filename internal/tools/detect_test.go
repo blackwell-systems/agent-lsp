@@ -10,7 +10,7 @@ import (
 )
 
 func TestHandleDetectLspServers_MissingDir(t *testing.T) {
-	r, err := HandleDetectLspServers(context.Background(), nil, map[string]interface{}{})
+	r, err := HandleDetectLspServers(context.Background(), nil, map[string]any{})
 	if err != nil {
 		t.Fatalf("unexpected Go error: %v", err)
 	}
@@ -29,7 +29,7 @@ func TestHandleDetectLspServers_GoWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r, err := HandleDetectLspServers(context.Background(), nil, map[string]interface{}{
+	r, err := HandleDetectLspServers(context.Background(), nil, map[string]any{
 		"workspace_dir": dir,
 	})
 	if err != nil {
@@ -59,10 +59,10 @@ func TestHandleDetectLspServers_MultiLanguage(t *testing.T) {
 	dir := t.TempDir()
 	// Go + TypeScript workspace.
 	files := map[string]string{
-		"go.mod":         "module example.com/foo\n",
-		"main.go":        "package main\n",
-		"app.ts":         "const x = 1;\n",
-		"tsconfig.json":  "{}\n",
+		"go.mod":        "module example.com/foo\n",
+		"main.go":       "package main\n",
+		"app.ts":        "const x = 1;\n",
+		"tsconfig.json": "{}\n",
 	}
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
@@ -70,7 +70,7 @@ func TestHandleDetectLspServers_MultiLanguage(t *testing.T) {
 		}
 	}
 
-	r, err := HandleDetectLspServers(context.Background(), nil, map[string]interface{}{
+	r, err := HandleDetectLspServers(context.Background(), nil, map[string]any{
 		"workspace_dir": dir,
 	})
 	if err != nil {
@@ -116,7 +116,7 @@ func TestHandleDetectLspServers_SkipsNodeModules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r, err := HandleDetectLspServers(context.Background(), nil, map[string]interface{}{
+	r, err := HandleDetectLspServers(context.Background(), nil, map[string]any{
 		"workspace_dir": dir,
 	})
 	if err != nil {
@@ -176,7 +176,7 @@ func TestSuggestedConfigDeduplication(t *testing.T) {
 		}
 	}
 
-	r, err := HandleDetectLspServers(context.Background(), nil, map[string]interface{}{
+	r, err := HandleDetectLspServers(context.Background(), nil, map[string]any{
 		"workspace_dir": dir,
 	})
 	if err != nil {

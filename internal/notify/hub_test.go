@@ -8,11 +8,11 @@ import (
 
 // mockSender records calls to SendLog and SendResourceUpdated.
 type mockSender struct {
-	logs     []logCall
-	updates  []string
-	mu       sync.Mutex
-	logErr   error
-	updErr   error
+	logs    []logCall
+	updates []string
+	mu      sync.Mutex
+	logErr  error
+	updErr  error
 }
 
 type logCall struct {

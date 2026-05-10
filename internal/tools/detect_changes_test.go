@@ -55,11 +55,11 @@ func TestFilterChangedFiles(t *testing.T) {
 	}
 
 	result := filterChangedFiles(dir, []string{
-		goFile,        // absolute, recognized
-		pyFile,        // absolute, recognized
-		txtFile,       // absolute, plaintext (filtered out)
-		missingFile,   // relative, does not exist (filtered out)
-		"main.go",     // relative, exists, recognized
+		goFile,      // absolute, recognized
+		pyFile,      // absolute, recognized
+		txtFile,     // absolute, plaintext (filtered out)
+		missingFile, // relative, does not exist (filtered out)
+		"main.go",   // relative, exists, recognized
 	})
 
 	// Expect goFile, pyFile, and the relative main.go (resolved to absolute).

@@ -17,7 +17,7 @@ func HandleStartLsp(
 	setClient func(*lsp.LSPClient),
 	serverPath string,
 	serverArgs []string,
-	args map[string]interface{},
+	args map[string]any,
 ) (types.ToolResult, error) {
 	rootDir, ok := args["root_dir"].(string)
 	if !ok || rootDir == "" {
@@ -94,14 +94,14 @@ func HandleStartLsp(
 
 // ParseScopePaths extracts scope paths from the args value.
 // Accepts a single string or []interface{} (JSON array).
-func ParseScopePaths(raw interface{}) []string {
+func ParseScopePaths(raw any) []string {
 	switch v := raw.(type) {
 	case string:
 		if v == "" {
 			return nil
 		}
 		return []string{v}
-	case []interface{}:
+	case []any:
 		paths := make([]string, 0, len(v))
 		for _, item := range v {
 			if s, ok := item.(string); ok && s != "" {
@@ -116,7 +116,7 @@ func ParseScopePaths(raw interface{}) []string {
 
 // HandleRestartLspServer restarts the LSP server with the given root dir.
 // root_dir is required: omitting it would construct a malformed "file://" rootURI.
-func HandleRestartLspServer(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleRestartLspServer(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -134,7 +134,7 @@ func HandleRestartLspServer(ctx context.Context, client *lsp.LSPClient, args map
 }
 
 // HandleOpenDocument opens a document in the LSP server.
-func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -173,7 +173,7 @@ func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[str
 }
 
 // HandleCloseDocument closes a document in the LSP server.
-func HandleCloseDocument(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleCloseDocument(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}

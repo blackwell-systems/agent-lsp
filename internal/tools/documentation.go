@@ -17,9 +17,9 @@ import (
 type DocResult struct {
 	Symbol    string `json:"symbol"`
 	Language  string `json:"language"`
-	Source    string `json:"source"`    // "toolchain" or "error"
-	Doc       string `json:"doc"`       // full documentation text (ANSI-stripped)
-	Signature string `json:"signature"` // extracted signature line, may be empty
+	Source    string `json:"source"`          // "toolchain" or "error"
+	Doc       string `json:"doc"`             // full documentation text (ANSI-stripped)
+	Signature string `json:"signature"`       // extracted signature line, may be empty
 	Error     string `json:"error,omitempty"` // set when Source == "error"
 }
 
@@ -121,7 +121,7 @@ func extractSignature(language, output string) string {
 // HandleGetSymbolDocumentation is the MCP handler for get_symbol_documentation.
 // It dispatches to per-language toolchain commands to fetch canonical documentation.
 // No *lsp.LSPClient parameter — runs shell commands independently of any LSP session.
-func HandleGetSymbolDocumentation(ctx context.Context, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetSymbolDocumentation(ctx context.Context, args map[string]any) (types.ToolResult, error) {
 	symbol, _ := args["symbol"].(string)
 	languageID, _ := args["language_id"].(string)
 	filePath, _ := args["file_path"].(string)

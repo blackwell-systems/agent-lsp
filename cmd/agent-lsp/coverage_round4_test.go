@@ -249,4 +249,3 @@ func TestGenerateRulesContent_NonEmpty(t *testing.T) {
 		t.Error("rules content should mention get_change_impact")
 	}
 }
-

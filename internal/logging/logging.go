@@ -36,7 +36,7 @@ var logLevelPriority = map[string]int{
 var (
 	mu                sync.RWMutex
 	currentLevel      = LevelInfo
-	mcpServer         interface{}
+	mcpServer         any
 	serverInitialized bool
 )
 
@@ -58,7 +58,7 @@ func init() {
 
 // SetServer stores a reference to the MCP server notification sender.
 // Called by server.go (Wave 2) after the server is created.
-func SetServer(sender interface{}) {
+func SetServer(sender any) {
 	mu.Lock()
 	defer mu.Unlock()
 	mcpServer = sender

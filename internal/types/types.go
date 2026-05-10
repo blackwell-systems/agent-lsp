@@ -29,11 +29,11 @@ type FormattedLocation struct {
 
 // LSPDiagnostic mirrors the LSP publishDiagnostics Diagnostic object.
 type LSPDiagnostic struct {
-	Range    Range       `json:"range"`
-	Severity int         `json:"severity"` // 1=error 2=warning 3=info 4=hint
-	Code     interface{} `json:"code,omitempty"`
-	Source   string      `json:"source,omitempty"`
-	Message  string      `json:"message"`
+	Range    Range  `json:"range"`
+	Severity int    `json:"severity"` // 1=error 2=warning 3=info 4=hint
+	Code     any    `json:"code,omitempty"`
+	Source   string `json:"source,omitempty"`
+	Message  string `json:"message"`
 }
 
 // DiagnosticUpdateCallback is called whenever the LSP server publishes diagnostics.
@@ -86,7 +86,7 @@ type CallHierarchyItem struct {
 	URI            string      `json:"uri"`
 	Range          Range       `json:"range"`
 	SelectionRange Range       `json:"selectionRange"`
-	Data           interface{} `json:"data,omitempty"`
+	Data           any         `json:"data,omitempty"`
 }
 
 // CallHierarchyIncomingCall represents a caller of a function in the call hierarchy.
@@ -115,7 +115,7 @@ type TypeHierarchyItem struct {
 	URI            string      `json:"uri"`
 	Range          Range       `json:"range"`
 	SelectionRange Range       `json:"selectionRange"`
-	Data           interface{} `json:"data,omitempty"`
+	Data           any         `json:"data,omitempty"`
 }
 
 // SemanticToken is a single decoded semantic token with absolute 1-based position
@@ -163,9 +163,9 @@ type DocumentSymbol struct {
 // Command is an LSP workspace command (used both standalone and embedded).
 // See LSP 3.17 § Command.
 type Command struct {
-	Title     string        `json:"title"`
-	Command   string        `json:"command"`
-	Arguments []interface{} `json:"arguments,omitempty"`
+	Title     string `json:"title"`
+	Command   string `json:"command"`
+	Arguments []any  `json:"arguments,omitempty"`
 }
 
 // CompletionItem represents a single completion suggestion.
@@ -175,18 +175,18 @@ type CompletionItem struct {
 	Kind                *int        `json:"kind,omitempty"`
 	Tags                []SymbolTag `json:"tags,omitempty"`
 	Detail              *string     `json:"detail,omitempty"`
-	Documentation       interface{} `json:"documentation,omitempty"`
+	Documentation       any         `json:"documentation,omitempty"`
 	Deprecated          bool        `json:"deprecated,omitempty"`
 	Preselect           bool        `json:"preselect,omitempty"`
 	SortText            *string     `json:"sortText,omitempty"`
 	FilterText          *string     `json:"filterText,omitempty"`
 	InsertText          *string     `json:"insertText,omitempty"`
 	InsertTextFormat    *int        `json:"insertTextFormat,omitempty"`
-	TextEdit            interface{} `json:"textEdit,omitempty"`
+	TextEdit            any         `json:"textEdit,omitempty"`
 	AdditionalTextEdits []TextEdit  `json:"additionalTextEdits,omitempty"`
 	CommitCharacters    []string    `json:"commitCharacters,omitempty"`
 	Command             *Command    `json:"command,omitempty"`
-	Data                interface{} `json:"data,omitempty"`
+	Data                any         `json:"data,omitempty"`
 }
 
 // CompletionList is the canonical completion response wrapper.
@@ -206,18 +206,18 @@ type CodeAction struct {
 	Disabled    *struct {
 		Reason string `json:"reason"`
 	} `json:"disabled,omitempty"`
-	Edit    interface{} `json:"edit,omitempty"`
-	Command *Command    `json:"command,omitempty"`
-	Data    interface{} `json:"data,omitempty"`
+	Edit    any      `json:"edit,omitempty"`
+	Command *Command `json:"command,omitempty"`
+	Data    any      `json:"data,omitempty"`
 }
 
 // ToolHandler is the function signature for tool handler callbacks registered
 // by extensions. The ctx, client, and args mirror the standard tool handler args.
-type ToolHandler func(ctx interface{}, args map[string]interface{}) (ToolResult, error)
+type ToolHandler func(ctx any, args map[string]any) (ToolResult, error)
 
 // ResourceHandler is the function signature for resource read callbacks registered
 // by extensions.
-type ResourceHandler func(ctx interface{}, uri string) (interface{}, error)
+type ResourceHandler func(ctx any, uri string) (any, error)
 
 // Extension is implemented by per-language extension packages.
 // The current interface covers the four methods used by the extension
@@ -228,7 +228,7 @@ type Extension interface {
 	ToolHandlers() map[string]ToolHandler
 	ResourceHandlers() map[string]ResourceHandler
 	SubscriptionHandlers() map[string]ResourceHandler
-	PromptHandlers() map[string]interface{}
+	PromptHandlers() map[string]any
 }
 
 // InlayHintKind indicates whether an inlay hint is for a Type annotation or
@@ -254,12 +254,12 @@ type InlayHintLabelPart struct {
 // Label is either a plain string or a JSON array of InlayHintLabelPart.
 // Use InlayHint.LabelString() for the display string in either case.
 type InlayHint struct {
-	Position     Position     `json:"position"`
-	Label        interface{}  `json:"label"` // string | []InlayHintLabelPart
+	Position     Position      `json:"position"`
+	Label        any           `json:"label"` // string | []InlayHintLabelPart
 	Kind         InlayHintKind `json:"kind,omitempty"`
-	Tooltip      string       `json:"tooltip,omitempty"`
-	PaddingLeft  bool         `json:"paddingLeft,omitempty"`
-	PaddingRight bool         `json:"paddingRight,omitempty"`
+	Tooltip      string        `json:"tooltip,omitempty"`
+	PaddingLeft  bool          `json:"paddingLeft,omitempty"`
+	PaddingRight bool          `json:"paddingRight,omitempty"`
 }
 
 // DocumentHighlightKind indicates the role of a highlighted symbol occurrence.
@@ -268,9 +268,9 @@ type DocumentHighlightKind int
 
 const (
 	// DocumentHighlightText is a textual occurrence (not read or write).
-	DocumentHighlightText  DocumentHighlightKind = 1
+	DocumentHighlightText DocumentHighlightKind = 1
 	// DocumentHighlightRead is a read access of the symbol.
-	DocumentHighlightRead  DocumentHighlightKind = 2
+	DocumentHighlightRead DocumentHighlightKind = 2
 	// DocumentHighlightWrite is a write access of the symbol.
 	DocumentHighlightWrite DocumentHighlightKind = 3
 )

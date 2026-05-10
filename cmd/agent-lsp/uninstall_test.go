@@ -11,14 +11,14 @@ func TestCleanMCPConfig_PreservesOtherServers(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".mcp.json")
 
-	cfg := map[string]interface{}{
-		"mcpServers": map[string]interface{}{
-			"lsp": map[string]interface{}{
+	cfg := map[string]any{
+		"mcpServers": map[string]any{
+			"lsp": map[string]any{
 				"type":    "stdio",
 				"command": "agent-lsp",
 				"args":    []string{"go:gopls"},
 			},
-			"other-server": map[string]interface{}{
+			"other-server": map[string]any{
 				"type":    "stdio",
 				"command": "other-binary",
 			},
@@ -37,9 +37,9 @@ func TestCleanMCPConfig_PreservesOtherServers(t *testing.T) {
 
 	// Verify other-server is preserved.
 	result, _ := os.ReadFile(path)
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	json.Unmarshal(result, &parsed)
-	servers := parsed["mcpServers"].(map[string]interface{})
+	servers := parsed["mcpServers"].(map[string]any)
 
 	if _, ok := servers["lsp"]; ok {
 		t.Error("lsp key should have been removed")
@@ -53,11 +53,11 @@ func TestCleanMCPConfig_RemovesBothKeys(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".mcp.json")
 
-	cfg := map[string]interface{}{
-		"mcpServers": map[string]interface{}{
-			"lsp":       map[string]interface{}{"command": "agent-lsp"},
-			"agent-lsp": map[string]interface{}{"command": "agent-lsp"},
-			"keep":      map[string]interface{}{"command": "other"},
+	cfg := map[string]any{
+		"mcpServers": map[string]any{
+			"lsp":       map[string]any{"command": "agent-lsp"},
+			"agent-lsp": map[string]any{"command": "agent-lsp"},
+			"keep":      map[string]any{"command": "other"},
 		},
 	}
 	data, _ := json.MarshalIndent(cfg, "", "  ")
@@ -69,9 +69,9 @@ func TestCleanMCPConfig_RemovesBothKeys(t *testing.T) {
 	}
 
 	result, _ := os.ReadFile(path)
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	json.Unmarshal(result, &parsed)
-	servers := parsed["mcpServers"].(map[string]interface{})
+	servers := parsed["mcpServers"].(map[string]any)
 	if len(servers) != 1 {
 		t.Errorf("expected 1 remaining server, got %d", len(servers))
 	}
@@ -149,9 +149,9 @@ func TestUninstallDryRun_NoSideEffects(t *testing.T) {
 
 	// Create an MCP config.
 	mcpPath := filepath.Join(dir, ".mcp.json")
-	cfg := map[string]interface{}{
-		"mcpServers": map[string]interface{}{
-			"lsp": map[string]interface{}{"command": "agent-lsp"},
+	cfg := map[string]any{
+		"mcpServers": map[string]any{
+			"lsp": map[string]any{"command": "agent-lsp"},
 		},
 	}
 	data, _ := json.MarshalIndent(cfg, "", "  ")

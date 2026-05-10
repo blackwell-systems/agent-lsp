@@ -9,9 +9,9 @@ import (
 
 // staleMockSender records calls for test verification.
 type staleMockSender struct {
-	mu       sync.Mutex
-	logs     []logEntry
-	updates  []string
+	mu      sync.Mutex
+	logs    []logEntry
+	updates []string
 }
 
 type logEntry struct {
@@ -134,4 +134,3 @@ func TestStaleNotifier_Stop(t *testing.T) {
 		t.Fatalf("expected Stop to flush resource update, got %d", len(sender.updates))
 	}
 }
-

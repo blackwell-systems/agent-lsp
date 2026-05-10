@@ -6,7 +6,7 @@ import (
 )
 
 func TestHandleAddWorkspaceFolder_NilClient(t *testing.T) {
-	r, err := HandleAddWorkspaceFolder(context.Background(), newNilClient(), map[string]interface{}{
+	r, err := HandleAddWorkspaceFolder(context.Background(), newNilClient(), map[string]any{
 		"path": "/tmp/other-project",
 	})
 	if err != nil {
@@ -18,7 +18,7 @@ func TestHandleAddWorkspaceFolder_NilClient(t *testing.T) {
 }
 
 func TestHandleAddWorkspaceFolder_MissingPath(t *testing.T) {
-	r, err := HandleAddWorkspaceFolder(context.Background(), newNilClient(), map[string]interface{}{})
+	r, err := HandleAddWorkspaceFolder(context.Background(), newNilClient(), map[string]any{})
 	if err != nil {
 		t.Fatalf("unexpected Go error: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestHandleAddWorkspaceFolder_MissingPath(t *testing.T) {
 }
 
 func TestHandleRemoveWorkspaceFolder_NilClient(t *testing.T) {
-	r, err := HandleRemoveWorkspaceFolder(context.Background(), newNilClient(), map[string]interface{}{
+	r, err := HandleRemoveWorkspaceFolder(context.Background(), newNilClient(), map[string]any{
 		"path": "/tmp/other-project",
 	})
 	if err != nil {

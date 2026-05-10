@@ -128,8 +128,8 @@ func TestDiagDebouncer_ErrorCounting(t *testing.T) {
 		{Severity: 1, Message: "error3"},
 		{Severity: 2, Message: "warn1"},
 		{Severity: 2, Message: "warn2"},
-		{Severity: 3, Message: "info1"},  // not counted
-		{Severity: 4, Message: "hint1"},  // not counted
+		{Severity: 3, Message: "info1"}, // not counted
+		{Severity: 4, Message: "hint1"}, // not counted
 	})
 
 	time.Sleep(150 * time.Millisecond)

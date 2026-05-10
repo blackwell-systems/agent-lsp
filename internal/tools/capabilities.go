@@ -56,20 +56,20 @@ var alwaysAvailableTools = []string{
 
 // SkillStatus describes whether a skill is viable with the current language server.
 type SkillStatus struct {
-	Name               string   `json:"name"`
-	Status             string   `json:"status"` // "supported", "partial", "unsupported"
-	MissingRequired    []string `json:"missing_required,omitempty"`
-	MissingOptional    []string `json:"missing_optional,omitempty"`
+	Name            string   `json:"name"`
+	Status          string   `json:"status"` // "supported", "partial", "unsupported"
+	MissingRequired []string `json:"missing_required,omitempty"`
+	MissingOptional []string `json:"missing_optional,omitempty"`
 }
 
 // ServerCapabilitiesResult is the response shape for get_server_capabilities.
 type ServerCapabilitiesResult struct {
-	ServerName      string                 `json:"server_name,omitempty"`
-	ServerVersion   string                 `json:"server_version,omitempty"`
-	SupportedTools  []string               `json:"supported_tools"`
-	UnsupportedTools []string              `json:"unsupported_tools"`
-	Skills          []SkillStatus          `json:"skills,omitempty"`
-	Capabilities    map[string]interface{} `json:"capabilities"`
+	ServerName       string         `json:"server_name,omitempty"`
+	ServerVersion    string         `json:"server_version,omitempty"`
+	SupportedTools   []string       `json:"supported_tools"`
+	UnsupportedTools []string       `json:"unsupported_tools"`
+	Skills           []SkillStatus  `json:"skills,omitempty"`
+	Capabilities     map[string]any `json:"capabilities"`
 }
 
 // skillCapabilities defines required and optional capabilities for each skill.
@@ -104,7 +104,7 @@ var skillCapabilities = []struct {
 
 // classifySkills checks each skill's required and optional capabilities against
 // the server's advertised capabilities and returns a status for each.
-func classifySkills(caps map[string]interface{}) []SkillStatus {
+func classifySkills(caps map[string]any) []SkillStatus {
 	var result []SkillStatus
 	for _, skill := range skillCapabilities {
 		var missingReq, missingOpt []string
@@ -142,7 +142,7 @@ func classifySkills(caps map[string]interface{}) []SkillStatus {
 //
 // This lets the AI skip tools that will return empty results and avoid
 // unnecessary LSP round trips for unsupported features.
-func HandleGetServerCapabilities(_ context.Context, client *lsp.LSPClient, _ map[string]interface{}) (types.ToolResult, error) {
+func HandleGetServerCapabilities(_ context.Context, client *lsp.LSPClient, _ map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -186,7 +186,7 @@ func HandleGetServerCapabilities(_ context.Context, client *lsp.LSPClient, _ map
 
 // hasCapabilityInMap checks whether a capability key is present and truthy
 // in the given map — mirrors the client's hasCapability logic.
-func hasCapabilityInMap(caps map[string]interface{}, key string) bool {
+func hasCapabilityInMap(caps map[string]any, key string) bool {
 	v, ok := caps[key]
 	if !ok {
 		return false

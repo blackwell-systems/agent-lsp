@@ -33,7 +33,7 @@ func repoForFile(filePath string, consumerRoots []string) string {
 // HandleGetCrossRepoReferences handles the get_cross_repo_references MCP tool.
 // It adds each consumer_root as a workspace folder, calls GetReferences on the
 // symbol, then partitions results by which consumer_root prefix they belong to.
-func HandleGetCrossRepoReferences(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetCrossRepoReferences(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	// Decode symbol_file (required).
 	symbolFile, ok := args["symbol_file"].(string)
 	if !ok || symbolFile == "" {
@@ -42,7 +42,7 @@ func HandleGetCrossRepoReferences(ctx context.Context, client *lsp.LSPClient, ar
 
 	// Decode consumer_roots (required, non-empty) — validated before CheckInitialized
 	// so arg errors are reported regardless of client state.
-	rawRoots, ok := args["consumer_roots"].([]interface{})
+	rawRoots, ok := args["consumer_roots"].([]any)
 	if !ok || len(rawRoots) == 0 {
 		return types.ErrorResult("consumer_roots must be non-empty; use get_references for single-repo lookup"), nil
 	}
@@ -129,7 +129,7 @@ func HandleGetCrossRepoReferences(ctx context.Context, client *lsp.LSPClient, ar
 	}
 
 	// Build response.
-	response := map[string]interface{}{
+	response := map[string]any{
 		"symbol":     symbolName,
 		"references": refs,
 		"summary":    fmt.Sprintf("Found %d references across %d repos.", len(refs), len(repoSet)),

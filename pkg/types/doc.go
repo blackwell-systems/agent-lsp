@@ -21,37 +21,37 @@ package types
 
 import internaltypes "github.com/blackwell-systems/agent-lsp/internal/types"
 
-type Position                  = internaltypes.Position
-type Range                     = internaltypes.Range
-type Location                  = internaltypes.Location
-type FormattedLocation         = internaltypes.FormattedLocation
-type LSPDiagnostic             = internaltypes.LSPDiagnostic
-type DiagnosticUpdateCallback  = internaltypes.DiagnosticUpdateCallback
-type FileChangeEvent           = internaltypes.FileChangeEvent
-type ToolResult                = internaltypes.ToolResult
-type ContentItem               = internaltypes.ContentItem
-type SymbolKind                = internaltypes.SymbolKind
-type SymbolTag                 = internaltypes.SymbolTag
-type CallHierarchyItem         = internaltypes.CallHierarchyItem
+type Position = internaltypes.Position
+type Range = internaltypes.Range
+type Location = internaltypes.Location
+type FormattedLocation = internaltypes.FormattedLocation
+type LSPDiagnostic = internaltypes.LSPDiagnostic
+type DiagnosticUpdateCallback = internaltypes.DiagnosticUpdateCallback
+type FileChangeEvent = internaltypes.FileChangeEvent
+type ToolResult = internaltypes.ToolResult
+type ContentItem = internaltypes.ContentItem
+type SymbolKind = internaltypes.SymbolKind
+type SymbolTag = internaltypes.SymbolTag
+type CallHierarchyItem = internaltypes.CallHierarchyItem
 type CallHierarchyIncomingCall = internaltypes.CallHierarchyIncomingCall
 type CallHierarchyOutgoingCall = internaltypes.CallHierarchyOutgoingCall
-type TypeHierarchyItem         = internaltypes.TypeHierarchyItem
-type SemanticToken             = internaltypes.SemanticToken
-type TextEdit                  = internaltypes.TextEdit
-type SymbolInformation         = internaltypes.SymbolInformation
-type DocumentSymbol            = internaltypes.DocumentSymbol
-type Command                   = internaltypes.Command
-type CompletionItem            = internaltypes.CompletionItem
-type CompletionList            = internaltypes.CompletionList
-type CodeAction                = internaltypes.CodeAction
-type ToolHandler               = internaltypes.ToolHandler
-type ResourceHandler           = internaltypes.ResourceHandler
-type Extension                 = internaltypes.Extension
-type InlayHintKind             = internaltypes.InlayHintKind
-type InlayHintLabelPart        = internaltypes.InlayHintLabelPart
-type InlayHint                 = internaltypes.InlayHint
-type DocumentHighlightKind     = internaltypes.DocumentHighlightKind
-type DocumentHighlight         = internaltypes.DocumentHighlight
+type TypeHierarchyItem = internaltypes.TypeHierarchyItem
+type SemanticToken = internaltypes.SemanticToken
+type TextEdit = internaltypes.TextEdit
+type SymbolInformation = internaltypes.SymbolInformation
+type DocumentSymbol = internaltypes.DocumentSymbol
+type Command = internaltypes.Command
+type CompletionItem = internaltypes.CompletionItem
+type CompletionList = internaltypes.CompletionList
+type CodeAction = internaltypes.CodeAction
+type ToolHandler = internaltypes.ToolHandler
+type ResourceHandler = internaltypes.ResourceHandler
+type Extension = internaltypes.Extension
+type InlayHintKind = internaltypes.InlayHintKind
+type InlayHintLabelPart = internaltypes.InlayHintLabelPart
+type InlayHint = internaltypes.InlayHint
+type DocumentHighlightKind = internaltypes.DocumentHighlightKind
+type DocumentHighlight = internaltypes.DocumentHighlight
 
 const (
 	InlayHintKindType      = internaltypes.InlayHintKindType

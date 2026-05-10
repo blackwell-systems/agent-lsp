@@ -17,15 +17,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // HandleRenameSymbol renames the symbol at the given location across the workspace.
 // When the direct position lookup returns an empty WorkspaceEdit, it falls back to
 // workspace symbol search by hover name and retries — handling imprecise AI positions.
-func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -50,7 +50,7 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 		languageID = "plaintext"
 	}
 
-	result, wErr := WithDocument[interface{}](ctx, client, filePath, languageID, func(fileURI string) (interface{}, error) {
+	result, wErr := WithDocument[any](ctx, client, filePath, languageID, func(fileURI string) (any, error) {
 		pos := types.Position{Line: line - 1, Character: col - 1}
 		res, rErr := client.RenameSymbol(ctx, fileURI, pos, newName)
 		if rErr != nil {
@@ -74,7 +74,7 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 	dryRun, _ := args["dry_run"].(bool)
 	if dryRun {
 		type previewEnvelope struct {
-			WorkspaceEdit interface{} `json:"workspace_edit"`
+			WorkspaceEdit any `json:"workspace_edit"`
 			Preview       struct {
 				Note string `json:"note"`
 			} `json:"preview"`
@@ -97,7 +97,7 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 // renameWithFuzzyFallback retries rename using workspace symbol candidates when the
 // direct position lookup returned an empty WorkspaceEdit. Mirrors the pattern used
 // by go_to_definition and get_references for position-imprecise AI callers.
-func renameWithFuzzyFallback(ctx context.Context, client *lsp.LSPClient, fileURI string, line, col int, newName string) interface{} {
+func renameWithFuzzyFallback(ctx context.Context, client *lsp.LSPClient, fileURI string, line, col int, newName string) any {
 	hoverPos := types.Position{Line: line - 1, Character: col - 1}
 	hoverText, err := client.GetInfoOnLocation(ctx, fileURI, hoverPos)
 	if err != nil || hoverText == "" {
@@ -138,7 +138,7 @@ func renameWithFuzzyFallback(ctx context.Context, client *lsp.LSPClient, fileURI
 // (e.g. "vendor/**", "**/*_gen.go"). If excludeGlobs is empty, the result is
 // returned unchanged. Handles both "changes" (map[string][]TextEdit) and
 // "documentChanges" ([]TextDocumentEdit) WorkspaceEdit formats.
-func filterWorkspaceEditByGlobs(result interface{}, excludeGlobs []string) interface{} {
+func filterWorkspaceEditByGlobs(result any, excludeGlobs []string) any {
 	if len(excludeGlobs) == 0 || result == nil {
 		return result
 	}
@@ -148,7 +148,7 @@ func filterWorkspaceEditByGlobs(result interface{}, excludeGlobs []string) inter
 		return result
 	}
 
-	var edit map[string]interface{}
+	var edit map[string]any
 	if err := json.Unmarshal(data, &edit); err != nil {
 		return result
 	}
@@ -170,8 +170,8 @@ func filterWorkspaceEditByGlobs(result interface{}, excludeGlobs []string) inter
 	}
 
 	// Handle "changes" format: map[uri][]TextEdit
-	if changes, ok := edit["changes"].(map[string]interface{}); ok {
-		filtered := make(map[string]interface{}, len(changes))
+	if changes, ok := edit["changes"].(map[string]any); ok {
+		filtered := make(map[string]any, len(changes))
 		for uri, edits := range changes {
 			if !matchesAny(uri) {
 				filtered[uri] = edits
@@ -181,15 +181,15 @@ func filterWorkspaceEditByGlobs(result interface{}, excludeGlobs []string) inter
 	}
 
 	// Handle "documentChanges" format: []TextDocumentEdit
-	if docChanges, ok := edit["documentChanges"].([]interface{}); ok {
-		filtered := make([]interface{}, 0, len(docChanges))
+	if docChanges, ok := edit["documentChanges"].([]any); ok {
+		filtered := make([]any, 0, len(docChanges))
 		for _, dc := range docChanges {
-			dcMap, ok := dc.(map[string]interface{})
+			dcMap, ok := dc.(map[string]any)
 			if !ok {
 				filtered = append(filtered, dc)
 				continue
 			}
-			td, _ := dcMap["textDocument"].(map[string]interface{})
+			td, _ := dcMap["textDocument"].(map[string]any)
 			uri, _ := td["uri"].(string)
 			if uri == "" || !matchesAny(uri) {
 				filtered = append(filtered, dc)
@@ -203,7 +203,7 @@ func filterWorkspaceEditByGlobs(result interface{}, excludeGlobs []string) inter
 
 // extractStringSlice extracts a []string from args[key]. Handles both
 // []string (typed) and []interface{} (JSON-decoded) input shapes.
-func extractStringSlice(args map[string]interface{}, key string) []string {
+func extractStringSlice(args map[string]any, key string) []string {
 	v, ok := args[key]
 	if !ok || v == nil {
 		return nil
@@ -211,7 +211,7 @@ func extractStringSlice(args map[string]interface{}, key string) []string {
 	switch t := v.(type) {
 	case []string:
 		return t
-	case []interface{}:
+	case []any:
 		out := make([]string, 0, len(t))
 		for _, item := range t {
 			if s, ok := item.(string); ok {
@@ -226,7 +226,7 @@ func extractStringSlice(args map[string]interface{}, key string) []string {
 // isEmptyWorkspaceEdit reports whether a RenameSymbol result contains no edits.
 // A nil result or one that marshals to "null" or "{}" is considered empty —
 // indicating the server found no symbol at the requested position.
-func isEmptyWorkspaceEdit(result interface{}) bool {
+func isEmptyWorkspaceEdit(result any) bool {
 	if result == nil {
 		return true
 	}
@@ -239,7 +239,7 @@ func isEmptyWorkspaceEdit(result interface{}) bool {
 }
 
 // HandlePrepareRename checks whether a rename is valid at the given location.
-func HandlePrepareRename(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandlePrepareRename(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -259,7 +259,7 @@ func HandlePrepareRename(ctx context.Context, client *lsp.LSPClient, args map[st
 		languageID = "plaintext"
 	}
 
-	result, wErr := WithDocument[interface{}](ctx, client, filePath, languageID, func(fileURI string) (interface{}, error) {
+	result, wErr := WithDocument[any](ctx, client, filePath, languageID, func(fileURI string) (any, error) {
 		pos := types.Position{Line: line - 1, Character: col - 1}
 		return client.PrepareRename(ctx, fileURI, pos)
 	})
@@ -275,7 +275,7 @@ func HandlePrepareRename(ctx context.Context, client *lsp.LSPClient, args map[st
 }
 
 // HandleFormatDocument formats an entire document.
-func HandleFormatDocument(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleFormatDocument(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -317,7 +317,7 @@ func HandleFormatDocument(ctx context.Context, client *lsp.LSPClient, args map[s
 }
 
 // HandleFormatRange formats a range within a document.
-func HandleFormatRange(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleFormatRange(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -370,7 +370,7 @@ func HandleFormatRange(ctx context.Context, client *lsp.LSPClient, args map[stri
 //   - Text-match mode: supply file_path + old_text + new_text. The tool finds
 //     old_text in the file (exact match first, then whitespace-normalized line
 //     match) and replaces it with new_text without requiring line/column positions.
-func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -407,7 +407,7 @@ func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string
 // if that fails it falls back to a line-by-line whitespace-normalised match
 // (each line compared after strings.TrimSpace). The normalised match replaces
 // full lines, so newText should include the desired indentation for those lines.
-func textMatchApply(filePath, oldText, newText string) (interface{}, error) {
+func textMatchApply(filePath, oldText, newText string) (any, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", filePath, err)
@@ -441,13 +441,13 @@ func textMatchApply(filePath, oldText, newText string) (interface{}, error) {
 	}
 
 	fileURI := CreateFileURI(filePath)
-	edit := map[string]interface{}{
-		"changes": map[string]interface{}{
-			fileURI: []interface{}{
-				map[string]interface{}{
-					"range": map[string]interface{}{
-						"start": map[string]interface{}{"line": startLine, "character": startChar},
-						"end":   map[string]interface{}{"line": endLine, "character": endChar},
+	edit := map[string]any{
+		"changes": map[string]any{
+			fileURI: []any{
+				map[string]any{
+					"range": map[string]any{
+						"start": map[string]any{"line": startLine, "character": startChar},
+						"end":   map[string]any{"line": endLine, "character": endChar},
 					},
 					"newText": newText,
 				},
@@ -516,7 +516,7 @@ func findText(src, oldText string) (start, end int, found bool) {
 }
 
 // HandleExecuteCommand executes a workspace command.
-func HandleExecuteCommand(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleExecuteCommand(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -526,8 +526,8 @@ func HandleExecuteCommand(ctx context.Context, client *lsp.LSPClient, args map[s
 		return types.ErrorResult("command is required"), nil
 	}
 
-	var cmdArgs []interface{}
-	if v, ok := args["arguments"].([]interface{}); ok {
+	var cmdArgs []any
+	if v, ok := args["arguments"].([]any); ok {
 		cmdArgs = v
 	}
 

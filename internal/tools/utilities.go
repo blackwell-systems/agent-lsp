@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
@@ -22,19 +22,19 @@ var validLogLevels = map[string]bool{
 }
 
 // HandleDidChangeWatchedFiles notifies the LSP server that watched files have changed.
-func HandleDidChangeWatchedFiles(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleDidChangeWatchedFiles(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
 
-	rawChanges, ok := args["changes"].([]interface{})
+	rawChanges, ok := args["changes"].([]any)
 	if !ok {
 		return types.ErrorResult("changes must be an array"), nil
 	}
 
 	changes := make([]types.FileChangeEvent, 0, len(rawChanges))
 	for i, raw := range rawChanges {
-		m, ok := raw.(map[string]interface{})
+		m, ok := raw.(map[string]any)
 		if !ok {
 			return types.ErrorResult(fmt.Sprintf("changes[%d] must be an object", i)), nil
 		}
@@ -62,7 +62,7 @@ func HandleDidChangeWatchedFiles(ctx context.Context, client *lsp.LSPClient, arg
 }
 
 // HandleSetLogLevel sets the minimum log level for the server.
-func HandleSetLogLevel(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleSetLogLevel(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	level, ok := args["level"].(string)
 	if !ok || level == "" {
 		return types.ErrorResult("level is required"), nil

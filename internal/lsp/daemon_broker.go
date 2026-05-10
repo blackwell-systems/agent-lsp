@@ -234,7 +234,7 @@ func handleBrokerConnection(ctx context.Context, conn net.Conn, client *LSPClien
 
 		if envelope.ID != nil {
 			// It's a request: forward to LSP server and send response back.
-			var params interface{}
+			var params any
 			if envelope.Params != nil {
 				_ = json.Unmarshal(envelope.Params, &params)
 			}
@@ -243,10 +243,10 @@ func handleBrokerConnection(ctx context.Context, conn net.Conn, client *LSPClien
 			var response []byte
 			if err != nil {
 				logging.Log(logging.LevelDebug, fmt.Sprintf("broker: request %s error: %v", envelope.Method, err))
-				response, _ = json.Marshal(map[string]interface{}{
+				response, _ = json.Marshal(map[string]any{
 					"jsonrpc": "2.0",
 					"id":      envelope.ID,
-					"error":   map[string]interface{}{"code": -32603, "message": err.Error()},
+					"error":   map[string]any{"code": -32603, "message": err.Error()},
 				})
 			} else {
 				resultLen := 0
@@ -254,7 +254,7 @@ func handleBrokerConnection(ctx context.Context, conn net.Conn, client *LSPClien
 					resultLen = len(result)
 				}
 				logging.Log(logging.LevelDebug, fmt.Sprintf("broker: request %s success (result %d bytes)", envelope.Method, resultLen))
-				response, _ = json.Marshal(map[string]interface{}{
+				response, _ = json.Marshal(map[string]any{
 					"jsonrpc": "2.0",
 					"id":      envelope.ID,
 					"result":  result,

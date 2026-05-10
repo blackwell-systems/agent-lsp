@@ -19,7 +19,7 @@ import (
 //
 // Returns an empty array when the connected language server does not support
 // inlayHintProvider or has no hints for the given range.
-func HandleGetInlayHints(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetInlayHints(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}

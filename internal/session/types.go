@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
@@ -99,9 +99,9 @@ type ChainResult struct {
 
 // CommitResult is the response from commit_session.
 type CommitResult struct {
-	SessionID    string      `json:"session_id"`
-	FilesWritten int         `json:"files_written,omitempty"`
-	Patch        interface{} `json:"patch"`
+	SessionID    string `json:"session_id"`
+	FilesWritten int    `json:"files_written,omitempty"`
+	Patch        any    `json:"patch"`
 }
 
 // SessionExecutor abstracts how a session acquires and releases LSP access.
@@ -112,18 +112,18 @@ type SessionExecutor interface {
 
 // SimulationSession holds per-session state.
 type SimulationSession struct {
-	ID        string
-	Status    SessionStatus
-	Client    *lsp.LSPClient
-	Edits     []AppliedEdit
-	Baselines map[string]DiagnosticsSnapshot
-	Versions  map[string]int
+	ID               string
+	Status           SessionStatus
+	Client           *lsp.LSPClient
+	Edits            []AppliedEdit
+	Baselines        map[string]DiagnosticsSnapshot
+	Versions         map[string]int
 	Contents         map[string]string // per-file current content (in-memory)
 	OriginalContents map[string]string // per-file content at baseline time (for Discard)
-	Workspace string
-	Language  string
-	DirtyErr  error
-	mu        sync.Mutex
+	Workspace        string
+	Language         string
+	DirtyErr         error
+	mu               sync.Mutex
 }
 
 // MarkDirty sets the session to dirty state with the given error.

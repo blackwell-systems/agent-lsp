@@ -22,7 +22,7 @@ type typeHierarchyResult struct {
 //   - "supertypes" -- parent classes and interfaces
 //   - "subtypes"   -- subclasses and implementations
 //   - "both"       -- both supertypes and subtypes (default when omitted or empty)
-func HandleTypeHierarchy(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleTypeHierarchy(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}

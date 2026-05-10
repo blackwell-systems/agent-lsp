@@ -19,7 +19,7 @@ func TestParseScopePaths_EmptyString(t *testing.T) {
 }
 
 func TestParseScopePaths_StringSlice(t *testing.T) {
-	input := []interface{}{"src/a", "src/b", "src/c"}
+	input := []any{"src/a", "src/b", "src/c"}
 	got := ParseScopePaths(input)
 	if len(got) != 3 {
 		t.Fatalf("expected 3 paths, got %d", len(got))
@@ -30,7 +30,7 @@ func TestParseScopePaths_StringSlice(t *testing.T) {
 }
 
 func TestParseScopePaths_SliceWithEmptyStrings(t *testing.T) {
-	input := []interface{}{"src/a", "", "src/c"}
+	input := []any{"src/a", "", "src/c"}
 	got := ParseScopePaths(input)
 	if len(got) != 2 {
 		t.Fatalf("expected 2 paths (empty filtered), got %d", len(got))
@@ -41,7 +41,7 @@ func TestParseScopePaths_SliceWithEmptyStrings(t *testing.T) {
 }
 
 func TestParseScopePaths_SliceWithNonStrings(t *testing.T) {
-	input := []interface{}{"src/a", 42, true, "src/b"}
+	input := []any{"src/a", 42, true, "src/b"}
 	got := ParseScopePaths(input)
 	if len(got) != 2 {
 		t.Fatalf("expected 2 paths (non-strings filtered), got %d", len(got))
@@ -52,7 +52,7 @@ func TestParseScopePaths_SliceWithNonStrings(t *testing.T) {
 }
 
 func TestParseScopePaths_EmptySlice(t *testing.T) {
-	input := []interface{}{}
+	input := []any{}
 	got := ParseScopePaths(input)
 	if len(got) != 0 {
 		t.Errorf("expected empty slice, got %v", got)

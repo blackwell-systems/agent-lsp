@@ -92,7 +92,7 @@ func TestExtractPositionWithPattern_WithPattern(t *testing.T) {
 	content := "package main\nfunc foo() {}\n"
 	path := writeTemp(t, content)
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"position_pattern": "func @@foo",
 	}
 	line, col, err := ExtractPositionWithPattern(args, path)
@@ -109,7 +109,7 @@ func TestExtractPositionWithPattern_WithPattern(t *testing.T) {
 }
 
 func TestExtractPositionWithPattern_Fallback(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"line":   float64(5),
 		"column": float64(3),
 	}
@@ -135,7 +135,7 @@ func TestResolvePositionPattern_FileNotFound(t *testing.T) {
 // TestExtractPositionWithPattern_NeitherPatternNorPosition verifies that when
 // neither position_pattern nor line/column are provided, an error is returned.
 func TestExtractPositionWithPattern_NeitherPatternNorPosition(t *testing.T) {
-	_, _, err := ExtractPositionWithPattern(map[string]interface{}{}, "")
+	_, _, err := ExtractPositionWithPattern(map[string]any{}, "")
 	if err == nil {
 		t.Fatal("expected error when no position information provided, got nil")
 	}
@@ -219,7 +219,7 @@ func TestExtractPositionWithPattern_LineScope(t *testing.T) {
 	content := "func foo() {}\nfunc bar() {}\nfunc foo() int { return 1 }\n"
 	path := writeTemp(t, content)
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"position_pattern": "func @@foo",
 		"line_scope_start": float64(3),
 		"line_scope_end":   float64(3),
@@ -241,7 +241,7 @@ func TestExtractPositionWithPattern_LineScopeAbsent(t *testing.T) {
 	content := "func foo() {}\n"
 	path := writeTemp(t, content)
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"position_pattern": "func @@foo",
 	}
 	line, col, err := ExtractPositionWithPattern(args, path)

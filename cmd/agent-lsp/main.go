@@ -22,9 +22,8 @@ import (
 
 	"github.com/blackwell-systems/agent-lsp/internal/config"
 	"github.com/blackwell-systems/agent-lsp/internal/extensions"
-	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
-
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 )
 
 const gracefulShutdownTimeout = 5 * time.Second

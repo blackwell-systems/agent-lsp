@@ -6,7 +6,7 @@ import (
 )
 
 func TestHandleGetDocumentHighlights_NilClient(t *testing.T) {
-	r, err := HandleGetDocumentHighlights(context.Background(), newNilClient(), map[string]interface{}{
+	r, err := HandleGetDocumentHighlights(context.Background(), newNilClient(), map[string]any{
 		"file_path": "/tmp/foo.go",
 		"line":      1,
 		"column":    1,
@@ -20,7 +20,7 @@ func TestHandleGetDocumentHighlights_NilClient(t *testing.T) {
 }
 
 func TestHandleGetDocumentHighlights_MissingFilePath(t *testing.T) {
-	r, err := HandleGetDocumentHighlights(context.Background(), newNilClient(), map[string]interface{}{
+	r, err := HandleGetDocumentHighlights(context.Background(), newNilClient(), map[string]any{
 		"line": 1, "column": 1,
 	})
 	if err != nil {
@@ -32,7 +32,7 @@ func TestHandleGetDocumentHighlights_MissingFilePath(t *testing.T) {
 }
 
 func TestHandleGetDocumentHighlights_MissingLine(t *testing.T) {
-	r, err := HandleGetDocumentHighlights(context.Background(), newNilClient(), map[string]interface{}{
+	r, err := HandleGetDocumentHighlights(context.Background(), newNilClient(), map[string]any{
 		"file_path": "/tmp/foo.go",
 		"column":    1,
 		// line intentionally missing

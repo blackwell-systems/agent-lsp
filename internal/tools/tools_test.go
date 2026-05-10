@@ -57,7 +57,7 @@ func TestWithDocument_Success(t *testing.T) {
 // state — the precondition check path. Real LSP results need an integration test.
 func TestHandleGetInfoOnLocation_ValidArgs(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"file_path": "/some/file.go",
 		"line":      float64(5),
 		"column":    float64(10),
@@ -82,7 +82,7 @@ func TestHandleGetInfoOnLocation_ValidArgs(t *testing.T) {
 // Instead we rely on: CheckInitialized passes only for non-nil client, but we
 // want to exercise arg validation. We test this via the helper directly.
 func TestHandleGetInfoOnLocation_InvalidLine(t *testing.T) {
-	_, _, err := extractPosition(map[string]interface{}{
+	_, _, err := extractPosition(map[string]any{
 		"line":   float64(0),
 		"column": float64(1),
 	})
@@ -103,7 +103,7 @@ func TestHandleGetCodeActions_RangeValidation(t *testing.T) {
 	// We need a non-nil client to reach the range-validation step.
 	// Use a nil client — CheckInitialized fires first and returns ErrorResult.
 	// To test range validation specifically, call extractRange directly.
-	_, err := extractRange(map[string]interface{}{
+	_, err := extractRange(map[string]any{
 		"start_line":   float64(5),
 		"start_column": float64(1),
 		"end_line":     float64(3),
@@ -117,7 +117,7 @@ func TestHandleGetCodeActions_RangeValidation(t *testing.T) {
 	}
 
 	// Also verify the handler itself propagates it as ErrorResult (nil client path).
-	result, goErr := HandleGetCodeActions(ctx, newNilClient(), map[string]interface{}{
+	result, goErr := HandleGetCodeActions(ctx, newNilClient(), map[string]any{
 		"file_path":    "/some/file.go",
 		"start_line":   float64(5),
 		"start_column": float64(1),
@@ -202,7 +202,7 @@ func TestHandleStartLsp_ShutdownsExistingClient(t *testing.T) {
 		setClient,
 		"/nonexistent/lsp-server",
 		[]string{},
-		map[string]interface{}{"root_dir": "/tmp"},
+		map[string]any{"root_dir": "/tmp"},
 	)
 	if err != nil {
 		t.Fatalf("unexpected Go error: %v", err)
@@ -234,7 +234,7 @@ func TestHandleStartLsp_ErrorReturnsIsError(t *testing.T) {
 		func(*lsp.LSPClient) {},
 		"/nonexistent/lsp-binary",
 		[]string{},
-		map[string]interface{}{"root_dir": "/tmp"},
+		map[string]any{"root_dir": "/tmp"},
 	)
 	if err != nil {
 		t.Fatalf("HandleStartLsp must not return a Go error on init failure, got: %v", err)
@@ -261,7 +261,7 @@ func TestCheckInitialized(t *testing.T) {
 
 func TestHandleSetLogLevel_ValidLevel(t *testing.T) {
 	ctx := context.Background()
-	result, err := HandleSetLogLevel(ctx, nil, map[string]interface{}{"level": "debug"})
+	result, err := HandleSetLogLevel(ctx, nil, map[string]any{"level": "debug"})
 	if err != nil {
 		t.Fatalf("unexpected Go error: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestHandleSetLogLevel_ValidLevel(t *testing.T) {
 
 func TestHandleSetLogLevel_InvalidLevel(t *testing.T) {
 	ctx := context.Background()
-	result, err := HandleSetLogLevel(ctx, nil, map[string]interface{}{"level": "verbose"})
+	result, err := HandleSetLogLevel(ctx, nil, map[string]any{"level": "verbose"})
 	if err != nil {
 		t.Fatalf("unexpected Go error: %v", err)
 	}
@@ -295,7 +295,7 @@ func TestURIToFilePath_InvalidURI(t *testing.T) {
 // --- TestExtractRange_EqualPositionAllowed ---
 
 func TestExtractRange_EqualPositionAllowed(t *testing.T) {
-	_, err := extractRange(map[string]interface{}{
+	_, err := extractRange(map[string]any{
 		"start_line":   float64(3),
 		"start_column": float64(1),
 		"end_line":     float64(3),

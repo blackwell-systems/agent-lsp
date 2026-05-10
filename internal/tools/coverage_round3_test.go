@@ -9,7 +9,7 @@ import (
 // --- extractPosition ---
 
 func TestExtractPosition_Valid(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"line":   float64(10),
 		"column": float64(5),
 	}
@@ -23,7 +23,7 @@ func TestExtractPosition_Valid(t *testing.T) {
 }
 
 func TestExtractPosition_MissingLine(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"column": float64(5),
 	}
 	_, _, err := extractPosition(args)
@@ -33,7 +33,7 @@ func TestExtractPosition_MissingLine(t *testing.T) {
 }
 
 func TestExtractPosition_MissingColumn(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"line": float64(5),
 	}
 	_, _, err := extractPosition(args)
@@ -43,7 +43,7 @@ func TestExtractPosition_MissingColumn(t *testing.T) {
 }
 
 func TestExtractPosition_ZeroLine(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"line":   float64(0),
 		"column": float64(1),
 	}
@@ -54,7 +54,7 @@ func TestExtractPosition_ZeroLine(t *testing.T) {
 }
 
 func TestExtractPosition_ZeroColumn(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"line":   float64(1),
 		"column": float64(0),
 	}
@@ -65,7 +65,7 @@ func TestExtractPosition_ZeroColumn(t *testing.T) {
 }
 
 func TestExtractPosition_IntTypes(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"line":   int(3),
 		"column": int64(7),
 	}
@@ -81,7 +81,7 @@ func TestExtractPosition_IntTypes(t *testing.T) {
 // --- extractRange ---
 
 func TestExtractRange_Valid(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"start_line":   float64(1),
 		"start_column": float64(1),
 		"end_line":     float64(5),
@@ -101,7 +101,7 @@ func TestExtractRange_Valid(t *testing.T) {
 }
 
 func TestExtractRange_StartAfterEnd(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"start_line":   float64(10),
 		"start_column": float64(1),
 		"end_line":     float64(5),
@@ -114,7 +114,7 @@ func TestExtractRange_StartAfterEnd(t *testing.T) {
 }
 
 func TestExtractRange_SameLineBadColumn(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"start_line":   float64(5),
 		"start_column": float64(20),
 		"end_line":     float64(5),
@@ -127,7 +127,7 @@ func TestExtractRange_SameLineBadColumn(t *testing.T) {
 }
 
 func TestExtractRange_MissingStartLine(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"start_column": float64(1),
 		"end_line":     float64(5),
 		"end_column":   float64(1),
@@ -139,7 +139,7 @@ func TestExtractRange_MissingStartLine(t *testing.T) {
 }
 
 func TestExtractRange_ZeroEndLine(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"start_line":   float64(1),
 		"start_column": float64(1),
 		"end_line":     float64(0),
@@ -154,7 +154,7 @@ func TestExtractRange_ZeroEndLine(t *testing.T) {
 // --- toInt ---
 
 func TestToInt_Float64(t *testing.T) {
-	args := map[string]interface{}{"n": float64(42)}
+	args := map[string]any{"n": float64(42)}
 	v, err := toInt(args, "n")
 	if err != nil || v != 42 {
 		t.Errorf("got %d, %v; want 42, nil", v, err)
@@ -162,7 +162,7 @@ func TestToInt_Float64(t *testing.T) {
 }
 
 func TestToInt_Int(t *testing.T) {
-	args := map[string]interface{}{"n": int(7)}
+	args := map[string]any{"n": int(7)}
 	v, err := toInt(args, "n")
 	if err != nil || v != 7 {
 		t.Errorf("got %d, %v; want 7, nil", v, err)
@@ -170,7 +170,7 @@ func TestToInt_Int(t *testing.T) {
 }
 
 func TestToInt_Int64(t *testing.T) {
-	args := map[string]interface{}{"n": int64(99)}
+	args := map[string]any{"n": int64(99)}
 	v, err := toInt(args, "n")
 	if err != nil || v != 99 {
 		t.Errorf("got %d, %v; want 99, nil", v, err)
@@ -178,7 +178,7 @@ func TestToInt_Int64(t *testing.T) {
 }
 
 func TestToInt_Missing(t *testing.T) {
-	args := map[string]interface{}{}
+	args := map[string]any{}
 	_, err := toInt(args, "n")
 	if err == nil {
 		t.Error("expected error for missing key")
@@ -186,7 +186,7 @@ func TestToInt_Missing(t *testing.T) {
 }
 
 func TestToInt_WrongType(t *testing.T) {
-	args := map[string]interface{}{"n": "notanumber"}
+	args := map[string]any{"n": "notanumber"}
 	_, err := toInt(args, "n")
 	if err == nil {
 		t.Error("expected error for string type")
@@ -196,7 +196,7 @@ func TestToInt_WrongType(t *testing.T) {
 // --- toIntOpt ---
 
 func TestToIntOpt_Present(t *testing.T) {
-	args := map[string]interface{}{"n": float64(3)}
+	args := map[string]any{"n": float64(3)}
 	v, ok := toIntOpt(args, "n")
 	if !ok || v != 3 {
 		t.Errorf("got %d, %v; want 3, true", v, ok)
@@ -204,7 +204,7 @@ func TestToIntOpt_Present(t *testing.T) {
 }
 
 func TestToIntOpt_Missing(t *testing.T) {
-	args := map[string]interface{}{}
+	args := map[string]any{}
 	_, ok := toIntOpt(args, "n")
 	if ok {
 		t.Error("expected ok=false for missing key")
@@ -374,7 +374,7 @@ func TestBuildGoArgs_SymbolOnly(t *testing.T) {
 // --- toIntOptional ---
 
 func TestToIntOptional_Missing(t *testing.T) {
-	args := map[string]interface{}{}
+	args := map[string]any{}
 	v, err := toIntOptional(args, "x")
 	if err != nil || v != 0 {
 		t.Errorf("got %d, %v; want 0, nil", v, err)
@@ -382,7 +382,7 @@ func TestToIntOptional_Missing(t *testing.T) {
 }
 
 func TestToIntOptional_Nil(t *testing.T) {
-	args := map[string]interface{}{"x": nil}
+	args := map[string]any{"x": nil}
 	v, err := toIntOptional(args, "x")
 	if err != nil || v != 0 {
 		t.Errorf("got %d, %v; want 0, nil", v, err)
@@ -390,7 +390,7 @@ func TestToIntOptional_Nil(t *testing.T) {
 }
 
 func TestToIntOptional_Float64(t *testing.T) {
-	args := map[string]interface{}{"x": float64(42)}
+	args := map[string]any{"x": float64(42)}
 	v, err := toIntOptional(args, "x")
 	if err != nil || v != 42 {
 		t.Errorf("got %d, %v; want 42, nil", v, err)
@@ -398,7 +398,7 @@ func TestToIntOptional_Float64(t *testing.T) {
 }
 
 func TestToIntOptional_WrongType(t *testing.T) {
-	args := map[string]interface{}{"x": "bad"}
+	args := map[string]any{"x": "bad"}
 	_, err := toIntOptional(args, "x")
 	if err == nil {
 		t.Error("expected error for string type")

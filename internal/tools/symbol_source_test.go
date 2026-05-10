@@ -176,7 +176,7 @@ func TestFindInnermostSymbol_NoMatch(t *testing.T) {
 
 func TestHandleGetSymbolSource_NilClient(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"file_path": "/some/file.go",
 		"line":      float64(1),
 		"character": float64(1),

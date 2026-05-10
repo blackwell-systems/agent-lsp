@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	internallsp "github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/config"
+	internallsp "github.com/blackwell-systems/agent-lsp/internal/lsp"
 	publsp "github.com/blackwell-systems/agent-lsp/pkg/lsp"
 )
 

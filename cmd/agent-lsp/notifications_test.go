@@ -118,4 +118,3 @@ func (s *testDiagSubscriber) fire(uri string, diags []types.LSPDiagnostic) {
 		s.cb(uri, diags)
 	}
 }
-

@@ -13,7 +13,7 @@ import (
 // TestHandleGoToSymbol_NilClient verifies that a nil client returns an error
 // result containing "not initialized".
 func TestHandleGoToSymbol_NilClient(t *testing.T) {
-	r, err := HandleGoToSymbol(context.Background(), newNilClient(), map[string]interface{}{
+	r, err := HandleGoToSymbol(context.Background(), newNilClient(), map[string]any{
 		"symbol_path": "pkg.Function",
 	})
 	if err != nil {
@@ -32,7 +32,7 @@ func TestHandleGoToSymbol_NilClient(t *testing.T) {
 // TestHandleGoToSymbol_EmptySymbolPath verifies that an empty symbol_path returns
 // an error result.
 func TestHandleGoToSymbol_EmptySymbolPath(t *testing.T) {
-	r, err := HandleGoToSymbol(context.Background(), newNilClient(), map[string]interface{}{
+	r, err := HandleGoToSymbol(context.Background(), newNilClient(), map[string]any{
 		"symbol_path": "",
 	})
 	if err != nil {
@@ -106,7 +106,7 @@ func TestBestSymbolMatch_Empty(t *testing.T) {
 func TestBestSymbolMatch_NilContainerName(t *testing.T) {
 	right := "MyStruct"
 	candidates := []types.SymbolInformation{
-		{Name: "Method", ContainerName: nil},       // nil — must not dereference
+		{Name: "Method", ContainerName: nil}, // nil — must not dereference
 		{Name: "Method", ContainerName: &right},
 	}
 	result := bestSymbolMatch(candidates, "MyStruct.Method")
@@ -238,8 +238,8 @@ func TestBestSymbolMatch_NoMatchFallback(t *testing.T) {
 // TestBestSymbolMatch_DeeplyNestedPath verifies that "a.b.c" splits correctly:
 // parent="a.b", leaf="c". ContainerName matching uses the full parent segment.
 func TestBestSymbolMatch_DeeplyNestedPath(t *testing.T) {
-	parentShallow := "b"   // would match "b.c" but not "a.b.c"
-	parentDeep := "a.b"    // correct full parent for "a.b.c"
+	parentShallow := "b" // would match "b.c" but not "a.b.c"
+	parentDeep := "a.b"  // correct full parent for "a.b.c"
 	candidates := []types.SymbolInformation{
 		{Name: "c", ContainerName: &parentShallow, Location: types.Location{URI: "file:///shallow.go"}},
 		{Name: "c", ContainerName: &parentDeep, Location: types.Location{URI: "file:///deep.go"}},

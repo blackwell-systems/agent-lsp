@@ -3,11 +3,11 @@
 // that implement language intelligence.
 //
 // The Run function:
-//   1. Wraps the LSP ClientResolver in a clientState for thread-safe access.
-//   2. Creates shared dependencies (session manager, audit logger, phase tracker).
-//   3. Registers all MCP tools via register*Tools functions (tools_*.go files).
-//   4. Registers MCP resources (diagnostics://, hover://, completions://).
-//   5. Starts the transport: stdio (default) or HTTP with bearer-token auth.
+//  1. Wraps the LSP ClientResolver in a clientState for thread-safe access.
+//  2. Creates shared dependencies (session manager, audit logger, phase tracker).
+//  3. Registers all MCP tools via register*Tools functions (tools_*.go files).
+//  4. Registers MCP resources (diagnostics://, hover://, completions://).
+//  5. Starts the transport: stdio (default) or HTTP with bearer-token auth.
 //
 // Key abstractions:
 //   - toolDeps: bundles all dependencies passed to tool registration functions.
@@ -32,8 +32,8 @@ import (
 	"github.com/blackwell-systems/agent-lsp/internal/config"
 	"github.com/blackwell-systems/agent-lsp/internal/extensions"
 	"github.com/blackwell-systems/agent-lsp/internal/httpauth"
-	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/notify"
 	"github.com/blackwell-systems/agent-lsp/internal/phase"
 	"github.com/blackwell-systems/agent-lsp/internal/resources"
@@ -106,17 +106,17 @@ func (r *csResolver) AllClients() []*lsp.LSPClient       { return r.delegate.All
 func (r *csResolver) Shutdown(ctx context.Context) error { return r.delegate.Shutdown(ctx) }
 
 // toolArgsToMap converts a typed args struct to map[string]interface{} via JSON round-trip.
-func toolArgsToMap(v interface{}) map[string]interface{} {
+func toolArgsToMap(v any) map[string]any {
 	data, err := json.Marshal(v)
 	if err != nil {
-		return map[string]interface{}{}
+		return map[string]any{}
 	}
-	m := map[string]interface{}{}
+	m := map[string]any{}
 	if err := json.Unmarshal(data, &m); err != nil {
 		// This should not happen in practice (Marshal produced valid JSON).
 		// Return empty map so callers receive field-required errors, not panics.
 		logging.Log(logging.LevelDebug, fmt.Sprintf("toolArgsToMap: unmarshal error: %v", err))
-		return map[string]interface{}{}
+		return map[string]any{}
 	}
 	return m
 }
@@ -156,7 +156,7 @@ func addToolWithPhaseCheck[T any](d toolDeps, tool *mcp.Tool, handler func(ctx c
 }
 
 // makeCallToolResult converts a types.ToolResult to *mcp.CallToolResult.
-func makeCallToolResult(r interface{}) *mcp.CallToolResult {
+func makeCallToolResult(r any) *mcp.CallToolResult {
 	data, err := json.Marshal(r)
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -274,16 +274,16 @@ func autoInitClient(
 
 // toolDeps bundles the shared dependencies passed to each tool registration function.
 type toolDeps struct {
-	server                   *mcp.Server
-	cs                       *clientState
-	resolver                 lsp.ClientResolver
+	server                    *mcp.Server
+	cs                        *clientState
+	resolver                  lsp.ClientResolver
 	clientForFileWithAutoInit func(string) *lsp.LSPClient
-	sessionMgr               *session.SessionManager
-	serverPath               string
-	serverArgs               []string
-	auditLogger              *audit.Logger
-	phaseTracker             *phase.Tracker
-	notifyHub                *notify.Hub
+	sessionMgr                *session.SessionManager
+	serverPath                string
+	serverArgs                []string
+	auditLogger               *audit.Logger
+	phaseTracker              *phase.Tracker
+	notifyHub                 *notify.Hub
 }
 
 // Run creates and starts the MCP server.
@@ -333,16 +333,16 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	phaseTracker := phase.NewTracker(phase.BuiltinSkills(), auditLogger)
 
 	deps := toolDeps{
-		server:                   server,
-		cs:                       cs,
-		resolver:                 resolver,
+		server:                    server,
+		cs:                        cs,
+		resolver:                  resolver,
 		clientForFileWithAutoInit: clientForFileWithAutoInit,
-		sessionMgr:               sessionMgr,
-		serverPath:               serverPath,
-		serverArgs:               serverArgs,
-		auditLogger:              auditLogger,
-		phaseTracker:             phaseTracker,
-		notifyHub:                notifyHub,
+		sessionMgr:                sessionMgr,
+		serverPath:                serverPath,
+		serverArgs:                serverArgs,
+		auditLogger:               auditLogger,
+		phaseTracker:              phaseTracker,
+		notifyHub:                 notifyHub,
 	}
 
 	registerWorkspaceTools(deps)

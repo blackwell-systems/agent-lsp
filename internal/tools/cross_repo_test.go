@@ -65,7 +65,7 @@ func TestRepoForFile(t *testing.T) {
 // TestHandleGetCrossRepoReferences_EmptyRoots verifies that calling with no
 // consumer_roots key returns an error result mentioning "consumer_roots".
 func TestHandleGetCrossRepoReferences_EmptyRoots(t *testing.T) {
-	result, err := HandleGetCrossRepoReferences(context.Background(), nil, map[string]interface{}{
+	result, err := HandleGetCrossRepoReferences(context.Background(), nil, map[string]any{
 		"symbol_file": "/some/file.go",
 		"line":        float64(1),
 		"column":      float64(1),
@@ -85,11 +85,11 @@ func TestHandleGetCrossRepoReferences_EmptyRoots(t *testing.T) {
 // TestHandleGetCrossRepoReferences_EmptyRootsSlice verifies that an explicitly
 // empty consumer_roots slice is also rejected with an error about "consumer_roots".
 func TestHandleGetCrossRepoReferences_EmptyRootsSlice(t *testing.T) {
-	result, err := HandleGetCrossRepoReferences(context.Background(), nil, map[string]interface{}{
+	result, err := HandleGetCrossRepoReferences(context.Background(), nil, map[string]any{
 		"symbol_file":    "/some/file.go",
 		"line":           float64(1),
 		"column":         float64(1),
-		"consumer_roots": []interface{}{},
+		"consumer_roots": []any{},
 	})
 	if err != nil {
 		t.Fatalf("unexpected Go error: %v", err)
@@ -107,11 +107,11 @@ func TestHandleGetCrossRepoReferences_EmptyRootsSlice(t *testing.T) {
 // rejected by CheckInitialized before consumer_roots validation, returning
 // an error about the uninitialized state.
 func TestHandleGetCrossRepoReferences_NilClient(t *testing.T) {
-	result, err := HandleGetCrossRepoReferences(context.Background(), newNilClient(), map[string]interface{}{
+	result, err := HandleGetCrossRepoReferences(context.Background(), newNilClient(), map[string]any{
 		"symbol_file":    "/some/file.go",
 		"line":           float64(1),
 		"column":         float64(1),
-		"consumer_roots": []interface{}{"/home/user/consumer-a"},
+		"consumer_roots": []any{"/home/user/consumer-a"},
 	})
 	if err != nil {
 		t.Fatalf("unexpected Go error: %v", err)

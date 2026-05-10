@@ -280,8 +280,8 @@ func skillVerify() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"simulate_*",
-					"run_build",  // re-run full verify instead
-					"run_tests",  // re-run full verify instead
+					"run_build", // re-run full verify instead
+					"run_tests", // re-run full verify instead
 				},
 			},
 		},

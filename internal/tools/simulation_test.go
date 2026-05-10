@@ -9,7 +9,7 @@ import (
 // TestHandleCreateSimulationSession_MissingWorkspaceRoot tests that missing workspace_root returns error.
 func TestHandleCreateSimulationSession_MissingWorkspaceRoot(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"language": "go",
 	}
 
@@ -29,7 +29,7 @@ func TestHandleCreateSimulationSession_MissingWorkspaceRoot(t *testing.T) {
 // TestHandleCreateSimulationSession_MissingLanguage tests that missing language returns error.
 func TestHandleCreateSimulationSession_MissingLanguage(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"workspace_root": "/tmp/test",
 	}
 
@@ -49,7 +49,7 @@ func TestHandleCreateSimulationSession_MissingLanguage(t *testing.T) {
 // TestHandleSimulateEdit_MissingSessionID tests that missing session_id returns error.
 func TestHandleSimulateEdit_MissingSessionID(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"file_path":    "/tmp/test.go",
 		"start_line":   1,
 		"start_column": 1,
@@ -74,7 +74,7 @@ func TestHandleSimulateEdit_MissingSessionID(t *testing.T) {
 // TestHandleSimulateEdit_MissingFilePath tests that missing file_path returns error.
 func TestHandleSimulateEdit_MissingFilePath(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"session_id":   "test-session",
 		"start_line":   1,
 		"start_column": 1,
@@ -100,12 +100,12 @@ func TestHandleSimulateEdit_MissingFilePath(t *testing.T) {
 func TestHandleSimulateEdit_InvalidRange(t *testing.T) {
 	testCases := []struct {
 		name        string
-		args        map[string]interface{}
+		args        map[string]any
 		wantErrText string
 	}{
 		{
 			name: "missing start_line",
-			args: map[string]interface{}{
+			args: map[string]any{
 				"session_id":   "test-session",
 				"file_path":    "/tmp/test.go",
 				"start_column": 1,
@@ -117,7 +117,7 @@ func TestHandleSimulateEdit_InvalidRange(t *testing.T) {
 		},
 		{
 			name: "zero start_line",
-			args: map[string]interface{}{
+			args: map[string]any{
 				"session_id":   "test-session",
 				"file_path":    "/tmp/test.go",
 				"start_line":   0,
@@ -130,7 +130,7 @@ func TestHandleSimulateEdit_InvalidRange(t *testing.T) {
 		},
 		{
 			name: "start after end",
-			args: map[string]interface{}{
+			args: map[string]any{
 				"session_id":   "test-session",
 				"file_path":    "/tmp/test.go",
 				"start_line":   2,
@@ -164,7 +164,7 @@ func TestHandleSimulateEdit_InvalidRange(t *testing.T) {
 // TestHandleEvaluateSession_MissingSessionID tests that missing session_id returns error.
 func TestHandleEvaluateSession_MissingSessionID(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{}
+	args := map[string]any{}
 
 	result, err := HandleEvaluateSession(ctx, nil, args)
 	if err != nil {
@@ -182,7 +182,7 @@ func TestHandleEvaluateSession_MissingSessionID(t *testing.T) {
 // TestHandleSimulateChain_MissingEdits tests that missing edits array returns error.
 func TestHandleSimulateChain_MissingEdits(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"session_id": "test-session",
 	}
 
@@ -202,9 +202,9 @@ func TestHandleSimulateChain_MissingEdits(t *testing.T) {
 // TestHandleSimulateChain_EmptyEdits tests that empty edits array returns error.
 func TestHandleSimulateChain_EmptyEdits(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"session_id": "test-session",
-		"edits":      []interface{}{},
+		"edits":      []any{},
 	}
 
 	result, err := HandleSimulateChain(ctx, nil, args)
@@ -223,7 +223,7 @@ func TestHandleSimulateChain_EmptyEdits(t *testing.T) {
 // TestHandleCommitSession_MissingSessionID tests that missing session_id returns error.
 func TestHandleCommitSession_MissingSessionID(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{}
+	args := map[string]any{}
 
 	result, err := HandleCommitSession(ctx, nil, args)
 	if err != nil {
@@ -241,7 +241,7 @@ func TestHandleCommitSession_MissingSessionID(t *testing.T) {
 // TestHandleDestroySession_MissingSessionID tests that missing session_id returns error.
 func TestHandleDestroySession_MissingSessionID(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{}
+	args := map[string]any{}
 
 	result, err := HandleDestroySession(ctx, nil, args)
 	if err != nil {
@@ -259,7 +259,7 @@ func TestHandleDestroySession_MissingSessionID(t *testing.T) {
 // TestHandleSimulateEditAtomic_MissingWorkspaceRoot tests that missing workspace_root returns error.
 func TestHandleSimulateEditAtomic_MissingWorkspaceRoot(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"language":     "go",
 		"file_path":    "/tmp/test.go",
 		"start_line":   1,
@@ -285,7 +285,7 @@ func TestHandleSimulateEditAtomic_MissingWorkspaceRoot(t *testing.T) {
 // TestHandleSimulateEditAtomic_MissingLanguage tests that missing language returns error.
 func TestHandleSimulateEditAtomic_MissingLanguage(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"workspace_root": "/tmp/test",
 		"file_path":      "/tmp/test.go",
 		"start_line":     1,
@@ -311,7 +311,7 @@ func TestHandleSimulateEditAtomic_MissingLanguage(t *testing.T) {
 // TestHandleSimulateEditAtomic_MissingFilePath tests that missing file_path returns error.
 func TestHandleSimulateEditAtomic_MissingFilePath(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"workspace_root": "/tmp/test",
 		"language":       "go",
 		"start_line":     1,

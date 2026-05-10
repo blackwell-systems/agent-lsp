@@ -16,7 +16,7 @@ import (
 // After adding a folder, the server re-indexes it and references in either
 // direction across the workspace boundary become available — useful when
 // working across a library and its consumers in the same session.
-func HandleAddWorkspaceFolder(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleAddWorkspaceFolder(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -31,7 +31,7 @@ func HandleAddWorkspaceFolder(ctx context.Context, client *lsp.LSPClient, args m
 	}
 
 	folders := client.GetWorkspaceFolders()
-	data, err := json.Marshal(map[string]interface{}{
+	data, err := json.Marshal(map[string]any{
 		"added":             path,
 		"workspace_folders": folders,
 	})
@@ -42,7 +42,7 @@ func HandleAddWorkspaceFolder(ctx context.Context, client *lsp.LSPClient, args m
 }
 
 // HandleRemoveWorkspaceFolder removes a directory from the LSP workspace.
-func HandleRemoveWorkspaceFolder(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleRemoveWorkspaceFolder(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -57,7 +57,7 @@ func HandleRemoveWorkspaceFolder(ctx context.Context, client *lsp.LSPClient, arg
 	}
 
 	folders := client.GetWorkspaceFolders()
-	data, err := json.Marshal(map[string]interface{}{
+	data, err := json.Marshal(map[string]any{
 		"removed":           path,
 		"workspace_folders": folders,
 	})
@@ -68,13 +68,13 @@ func HandleRemoveWorkspaceFolder(ctx context.Context, client *lsp.LSPClient, arg
 }
 
 // HandleListWorkspaceFolders returns the current workspace folder list.
-func HandleListWorkspaceFolders(_ context.Context, client *lsp.LSPClient, _ map[string]interface{}) (types.ToolResult, error) {
+func HandleListWorkspaceFolders(_ context.Context, client *lsp.LSPClient, _ map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
 
 	folders := client.GetWorkspaceFolders()
-	data, err := json.Marshal(map[string]interface{}{
+	data, err := json.Marshal(map[string]any{
 		"workspace_folders": folders,
 	})
 	if err != nil {

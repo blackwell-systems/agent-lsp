@@ -98,10 +98,10 @@ func TestFileToURI(t *testing.T) {
 // --- extractFilesFromWorkspaceEdit ---
 
 func TestExtractFilesFromWorkspaceEdit(t *testing.T) {
-	edit := map[string]interface{}{
-		"changes": map[string]interface{}{
-			"file:///a.go": []interface{}{},
-			"file:///b.go": []interface{}{},
+	edit := map[string]any{
+		"changes": map[string]any{
+			"file:///a.go": []any{},
+			"file:///b.go": []any{},
 		},
 	}
 	files := extractFilesFromWorkspaceEdit(edit)
@@ -111,7 +111,7 @@ func TestExtractFilesFromWorkspaceEdit(t *testing.T) {
 }
 
 func TestExtractFilesFromWorkspaceEdit_NoChanges(t *testing.T) {
-	edit := map[string]interface{}{}
+	edit := map[string]any{}
 	files := extractFilesFromWorkspaceEdit(edit)
 	if files != nil {
 		t.Errorf("expected nil for missing changes key, got %v", files)
@@ -119,7 +119,7 @@ func TestExtractFilesFromWorkspaceEdit_NoChanges(t *testing.T) {
 }
 
 func TestExtractFilesFromWorkspaceEdit_WrongType(t *testing.T) {
-	edit := map[string]interface{}{
+	edit := map[string]any{
 		"changes": "not-a-map",
 	}
 	files := extractFilesFromWorkspaceEdit(edit)

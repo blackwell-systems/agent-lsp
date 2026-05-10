@@ -18,9 +18,9 @@ func TestHandleGetServerCapabilities_NilClient(t *testing.T) {
 
 // TestHasCapabilityInMap verifies the capability map lookup logic.
 func TestHasCapabilityInMap(t *testing.T) {
-	caps := map[string]interface{}{
+	caps := map[string]any{
 		"hoverProvider":      true,
-		"completionProvider": map[string]interface{}{"triggerCharacters": []string{"."}},
+		"completionProvider": map[string]any{"triggerCharacters": []string{"."}},
 		"renameProvider":     false,
 		"absentKey":          nil,
 	}
@@ -29,11 +29,11 @@ func TestHasCapabilityInMap(t *testing.T) {
 		key  string
 		want bool
 	}{
-		{"hoverProvider", true},                // bool true
-		{"completionProvider", true},           // non-nil object
-		{"renameProvider", false},              // bool false
-		{"absentKey", false},                   // nil value (absent)
-		{"notPresent", false},                  // key missing entirely
+		{"hoverProvider", true},      // bool true
+		{"completionProvider", true}, // non-nil object
+		{"renameProvider", false},    // bool false
+		{"absentKey", false},         // nil value (absent)
+		{"notPresent", false},        // key missing entirely
 	}
 
 	for _, tc := range cases {
@@ -81,13 +81,13 @@ func TestServerCapabilitiesResultShape(t *testing.T) {
 		ServerVersion:    "v0.15.0",
 		SupportedTools:   []string{"start_lsp"},
 		UnsupportedTools: []string{"type_hierarchy"},
-		Capabilities:     map[string]interface{}{},
+		Capabilities:     map[string]any{},
 	}
 	data, err := json.Marshal(result)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var m map[string]interface{}
+	var m map[string]any
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

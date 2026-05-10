@@ -4,9 +4,9 @@
 // did_change_watched_files, detect_lsp_servers, and set_log_level.
 //
 // Each tool follows the same pattern:
-//   1. An Args struct with jsonschema tags (drives MCP schema generation).
-//   2. A handler registered via addToolWithPhaseCheck that converts the
-//      typed args to the internal map format and delegates to internal/tools.
+//  1. An Args struct with jsonschema tags (drives MCP schema generation).
+//  2. A handler registered via addToolWithPhaseCheck that converts the
+//     typed args to the internal map format and delegates to internal/tools.
 //
 // The args structs use jsonschema tags rather than separate schema definitions.
 // The go-sdk reads these tags at startup to generate the MCP tool schema
@@ -28,11 +28,11 @@ import (
 // Workspace/lifecycle tool arg types.
 
 type StartLspArgs struct {
-	RootDir              string  `json:"root_dir" jsonschema:"Workspace root directory containing the project (e.g. directory with go.mod, package.json)"`
-	LanguageID           string  `json:"language_id,omitempty" jsonschema:"Language server to start (e.g. go, typescript, rust). Optional; auto-detected"`
-	Connect              string  `json:"connect,omitempty" jsonschema:"Connect to an already-running language server at this TCP address (e.g. localhost:9999) instead of spawning a new process. Reuses the existing server's warm index. Supported by gopls (gopls -listen=:9999) and some other servers."`
-	ReadyTimeoutSeconds  float64 `json:"ready_timeout_seconds,omitempty" jsonschema:"If > 0, block until all $/progress workspace-indexing tokens complete or this many seconds elapse. Useful for servers like jdtls that index asynchronously after initialize."`
-	Scope                string  `json:"scope,omitempty" jsonschema:"Limit indexing to specific subdirectories. Accepts a path string or array of paths relative to root_dir. Generates a temporary language-server config (pyrightconfig.json, tsconfig.json) that restricts analysis scope. Use on large monorepos to prevent reference query timeouts."`
+	RootDir             string  `json:"root_dir" jsonschema:"Workspace root directory containing the project (e.g. directory with go.mod, package.json)"`
+	LanguageID          string  `json:"language_id,omitempty" jsonschema:"Language server to start (e.g. go, typescript, rust). Optional; auto-detected"`
+	Connect             string  `json:"connect,omitempty" jsonschema:"Connect to an already-running language server at this TCP address (e.g. localhost:9999) instead of spawning a new process. Reuses the existing server's warm index. Supported by gopls (gopls -listen=:9999) and some other servers."`
+	ReadyTimeoutSeconds float64 `json:"ready_timeout_seconds,omitempty" jsonschema:"If > 0, block until all $/progress workspace-indexing tokens complete or this many seconds elapse. Useful for servers like jdtls that index asynchronously after initialize."`
+	Scope               string  `json:"scope,omitempty" jsonschema:"Limit indexing to specific subdirectories. Accepts a path string or array of paths relative to root_dir. Generates a temporary language-server config (pyrightconfig.json, tsconfig.json) that restricts analysis scope. Use on large monorepos to prevent reference query timeouts."`
 }
 
 type RestartLspArgs struct {
@@ -58,19 +58,19 @@ type GetDiagnosticsArgs struct {
 }
 
 type ApplyEditArgs struct {
-	Edit     map[string]interface{} `json:"workspace_edit,omitempty" jsonschema:"WorkspaceEdit object (as returned by rename_symbol or format_document)"`
-	FilePath string                 `json:"file_path,omitempty" jsonschema:"File path for text-match mode"`
-	OldText  string                 `json:"old_text,omitempty" jsonschema:"Text to find and replace (text-match mode)"`
-	NewText  string                 `json:"new_text,omitempty" jsonschema:"Replacement text (text-match mode)"`
+	Edit     map[string]any `json:"workspace_edit,omitempty" jsonschema:"WorkspaceEdit object (as returned by rename_symbol or format_document)"`
+	FilePath string         `json:"file_path,omitempty" jsonschema:"File path for text-match mode"`
+	OldText  string         `json:"old_text,omitempty" jsonschema:"Text to find and replace (text-match mode)"`
+	NewText  string         `json:"new_text,omitempty" jsonschema:"Replacement text (text-match mode)"`
 }
 
 type ExecuteCommandArgs struct {
-	Command   string                   `json:"command" jsonschema:"LSP command identifier (from code action's command field)"`
-	Arguments []map[string]interface{} `json:"arguments,omitempty" jsonschema:"Command arguments as array of JSON objects"`
+	Command   string           `json:"command" jsonschema:"LSP command identifier (from code action's command field)"`
+	Arguments []map[string]any `json:"arguments,omitempty" jsonschema:"Command arguments as array of JSON objects"`
 }
 
 type DidChangeWatchedFilesArgs struct {
-	Changes []map[string]interface{} `json:"changes" jsonschema:"Array of file change events: [{uri\\, type}] where type is 1=created\\, 2=changed\\, 3=deleted"`
+	Changes []map[string]any `json:"changes" jsonschema:"Array of file change events: [{uri\\, type}] where type is 1=created\\, 2=changed\\, 3=deleted"`
 }
 
 type SetLogLevelArgs struct {
@@ -85,14 +85,14 @@ type FormatDocumentArgs struct {
 }
 
 type FormatRangeArgs struct {
-	FilePath    string `json:"file_path" jsonschema:"Absolute path to the file to format"`
-	LanguageID  string `json:"language_id,omitempty"`
-	StartLine   int    `json:"start_line" jsonschema:"1-indexed start line of the range to format"`
-	StartColumn int    `json:"start_column" jsonschema:"1-indexed start column of the range to format"`
-	EndLine     int    `json:"end_line" jsonschema:"1-indexed end line of the range to format"`
-	EndColumn   int    `json:"end_column" jsonschema:"1-indexed end column of the range to format"`
-	TabSize     int    `json:"tab_size,omitempty" jsonschema:"Tab size in spaces. Default: 4"`
-	InsertSpaces *bool `json:"insert_spaces,omitempty" jsonschema:"Use spaces instead of tabs. Default: true"`
+	FilePath     string `json:"file_path" jsonschema:"Absolute path to the file to format"`
+	LanguageID   string `json:"language_id,omitempty"`
+	StartLine    int    `json:"start_line" jsonschema:"1-indexed start line of the range to format"`
+	StartColumn  int    `json:"start_column" jsonschema:"1-indexed start column of the range to format"`
+	EndLine      int    `json:"end_line" jsonschema:"1-indexed end line of the range to format"`
+	EndColumn    int    `json:"end_column" jsonschema:"1-indexed end column of the range to format"`
+	TabSize      int    `json:"tab_size,omitempty" jsonschema:"Tab size in spaces. Default: 4"`
+	InsertSpaces *bool  `json:"insert_spaces,omitempty" jsonschema:"Use spaces instead of tabs. Default: true"`
 }
 
 type DetectLspServersArgs struct {

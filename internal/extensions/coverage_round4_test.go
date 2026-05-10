@@ -11,7 +11,7 @@ type fullMockExtension struct {
 	tools         map[string]types.ToolHandler
 	resources     map[string]types.ResourceHandler
 	subscriptions map[string]types.ResourceHandler
-	prompts       map[string]interface{}
+	prompts       map[string]any
 }
 
 func (m *fullMockExtension) ToolHandlers() map[string]types.ToolHandler {
@@ -26,14 +26,14 @@ func (m *fullMockExtension) SubscriptionHandlers() map[string]types.ResourceHand
 	return m.subscriptions
 }
 
-func (m *fullMockExtension) PromptHandlers() map[string]interface{} {
+func (m *fullMockExtension) PromptHandlers() map[string]any {
 	return m.prompts
 }
 
 func TestRegistry_SubscriptionHandlers_Prefixed(t *testing.T) {
 	resetFactories()
 
-	subHandler := func(ctx interface{}, uri string) (interface{}, error) {
+	subHandler := func(ctx any, uri string) (any, error) {
 		return "subscribed", nil
 	}
 
@@ -44,7 +44,7 @@ func TestRegistry_SubscriptionHandlers_Prefixed(t *testing.T) {
 			subscriptions: map[string]types.ResourceHandler{
 				"diagnostics": subHandler,
 			},
-			prompts: map[string]interface{}{},
+			prompts: map[string]any{},
 		}
 	})
 
@@ -70,7 +70,7 @@ func TestRegistry_PromptHandlers_Prefixed(t *testing.T) {
 			tools:         map[string]types.ToolHandler{},
 			resources:     map[string]types.ResourceHandler{},
 			subscriptions: map[string]types.ResourceHandler{},
-			prompts: map[string]interface{}{
+			prompts: map[string]any{
 				"explain": "explain prompt handler",
 			},
 		}
@@ -110,7 +110,7 @@ func TestRegistry_MultipleLanguages_MergedHandlers(t *testing.T) {
 			tools:         map[string]types.ToolHandler{},
 			resources:     map[string]types.ResourceHandler{},
 			subscriptions: map[string]types.ResourceHandler{},
-			prompts:       map[string]interface{}{"p1": "go-prompt"},
+			prompts:       map[string]any{"p1": "go-prompt"},
 		}
 	})
 	RegisterFactory("rust", func() types.Extension {
@@ -118,7 +118,7 @@ func TestRegistry_MultipleLanguages_MergedHandlers(t *testing.T) {
 			tools:         map[string]types.ToolHandler{},
 			resources:     map[string]types.ResourceHandler{},
 			subscriptions: map[string]types.ResourceHandler{},
-			prompts:       map[string]interface{}{"p1": "rust-prompt"},
+			prompts:       map[string]any{"p1": "rust-prompt"},
 		}
 	})
 
@@ -146,7 +146,7 @@ func TestRegistry_Activate_SanitizesLanguageID(t *testing.T) {
 			tools:         map[string]types.ToolHandler{},
 			resources:     map[string]types.ResourceHandler{},
 			subscriptions: map[string]types.ResourceHandler{},
-			prompts:       map[string]interface{}{},
+			prompts:       map[string]any{},
 		}
 	})
 
@@ -166,7 +166,7 @@ func TestRegistry_Activate_SanitizesLanguageID(t *testing.T) {
 func TestRegistry_ResourceHandlers_Prefixed(t *testing.T) {
 	resetFactories()
 
-	resHandler := func(ctx interface{}, uri string) (interface{}, error) {
+	resHandler := func(ctx any, uri string) (any, error) {
 		return "resource data", nil
 	}
 
@@ -177,7 +177,7 @@ func TestRegistry_ResourceHandlers_Prefixed(t *testing.T) {
 				"classpath": resHandler,
 			},
 			subscriptions: map[string]types.ResourceHandler{},
-			prompts:       map[string]interface{}{},
+			prompts:       map[string]any{},
 		}
 	})
 
@@ -190,7 +190,7 @@ func TestRegistry_ResourceHandlers_Prefixed(t *testing.T) {
 	}
 }
 
-func keysAny(m map[string]interface{}) []string {
+func keysAny(m map[string]any) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

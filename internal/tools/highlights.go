@@ -17,7 +17,7 @@ import (
 // Use this to find all local usages of a variable, parameter, or field
 // without the overhead of get_references. Returns an empty array when the
 // server does not support documentHighlightProvider.
-func HandleGetDocumentHighlights(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetDocumentHighlights(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}

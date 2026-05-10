@@ -82,7 +82,7 @@ func cleanMCPConfig(path string, dryRun bool) (int, int) {
 		return 0, 1
 	}
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not parse %s: %v\n", path, err)
 		return 0, 1
@@ -92,7 +92,7 @@ func cleanMCPConfig(path string, dryRun bool) (int, int) {
 	if !ok {
 		return 0, 1
 	}
-	servers, ok := serversRaw.(map[string]interface{})
+	servers, ok := serversRaw.(map[string]any)
 	if !ok {
 		return 0, 1
 	}

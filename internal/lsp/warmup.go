@@ -143,9 +143,9 @@ func (w *warmupState) hoverCanary(ctx context.Context, client *LSPClient, fileUR
 	canaryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	result, err := client.sendRequest(canaryCtx, "textDocument/hover", map[string]interface{}{
-		"textDocument": map[string]interface{}{"uri": fileURI},
-		"position":     map[string]interface{}{"line": 0, "character": 0},
+	result, err := client.sendRequest(canaryCtx, "textDocument/hover", map[string]any{
+		"textDocument": map[string]any{"uri": fileURI},
+		"position":     map[string]any{"line": 0, "character": 0},
 	})
 	if err != nil {
 		return false

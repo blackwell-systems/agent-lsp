@@ -82,24 +82,24 @@ func TestHandleGetChangeImpact_EmptyFiles(t *testing.T) {
 	// handler returns an ErrorResult (never a nil error) under these conditions.
 	tests := []struct {
 		name        string
-		args        map[string]interface{}
+		args        map[string]any
 		wantErrText string
 	}{
 		{
 			name: "missing changed_files key with nil client",
-			args: map[string]interface{}{},
+			args: map[string]any{},
 			// CheckInitialized fires first when client is nil.
 			wantErrText: "LSP client not initialized",
 		},
 		{
 			name: "empty changed_files slice with nil client",
-			args: map[string]interface{}{"changed_files": []interface{}{}},
+			args: map[string]any{"changed_files": []any{}},
 			// CheckInitialized fires first when client is nil.
 			wantErrText: "LSP client not initialized",
 		},
 		{
 			name: "changed_files with only empty strings with nil client",
-			args: map[string]interface{}{"changed_files": []interface{}{"", ""}},
+			args: map[string]any{"changed_files": []any{"", ""}},
 			// CheckInitialized fires first when client is nil.
 			wantErrText: "LSP client not initialized",
 		},
@@ -127,8 +127,8 @@ func TestHandleGetChangeImpact_EmptyFiles(t *testing.T) {
 
 func TestHandleGetChangeImpact_NilClient(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
-		"changed_files": []interface{}{"internal/tools/helpers.go"},
+	args := map[string]any{
+		"changed_files": []any{"internal/tools/helpers.go"},
 	}
 
 	result, err := HandleGetChangeImpact(ctx, nil, args)

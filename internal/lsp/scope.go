@@ -26,7 +26,7 @@ import (
 
 // ScopeConfig holds the state needed to clean up generated config files.
 type ScopeConfig struct {
-	GeneratedFiles []string // absolute paths of files we created
+	GeneratedFiles []string          // absolute paths of files we created
 	BackedUpFiles  map[string]string // original path -> backup path (if we overwrote)
 }
 
@@ -101,12 +101,12 @@ func generatePyrightScope(rootDir string, scopePaths []string) (*ScopeConfig, er
 		includes = append(includes, p)
 	}
 
-	config := map[string]interface{}{
-		"include":               includes,
-		"reportMissingImports":  false,
+	config := map[string]any{
+		"include":                   includes,
+		"reportMissingImports":      false,
 		"reportMissingModuleSource": false,
-		"pythonVersion":         "3.11",
-		"typeCheckingMode":      "basic",
+		"pythonVersion":             "3.11",
+		"typeCheckingMode":          "basic",
 	}
 
 	data, err := json.MarshalIndent(config, "", "  ")
@@ -153,11 +153,11 @@ func generateTSScope(rootDir string, scopePaths []string) (*ScopeConfig, error) 
 		includes = append(includes, p)
 	}
 
-	config := map[string]interface{}{
-		"compilerOptions": map[string]interface{}{
-			"target":    "ES2020",
-			"module":    "commonjs",
-			"strict":    false,
+	config := map[string]any{
+		"compilerOptions": map[string]any{
+			"target":       "ES2020",
+			"module":       "commonjs",
+			"strict":       false,
 			"skipLibCheck": true,
 		},
 		"include": includes,

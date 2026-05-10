@@ -188,10 +188,10 @@ func registerNavigationTools(d toolDeps) {
 		delta := computeDelta(diagsBefore, diagsAfter)
 
 		record := audit.Record{
-			Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
-			Tool:              "rename_symbol",
-			Files:             []string{args.FilePath},
-			EditSummary:       &audit.EditSummary{
+			Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+			Tool:      "rename_symbol",
+			Files:     []string{args.FilePath},
+			EditSummary: &audit.EditSummary{
 				Mode:    "rename",
 				NewName: args.NewName,
 			},

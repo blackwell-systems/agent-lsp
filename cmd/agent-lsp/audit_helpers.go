@@ -68,8 +68,8 @@ func fileToURI(path string) string {
 }
 
 // extractFilesFromWorkspaceEdit pulls affected file paths from a workspace_edit arg.
-func extractFilesFromWorkspaceEdit(edit map[string]interface{}) []string {
-	changes, ok := edit["changes"].(map[string]interface{})
+func extractFilesFromWorkspaceEdit(edit map[string]any) []string {
+	changes, ok := edit["changes"].(map[string]any)
 	if !ok {
 		return nil
 	}

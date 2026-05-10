@@ -58,12 +58,12 @@ func registerPhaseTools(d toolDeps) {
 
 		status := d.phaseTracker.Status()
 		data, _ := json.Marshal(map[string]any{
-			"status":         "activated",
-			"skill":          status.SkillName,
-			"mode":           status.Mode,
-			"current_phase":  status.CurrentPhase,
-			"total_phases":   status.TotalPhases,
-			"allowed_tools":  status.AllowedTools,
+			"status":          "activated",
+			"skill":           status.SkillName,
+			"mode":            status.Mode,
+			"current_phase":   status.CurrentPhase,
+			"total_phases":    status.TotalPhases,
+			"allowed_tools":   status.AllowedTools,
 			"forbidden_tools": status.ForbiddenTools,
 		})
 		return makeCallToolResult(types.TextResult(string(data))), nil, nil

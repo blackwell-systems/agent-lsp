@@ -4,10 +4,10 @@
 // A simulation session snapshots the current diagnostic state from the LSP
 // server, then tracks virtual edits applied by the agent. When the agent
 // evaluates the session, the manager:
-//   1. Applies each edit to the real LSP server (via didChange/didOpen).
-//   2. Waits for diagnostics to settle.
-//   3. Computes the diagnostic delta (new errors minus baseline errors).
-//   4. Reverts the LSP server state (via ReopenDocument from disk).
+//  1. Applies each edit to the real LSP server (via didChange/didOpen).
+//  2. Waits for diagnostics to settle.
+//  3. Computes the diagnostic delta (new errors minus baseline errors).
+//  4. Reverts the LSP server state (via ReopenDocument from disk).
 //
 // If the agent commits, edits are written to disk and the LSP state is left
 // updated. If the agent discards, everything reverts to the baseline.
@@ -27,8 +27,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
 	internaluri "github.com/blackwell-systems/agent-lsp/internal/uri"
 )

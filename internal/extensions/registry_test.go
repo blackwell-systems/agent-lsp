@@ -31,7 +31,7 @@ func (m *mockExtension) SubscriptionHandlers() map[string]types.ResourceHandler 
 	return nil
 }
 
-func (m *mockExtension) PromptHandlers() map[string]interface{} {
+func (m *mockExtension) PromptHandlers() map[string]any {
 	return nil
 }
 
@@ -85,7 +85,7 @@ func TestRegistry_Activate_KnownLanguage(t *testing.T) {
 func TestRegistry_ToolHandlers_Prefixed(t *testing.T) {
 	resetFactories()
 
-	handler := func(ctx interface{}, args map[string]interface{}) (types.ToolResult, error) {
+	handler := func(ctx any, args map[string]any) (types.ToolResult, error) {
 		return types.TextResult("ok"), nil
 	}
 	RegisterFactory("rust", func() types.Extension {

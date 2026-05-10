@@ -9,7 +9,7 @@ import (
 // --- TestHandleTypeHierarchy_NilClient ---
 
 func TestHandleTypeHierarchy_NilClient(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"file_path": "/tmp/foo.go",
 		"line":      1,
 		"column":    1,
@@ -35,7 +35,7 @@ func TestHandleTypeHierarchy_MissingFilePath(t *testing.T) {
 	// that the file_path check would fire by inspecting the handler source behavior.
 	//
 	// Practical test: when file_path is present but empty string.
-	args := map[string]interface{}{
+	args := map[string]any{
 		"file_path": "",
 		"line":      1,
 		"column":    1,
@@ -63,7 +63,7 @@ func TestHandleTypeHierarchy_MissingFilePath(t *testing.T) {
 // validation, this test uses a nil client and verifies the nil-client error path.
 // The direction validation itself is a pure string switch — tested directly below.
 func TestHandleTypeHierarchy_InvalidDirection(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"file_path": "/tmp/foo.go",
 		"line":      1,
 		"column":    1,
@@ -113,7 +113,7 @@ func TestTypeHierarchyDirectionValidation(t *testing.T) {
 func TestHandleTypeHierarchy_MissingLine(t *testing.T) {
 	// No line arg — extractPosition should return an error.
 	// CheckInitialized fires first with nil client, which is the observable behavior.
-	args := map[string]interface{}{
+	args := map[string]any{
 		"file_path": "/tmp/foo.go",
 		// line intentionally missing
 		"column": 1,

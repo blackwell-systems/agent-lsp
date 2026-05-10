@@ -6,7 +6,7 @@ import (
 )
 
 func TestHandleGetInlayHints_NilClient(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"file_path":    "/tmp/foo.go",
 		"start_line":   1,
 		"start_column": 1,
@@ -23,7 +23,7 @@ func TestHandleGetInlayHints_NilClient(t *testing.T) {
 }
 
 func TestHandleGetInlayHints_MissingFilePath(t *testing.T) {
-	r, err := HandleGetInlayHints(context.Background(), newNilClient(), map[string]interface{}{
+	r, err := HandleGetInlayHints(context.Background(), newNilClient(), map[string]any{
 		"start_line": 1, "start_column": 1, "end_line": 10, "end_column": 1,
 	})
 	if err != nil {
@@ -36,7 +36,7 @@ func TestHandleGetInlayHints_MissingFilePath(t *testing.T) {
 
 func TestHandleGetInlayHints_InvalidRange(t *testing.T) {
 	// start_line=0 is invalid (must be >= 1).
-	r, err := HandleGetInlayHints(context.Background(), newNilClient(), map[string]interface{}{
+	r, err := HandleGetInlayHints(context.Background(), newNilClient(), map[string]any{
 		"file_path":    "/tmp/foo.go",
 		"start_line":   0,
 		"start_column": 1,

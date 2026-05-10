@@ -45,9 +45,9 @@ type EvaluateSessionArgs struct {
 }
 
 type SimulateChainArgs struct {
-	SessionID string                   `json:"session_id" jsonschema:"Session identifier returned by create_simulation_session"`
-	Edits     []map[string]interface{} `json:"edits" jsonschema:"Array of edit objects, each with file_path, start_line, start_column, end_line, end_column, new_text"`
-	TimeoutMs int                      `json:"timeout_ms,omitempty" jsonschema:"Timeout in milliseconds for LSP diagnostics collection. Default: 5000"`
+	SessionID string           `json:"session_id" jsonschema:"Session identifier returned by create_simulation_session"`
+	Edits     []map[string]any `json:"edits" jsonschema:"Array of edit objects, each with file_path, start_line, start_column, end_line, end_column, new_text"`
+	TimeoutMs int              `json:"timeout_ms,omitempty" jsonschema:"Timeout in milliseconds for LSP diagnostics collection. Default: 5000"`
 }
 
 type CommitSessionArgs struct {
@@ -161,11 +161,11 @@ func registerSessionTools(d toolDeps) {
 		}
 
 		record := audit.Record{
-			Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
-			Tool:              "commit_session",
-			SessionID:         args.SessionID,
-			Files:             filesChecked,
-			EditSummary:       &audit.EditSummary{
+			Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+			Tool:      "commit_session",
+			SessionID: args.SessionID,
+			Files:     filesChecked,
+			EditSummary: &audit.EditSummary{
 				Mode:   "commit",
 				Target: args.Target,
 				Apply:  args.Apply,

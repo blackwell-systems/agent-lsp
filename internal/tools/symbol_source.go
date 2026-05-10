@@ -50,7 +50,7 @@ func findInnermostSymbol(symbols []types.DocumentSymbol, line, character int) *t
 // HandleGetSymbolSource resolves a file path, reads document symbols via LSP,
 // finds the innermost symbol containing the cursor (1-based input), slices file
 // content to that symbol's range, and returns structured JSON.
-func HandleGetSymbolSource(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGetSymbolSource(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -106,7 +106,7 @@ func HandleGetSymbolSource(ctx context.Context, client *lsp.LSPClient, args map[
 	}
 	lines := strings.Split(string(content), "\n")
 	start := sym.Range.Start.Line // 0-based
-	end := sym.Range.End.Line    // 0-based, inclusive
+	end := sym.Range.End.Line     // 0-based, inclusive
 	if start < 0 {
 		start = 0
 	}

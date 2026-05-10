@@ -10,7 +10,7 @@ import (
 // --- TestHandleGetWorkspaceSymbols_NilClient ---
 
 func TestHandleGetWorkspaceSymbols_NilClient(t *testing.T) {
-	r, err := HandleGetWorkspaceSymbols(context.Background(), newNilClient(), map[string]interface{}{})
+	r, err := HandleGetWorkspaceSymbols(context.Background(), newNilClient(), map[string]any{})
 	if err != nil {
 		t.Fatalf("unexpected Go error: %v", err)
 	}
@@ -33,42 +33,42 @@ func TestSymbolPaginationWindow(t *testing.T) {
 		wantNilPage bool
 	}{
 		{
-			name: "basic window at start",
+			name:  "basic window at start",
 			total: 10, offset: 0, limit: 3,
 			wantStart: 0, wantEnd: 3, wantMore: true,
 		},
 		{
-			name: "window in middle",
+			name:  "window in middle",
 			total: 10, offset: 3, limit: 3,
 			wantStart: 3, wantEnd: 6, wantMore: true,
 		},
 		{
-			name: "window clips at end",
+			name:  "window clips at end",
 			total: 10, offset: 8, limit: 5,
 			wantStart: 8, wantEnd: 10, wantMore: false,
 		},
 		{
-			name: "exact last page",
+			name:  "exact last page",
 			total: 6, offset: 3, limit: 3,
 			wantStart: 3, wantEnd: 6, wantMore: false,
 		},
 		{
-			name:        "offset out of bounds",
+			name:  "offset out of bounds",
 			total: 5, offset: 5, limit: 3,
 			wantNilPage: true,
 		},
 		{
-			name:        "offset beyond total",
+			name:  "offset beyond total",
 			total: 5, offset: 10, limit: 3,
 			wantNilPage: true,
 		},
 		{
-			name:        "empty result set",
+			name:  "empty result set",
 			total: 0, offset: 0, limit: 3,
 			wantNilPage: true,
 		},
 		{
-			name: "limit=1 steps one at a time",
+			name:  "limit=1 steps one at a time",
 			total: 3, offset: 1, limit: 1,
 			wantStart: 1, wantEnd: 2, wantMore: true,
 		},
@@ -109,39 +109,39 @@ func TestSymbolPaginationWindow(t *testing.T) {
 
 func TestToIntOpt(t *testing.T) {
 	cases := []struct {
-		name      string
-		args      map[string]interface{}
-		key       string
-		wantVal   int
-		wantOK    bool
+		name    string
+		args    map[string]any
+		key     string
+		wantVal int
+		wantOK  bool
 	}{
 		{
 			name:    "integer value",
-			args:    map[string]interface{}{"n": 5},
+			args:    map[string]any{"n": 5},
 			key:     "n",
 			wantVal: 5, wantOK: true,
 		},
 		{
 			name:    "float64 value (JSON number)",
-			args:    map[string]interface{}{"n": float64(7)},
+			args:    map[string]any{"n": float64(7)},
 			key:     "n",
 			wantVal: 7, wantOK: true,
 		},
 		{
 			name:   "missing key",
-			args:   map[string]interface{}{},
+			args:   map[string]any{},
 			key:    "n",
 			wantOK: false,
 		},
 		{
 			name:   "string value is invalid",
-			args:   map[string]interface{}{"n": "3"},
+			args:   map[string]any{"n": "3"},
 			key:    "n",
 			wantOK: false,
 		},
 		{
 			name:    "zero value",
-			args:    map[string]interface{}{"n": 0},
+			args:    map[string]any{"n": 0},
 			key:     "n",
 			wantVal: 0, wantOK: true,
 		},

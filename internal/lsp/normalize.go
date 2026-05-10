@@ -54,7 +54,7 @@ func NormalizeDocumentSymbols(raw json.RawMessage) ([]types.DocumentSymbol, erro
 		return fmt.Sprintf("%s\x00%d", name, kind)
 	}
 
-	nameMap := make(map[string]*types.DocumentSymbol, len(infos))   // compound key
+	nameMap := make(map[string]*types.DocumentSymbol, len(infos))    // compound key
 	nameByBare := make(map[string]*types.DocumentSymbol, len(infos)) // bare name for container lookup
 	symPtrs := make([]*types.DocumentSymbol, len(infos))
 	for i, info := range infos {

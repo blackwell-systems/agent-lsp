@@ -21,7 +21,7 @@ func TestDocResultMarshal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal error: %v", err)
 	}
-	var m map[string]interface{}
+	var m map[string]any
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatalf("unmarshal error: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestStripANSI(t *testing.T) {
 // TestGoDocDispatch_MissingSymbol verifies that calling with empty symbol returns ErrorResult.
 func TestGoDocDispatch_MissingSymbol(t *testing.T) {
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"symbol":      "",
 		"language_id": "go",
 	}
@@ -75,7 +75,7 @@ func TestGoDocDispatch_MissingSymbol(t *testing.T) {
 func TestGoDocDispatch_UnsupportedLang(t *testing.T) {
 	ctx := context.Background()
 	for _, lang := range []string{"typescript", "javascript", "cobol"} {
-		args := map[string]interface{}{
+		args := map[string]any{
 			"symbol":      "someSymbol",
 			"language_id": lang,
 		}
@@ -109,7 +109,7 @@ func TestGoDocDispatch_Integration(t *testing.T) {
 		t.Skip("go binary not in PATH; skipping integration test")
 	}
 	ctx := context.Background()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"symbol":      "fmt.Println",
 		"language_id": "go",
 	}

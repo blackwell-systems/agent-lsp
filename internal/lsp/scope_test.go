@@ -25,12 +25,12 @@ func TestGenerateScopeConfig_Python(t *testing.T) {
 		t.Fatalf("failed to read pyrightconfig.json: %v", err)
 	}
 
-	var config map[string]interface{}
+	var config map[string]any
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatalf("failed to parse pyrightconfig.json: %v", err)
 	}
 
-	includes, ok := config["include"].([]interface{})
+	includes, ok := config["include"].([]any)
 	if !ok {
 		t.Fatal("pyrightconfig.json missing 'include' array")
 	}
@@ -69,12 +69,12 @@ func TestGenerateScopeConfig_TypeScript(t *testing.T) {
 		t.Fatalf("failed to read tsconfig.json: %v", err)
 	}
 
-	var config map[string]interface{}
+	var config map[string]any
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatalf("failed to parse tsconfig.json: %v", err)
 	}
 
-	includes, ok := config["include"].([]interface{})
+	includes, ok := config["include"].([]any)
 	if !ok {
 		t.Fatal("tsconfig.json missing 'include' array")
 	}
@@ -166,7 +166,7 @@ func TestGenerateScopeConfig_BackupExisting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var genConfig map[string]interface{}
+	var genConfig map[string]any
 	if err := json.Unmarshal(genData, &genConfig); err != nil {
 		t.Fatal(err)
 	}

@@ -99,4 +99,3 @@ func (n *StaleNotifier) flush() {
 	data, _ := json.Marshal(payload)
 	n.hub.Send("info", "file_watcher", string(data))
 }
-

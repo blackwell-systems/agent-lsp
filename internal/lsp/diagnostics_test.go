@@ -28,12 +28,12 @@ func TestWaitForDiagnostics_SettlesAfterQuietWindow(t *testing.T) {
 	for round := 0; round < 2; round++ {
 		time.Sleep(10 * time.Millisecond)
 		for _, uri := range uris {
-			if err := writeMsg(serverW, map[string]interface{}{
+			if err := writeMsg(serverW, map[string]any{
 				"jsonrpc": "2.0",
 				"method":  "textDocument/publishDiagnostics",
-				"params": map[string]interface{}{
+				"params": map[string]any{
 					"uri":         uri,
-					"diagnostics": []interface{}{},
+					"diagnostics": []any{},
 				},
 			}); err != nil {
 				t.Fatalf("write diag round %d: %v", round, err)
@@ -217,20 +217,20 @@ func TestWaitForFileIndexed_StabilityWindowReset(t *testing.T) {
 
 	// Send first notification.
 	time.Sleep(50 * time.Millisecond)
-	if err := writeMsg(serverW, map[string]interface{}{
+	if err := writeMsg(serverW, map[string]any{
 		"jsonrpc": "2.0",
 		"method":  "textDocument/publishDiagnostics",
-		"params":  map[string]interface{}{"uri": uri, "diagnostics": []interface{}{}},
+		"params":  map[string]any{"uri": uri, "diagnostics": []any{}},
 	}); err != nil {
 		t.Fatalf("write first notification: %v", err)
 	}
 
 	// Send second notification 200ms later (within stability window).
 	time.Sleep(200 * time.Millisecond)
-	if err := writeMsg(serverW, map[string]interface{}{
+	if err := writeMsg(serverW, map[string]any{
 		"jsonrpc": "2.0",
 		"method":  "textDocument/publishDiagnostics",
-		"params":  map[string]interface{}{"uri": uri, "diagnostics": []interface{}{}},
+		"params":  map[string]any{"uri": uri, "diagnostics": []any{}},
 	}); err != nil {
 		t.Fatalf("write second notification: %v", err)
 	}
@@ -285,12 +285,12 @@ func TestWaitForDiagnostics_OnlyFreshNotifications(t *testing.T) {
 	}()
 
 	time.Sleep(10 * time.Millisecond)
-	if err := writeMsg(serverW, map[string]interface{}{
+	if err := writeMsg(serverW, map[string]any{
 		"jsonrpc": "2.0",
 		"method":  "textDocument/publishDiagnostics",
-		"params": map[string]interface{}{
+		"params": map[string]any{
 			"uri":         uri,
-			"diagnostics": []interface{}{},
+			"diagnostics": []any{},
 		},
 	}); err != nil {
 		t.Fatalf("write: %v", err)

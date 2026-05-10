@@ -99,7 +99,7 @@ func TestResourceResultJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal: %v", err)
 	}
-	var out map[string]interface{}
+	var out map[string]any
 	if err := json.Unmarshal(data, &out); err != nil {
 		t.Fatalf("json.Unmarshal: %v", err)
 	}

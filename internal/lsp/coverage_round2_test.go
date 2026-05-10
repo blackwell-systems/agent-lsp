@@ -107,9 +107,9 @@ func TestLanguageIDFromURI_Extended(t *testing.T) {
 func TestHasCapability(t *testing.T) {
 	c := NewLSPClient("fake", nil)
 	// Set capabilities directly.
-	c.capabilities = map[string]interface{}{
+	c.capabilities = map[string]any{
 		"hoverProvider":      true,
-		"completionProvider": map[string]interface{}{"triggerCharacters": []string{"."}},
+		"completionProvider": map[string]any{"triggerCharacters": []string{"."}},
 		"renameProvider":     false,
 		"nilValue":           nil,
 	}
@@ -119,10 +119,10 @@ func TestHasCapability(t *testing.T) {
 		want bool
 	}{
 		{"hoverProvider", true},
-		{"completionProvider", true},   // non-nil map
-		{"renameProvider", false},      // bool false
-		{"nilValue", false},            // nil value
-		{"missingKey", false},          // absent
+		{"completionProvider", true}, // non-nil map
+		{"renameProvider", false},    // bool false
+		{"nilValue", false},          // nil value
+		{"missingKey", false},        // absent
 	}
 	for _, tc := range cases {
 		got := c.hasCapability(tc.key)

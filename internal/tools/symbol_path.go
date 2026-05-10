@@ -17,7 +17,7 @@ import (
 // args["symbol_path"]: dot-notation string e.g. "MyClass.method", "pkg.Function"
 // args["workspace_root"]: optional scope (unused in lookup, reserved for future filtering)
 // args["language"]: optional filter (reserved for future filtering)
-func HandleGoToSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]interface{}) (types.ToolResult, error) {
+func HandleGoToSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
