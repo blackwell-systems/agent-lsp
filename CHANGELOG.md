@@ -27,6 +27,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 - **Intent-based tool descriptions and titles.** All 7 renamed tools now have descriptions focused on agent intent rather than LSP protocol details. Titles updated to match (e.g., "Inspect Symbol" instead of "Get Hover Info", "Preview Edit" instead of "Simulate Edit (Atomic)").
 
+- **Cross-referencing in tool descriptions.** Tools now suggest related tools: `apply_edit` recommends `replace_symbol_body` for full function replacements and `preview_edit` before applying. `find_references` recommends `safe_delete_symbol` for zero-reference symbols and `get_change_impact` for blast-radius analysis. `suggest_fixes` points to `/lsp-fix-all` skill. `rename_symbol` recommends `find_references` before renaming exports.
+
+- **"No verification needed" assertions.** `preview_edit` description now states: "If net_delta is 0, the edit is safe to apply without further verification." Reduces unnecessary follow-up tool calls after clean previews.
+
 ### Fixed
 
 - **Go test path format.** `run_tests` with bare paths like `internal/notify` were interpreted as stdlib packages by `go test`. Now auto-prefixes `./` and appends `/...` for Go paths that don't start with `.` or `/`.

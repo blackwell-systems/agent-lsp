@@ -404,7 +404,7 @@ func registerWorkspaceTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "apply_edit",
-		Description: "Apply an edit to a file. Two modes: (1) WorkspaceEdit mode — pass workspace_edit with positional changes returned by rename_symbol or format_document; (2) Text-match mode — pass file_path + old_text + new_text to find and replace text without needing line/column positions. Text-match tries exact match first, then whitespace-normalised line match (handles indentation differences). Use text-match when AI-generated positions would be imprecise.",
+		Description: "Apply an edit to a file. Two modes: (1) WorkspaceEdit mode: pass workspace_edit with positional changes returned by rename_symbol or format_document; (2) Text-match mode: pass file_path + old_text + new_text to find and replace text. For full function/method body replacements, consider replace_symbol_body which resolves by symbol name instead of text matching. Always call preview_edit first to verify the edit is safe.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Apply Edit",
 			ReadOnlyHint:    false,

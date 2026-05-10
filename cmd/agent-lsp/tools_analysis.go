@@ -126,7 +126,7 @@ type GetCrossRepoReferencesArgs struct {
 func registerAnalysisTools(d toolDeps) {
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "inspect_symbol",
-		Description: "Get type information, documentation, and signature for a symbol at a specific location. Use this to understand what a function does, what type a variable has, or what a module exports before editing it.",
+		Description: "Get type information, documentation, and signature for a symbol at a specific location. Use this to understand what a function does, what type a variable has, or what a module exports before editing it. For finding all usages of the symbol, use find_references instead.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Inspect Symbol",
 			ReadOnlyHint:    true,
@@ -168,7 +168,7 @@ func registerAnalysisTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "suggest_fixes",
-		Description: "Get available quick fixes and code actions for a diagnostic or code range. Returns actionable fixes (add missing import, implement interface, fix type error) that can be applied via apply_edit.",
+		Description: "Get available quick fixes and code actions for a diagnostic or code range. Returns actionable fixes (add missing import, implement interface, fix type error) that can be applied via apply_edit. To auto-fix all diagnostics in a file, use the /lsp-fix-all skill via prompts/get.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Suggest Fixes",
 			ReadOnlyHint:    true,
@@ -210,7 +210,7 @@ func registerAnalysisTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "find_references",
-		Description: "Find all usages of a symbol across the codebase. Use before renaming, deleting, or changing any symbol to understand who calls it. Zero references means the symbol may be dead code. Always call this before editing exported symbols.",
+		Description: "Find all usages of a symbol across the codebase. Use before renaming, deleting, or changing any symbol to understand who calls it. Zero references means the symbol may be dead code; use safe_delete_symbol to remove it safely. For blast-radius analysis with test/non-test partitioning, use get_change_impact instead.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Find References",
 			ReadOnlyHint:    true,

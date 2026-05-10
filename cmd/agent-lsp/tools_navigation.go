@@ -168,7 +168,7 @@ func registerNavigationTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "rename_symbol",
-		Description: "Get a WorkspaceEdit for renaming a symbol across the entire workspace via LSP. Returns the edit object — NOT applied automatically. Use dry_run=true to preview what would change (returns workspace_edit + note). Use position_pattern with @@ marker for reliable position targeting instead of line/column. Inspect the returned WorkspaceEdit then call apply_edit to commit. Optional exclude_globs (array of glob patterns, e.g. [\"vendor/**\", \"**/*_gen.go\"]) skips matching files from the rename — useful for generated code, vendored files, and test fixtures.",
+		Description: "Rename a symbol across the entire workspace via LSP. Returns a WorkspaceEdit (not applied automatically). Always use dry_run=true first to preview changes. Call find_references before renaming exported symbols to understand blast radius. After applying via apply_edit, call get_diagnostics to verify no errors were introduced.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Rename Symbol",
 			ReadOnlyHint:    true,

@@ -214,7 +214,7 @@ func registerSessionTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "preview_edit",
-		Description: "Preview the impact of an edit before writing to disk. Shows what errors would be introduced or resolved without touching the file. net_delta: 0 means safe to apply. Use before every apply_edit to catch problems early. All line/column positions are 1-indexed.",
+		Description: "Preview the impact of an edit before writing to disk. Shows what errors would be introduced or resolved without touching the file. If net_delta is 0, the edit is safe to apply without further verification. Use before every apply_edit to catch problems early. All line/column positions are 1-indexed. For full function replacements, consider replace_symbol_body instead of apply_edit.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Preview Edit",
 			ReadOnlyHint:    false,
