@@ -10,7 +10,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `start_lsp` | Initialize LSP server with workspace root | `root_dir` (string, req), `language_id` (string, opt), `ready_timeout_seconds` (int, opt) |
+| `start_lsp` | Initialize LSP server with workspace root | `root_dir` (string, req), `language_id` (string, opt), `connect` (string, opt), `ready_timeout_seconds` (int, opt) |
 | `restart_lsp_server` | Restart current LSP server process | `root_dir` (string, opt) |
 | `open_document` | Register file with language server | `file_path` (string, req), `language_id` (string, opt), `text` (string, opt) |
 | `close_document` | Unregister file from language server | `file_path` (string, req) |
@@ -20,8 +20,9 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `get_server_capabilities` | Get LSP server capability map | none |
 
 **`start_lsp` notes:**
-- Shuts down existing LSP process before starting new one — no resource leak
+- Shuts down existing LSP process before starting new one, no resource leak
 - Language server initialized but may not have finished indexing on return
+- `connect` parameter enables passive mode: connect to an already-running language server via TCP (e.g. `gopls -listen=:9999`) instead of spawning a new process. Reuses the IDE's warm index with zero duplicate memory. Supported by gopls, clangd, and other servers with TCP listen mode.
 - `ready_timeout_seconds` — blocks until all `$/progress` workspace-indexing tokens complete before returning, up to the specified timeout; fires as soon as indexing completes (does not always wait the full timeout); grace period for late-emitting servers; also exports `WaitForWorkspaceReadyTimeout` on `LSPClient` for programmatic use beyond the default 60s cap
 - `get_references` waits for all `$/progress end` events before returning on large projects
 - `language_id` selects specific server in multi-server mode; omit to start all

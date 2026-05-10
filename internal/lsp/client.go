@@ -137,7 +137,10 @@ type LSPClient struct {
 	// daemon mode fields
 	isDaemon   bool        // true if connected to a daemon broker (not a direct subprocess)
 	daemonInfo *DaemonInfo // metadata about the connected daemon
-	socketConn net.Conn    // Unix socket connection (nil for direct subprocess mode)
+	socketConn net.Conn    // socket connection (Unix for daemon, TCP for passive; nil for subprocess)
+
+	// passive mode: connected to an externally-managed language server via TCP
+	isPassive bool
 
 	// pending RPC requests
 	pendingMu sync.Mutex
@@ -274,6 +277,44 @@ func NewDaemonClient(info *DaemonInfo) (*LSPClient, error) {
 	go c.readLoop()
 
 	return c, nil
+}
+
+// NewPassiveClient creates an LSPClient connected to an already-running
+// language server via TCP. Unlike NewLSPClient, it does not spawn a subprocess.
+// Unlike NewDaemonClient, it performs a real Initialize handshake to discover
+// the server's capabilities. Use this when the IDE already has a language
+// server running (e.g., gopls -listen=:9999).
+func NewPassiveClient(addr string) (*LSPClient, error) {
+	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to language server at %s: %w", addr, err)
+	}
+
+	c := &LSPClient{
+		pending:        make(map[int]*pendingRequest),
+		openDocs:       make(map[string]docMeta),
+		diags:          make(map[string][]types.LSPDiagnostic),
+		progressTokens: make(map[interface{}]struct{}),
+		capabilities:   make(map[string]interface{}),
+		warmup:         newWarmupState(),
+		isPassive:      true,
+		socketConn:     conn,
+		stdin:          conn,
+		frameReader:    NewFrameReader(conn),
+	}
+	c.nextID.Store(0)
+	c.progressCond = sync.NewCond(&c.progressMu)
+
+	go c.readLoop()
+
+	return c, nil
+}
+
+// IsPassive returns true if this client is connected to an external language
+// server via TCP (passive mode). The server is not owned by agent-lsp and
+// will not be killed on shutdown.
+func (c *LSPClient) IsPassive() bool {
+	return c.isPassive
 }
 
 // IsDaemon returns true if this client is connected to a daemon broker.
@@ -1006,8 +1047,8 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 // For direct-mode clients, it sends shutdown/exit, waits up to 3 seconds for
 // the process to exit, then force-kills it to prevent orphaned processes.
 func (c *LSPClient) Shutdown(ctx context.Context) error {
-	// Daemon mode: just close the socket, don't kill the server.
-	if c.isDaemon {
+	// Daemon and passive mode: just close the socket, don't kill the server.
+	if c.isDaemon || c.isPassive {
 		c.mu.Lock()
 		conn := c.socketConn
 		c.socketConn = nil

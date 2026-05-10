@@ -242,8 +242,8 @@ Some language servers support multi-client connections over TCP (gopls supports 
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **`--connect` transport** | Planned | Connect to an existing language server TCP socket instead of spawning a new process |
-| **Shared index** | Planned | Reuse the IDE's warm language server index; no duplicate indexing or memory overhead |
+| **`connect` parameter on `start_lsp`** | **Shipped** | Connect to an existing language server via TCP (e.g. `gopls -listen=:9999`) instead of spawning a new process. Reuses the IDE's warm index with zero duplicate memory. |
+| **Shared index** | **Shipped** | Passive mode reuses the IDE's warm language server index; no duplicate indexing or memory overhead. |
 
 ### IDE extensions
 

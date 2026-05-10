@@ -30,6 +30,7 @@ import (
 type StartLspArgs struct {
 	RootDir              string  `json:"root_dir" jsonschema:"Workspace root directory containing the project (e.g. directory with go.mod, package.json)"`
 	LanguageID           string  `json:"language_id,omitempty" jsonschema:"Language server to start (e.g. go, typescript, rust). Optional; auto-detected"`
+	Connect              string  `json:"connect,omitempty" jsonschema:"Connect to an already-running language server at this TCP address (e.g. localhost:9999) instead of spawning a new process. Reuses the existing server's warm index. Supported by gopls (gopls -listen=:9999) and some other servers."`
 	ReadyTimeoutSeconds  float64 `json:"ready_timeout_seconds,omitempty" jsonschema:"If > 0, block until all $/progress workspace-indexing tokens complete or this many seconds elapse. Useful for servers like jdtls that index asynchronously after initialize."`
 	Scope                string  `json:"scope,omitempty" jsonschema:"Limit indexing to specific subdirectories. Accepts a path string or array of paths relative to root_dir. Generates a temporary language-server config (pyrightconfig.json, tsconfig.json) that restricts analysis scope. Use on large monorepos to prevent reference query timeouts."`
 }
@@ -134,6 +135,23 @@ func registerWorkspaceTools(d toolDeps) {
 			OpenWorldHint:   boolPtr(false),
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args StartLspArgs) (*mcp.CallToolResult, any, error) {
+		// Passive mode: connect to an already-running language server via TCP.
+		if args.Connect != "" {
+			if existing := d.cs.get(); existing != nil {
+				_ = existing.Shutdown(ctx)
+			}
+			client, err := lsp.NewPassiveClient(args.Connect)
+			if err != nil {
+				return makeCallToolResult(types.ErrorResult(fmt.Sprintf("passive connect failed: %s", err))), nil, nil
+			}
+			if err := client.Initialize(ctx, args.RootDir); err != nil {
+				_ = client.Shutdown(ctx)
+				return makeCallToolResult(types.ErrorResult(fmt.Sprintf("passive initialize failed: %s", err))), nil, nil
+			}
+			d.cs.set(client)
+			return makeCallToolResult(types.TextResult("Connected to existing language server at " + args.Connect)), nil, nil
+		}
+
 		if sm, ok := d.resolver.(*lsp.ServerManager); ok {
 			if args.LanguageID != "" {
 				// Apply workspace scoping before starting the language server.

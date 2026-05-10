@@ -31,10 +31,23 @@ func HandleStartLsp(
 		_ = existing.Shutdown(ctx) // best-effort
 	}
 
+	// Passive mode: connect to an already-running language server via TCP.
+	// Skips subprocess spawn; reuses the IDE's warm index.
+	if connectAddr, ok := args["connect"].(string); ok && connectAddr != "" {
+		client, err := lsp.NewPassiveClient(connectAddr)
+		if err != nil {
+			return types.ErrorResult(fmt.Sprintf("passive connect failed: %s", err)), nil
+		}
+		if err := client.Initialize(ctx, rootDir); err != nil {
+			_ = client.Shutdown(ctx)
+			return types.ErrorResult(fmt.Sprintf("passive initialize failed: %s", err)), nil
+		}
+		setClient(client)
+		return appendHint(types.TextResult("Connected to existing language server at "+connectAddr), "Workspace initialized. Use get_document_symbols or get_diagnostics to begin analysis."), nil
+	}
+
 	// Optional workspace scoping: generate a language-server config file that
-	// limits indexing to specific subdirectories. This enables agent-lsp to work
-	// on large monorepos (e.g., 12M-line Python repos) without reference query
-	// timeouts from full-workspace indexing.
+	// limits indexing to specific subdirectories.
 	var scopeConfig *lsp.ScopeConfig
 	if rawScope, ok := args["scope"]; ok {
 		scopePaths := ParseScopePaths(rawScope)

@@ -5,6 +5,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **Passive mode (`connect` parameter on `start_lsp`).** Connect to an already-running language server via TCP instead of spawning a new process. Pass `connect: "localhost:9999"` to reuse the IDE's warm index with zero duplicate memory or indexing. Supported by gopls (`gopls -listen=:9999`), clangd, and other servers with TCP listen mode. On shutdown, agent-lsp closes the TCP connection without killing the server process.
+
 ## [0.8.1] - 2026-05-09
 
 ### Added

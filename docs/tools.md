@@ -41,6 +41,7 @@ workspace root at runtime.
 |------|------|----------|-------------|
 | `root_dir` | string | yes | Absolute path to the workspace root (directory containing `package.json`, `go.mod`, `go.work`, etc.) |
 | `language_id` | string | no | In multi-server mode, selects a specific configured server (e.g. `"go"` targets gopls, `"typescript"` targets typescript-language-server). Without this, all configured servers are started. Use `get_server_capabilities` to diagnose which server is active. |
+| `connect` | string | no | Connect to an already-running language server at this TCP address (e.g. `localhost:9999`) instead of spawning a new process. Reuses the existing server's warm index with zero duplicate memory. Supported by gopls (`gopls -listen=:9999`), clangd, and other servers with TCP listen mode. |
 | `ready_timeout_seconds` | number | no | If > 0, blocks until all `$/progress` workspace-indexing tokens complete or this many seconds elapse. Useful for servers like jdtls that index asynchronously after initialize. Fires as soon as indexing completes (does not always wait the full timeout). |
 
 **Example call**
