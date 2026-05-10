@@ -219,19 +219,19 @@ The inspector skill is agent-lsp's most powerful quality tool: it found a nil se
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Severity calibration** | Planned | Weight findings by "would a maintainer accept a PR for this?" Crash paths rank higher than style nits. Filter out findings that produce noise without actionable value. |
-| **Fix suggestions** | Planned | Each finding includes the specific fix: "remove lines 42-58" for dead code, "change `return err` to `fmt.Errorf('context: %w', err)`" for error wrapping. Agents can generate a PR directly from inspector output without additional analysis. |
-| **Batch mode** | Planned | Accept a directory and walk all packages, producing a ranked report. "Top 10 findings in this repo, sorted by severity and blast radius." Currently requires listing individual files. |
-| **Comparison mode** | Planned | Run on a PR diff: "what did this change introduce?" Compare before/after inspection results to surface new dead code, new silent failures, or new coverage gaps introduced by the change. |
+| **Severity calibration** | **Shipped** | Weight findings by blast radius using caller counts from `get_change_impact`. A silent failure in a function with 50 callers ranks higher than one with 2. Crash paths rank higher than style nits. Filter out findings that produce noise without actionable value. |
+| **Fix suggestions** | **Shipped** | Each finding includes the specific fix: "remove lines 42-58" for dead code, "change `return err` to `fmt.Errorf('context: %w', err)`" for error wrapping. Agents can generate a PR directly from inspector output without additional analysis. |
+| **Batch mode** | **Shipped** | Accept a directory with `--top N` flag, walk all packages, produce a ranked report. "Top 10 findings in this repo, sorted by severity and blast radius." |
+| **Comparison mode** | **Shipped** | Run on a PR diff with `--diff` flag: "what did this change introduce?" Compare before/after inspection results to surface new dead code, new silent failures, or new coverage gaps introduced by the change. |
 
 **Underlying tool improvements (Go code changes):**
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Cross-file impact scoring** | Planned | Weight each finding by its blast radius using `get_change_impact` data. A silent failure in a function with 50 callers ranks higher than one with 2. Requires the inspector to call `get_change_impact` per finding and include `caller_count` in the output. |
-| **Confidence tiers** | Planned | Replace "high/medium/low" with actionable labels: "verified" (LSP confirmed, act immediately), "suspected" (pattern match, investigate first), "advisory" (style suggestion, optional). Requires changes to the inspector output format and the check taxonomy in the SKILL.md. |
-| **Unexported dead code detection** | Planned | Extend `get_change_impact` or add a new tool parameter (`scope: "all"`) to check unexported symbols in addition to exported ones. Currently only exported symbols are checked because `collectExportedSymbols` filters by uppercase. Requires walking all document symbols and checking references for each. |
-| **Inspector result as MCP resource** | Planned | Expose the last inspector run as an MCP resource at `inspect://` so agents can re-read findings without re-running the full analysis. Useful for iterative fix-verify cycles. |
+| **Cross-file impact scoring** | **Shipped** | Weight each finding by its blast radius using `get_change_impact` data. A silent failure in a function with 50 callers ranks higher than one with 2. The inspector calls `get_change_impact` per finding and includes `caller_count` in the output. |
+| **Confidence tiers** | **Shipped** | Replace "high/medium/low" with actionable labels: "verified" (LSP confirmed, act immediately), "suspected" (pattern match, investigate first), "advisory" (style suggestion, optional). Applied to the inspector output format and the check taxonomy in the SKILL.md. |
+| **Unexported dead code detection** | **Shipped** | Extend `get_change_impact` with a new `scope` parameter (`scope: "all"`) to check unexported symbols in addition to exported ones. Uses `collectAllSymbols` to walk all document symbols and check references for each. |
+| **Inspector result as MCP resource** | **Shipped** | Expose the last inspector run as an MCP resource at `inspect://last`. Results persisted to `.agent-lsp/last-inspection.json`. Agents can re-read findings without re-running the full analysis. Useful for iterative fix-verify cycles. |
 
 ## Skills
 
