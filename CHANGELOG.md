@@ -25,6 +25,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 - **Flaky `TestSubscribeHealth_Stop`.** Timing race on CI: health poller could fire one message before the stop channel was read. Fixed by comparing message count before/after stop instead of asserting absolute zero.
 
+- **`get_change_impact` per-symbol test callers.** Response now includes `affected_symbols` with per-symbol `test_callers` and `non_test_callers` lists. Agents can see which tests cover each specific method, not just a flat list for the file. Backward compatible: existing top-level fields remain.
+
+- **`destroy_session` no longer returns an error on missing sessions.** Returns success with `status: "already_destroyed"` instead of `isError: true`. Agents calling `destroy_session` after `preview_edit` (which auto-cleans up) no longer see a confusing error.
+
 - **`preview_edit` net_delta no longer counts hints.** `DiffDiagnostics` now filters out severity 3 (info) and 4 (hint) before computing the delta. Previously, hints like "interface{} can be replaced by any" counted toward net_delta, making preview_edit report confusing deltas unrelated to the actual edit. Found by GPT-5.5 agent evaluation.
 
 - **`destroy_session` error message improved.** Now explains that `preview_edit` creates and destroys sessions automatically, so a separate `destroy_session` call is not needed. Addresses confusion from agent evaluations where models called destroy_session after preview_edit and got errors.
