@@ -130,13 +130,11 @@ func runInit(args []string) {
 				fmt.Printf("Wrote skill awareness rules to: %s\n", rulesPath)
 			}
 		} else {
-			// Other providers: write/overwrite the rules file.
-			if err := os.MkdirAll(filepath.Dir(rulesPath), 0o755); err == nil {
-				if err := os.WriteFile(rulesPath, []byte(rulesContent), 0o644); err != nil {
-					fmt.Fprintf(os.Stderr, "warning: could not write rules to %s: %v\n", rulesPath, err)
-				} else {
-					fmt.Printf("Wrote skill awareness rules to: %s\n", rulesPath)
-				}
+			// Other providers: use managed section to preserve existing content.
+			if err := writeManagedSection(rulesPath, rulesContent); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not write rules to %s: %v\n", rulesPath, err)
+			} else {
+				fmt.Printf("Wrote skill awareness rules to: %s\n", rulesPath)
 			}
 		}
 	}
