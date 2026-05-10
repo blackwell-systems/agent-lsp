@@ -1555,6 +1555,61 @@ This is useful for agents that want to read a function body without manually cou
 
 ---
 
+## Proactive Notifications (`internal/notify`)
+
+The notify package provides server-initiated notifications that inform the agent about state changes without requiring a tool call. Notifications flow from the LSP client layer through a central Hub to the MCP transport.
+
+### Notification flow
+
+```
+LSP subprocess (gopls/pyright)
+    │
+    │  publishDiagnostics / $/progress / exit
+    ▼
+internal/lsp/client_notify.go
+    │  SubscribeToFileChanges, IsAlive, IsWorkspaceLoaded hooks
+    ▼
+internal/notify/ subscribers
+    │  diagDebouncer (2s), SubscribeWorkspaceReady (poll),
+    │  SubscribeHealth (poll), StaleNotifier (3s debounce)
+    ▼
+notify.Hub
+    │  Send (logging/message), SendResourceUpdate (notifications/resources/updated)
+    ▼
+NotificationSender (MCP ServerSession)
+    │
+    │  MCP JSON-RPC notification
+    ▼
+AI agent
+```
+
+### Four notification channels
+
+| Channel | Trigger | MCP primitive | Debounce |
+|---------|---------|---------------|----------|
+| Diagnostic changes | `publishDiagnostics` from language server | `notifications/resources/updated` | 2 seconds (coalesces rapid updates during indexing) |
+| Workspace ready | All `$/progress` tokens complete | `logging/message` (JSON payload) | None (one-shot) |
+| Process health | Language server crash or recovery | `logging/message` (JSON payload) | None (immediate on state transition) |
+| Stale references | File changes on disk (file watcher) | `notifications/resources/updated` + `logging/message` | 3 seconds |
+
+### Hub design
+
+`notify.Hub` is the central coordinator. It holds a `NotificationSender` interface (set once the MCP session is established) and provides `Send` (for log-level notifications) and `SendResourceUpdate` (for resource change signals). The Hub collects stop functions via `AddStopFunc` and calls them on `Close`, tearing down all subscriber goroutines cleanly. All methods are thread-safe via `sync.RWMutex`.
+
+### LSPClient hooks (`internal/lsp/client_notify.go`)
+
+Three methods on `LSPClient` support the notification subscribers:
+
+- `SubscribeToFileChanges(callback)`: registers a callback invoked when the file watcher detects disk changes. Stored in a `fileChangeCbs` slice on the client struct.
+- `IsAlive() bool`: returns whether the language server subprocess is still running.
+- `IsWorkspaceLoaded() bool`: returns whether all `$/progress` indexing tokens have completed.
+
+### Wiring (Wave 2, not yet merged)
+
+Wave 2 will connect the Hub to the MCP server in `cmd/agent-lsp/notifications.go`, calling `hub.SetSender` once the MCP session initializes and `hub.Close` on shutdown.
+
+---
+
 ## See also
 
 - [Home](index.md): project overview, setup, and quick start
