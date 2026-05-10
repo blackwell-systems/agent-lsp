@@ -149,6 +149,20 @@ Layer 1 (`Instructions`) is the missing piece. Implementation: set `ServerOption
 | **`Instructions` on initialize** | Planned | Set `ServerOptions.Instructions` with condensed skill overview: tool count, key workflows (blast radius before edit, simulate before apply), pointer to `prompts/get` for full details. Under 200 tokens. Every MCP client receives it automatically. |
 | **`agent-lsp init` rules files** | Planned | When init targets Cursor, also write `.cursorrules`. Windsurf gets `.windsurfrules`. Claude Code gets CLAUDE.md skill section. Same content adapted to each provider's format. Supplements Layer 1 for clients that support persistent rules. |
 
+**Per-platform rules file mapping:**
+
+| Platform | Choice in `init` | Rules File | Format |
+|----------|-----------------|------------|--------|
+| Claude Code (project) | 1 | `CLAUDE.md` managed section (between sentinel comments) | Markdown |
+| Claude Code (global) | 2 | `~/.claude/CLAUDE.md` managed section | Markdown |
+| Claude Desktop | 3 | N/A (uses `Instructions` only) | N/A |
+| Cursor | 4 | `.cursor/rules/agent-lsp.mdc` | Cursor rules MDC |
+| Cline | 5 | `.clinerules` | Markdown |
+| Windsurf | 6 | `.windsurfrules` | Markdown |
+| Gemini CLI | 7 | `GEMINI.md` | Markdown |
+
+Content is identical across platforms (skill table, tool usage guidance, LSP-first preferences). Generated from SKILL.md files at build time via `go:embed`, keeping rules in sync with shipped skills automatically. The `init` command already knows which platform was selected; it writes the rules file alongside the MCP config in the same step.
+
 ## Skills
 
 22 skills shipped. See [skills.md](skills.md) for the full catalog.
