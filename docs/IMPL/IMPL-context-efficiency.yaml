@@ -507,6 +507,7 @@ waves:
           files:
             - internal/tools/etag.go
             - internal/tools/etag_test.go
+      base_commit: f585c3dbf344ef6f1d07b0600e578cf540bda6ab
     - number: 2
       agents:
         - id: D
@@ -740,5 +741,4 @@ critic_report:
     summary: 'Re-review after fix: Agent A now correctly references GetInfoOnLocation(ctx, uri, pos) (string, error) instead of the non-existent GetHover. All symbols verified against source: GetInfoOnLocation, GetDocumentSymbols, GetReferencesRaw, PrepareCallHierarchy, GetOutgoingCalls, LanguageIDFromPath, ValidateFilePath, WithDocument, CreateFileURI, isTestFile all exist with matching signatures. File existence checks pass (all 8 new files do not exist, all 3 modify files exist). Pattern accuracy confirmed for Agent D (appendHint/TextResult returns in analysis.go match brief). Registration pattern (addToolWithPhaseCheck, registerSessionTools) confirmed. Ownership is disjoint across waves. No errors found.'
     reviewed_at: "2026-05-10T19:12:40Z"
     issue_count: 0
-state: "REVIEWED"
-original_branch: main
+state: REVIEWED
