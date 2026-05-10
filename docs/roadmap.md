@@ -138,6 +138,7 @@ The gap between what clangd provides and what the broader toolchain offers is la
 | **`get_editing_context` (composite tool)** | Planned | Single "give me everything I need before editing this file" call. Returns: all symbols with signatures, callers (test/non-test partitioned), callees, imports. Composes existing `list_symbols` + `get_change_impact` data into one response. Eliminates the 3-5 tool call sequence agents currently use to gather pre-edit context. |
 | **Token savings in responses** | Planned | Include token count metadata in tool responses: "returned 847 tokens (vs ~12,400 for full file read)." Makes the efficiency story visible on every call without requiring a dashboard. |
 | **ETag/conditional responses** | Planned | Support `If-None-Match` style caching on tool responses. If the file hasn't changed since the last query, return a "not modified" stub instead of re-computing. Reduces redundant work on repeat queries (common in agent loops that re-check diagnostics or references). |
+| **Untested symbol filter** | Planned | `filter: "untested"` parameter on `get_change_impact`. Returns only exported symbols where `non_test_callers > 0 AND test_callers == 0` (active in production code but no test coverage). The data is already in the response; this surfaces it as a dedicated query. Complements `/lsp-dead-code` (zero references) with a coverage gap view (has callers, no tests). |
 
 ### Symbol-level editing tools
 
