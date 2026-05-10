@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -46,29 +47,75 @@ func TestSetupNotificationHub(t *testing.T) {
 
 func TestWireNotificationsToClient(t *testing.T) {
 	hub := notify.NewHub(&mockNotifySender{})
-	// Create a minimal LSPClient just to test that wiring doesn't panic.
-	// We use a nil-cmd client which is valid for testing subscription wiring.
 	client := &lsp.LSPClient{}
 
-	// wireNotificationsToClient should not panic with a zero-value client.
 	wireNotificationsToClient(hub, client)
 
-	// Verify that file change callbacks were registered by invoking them.
-	// The SubscribeToFileChanges stores callbacks; we trigger them by calling
-	// the method again to confirm the slice was populated.
 	called := false
 	client.SubscribeToFileChanges(func(changes []types.FileChangeEvent) {
 		called = true
 	})
 
-	// Give background goroutines a moment to start, then verify the hub
-	// has stop funcs registered (one per channel).
 	time.Sleep(50 * time.Millisecond)
 
-	// Close the hub to stop all background goroutines.
 	hub.Close()
 
 	if called {
 		t.Error("callback should not have been invoked yet")
 	}
 }
+
+func TestDiagnosticNotificationEndToEnd(t *testing.T) {
+	sender := &mockNotifySender{}
+	hub := notify.NewHub(sender)
+	defer hub.Close()
+
+	// Subscribe using the same path as wireNotificationsToClient.
+	sub := &testDiagSubscriber{}
+	stopDiag := notify.SubscribeDiagnostics(hub, sub)
+
+	// Simulate gopls publishing diagnostics with errors.
+	sub.fire("file:///test.go", []types.LSPDiagnostic{
+		{Severity: 1, Message: "undefined: foo"},
+		{Severity: 2, Message: "unused variable"},
+	})
+
+	// Stop the debouncer, which flushes pending notifications.
+	stopDiag()
+
+	if len(sender.logs) == 0 {
+		t.Fatal("expected at least 1 diagnostic notification, got 0")
+	}
+
+	msg := sender.logs[0].message
+	if sender.logs[0].logger != "diagnostics" {
+		t.Errorf("expected logger='diagnostics', got %q", sender.logs[0].logger)
+	}
+	if !strings.Contains(msg, `"errors":1`) {
+		t.Errorf("expected errors:1 in message, got: %s", msg)
+	}
+	if !strings.Contains(msg, `"warnings":1`) {
+		t.Errorf("expected warnings:1 in message, got: %s", msg)
+	}
+	t.Logf("notification sent: %s", msg)
+}
+
+// testDiagSubscriber implements notify.DiagnosticSubscriber for integration testing.
+type testDiagSubscriber struct {
+	cb types.DiagnosticUpdateCallback
+}
+
+func (s *testDiagSubscriber) SubscribeToDiagnostics(cb types.DiagnosticUpdateCallback) {
+	s.cb = cb
+}
+
+func (s *testDiagSubscriber) UnsubscribeFromDiagnostics(cb types.DiagnosticUpdateCallback) {
+	s.cb = nil
+}
+
+func (s *testDiagSubscriber) fire(uri string, diags []types.LSPDiagnostic) {
+	if s.cb != nil {
+		s.cb(uri, diags)
+	}
+}
+
