@@ -1,756 +1,749 @@
-title: "Context and Efficiency Features: get_editing_context, Token Savings, ETag"
+title: 'Context and Efficiency Features: get_editing_context, Token Savings, ETag'
 feature_slug: context-efficiency
 verdict: SUITABLE
-state: SCOUT_PENDING
-
 suitability_assessment: |
-  All five suitability gate questions pass cleanly:
+    All five suitability gate questions pass cleanly:
 
-  1. File decomposition: Three independent features map to 3 agents with fully
-     disjoint file ownership. No file conflicts.
-  2. Investigation-first: No unknowns; all three features are additive with clear
-     specs and existing patterns to follow.
-  3. Interface discoverability: The shared helpers (EstimateTokenSavings,
-     ComputeFileETag) have fully specifiable signatures before implementation.
-  4. Pre-implementation status: All three features are new (TODO). No existing
-     partial implementations found.
-  5. Parallelization value: Build/test cycle is ~15-30s (GOWORK=off go test).
-     3 agents with 2-4 files each, fully independent (single wave). Clear speedup.
+    1. File decomposition: Three independent features map to 3 agents with fully
+       disjoint file ownership. No file conflicts.
+    2. Investigation-first: No unknowns; all three features are additive with clear
+       specs and existing patterns to follow.
+    3. Interface discoverability: The shared helpers (EstimateTokenSavings,
+       ComputeFileETag) have fully specifiable signatures before implementation.
+    4. Pre-implementation status: All three features are new (TODO). No existing
+       partial implementations found.
+    5. Parallelization value: Build/test cycle is ~15-30s (GOWORK=off go test).
+       3 agents with 2-4 files each, fully independent (single wave). Clear speedup.
 
-  Estimated times:
-  - Scout phase: ~5 min
-  - Agent execution: ~8 min (3 agents in parallel, ~8 min each wall clock)
-  - Merge and verification: ~3 min
-  Total SAW time: ~16 min
+    Estimated times:
+    - Scout phase: ~5 min
+    - Agent execution: ~8 min (3 agents in parallel, ~8 min each wall clock)
+    - Merge and verification: ~3 min
+    Total SAW time: ~16 min
 
-  Sequential baseline: ~24 min (3 agents x 8 min avg)
-  Time savings: ~8 min (33% faster)
+    Sequential baseline: ~24 min (3 agents x 8 min avg)
+    Time savings: ~8 min (33% faster)
 
-  Recommendation: Clear speedup. All agents are wave 1 (fully parallel).
-
+    Recommendation: Clear speedup. All agents are wave 1 (fully parallel).
 test_command: GOWORK=off go test ./internal/... ./cmd/...
 lint_command: GOWORK=off go vet ./...
-
-quality_gates:
-  level: standard
-  gates:
-    - type: build
-      command: GOWORK=off go build ./...
-      required: true
-    - type: lint
-      command: GOWORK=off go vet ./...
-      required: true
-    - type: test
-      command: GOWORK=off go test ./internal/... ./cmd/...
-      required: true
-
-scaffolds: []
-
 file_ownership:
-  - file: internal/tools/context.go
-    agent: A
-    wave: 1
-    action: new
-    depends_on: []
-  - file: internal/tools/context_test.go
-    agent: A
-    wave: 1
-    action: new
-    depends_on: []
-  - file: cmd/agent-lsp/tools_context.go
-    agent: A
-    wave: 1
-    action: new
-    depends_on: []
-  - file: internal/tools/token_savings.go
-    agent: B
-    wave: 1
-    action: new
-    depends_on: []
-  - file: internal/tools/token_savings_test.go
-    agent: B
-    wave: 1
-    action: new
-    depends_on: []
-  - file: internal/tools/etag.go
-    agent: C
-    wave: 1
-    action: new
-    depends_on: []
-  - file: internal/tools/etag_test.go
-    agent: C
-    wave: 1
-    action: new
-    depends_on: []
-  - file: internal/tools/context_meta.go
-    agent: D
-    wave: 2
-    action: new
-    depends_on:
-      - A
-      - B
-      - C
-  - file: cmd/agent-lsp/tools_analysis.go
-    agent: D
-    wave: 2
-    action: modify
-    depends_on: []
-  - file: internal/tools/analysis.go
-    agent: D
-    wave: 2
-    action: modify
-    depends_on: []
-  - file: internal/tools/symbol_source.go
-    agent: D
-    wave: 2
-    action: modify
-    depends_on: []
-
+    - file: internal/tools/context.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/tools/context_test.go
+      agent: A
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/tools_context.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/tools/token_savings.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/tools/token_savings_test.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/tools/etag.go
+      agent: C
+      wave: 1
+      action: new
+    - file: internal/tools/etag_test.go
+      agent: C
+      wave: 1
+      action: new
+    - file: internal/tools/context_meta.go
+      agent: D
+      wave: 2
+      action: new
+      depends_on:
+        - A
+        - B
+        - C
+    - file: cmd/agent-lsp/tools_analysis.go
+      agent: D
+      wave: 2
+      action: modify
+    - file: internal/tools/analysis.go
+      agent: D
+      wave: 2
+      action: modify
+    - file: internal/tools/symbol_source.go
+      agent: D
+      wave: 2
+      action: modify
 interface_contracts:
-  - name: HandleGetEditingContext
-    description: |
-      Handler for the get_editing_context composite tool. Returns file symbols,
-      callers partitioned by test/non-test, callees, and imports.
-    definition: |
-      func HandleGetEditingContext(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
+    - name: HandleGetEditingContext
+      description: |
+        Handler for the get_editing_context composite tool. Returns file symbols,
+        callers partitioned by test/non-test, callees, and imports.
+      definition: |
+        func HandleGetEditingContext(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
 
-      Input args:
-        file_path: string (required) - absolute path to the file
-        language_id: string (optional) - auto-detected from extension
+        Input args:
+          file_path: string (required) - absolute path to the file
+          language_id: string (optional) - auto-detected from extension
 
-      Response JSON shape:
-        {
-          "file": "<path>",
-          "imports": ["pkg1", "pkg2"],
-          "symbols": [
-            {
-              "name": "FuncName",
-              "kind": "Function",
-              "signature": "func FuncName(x int) error",
-              "line": 42,
-              "callers": {
-                "test": [{"file": "...", "line": 10, "name": "TestX"}],
-                "non_test": [{"file": "...", "line": 20, "name": "main"}]
-              },
-              "callees": [{"name": "fmt.Println", "file": "..."}]
-            }
-          ]
-        }
-    location: internal/tools/context.go
-
-  - name: EstimateTokenSavings
-    description: |
-      Computes approximate token savings by comparing returned text size
-      to full file size. Returns metadata map.
-    definition: |
-      func EstimateTokenSavings(returnedText string, filePath string) map[string]int
-
-      Returns map with keys: tokens_returned, tokens_full_file, tokens_saved.
-      If file cannot be stat'd, returns only tokens_returned.
-    location: internal/tools/token_savings.go
-
-  - name: AppendTokenMeta
-    description: |
-      Wraps a ToolResult with token savings metadata as an additional content item.
-    definition: |
-      func AppendTokenMeta(result types.ToolResult, filePath string) types.ToolResult
-
-      Appends a JSON content item with _meta.token_savings to the result.
-      Returns unchanged if result.IsError or Content is empty.
-    location: internal/tools/token_savings.go
-
-  - name: ComputeFileETag
-    description: |
-      Computes a SHA-256 based ETag (truncated to 16 hex chars) for a file.
-    definition: |
-      func ComputeFileETag(filePath string) (string, error)
-
-      Returns the first 16 hex characters of SHA-256(file contents).
-      Error if file cannot be read.
-    location: internal/tools/etag.go
-
-  - name: ComputeETag
-    description: |
-      Computes ETag from in-memory content bytes (no disk read).
-    definition: |
-      func ComputeETag(content []byte) string
-
-      Returns 16-char hex string from SHA-256 of content.
-    location: internal/tools/etag.go
-
-  - name: CheckETagMatch
-    description: |
-      Checks if a provided etag matches the current file hash.
-    definition: |
-      func CheckETagMatch(filePath string, ifNoneMatch string) (matched bool, result types.ToolResult, etag string, err error)
-
-      If ifNoneMatch is empty or does not match, returns matched=false with current etag.
-      If matched, returns matched=true with a short not_modified JSON response.
-    location: internal/tools/etag.go
-
-  - name: HandleGetEditingContextWithMeta
-    description: |
-      Wrapper that adds ETag and token savings to get_editing_context responses.
-    definition: |
-      func HandleGetEditingContextWithMeta(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
-
-      Checks if_none_match first; if matched returns short not_modified response.
-      Otherwise delegates to HandleGetEditingContext, then appends etag and token meta.
-    location: internal/tools/context_meta.go
-
-waves:
-  - number: 1
-    agents:
-      - id: A
-        task: |
-          ## What to implement
-
-          Create the `get_editing_context` composite MCP tool (tool #61). This tool
-          returns everything an agent needs before editing a file in a single call:
-          symbols with signatures, callers partitioned into test/non-test, callees,
-          and the file's imports.
-
-          ### Files to create
-
-          **1. `internal/tools/context.go`**
-
-          Handler function:
-          ```go
-          func HandleGetEditingContext(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
-          ```
-
-          Implementation steps:
-          1. Validate `file_path` arg is present, call `ValidateFilePath`
-          2. Extract `language_id` (default from `lsp.LanguageIDFromPath`)
-          3. Call `WithDocument` to open the file, then `client.GetDocumentSymbols`
-          4. For each exported/top-level symbol, call `client.GetReferencesRaw` to
-             get callers. Partition using `isTestFile` (already in change_impact.go;
-             same package, call directly).
-          5. For each function/method symbol, call `client.PrepareCallHierarchy` then
-             `client.GetOutgoingCalls` to get callees.
-          6. Extract imports from the file content (read via os.ReadFile; parse import
-             block with simple regex or go/parser for Go files; for other languages
-             return raw import lines matching common patterns).
-          7. Assemble JSON response and return via `types.TextResult`.
-
-          Use parallel reference queries (like change_impact.go does) with a worker
-          pool of 16 for the callers phase.
-
-          The response JSON shape:
-          ```json
+        Response JSON shape:
           {
-            "file": "/path/to/file.go",
-            "imports": ["fmt", "context", "github.com/foo/bar"],
+            "file": "<path>",
+            "imports": ["pkg1", "pkg2"],
             "symbols": [
               {
-                "name": "HandleFoo",
+                "name": "FuncName",
                 "kind": "Function",
-                "signature": "func HandleFoo(ctx context.Context) error",
-                "line": 15,
+                "signature": "func FuncName(x int) error",
+                "line": 42,
                 "callers": {
-                  "test": [{"file": "/path/test.go", "line": 10, "name": "TestFoo"}],
-                  "non_test": [{"file": "/path/main.go", "line": 42, "name": "run"}]
+                  "test": [{"file": "...", "line": 10, "name": "TestX"}],
+                  "non_test": [{"file": "...", "line": 20, "name": "main"}]
                 },
-                "callees": [{"name": "fmt.Println", "file": "/path/fmt/print.go", "line": 1}]
+                "callees": [{"name": "fmt.Println", "file": "..."}]
               }
             ]
           }
-          ```
+      location: internal/tools/context.go
+    - name: EstimateTokenSavings
+      description: |
+        Computes approximate token savings by comparing returned text size
+        to full file size. Returns metadata map.
+      definition: |
+        func EstimateTokenSavings(returnedText string, filePath string) map[string]int
 
-          For the signature field: use `client.GetHover` on the symbol's definition
-          position to get the type signature string. If hover returns nil or empty,
-          fall back to the symbol name + kind as the signature.
+        Returns map with keys: tokens_returned, tokens_full_file, tokens_saved.
+        If file cannot be stat'd, returns only tokens_returned.
+      location: internal/tools/token_savings.go
+    - name: AppendTokenMeta
+      description: |
+        Wraps a ToolResult with token savings metadata as an additional content item.
+      definition: |
+        func AppendTokenMeta(result types.ToolResult, filePath string) types.ToolResult
 
-          **2. `internal/tools/context_test.go`**
+        Appends a JSON content item with _meta.token_savings to the result.
+        Returns unchanged if result.IsError or Content is empty.
+      location: internal/tools/token_savings.go
+    - name: ComputeFileETag
+      description: |
+        Computes a SHA-256 based ETag (truncated to 16 hex chars) for a file.
+      definition: |
+        func ComputeFileETag(filePath string) (string, error)
 
-          Test the handler with a nil client (returns error), and test the import
-          extraction helper if you factor one out. Follow the pattern in other test
-          files in internal/tools/ for nil-client tests.
+        Returns the first 16 hex characters of SHA-256(file contents).
+        Error if file cannot be read.
+      location: internal/tools/etag.go
+    - name: ComputeETag
+      description: |
+        Computes ETag from in-memory content bytes (no disk read).
+      definition: |
+        func ComputeETag(content []byte) string
 
-          **3. `cmd/agent-lsp/tools_context.go`**
+        Returns 16-char hex string from SHA-256 of content.
+      location: internal/tools/etag.go
+    - name: CheckETagMatch
+      description: |
+        Checks if a provided etag matches the current file hash.
+      definition: |
+        func CheckETagMatch(filePath string, ifNoneMatch string) (matched bool, result types.ToolResult, etag string, err error)
 
-          Registration file following the exact pattern of `tools_analysis.go`:
-          ```go
-          package main
+        If ifNoneMatch is empty or does not match, returns matched=false with current etag.
+        If matched, returns matched=true with a short not_modified JSON response.
+      location: internal/tools/etag.go
+    - name: HandleGetEditingContextWithMeta
+      description: |
+        Wrapper that adds ETag and token savings to get_editing_context responses.
+      definition: |
+        func HandleGetEditingContextWithMeta(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
 
-          import (
-              "context"
-              "github.com/blackwell-systems/agent-lsp/internal/tools"
-              "github.com/modelcontextprotocol/go-sdk/mcp"
-          )
+        Checks if_none_match first; if matched returns short not_modified response.
+        Otherwise delegates to HandleGetEditingContext, then appends etag and token meta.
+      location: internal/tools/context_meta.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## What to implement
 
-          type GetEditingContextArgs struct {
-              FilePath   string `json:"file_path" jsonschema:"Absolute path to the file to get editing context for"`
-              LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier. Optional; auto-detected from file extension"`
-          }
+            Create the `get_editing_context` composite MCP tool (tool #61). This tool
+            returns everything an agent needs before editing a file in a single call:
+            symbols with signatures, callers partitioned into test/non-test, callees,
+            and the file's imports.
 
-          func registerContextTools(d toolDeps) {
-              addToolWithPhaseCheck(d, &mcp.Tool{
-                  Name:        "get_editing_context",
-                  Description: "Get complete editing context for a file in one call: all symbols with signatures, callers (test vs non-test), callees, and imports. Use before making changes to understand the file structure and blast radius without multiple round-trips.",
-                  Annotations: &mcp.ToolAnnotations{
-                      Title:           "Get Editing Context",
-                      ReadOnlyHint:    true,
-                      DestructiveHint: boolPtr(false),
-                      OpenWorldHint:   boolPtr(false),
+            ### Files to create
+
+            **1. `internal/tools/context.go`**
+
+            Handler function:
+            ```go
+            func HandleGetEditingContext(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
+            ```
+
+            Implementation steps:
+            1. Validate `file_path` arg is present, call `ValidateFilePath`
+            2. Extract `language_id` (default from `lsp.LanguageIDFromPath`)
+            3. Call `WithDocument` to open the file, then `client.GetDocumentSymbols`
+            4. For each exported/top-level symbol, call `client.GetReferencesRaw` to
+               get callers. Partition using `isTestFile` (already in change_impact.go;
+               same package, call directly).
+            5. For each function/method symbol, call `client.PrepareCallHierarchy` then
+               `client.GetOutgoingCalls` to get callees.
+            6. Extract imports from the file content (read via os.ReadFile; parse import
+               block with simple regex or go/parser for Go files; for other languages
+               return raw import lines matching common patterns).
+            7. Assemble JSON response and return via `types.TextResult`.
+
+            Use parallel reference queries (like change_impact.go does) with a worker
+            pool of 16 for the callers phase.
+
+            The response JSON shape:
+            ```json
+            {
+              "file": "/path/to/file.go",
+              "imports": ["fmt", "context", "github.com/foo/bar"],
+              "symbols": [
+                {
+                  "name": "HandleFoo",
+                  "kind": "Function",
+                  "signature": "func HandleFoo(ctx context.Context) error",
+                  "line": 15,
+                  "callers": {
+                    "test": [{"file": "/path/test.go", "line": 10, "name": "TestFoo"}],
+                    "non_test": [{"file": "/path/main.go", "line": 42, "name": "run"}]
                   },
-              }, func(ctx context.Context, req *mcp.CallToolRequest, args GetEditingContextArgs) (*mcp.CallToolResult, any, error) {
-                  r, err := tools.HandleGetEditingContext(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
-                  return makeCallToolResult(r), nil, err
-              })
-          }
-          ```
-
-          Then add `registerContextTools(deps)` call in `cmd/agent-lsp/server.go`.
-          Insert after this exact text:
-          ```go
-          registerSessionTools(deps)
-          ```
-
-          ### Interfaces relied upon
-          - `lsp.LSPClient.GetDocumentSymbols(ctx, uri) ([]types.DocumentSymbol, error)`
-          - `lsp.LSPClient.GetReferencesRaw(ctx, uri, pos, includeDecl) ([]types.Location, error)`
-          - `lsp.LSPClient.PrepareCallHierarchy(ctx, uri, pos) ([]types.CallHierarchyItem, error)`
-          - `lsp.LSPClient.GetOutgoingCalls(ctx, item) ([]types.CallHierarchyOutgoingCall, error)`
-          - `lsp.LSPClient.GetHover(ctx, uri, pos) (*types.Hover, error)`
-          - `tools.WithDocument`, `tools.ValidateFilePath`, `tools.CreateFileURI`
-          - `tools.isTestFile(path string) bool` (in change_impact.go, same package)
-          - `lsp.LanguageIDFromPath(path string) string`
-
-          ### Tests to write
-          - TestHandleGetEditingContext_NilClient: returns error result
-          - TestHandleGetEditingContext_MissingFilePath: returns error result
-          - TestExtractImports_Go: parses Go import block (if factored out)
-
-          ### Verification gate
-          ```bash
-          GOWORK=off go build ./... && GOWORK=off go test ./internal/tools/ -run TestHandleGetEditingContext && GOWORK=off go vet ./...
-          ```
-
-          Postconditions:
-          ```bash
-          # get_editing_context handler exists
-          grep -q "func HandleGetEditingContext" internal/tools/context.go
-          # Registration exists
-          grep -q "get_editing_context" cmd/agent-lsp/tools_context.go
-          # Registration called from server.go
-          grep -q "registerContextTools" cmd/agent-lsp/server.go
-          ```
-
-          ### Constraints
-          - Do NOT modify internal/tools/helpers.go
-          - Do NOT add token savings or etag logic; that comes in wave 2
-          - Do NOT duplicate the isTestFile function; it is in the same package
-            (internal/tools/change_impact.go), call it directly
-          - Do NOT modify any existing tool handler files
-        files:
-          - internal/tools/context.go
-          - internal/tools/context_test.go
-          - cmd/agent-lsp/tools_context.go
-        dependencies: []
-
-      - id: B
-        task: |
-          ## What to implement
-
-          Create a token savings estimation helper. This helper computes approximate
-          token savings by comparing returned text size to full file size.
-
-          ### Files to create
-
-          **1. `internal/tools/token_savings.go`**
-
-          Two exported functions:
-
-          ```go
-          package tools
-
-          import (
-              "encoding/json"
-              "os"
-
-              "github.com/blackwell-systems/agent-lsp/internal/types"
-          )
-
-          // EstimateTokenSavings computes approximate token savings by comparing
-          // the size of returnedText to the full file size.
-          // Uses len/4 as a rough token approximation (1 token ~ 4 chars).
-          func EstimateTokenSavings(returnedText string, filePath string) map[string]int {
-              tokensReturned := len(returnedText) / 4
-              result := map[string]int{
-                  "tokens_returned": tokensReturned,
-              }
-              info, err := os.Stat(filePath)
-              if err == nil {
-                  tokensFullFile := int(info.Size()) / 4
-                  result["tokens_full_file"] = tokensFullFile
-                  result["tokens_saved"] = tokensFullFile - tokensReturned
-              }
-              return result
-          }
-
-          // AppendTokenMeta wraps a ToolResult with token savings metadata.
-          // Appends a JSON content item with _meta.token_savings.
-          // Returns unchanged if result.IsError or Content is empty.
-          func AppendTokenMeta(result types.ToolResult, filePath string) types.ToolResult {
-              if result.IsError || len(result.Content) == 0 || result.Content[0].Text == "" {
-                  return result
-              }
-              text := result.Content[0].Text
-              meta := EstimateTokenSavings(text, filePath)
-              metaJSON, err := json.Marshal(map[string]any{"_meta": map[string]any{"token_savings": meta}})
-              if err != nil {
-                  return result
-              }
-              result.Content = append(result.Content, types.ContentItem{
-                  Type: "text",
-                  Text: string(metaJSON),
-              })
-              return result
-          }
-          ```
-
-          **2. `internal/tools/token_savings_test.go`**
-
-          Tests:
-          - TestEstimateTokenSavings_Basic: create temp file with 400 bytes, pass
-            "short" (5 chars = 1 token), verify tokens_returned=1, tokens_full_file=100,
-            tokens_saved=99
-          - TestEstimateTokenSavings_MissingFile: pass non-existent path, verify only
-            tokens_returned is present (no tokens_full_file or tokens_saved keys)
-          - TestAppendTokenMeta_ErrorResult: pass error result, verify unchanged
-          - TestAppendTokenMeta_AddsMetaContent: pass valid result, verify Content
-            has 2 items and second contains "_meta"
-
-          ### Interfaces relied upon
-          - `types.ToolResult` struct (Content []ContentItem, IsError bool)
-          - `types.ContentItem` struct (Type, Text string)
-          - `os.Stat` for file size
-
-          ### Verification gate
-          ```bash
-          GOWORK=off go build ./... && GOWORK=off go test ./internal/tools/ -run "TestEstimateTokenSavings|TestAppendTokenMeta" && GOWORK=off go vet ./...
-          ```
-
-          Postconditions:
-          ```bash
-          grep -q "func EstimateTokenSavings" internal/tools/token_savings.go
-          grep -q "func AppendTokenMeta" internal/tools/token_savings.go
-          grep -q "TestEstimateTokenSavings" internal/tools/token_savings_test.go
-          ```
-
-          ### Constraints
-          - Do NOT modify any existing handler files (analysis.go, symbol_source.go, etc.)
-          - Do NOT modify helpers.go
-          - Do NOT add etag logic; that is Agent C's responsibility
-          - Keep the helper self-contained in token_savings.go with its own imports
-        files:
-          - internal/tools/token_savings.go
-          - internal/tools/token_savings_test.go
-        dependencies: []
-
-      - id: C
-        task: |
-          ## What to implement
-
-          Create an ETag/conditional-response helper for file-scoped tools.
-          Computes SHA-256 based ETags and supports if_none_match for cache hits.
-
-          ### Files to create
-
-          **1. `internal/tools/etag.go`**
-
-          Three exported functions:
-
-          ```go
-          package tools
-
-          import (
-              "crypto/sha256"
-              "encoding/hex"
-              "fmt"
-              "os"
-
-              "github.com/blackwell-systems/agent-lsp/internal/types"
-          )
-
-          // ComputeFileETag returns a 16-char hex string derived from SHA-256
-          // of the file's contents.
-          func ComputeFileETag(filePath string) (string, error) {
-              data, err := os.ReadFile(filePath)
-              if err != nil {
-                  return "", fmt.Errorf("computing etag for %s: %w", filePath, err)
-              }
-              return ComputeETag(data), nil
-          }
-
-          // ComputeETag returns a 16-char hex ETag from arbitrary content bytes.
-          // Useful when file content is already in memory (avoids double read).
-          func ComputeETag(content []byte) string {
-              h := sha256.Sum256(content)
-              return hex.EncodeToString(h[:8]) // 8 bytes = 16 hex chars
-          }
-
-          // CheckETagMatch checks if ifNoneMatch matches the current file's hash.
-          // Returns:
-          //   matched=true + not_modified ToolResult when etag matches
-          //   matched=false + current etag string when no match (or empty ifNoneMatch)
-          //   error if file cannot be read
-          func CheckETagMatch(filePath string, ifNoneMatch string) (matched bool, result types.ToolResult, etag string, err error) {
-              currentETag, err := ComputeFileETag(filePath)
-              if err != nil {
-                  return false, types.ToolResult{}, "", err
-              }
-              if ifNoneMatch != "" && ifNoneMatch == currentETag {
-                  notModified := fmt.Sprintf(`{"status":"not_modified","etag":"%s"}`, currentETag)
-                  return true, types.TextResult(notModified), currentETag, nil
-              }
-              return false, types.ToolResult{}, currentETag, nil
-          }
-          ```
-
-          **2. `internal/tools/etag_test.go`**
-
-          Tests:
-          - TestComputeFileETag_Basic: write known content to temp file, verify
-            result is exactly 16 hex chars, verify deterministic (call twice)
-          - TestComputeFileETag_MissingFile: returns non-nil error
-          - TestComputeETag_Deterministic: same []byte produces same string
-          - TestComputeETag_DifferentContent: different bytes produce different etag
-          - TestCheckETagMatch_Match: compute etag, pass as ifNoneMatch, verify
-            matched=true and result contains "not_modified"
-          - TestCheckETagMatch_NoMatch: pass wrong etag, verify matched=false
-          - TestCheckETagMatch_EmptyIfNoneMatch: pass "", verify matched=false and
-            etag is non-empty
-
-          ### Interfaces relied upon
-          - `types.ToolResult` and `types.TextResult`
-          - Standard library: crypto/sha256, encoding/hex, os, fmt
-
-          ### Verification gate
-          ```bash
-          GOWORK=off go build ./... && GOWORK=off go test ./internal/tools/ -run "TestComputeFileETag|TestComputeETag|TestCheckETagMatch" && GOWORK=off go vet ./...
-          ```
-
-          Postconditions:
-          ```bash
-          grep -q "func ComputeFileETag" internal/tools/etag.go
-          grep -q "func ComputeETag" internal/tools/etag.go
-          grep -q "func CheckETagMatch" internal/tools/etag.go
-          grep -q "TestCheckETagMatch" internal/tools/etag_test.go
-          ```
-
-          ### Constraints
-          - Do NOT modify any existing handler files
-          - Do NOT modify helpers.go
-          - Do NOT add token savings logic; that is Agent B's responsibility
-          - Keep everything self-contained in etag.go
-        files:
-          - internal/tools/etag.go
-          - internal/tools/etag_test.go
-        dependencies: []
-
-  - number: 2
-    agents:
-      - id: D
-        task: |
-          ## What to implement
-
-          Wire the token savings and ETag helpers (created in wave 1) into the
-          get_editing_context tool and into existing tool handlers.
-
-          ### Files to create/modify
-
-          **1. Create `internal/tools/context_meta.go`**
-
-          This file adds token savings and etag support to get_editing_context:
-
-          ```go
-          package tools
-
-          import (
-              "context"
-              "encoding/json"
-
-              "github.com/blackwell-systems/agent-lsp/internal/lsp"
-              "github.com/blackwell-systems/agent-lsp/internal/types"
-          )
-
-          // HandleGetEditingContextWithMeta wraps HandleGetEditingContext to add
-          // ETag conditional response and token savings metadata.
-          func HandleGetEditingContextWithMeta(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
-              filePath, _ := args["file_path"].(string)
-              ifNoneMatch, _ := args["if_none_match"].(string)
-
-              // ETag check: if file hasn't changed, return short response
-              if filePath != "" && ifNoneMatch != "" {
-                  matched, result, _, err := CheckETagMatch(filePath, ifNoneMatch)
-                  if err == nil && matched {
-                      return result, nil
-                  }
-              }
-
-              // Delegate to the core handler
-              result, err := HandleGetEditingContext(ctx, client, args)
-              if err != nil || result.IsError {
-                  return result, err
-              }
-
-              // Add etag to the primary JSON response
-              if filePath != "" {
-                  etag, etagErr := ComputeFileETag(filePath)
-                  if etagErr == nil {
-                      result = injectETagField(result, etag)
-                  }
-              }
-
-              // Add token savings metadata
-              if filePath != "" {
-                  result = AppendTokenMeta(result, filePath)
-              }
-
-              return result, nil
-          }
-
-          // injectETagField parses the JSON in Content[0].Text, adds "etag" field,
-          // and re-marshals. If parsing fails, returns unchanged.
-          func injectETagField(result types.ToolResult, etag string) types.ToolResult {
-              if len(result.Content) == 0 || result.Content[0].Text == "" {
-                  return result
-              }
-              var obj map[string]any
-              if err := json.Unmarshal([]byte(result.Content[0].Text), &obj); err != nil {
-                  return result
-              }
-              obj["etag"] = etag
-              data, err := json.Marshal(obj)
-              if err != nil {
-                  return result
-              }
-              result.Content[0].Text = string(data)
-              return result
-          }
-          ```
-
-          **2. Modify `cmd/agent-lsp/tools_context.go`**
-
-          Add `if_none_match` field to GetEditingContextArgs. Find:
-          ```go
-          type GetEditingContextArgs struct {
-              FilePath   string `json:"file_path" jsonschema:"Absolute path to the file to get editing context for"`
-              LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier. Optional; auto-detected from file extension"`
-          }
-          ```
-          Add after LanguageID:
-          ```go
-              IfNoneMatch string `json:"if_none_match,omitempty" jsonschema:"ETag from a previous response. If file has not changed, returns a short not_modified response instead of recomputing"`
-          ```
-
-          Change the handler call from `tools.HandleGetEditingContext` to
-          `tools.HandleGetEditingContextWithMeta`. Find:
-          ```go
-          r, err := tools.HandleGetEditingContext(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
-          ```
-          Replace with:
-          ```go
-          r, err := tools.HandleGetEditingContextWithMeta(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
-          ```
-
-          **3. Modify `internal/tools/analysis.go`**
-
-          In `HandleGetDocumentSymbols`, after the final JSON marshal and before
-          the return statement, add token savings. Find the return near line ~380:
-          ```go
-          return appendHint(types.TextResult(string(data)), docSymbolHint), nil
-          ```
-          Change to:
-          ```go
-          return AppendTokenMeta(appendHint(types.TextResult(string(data)), docSymbolHint), filePath), nil
-          ```
-
-          Also do the same for the outline format return. Find:
-          ```go
-          return appendHint(types.TextResult(renderOutline(shifted, 0)), docSymbolHint), nil
-          ```
-          Change to:
-          ```go
-          return AppendTokenMeta(appendHint(types.TextResult(renderOutline(shifted, 0)), docSymbolHint), filePath), nil
-          ```
-
-          **4. Modify `internal/tools/symbol_source.go`**
-
-          In `HandleGetSymbolSource`, before the final return, add token savings.
-          Find where the JSON result is returned and wrap with AppendTokenMeta,
-          passing filePath.
-
-          **5. Modify `cmd/agent-lsp/tools_analysis.go`**
-
-          Add `IfNoneMatch` field to `GetDocumentSymbolsArgs`:
-          ```go
-          IfNoneMatch string `json:"if_none_match,omitempty" jsonschema:"ETag from a previous response. If file has not changed, returns not_modified"`
-          ```
-
-          Add `IfNoneMatch` field to `GetSymbolSourceArgs`:
-          ```go
-          IfNoneMatch string `json:"if_none_match,omitempty" jsonschema:"ETag from a previous response. If file has not changed, returns not_modified"`
-          ```
-
-          ### Interfaces relied upon
-          - `tools.HandleGetEditingContext` (from Agent A, wave 1)
-          - `tools.EstimateTokenSavings` (from Agent B, wave 1)
-          - `tools.AppendTokenMeta` (from Agent B, wave 1)
-          - `tools.ComputeFileETag` (from Agent C, wave 1)
-          - `tools.CheckETagMatch` (from Agent C, wave 1)
-
-          ### Verification gate
-          ```bash
-          GOWORK=off go build ./... && GOWORK=off go test ./internal/tools/ -run "TestHandleGetEditingContext|TestEstimate|TestCheckETag|TestAppendTokenMeta" && GOWORK=off go vet ./...
-          ```
-
-          Postconditions:
-          ```bash
-          grep -q "HandleGetEditingContextWithMeta" internal/tools/context_meta.go
-          grep -q "HandleGetEditingContextWithMeta" cmd/agent-lsp/tools_context.go
-          grep -q "if_none_match" cmd/agent-lsp/tools_context.go
-          grep -q "AppendTokenMeta" internal/tools/analysis.go
-          grep -q "AppendTokenMeta" internal/tools/symbol_source.go
-          ```
-
-          ### Constraints
-          - Do NOT modify internal/tools/context.go (Agent A's file)
-          - Do NOT modify internal/tools/token_savings.go or etag.go (Agents B/C)
-          - Do NOT modify helpers.go
-          - When modifying analysis.go and symbol_source.go, only add the
-            AppendTokenMeta call; do not refactor existing logic
-          - Do NOT add ETag conditional checks to list_symbols or get_symbol_source
-            in this wave (the if_none_match param is added to args structs for future
-            use but the check logic in the handlers is deferred to avoid complexity)
-        files:
-          - internal/tools/context_meta.go
-          - cmd/agent-lsp/tools_analysis.go
-          - internal/tools/analysis.go
-          - internal/tools/symbol_source.go
-        dependencies:
-          - A
-          - B
-          - C
-
+                  "callees": [{"name": "fmt.Println", "file": "/path/fmt/print.go", "line": 1}]
+                }
+              ]
+            }
+            ```
+
+            For the signature field: use `client.GetHover` on the symbol's definition
+            position to get the type signature string. If hover returns nil or empty,
+            fall back to the symbol name + kind as the signature.
+
+            **2. `internal/tools/context_test.go`**
+
+            Test the handler with a nil client (returns error), and test the import
+            extraction helper if you factor one out. Follow the pattern in other test
+            files in internal/tools/ for nil-client tests.
+
+            **3. `cmd/agent-lsp/tools_context.go`**
+
+            Registration file following the exact pattern of `tools_analysis.go`:
+            ```go
+            package main
+
+            import (
+                "context"
+                "github.com/blackwell-systems/agent-lsp/internal/tools"
+                "github.com/modelcontextprotocol/go-sdk/mcp"
+            )
+
+            type GetEditingContextArgs struct {
+                FilePath   string `json:"file_path" jsonschema:"Absolute path to the file to get editing context for"`
+                LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier. Optional; auto-detected from file extension"`
+            }
+
+            func registerContextTools(d toolDeps) {
+                addToolWithPhaseCheck(d, &mcp.Tool{
+                    Name:        "get_editing_context",
+                    Description: "Get complete editing context for a file in one call: all symbols with signatures, callers (test vs non-test), callees, and imports. Use before making changes to understand the file structure and blast radius without multiple round-trips.",
+                    Annotations: &mcp.ToolAnnotations{
+                        Title:           "Get Editing Context",
+                        ReadOnlyHint:    true,
+                        DestructiveHint: boolPtr(false),
+                        OpenWorldHint:   boolPtr(false),
+                    },
+                }, func(ctx context.Context, req *mcp.CallToolRequest, args GetEditingContextArgs) (*mcp.CallToolResult, any, error) {
+                    r, err := tools.HandleGetEditingContext(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+                    return makeCallToolResult(r), nil, err
+                })
+            }
+            ```
+
+            Then add `registerContextTools(deps)` call in `cmd/agent-lsp/server.go`.
+            Insert after this exact text:
+            ```go
+            registerSessionTools(deps)
+            ```
+
+            ### Interfaces relied upon
+            - `lsp.LSPClient.GetDocumentSymbols(ctx, uri) ([]types.DocumentSymbol, error)`
+            - `lsp.LSPClient.GetReferencesRaw(ctx, uri, pos, includeDecl) ([]types.Location, error)`
+            - `lsp.LSPClient.PrepareCallHierarchy(ctx, uri, pos) ([]types.CallHierarchyItem, error)`
+            - `lsp.LSPClient.GetOutgoingCalls(ctx, item) ([]types.CallHierarchyOutgoingCall, error)`
+            - `lsp.LSPClient.GetHover(ctx, uri, pos) (*types.Hover, error)`
+            - `tools.WithDocument`, `tools.ValidateFilePath`, `tools.CreateFileURI`
+            - `tools.isTestFile(path string) bool` (in change_impact.go, same package)
+            - `lsp.LanguageIDFromPath(path string) string`
+
+            ### Tests to write
+            - TestHandleGetEditingContext_NilClient: returns error result
+            - TestHandleGetEditingContext_MissingFilePath: returns error result
+            - TestExtractImports_Go: parses Go import block (if factored out)
+
+            ### Verification gate
+            ```bash
+            GOWORK=off go build ./... && GOWORK=off go test ./internal/tools/ -run TestHandleGetEditingContext && GOWORK=off go vet ./...
+            ```
+
+            Postconditions:
+            ```bash
+            # get_editing_context handler exists
+            grep -q "func HandleGetEditingContext" internal/tools/context.go
+            # Registration exists
+            grep -q "get_editing_context" cmd/agent-lsp/tools_context.go
+            # Registration called from server.go
+            grep -q "registerContextTools" cmd/agent-lsp/server.go
+            ```
+
+            ### Constraints
+            - Do NOT modify internal/tools/helpers.go
+            - Do NOT add token savings or etag logic; that comes in wave 2
+            - Do NOT duplicate the isTestFile function; it is in the same package
+              (internal/tools/change_impact.go), call it directly
+            - Do NOT modify any existing tool handler files
+          files:
+            - internal/tools/context.go
+            - internal/tools/context_test.go
+            - cmd/agent-lsp/tools_context.go
+        - id: B
+          task: |
+            ## What to implement
+
+            Create a token savings estimation helper. This helper computes approximate
+            token savings by comparing returned text size to full file size.
+
+            ### Files to create
+
+            **1. `internal/tools/token_savings.go`**
+
+            Two exported functions:
+
+            ```go
+            package tools
+
+            import (
+                "encoding/json"
+                "os"
+
+                "github.com/blackwell-systems/agent-lsp/internal/types"
+            )
+
+            // EstimateTokenSavings computes approximate token savings by comparing
+            // the size of returnedText to the full file size.
+            // Uses len/4 as a rough token approximation (1 token ~ 4 chars).
+            func EstimateTokenSavings(returnedText string, filePath string) map[string]int {
+                tokensReturned := len(returnedText) / 4
+                result := map[string]int{
+                    "tokens_returned": tokensReturned,
+                }
+                info, err := os.Stat(filePath)
+                if err == nil {
+                    tokensFullFile := int(info.Size()) / 4
+                    result["tokens_full_file"] = tokensFullFile
+                    result["tokens_saved"] = tokensFullFile - tokensReturned
+                }
+                return result
+            }
+
+            // AppendTokenMeta wraps a ToolResult with token savings metadata.
+            // Appends a JSON content item with _meta.token_savings.
+            // Returns unchanged if result.IsError or Content is empty.
+            func AppendTokenMeta(result types.ToolResult, filePath string) types.ToolResult {
+                if result.IsError || len(result.Content) == 0 || result.Content[0].Text == "" {
+                    return result
+                }
+                text := result.Content[0].Text
+                meta := EstimateTokenSavings(text, filePath)
+                metaJSON, err := json.Marshal(map[string]any{"_meta": map[string]any{"token_savings": meta}})
+                if err != nil {
+                    return result
+                }
+                result.Content = append(result.Content, types.ContentItem{
+                    Type: "text",
+                    Text: string(metaJSON),
+                })
+                return result
+            }
+            ```
+
+            **2. `internal/tools/token_savings_test.go`**
+
+            Tests:
+            - TestEstimateTokenSavings_Basic: create temp file with 400 bytes, pass
+              "short" (5 chars = 1 token), verify tokens_returned=1, tokens_full_file=100,
+              tokens_saved=99
+            - TestEstimateTokenSavings_MissingFile: pass non-existent path, verify only
+              tokens_returned is present (no tokens_full_file or tokens_saved keys)
+            - TestAppendTokenMeta_ErrorResult: pass error result, verify unchanged
+            - TestAppendTokenMeta_AddsMetaContent: pass valid result, verify Content
+              has 2 items and second contains "_meta"
+
+            ### Interfaces relied upon
+            - `types.ToolResult` struct (Content []ContentItem, IsError bool)
+            - `types.ContentItem` struct (Type, Text string)
+            - `os.Stat` for file size
+
+            ### Verification gate
+            ```bash
+            GOWORK=off go build ./... && GOWORK=off go test ./internal/tools/ -run "TestEstimateTokenSavings|TestAppendTokenMeta" && GOWORK=off go vet ./...
+            ```
+
+            Postconditions:
+            ```bash
+            grep -q "func EstimateTokenSavings" internal/tools/token_savings.go
+            grep -q "func AppendTokenMeta" internal/tools/token_savings.go
+            grep -q "TestEstimateTokenSavings" internal/tools/token_savings_test.go
+            ```
+
+            ### Constraints
+            - Do NOT modify any existing handler files (analysis.go, symbol_source.go, etc.)
+            - Do NOT modify helpers.go
+            - Do NOT add etag logic; that is Agent C's responsibility
+            - Keep the helper self-contained in token_savings.go with its own imports
+          files:
+            - internal/tools/token_savings.go
+            - internal/tools/token_savings_test.go
+        - id: C
+          task: |
+            ## What to implement
+
+            Create an ETag/conditional-response helper for file-scoped tools.
+            Computes SHA-256 based ETags and supports if_none_match for cache hits.
+
+            ### Files to create
+
+            **1. `internal/tools/etag.go`**
+
+            Three exported functions:
+
+            ```go
+            package tools
+
+            import (
+                "crypto/sha256"
+                "encoding/hex"
+                "fmt"
+                "os"
+
+                "github.com/blackwell-systems/agent-lsp/internal/types"
+            )
+
+            // ComputeFileETag returns a 16-char hex string derived from SHA-256
+            // of the file's contents.
+            func ComputeFileETag(filePath string) (string, error) {
+                data, err := os.ReadFile(filePath)
+                if err != nil {
+                    return "", fmt.Errorf("computing etag for %s: %w", filePath, err)
+                }
+                return ComputeETag(data), nil
+            }
+
+            // ComputeETag returns a 16-char hex ETag from arbitrary content bytes.
+            // Useful when file content is already in memory (avoids double read).
+            func ComputeETag(content []byte) string {
+                h := sha256.Sum256(content)
+                return hex.EncodeToString(h[:8]) // 8 bytes = 16 hex chars
+            }
+
+            // CheckETagMatch checks if ifNoneMatch matches the current file's hash.
+            // Returns:
+            //   matched=true + not_modified ToolResult when etag matches
+            //   matched=false + current etag string when no match (or empty ifNoneMatch)
+            //   error if file cannot be read
+            func CheckETagMatch(filePath string, ifNoneMatch string) (matched bool, result types.ToolResult, etag string, err error) {
+                currentETag, err := ComputeFileETag(filePath)
+                if err != nil {
+                    return false, types.ToolResult{}, "", err
+                }
+                if ifNoneMatch != "" && ifNoneMatch == currentETag {
+                    notModified := fmt.Sprintf(`{"status":"not_modified","etag":"%s"}`, currentETag)
+                    return true, types.TextResult(notModified), currentETag, nil
+                }
+                return false, types.ToolResult{}, currentETag, nil
+            }
+            ```
+
+            **2. `internal/tools/etag_test.go`**
+
+            Tests:
+            - TestComputeFileETag_Basic: write known content to temp file, verify
+              result is exactly 16 hex chars, verify deterministic (call twice)
+            - TestComputeFileETag_MissingFile: returns non-nil error
+            - TestComputeETag_Deterministic: same []byte produces same string
+            - TestComputeETag_DifferentContent: different bytes produce different etag
+            - TestCheckETagMatch_Match: compute etag, pass as ifNoneMatch, verify
+              matched=true and result contains "not_modified"
+            - TestCheckETagMatch_NoMatch: pass wrong etag, verify matched=false
+            - TestCheckETagMatch_EmptyIfNoneMatch: pass "", verify matched=false and
+              etag is non-empty
+
+            ### Interfaces relied upon
+            - `types.ToolResult` and `types.TextResult`
+            - Standard library: crypto/sha256, encoding/hex, os, fmt
+
+            ### Verification gate
+            ```bash
+            GOWORK=off go build ./... && GOWORK=off go test ./internal/tools/ -run "TestComputeFileETag|TestComputeETag|TestCheckETagMatch" && GOWORK=off go vet ./...
+            ```
+
+            Postconditions:
+            ```bash
+            grep -q "func ComputeFileETag" internal/tools/etag.go
+            grep -q "func ComputeETag" internal/tools/etag.go
+            grep -q "func CheckETagMatch" internal/tools/etag.go
+            grep -q "TestCheckETagMatch" internal/tools/etag_test.go
+            ```
+
+            ### Constraints
+            - Do NOT modify any existing handler files
+            - Do NOT modify helpers.go
+            - Do NOT add token savings logic; that is Agent B's responsibility
+            - Keep everything self-contained in etag.go
+          files:
+            - internal/tools/etag.go
+            - internal/tools/etag_test.go
+    - number: 2
+      agents:
+        - id: D
+          task: |
+            ## What to implement
+
+            Wire the token savings and ETag helpers (created in wave 1) into the
+            get_editing_context tool and into existing tool handlers.
+
+            ### Files to create/modify
+
+            **1. Create `internal/tools/context_meta.go`**
+
+            This file adds token savings and etag support to get_editing_context:
+
+            ```go
+            package tools
+
+            import (
+                "context"
+                "encoding/json"
+
+                "github.com/blackwell-systems/agent-lsp/internal/lsp"
+                "github.com/blackwell-systems/agent-lsp/internal/types"
+            )
+
+            // HandleGetEditingContextWithMeta wraps HandleGetEditingContext to add
+            // ETag conditional response and token savings metadata.
+            func HandleGetEditingContextWithMeta(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
+                filePath, _ := args["file_path"].(string)
+                ifNoneMatch, _ := args["if_none_match"].(string)
+
+                // ETag check: if file hasn't changed, return short response
+                if filePath != "" && ifNoneMatch != "" {
+                    matched, result, _, err := CheckETagMatch(filePath, ifNoneMatch)
+                    if err == nil && matched {
+                        return result, nil
+                    }
+                }
+
+                // Delegate to the core handler
+                result, err := HandleGetEditingContext(ctx, client, args)
+                if err != nil || result.IsError {
+                    return result, err
+                }
+
+                // Add etag to the primary JSON response
+                if filePath != "" {
+                    etag, etagErr := ComputeFileETag(filePath)
+                    if etagErr == nil {
+                        result = injectETagField(result, etag)
+                    }
+                }
+
+                // Add token savings metadata
+                if filePath != "" {
+                    result = AppendTokenMeta(result, filePath)
+                }
+
+                return result, nil
+            }
+
+            // injectETagField parses the JSON in Content[0].Text, adds "etag" field,
+            // and re-marshals. If parsing fails, returns unchanged.
+            func injectETagField(result types.ToolResult, etag string) types.ToolResult {
+                if len(result.Content) == 0 || result.Content[0].Text == "" {
+                    return result
+                }
+                var obj map[string]any
+                if err := json.Unmarshal([]byte(result.Content[0].Text), &obj); err != nil {
+                    return result
+                }
+                obj["etag"] = etag
+                data, err := json.Marshal(obj)
+                if err != nil {
+                    return result
+                }
+                result.Content[0].Text = string(data)
+                return result
+            }
+            ```
+
+            **2. Modify `cmd/agent-lsp/tools_context.go`**
+
+            Add `if_none_match` field to GetEditingContextArgs. Find:
+            ```go
+            type GetEditingContextArgs struct {
+                FilePath   string `json:"file_path" jsonschema:"Absolute path to the file to get editing context for"`
+                LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier. Optional; auto-detected from file extension"`
+            }
+            ```
+            Add after LanguageID:
+            ```go
+                IfNoneMatch string `json:"if_none_match,omitempty" jsonschema:"ETag from a previous response. If file has not changed, returns a short not_modified response instead of recomputing"`
+            ```
+
+            Change the handler call from `tools.HandleGetEditingContext` to
+            `tools.HandleGetEditingContextWithMeta`. Find:
+            ```go
+            r, err := tools.HandleGetEditingContext(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+            ```
+            Replace with:
+            ```go
+            r, err := tools.HandleGetEditingContextWithMeta(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+            ```
+
+            **3. Modify `internal/tools/analysis.go`**
+
+            In `HandleGetDocumentSymbols`, after the final JSON marshal and before
+            the return statement, add token savings. Find the return near line ~380:
+            ```go
+            return appendHint(types.TextResult(string(data)), docSymbolHint), nil
+            ```
+            Change to:
+            ```go
+            return AppendTokenMeta(appendHint(types.TextResult(string(data)), docSymbolHint), filePath), nil
+            ```
+
+            Also do the same for the outline format return. Find:
+            ```go
+            return appendHint(types.TextResult(renderOutline(shifted, 0)), docSymbolHint), nil
+            ```
+            Change to:
+            ```go
+            return AppendTokenMeta(appendHint(types.TextResult(renderOutline(shifted, 0)), docSymbolHint), filePath), nil
+            ```
+
+            **4. Modify `internal/tools/symbol_source.go`**
+
+            In `HandleGetSymbolSource`, before the final return, add token savings.
+            Find where the JSON result is returned and wrap with AppendTokenMeta,
+            passing filePath.
+
+            **5. Modify `cmd/agent-lsp/tools_analysis.go`**
+
+            Add `IfNoneMatch` field to `GetDocumentSymbolsArgs`:
+            ```go
+            IfNoneMatch string `json:"if_none_match,omitempty" jsonschema:"ETag from a previous response. If file has not changed, returns not_modified"`
+            ```
+
+            Add `IfNoneMatch` field to `GetSymbolSourceArgs`:
+            ```go
+            IfNoneMatch string `json:"if_none_match,omitempty" jsonschema:"ETag from a previous response. If file has not changed, returns not_modified"`
+            ```
+
+            ### Interfaces relied upon
+            - `tools.HandleGetEditingContext` (from Agent A, wave 1)
+            - `tools.EstimateTokenSavings` (from Agent B, wave 1)
+            - `tools.AppendTokenMeta` (from Agent B, wave 1)
+            - `tools.ComputeFileETag` (from Agent C, wave 1)
+            - `tools.CheckETagMatch` (from Agent C, wave 1)
+
+            ### Verification gate
+            ```bash
+            GOWORK=off go build ./... && GOWORK=off go test ./internal/tools/ -run "TestHandleGetEditingContext|TestEstimate|TestCheckETag|TestAppendTokenMeta" && GOWORK=off go vet ./...
+            ```
+
+            Postconditions:
+            ```bash
+            grep -q "HandleGetEditingContextWithMeta" internal/tools/context_meta.go
+            grep -q "HandleGetEditingContextWithMeta" cmd/agent-lsp/tools_context.go
+            grep -q "if_none_match" cmd/agent-lsp/tools_context.go
+            grep -q "AppendTokenMeta" internal/tools/analysis.go
+            grep -q "AppendTokenMeta" internal/tools/symbol_source.go
+            ```
+
+            ### Constraints
+            - Do NOT modify internal/tools/context.go (Agent A's file)
+            - Do NOT modify internal/tools/token_savings.go or etag.go (Agents B/C)
+            - Do NOT modify helpers.go
+            - When modifying analysis.go and symbol_source.go, only add the
+              AppendTokenMeta call; do not refactor existing logic
+            - Do NOT add ETag conditional checks to list_symbols or get_symbol_source
+              in this wave (the if_none_match param is added to args structs for future
+              use but the check logic in the handlers is deferred to avoid complexity)
+          files:
+            - internal/tools/context_meta.go
+            - cmd/agent-lsp/tools_analysis.go
+            - internal/tools/analysis.go
+            - internal/tools/symbol_source.go
+          dependencies:
+            - A
+            - B
+            - C
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: GOWORK=off go build ./...
+          required: true
+        - type: lint
+          command: GOWORK=off go vet ./...
+          required: true
+        - type: test
+          command: GOWORK=off go test ./internal/... ./cmd/...
+          required: true
 pre_mortem:
-  overall_risk: low
-  rows:
-    - scenario: Agent A duplicates isTestFile instead of reusing from change_impact.go
-      likelihood: medium
-      impact: low
-      mitigation: Task explicitly states to call it directly (same package)
-    - scenario: Agent D modifies existing handler return paths incorrectly
-      likelihood: medium
-      impact: medium
-      mitigation: Task provides exact text anchors for modifications; verification runs existing tests
-    - scenario: Wave 2 agent cannot find HandleGetEditingContext due to naming mismatch
-      likelihood: low
-      impact: high
-      mitigation: Interface contract specifies exact name; postcondition grep verifies
-    - scenario: server.go registerContextTools call placed in wrong location
-      likelihood: low
-      impact: medium
-      mitigation: Text anchor provided (after registerSessionTools); build will fail if wrong
+    overall_risk: low
+    rows:
+        - scenario: Agent A duplicates isTestFile instead of reusing from change_impact.go
+          likelihood: medium
+          impact: low
+          mitigation: Task explicitly states to call it directly (same package)
+        - scenario: Agent D modifies existing handler return paths incorrectly
+          likelihood: medium
+          impact: medium
+          mitigation: Task provides exact text anchors for modifications; verification runs existing tests
+        - scenario: Wave 2 agent cannot find HandleGetEditingContext due to naming mismatch
+          likelihood: low
+          impact: high
+          mitigation: Interface contract specifies exact name; postcondition grep verifies
+        - scenario: server.go registerContextTools call placed in wrong location
+          likelihood: low
+          impact: medium
+          mitigation: Text anchor provided (after registerSessionTools); build will fail if wrong
+critic_report:
+    verdict: ISSUES
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: ISSUES
+            issues:
+                - check: symbol_accuracy
+                  severity: error
+                  description: Brief references client.GetHover(ctx, uri, pos) (*types.Hover, error) but no such method exists on LSPClient. The actual hover method is GetInfoOnLocation(ctx context.Context, uri string, pos types.Position) (string, error) with a completely different return type (string, not *types.Hover). The interface contract section also lists this wrong signature.
+                  file: internal/lsp/client.go
+                  symbol: GetHover
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+    summary: 'One error found: Agent A references a non-existent method client.GetHover with signature (*types.Hover, error). The actual hover method on LSPClient is GetInfoOnLocation which returns (string, error). The agent will fail to compile if it uses the documented interface. All other checks pass: file existence is correct (all new files do not exist, all modify files exist), patterns match, interface contracts are internally consistent, imports are available, and ownership is disjoint.'
+    reviewed_at: "2026-05-10T19:10:23Z"
+    issue_count: 1
+state: SCOUT_PENDING
