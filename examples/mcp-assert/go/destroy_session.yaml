@@ -1,4 +1,4 @@
-name: destroy_session rejects invalid session ID
+name: destroy_session returns already_destroyed for invalid session ID
 server:
   command: agent-lsp
   args: ["go:gopls"]
@@ -11,5 +11,6 @@ assert:
   args:
     session_id: "nonexistent-session"
   expect:
-    is_error: true
+    not_error: true
+    contains: ["already_destroyed"]
 timeout: 30s
