@@ -110,6 +110,11 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 		includeTransitive = v
 	}
 
+	scope := "exported"
+	if v, ok := args["scope"].(string); ok && v != "" {
+		scope = v
+	}
+
 	// Phase 1: Collect all exported symbols from all changed files.
 	// Only collects top-level exports (functions, types, variables, constants).
 	// Struct fields are excluded: they aren't independently callable and their
@@ -126,7 +131,11 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 			warnings = append(warnings, fmt.Sprintf("warning: could not get symbols for %s: %s", file, err))
 			continue
 		}
-		collectExportedSymbols(symbols, file, langID, &allExports, true)
+		if scope == "all" {
+			collectAllSymbols(symbols, file, langID, &allExports, true)
+		} else {
+			collectExportedSymbols(symbols, file, langID, &allExports, true)
+		}
 	}
 
 	// Phase 1.5: Warmup. The first reference query on a cold workspace forces
@@ -355,6 +364,49 @@ func collectExportedSymbols(syms []types.DocumentSymbol, filePath, langID string
 		}
 		if recurseIntoChildren {
 			collectExportedSymbols(sym.Children, filePath, langID, out, true)
+		}
+	}
+}
+
+// collectAllSymbols walks a DocumentSymbol tree and appends ALL symbols
+// (exported and unexported) to the provided slice. Used when scope="all"
+// is requested for dead code detection of internal helpers.
+// Struct fields (kind 8) are still excluded.
+func collectAllSymbols(syms []types.DocumentSymbol, filePath, langID string, out *[]exportedSymbol, recurseIntoChildren bool) {
+	var sourceLines []string
+	if data, err := os.ReadFile(filePath); err == nil {
+		sourceLines = strings.Split(string(data), "\n")
+	}
+
+	for _, sym := range syms {
+		if sym.Kind == 8 {
+			continue
+		}
+		line := sym.SelectionRange.Start.Line
+		char := sym.SelectionRange.Start.Character
+
+		searchName := sym.Name
+		if dotIdx := strings.LastIndex(searchName, "."); dotIdx >= 0 {
+			searchName = searchName[dotIdx+1:]
+		}
+		if line < len(sourceLines) {
+			if col := strings.Index(sourceLines[line], searchName); col >= 0 {
+				char = col
+			}
+		}
+
+		*out = append(*out, exportedSymbol{
+			Name:   sym.Name,
+			File:   filePath,
+			LangID: langID,
+			Position: types.Position{
+				Line:      line,
+				Character: char,
+			},
+			Line: line + 1,
+		})
+		if recurseIntoChildren {
+			collectAllSymbols(sym.Children, filePath, langID, out, true)
 		}
 	}
 }
