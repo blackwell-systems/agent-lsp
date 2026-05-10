@@ -146,7 +146,7 @@ Layer 1 (`Instructions`) is the missing piece. Implementation: set `ServerOption
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **`Instructions` on initialize** | Planned | Set `ServerOptions.Instructions` with condensed skill overview: tool count, key workflows (blast radius before edit, simulate before apply), pointer to `prompts/get` for full details. Under 200 tokens. Every MCP client receives it automatically. |
+| **`Instructions` on initialize** | **Shipped** | `ServerOptions.Instructions` set with condensed skill overview: tool count, key workflows (blast radius before edit, simulate before apply, verify after change), pointer to `prompts/get` for full details. Under 200 tokens. Every MCP client receives it automatically on connect. |
 | **`agent-lsp init` rules files** | Planned | When init targets Cursor, also write `.cursorrules`. Windsurf gets `.windsurfrules`. Claude Code gets CLAUDE.md skill section. Same content adapted to each provider's format. Supplements Layer 1 for clients that support persistent rules. |
 
 **Per-platform rules file mapping:**
