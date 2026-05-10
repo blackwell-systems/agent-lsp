@@ -1,9 +1,9 @@
 ---
 name: lsp-inspect
-description: Full code quality audit for a file or package. Applies a check taxonomy (dead symbols, silent failures, error wrapping, coverage gaps, test coverage, doc drift, unrecovered panics, context propagation) using LSP-first strategies. Produces a severity-tiered findings report. Language-agnostic.
-argument-hint: "<file-or-directory> [--checks <type1>,<type2>] [--json]"
+description: Full code quality audit for a file, package, or directory. Supports batch mode (directory walk with --top ranking), comparison mode (--diff for branch-only issues), severity calibration by blast radius, fix suggestions, and confidence tiers. Applies a check taxonomy (dead symbols, silent failures, error wrapping, coverage gaps, test coverage, doc drift, unrecovered panics, context propagation) using LSP-first strategies. Produces a severity-tiered findings report. Language-agnostic.
+argument-hint: "<file-or-directory> [--checks <type1>,<type2>] [--json] [--top N] [--diff]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_change_impact mcp__lsp__find_references mcp__lsp__list_symbols mcp__lsp__inspect_symbol mcp__lsp__get_diagnostics mcp__lsp__find_callers mcp__lsp__go_to_definition mcp__lsp__get_server_capabilities mcp__lsp__get_cross_repo_references
+allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_change_impact mcp__lsp__find_references mcp__lsp__list_symbols mcp__lsp__inspect_symbol mcp__lsp__get_diagnostics mcp__lsp__find_callers mcp__lsp__go_to_definition mcp__lsp__get_server_capabilities mcp__lsp__get_cross_repo_references Bash
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -18,7 +18,7 @@ metadata:
 Full code quality audit for a file, package, or directory. Combines LSP batch
 analysis (`get_change_impact`) with targeted per-symbol checks and LLM-driven
 heuristic analysis. Produces a severity-tiered findings report with confidence
-levels.
+tiers and fix suggestions.
 
 ## When to Use
 
@@ -26,11 +26,13 @@ levels.
 - Finding dead code, untested exports, and error handling gaps in unfamiliar code
 - Reviewing code quality of an external codebase for contribution opportunities
 - Pre-merge quality gate on a set of changed files
+- Batch inspection of an entire directory with ranked output
+- Comparing branch changes against main to find newly introduced issues
 
 ## Input
 
 ```
-/lsp-inspect <target> [--checks <type1>,<type2>] [--json]
+/lsp-inspect <target> [--checks <type1>,<type2>] [--json] [--top N] [--diff]
 ```
 
 **Target** can be:
@@ -38,9 +40,15 @@ levels.
 - A directory/package: `/lsp-inspect internal/runnables/`
 - Multiple targets: `/lsp-inspect pkg/a.go pkg/b.go`
 
+**Directory detection:** When target is a directory, walk all `.go`, `.ts`, `.py`
+files in it recursively. Produce a ranked report: "Top N findings sorted by
+severity then blast radius."
+
 **Flags:**
 - `--checks <type1>,<type2>`: only run listed check types (default: all applicable)
 - `--json`: emit structured JSON instead of markdown
+- `--top N`: Maximum findings to report (default 20). Only applies to directory/batch mode.
+- `--diff`: Only inspect files changed vs main branch. Filter findings to lines within the diff ranges. Output header: "New issues introduced by this branch."
 
 ## Check Taxonomy
 
@@ -73,6 +81,16 @@ mcp__lsp__open_document(file_path="<target_file>", language_id="<lang>")
 Call `find_references` on it. If it returns `[]`, wait 3-5 seconds and retry.
 Do not proceed until a known-active symbol returns >= 1 reference.
 
+### Step 0.5: Diff mode file selection
+
+When `--diff` is set:
+1. Run `git diff --name-only main` to get changed files
+2. Run `git diff main` to get line-level change ranges
+3. Use only changed files as inspection targets
+4. After Step 3, filter findings: keep only those whose File:Line falls within
+   a changed line range from the diff
+5. Prepend output with: '## New issues introduced by this branch'
+
 ### Step 1: Batch analysis (Tier 1A)
 
 Call `get_change_impact` once per file in the target:
@@ -86,9 +104,9 @@ This returns all exported symbols with:
 - `test_callers`: count of test file references
 
 Classify immediately:
-- `non_test_callers == 0 AND test_callers == 0` -> dead symbol candidate
-- `non_test_callers == 0 AND test_callers > 0` -> test-only (may be dead)
-- `non_test_callers > 0 AND test_callers == 0` -> untested export
+- `non_test_callers == 0 AND test_callers == 0` -> dead symbol candidate (confidence: verified)
+- `non_test_callers == 0 AND test_callers > 0` -> test-only (may be dead, confidence: suspected)
+- `non_test_callers > 0 AND test_callers == 0` -> untested export (confidence: verified)
 
 If `get_change_impact` fails or is unavailable, fall back to Tier 1B
 (`find_references` per-symbol) for `dead_symbol` checks.
@@ -131,15 +149,24 @@ Apply the following checks by reading and reasoning about the code:
 
 For each finding, assign:
 
-**Severity:**
-- `error`: Will cause runtime failure, data loss, or resource leak
-- `warning`: May cause confusion, maintenance burden, or subtle bugs
-- `info`: Style issue or improvement opportunity
+**Severity (calibrated by blast radius):**
+- `error`: Will cause runtime failure, data loss, or resource leak, OR any finding where `non_test_callers >= 10` (high blast radius amplifies severity)
+- `warning`: May cause confusion, maintenance burden, or subtle bugs, OR findings where `non_test_callers` is 3-9
+- `info`: Style issue or improvement opportunity, OR `non_test_callers <= 2`
 
-**Confidence:**
-- `high`: LSP-verified (Tier 1A/1B) or unambiguous code pattern
-- `medium`: Heuristic match with possible false positive
-- `low`: Grep-based or uncertain pattern match
+Use the `non_test_callers` count from Step 1's `get_change_impact` result as a
+severity multiplier. A silent failure in a function with 50 callers is
+error-severity; the same pattern with 2 callers is info.
+
+**Cross-file impact scoring:** For every finding, look up the symbol's
+`non_test_callers` count from Step 1's get_change_impact result. Use this as a
+severity multiplier: if non_test_callers >= 10, escalate severity by one tier
+(info->warning, warning->error). Document the caller count in the finding.
+
+**Confidence tiers:**
+- `verified`: LSP-confirmed (Tier 1A/1B) or unambiguous code pattern (act immediately)
+- `suspected`: Heuristic match with possible false positive (pattern match, investigate first)
+- `advisory`: Grep-based or uncertain pattern match (style, optional)
 
 ### Step 4: Output
 
@@ -154,25 +181,70 @@ Produce the findings report:
 
 ### Errors
 
-| # | Check | File:Line | Finding | Confidence |
-|---|-------|-----------|---------|------------|
-| 1 | dead_symbol | pkg/foo.go:42 | `UnusedHelper` has 0 references | high (LSP) |
+| # | Check | File:Line | Finding | Confidence | Fix |
+|---|-------|-----------|---------|------------|-----|
+| 1 | dead_symbol | pkg/foo.go:42 | `UnusedHelper` has 0 references (0 callers) | verified (LSP) | Remove lines 42-55 (function `UnusedHelper`) |
 
 ### Warnings
 
-| # | Check | File:Line | Finding | Confidence |
-|---|-------|-----------|---------|------------|
-| 1 | error_wrapping | pkg/bar.go:88 | `return err` without context wrapping | high |
-| 2 | test_coverage | pkg/foo.go:15 | `ProcessInput` has 0 test callers | high (LSP) |
+| # | Check | File:Line | Finding | Confidence | Fix |
+|---|-------|-----------|---------|------------|-----|
+| 1 | error_wrapping | pkg/bar.go:88 | `return err` without context wrapping (5 callers) | verified | Change `return err` to `return fmt.Errorf("funcName: %w", err)` |
+| 2 | test_coverage | pkg/foo.go:15 | `ProcessInput` has 0 test callers (8 callers) | verified (LSP) | Add test for `ProcessInput` in foo_test.go |
 
 ### Info
 
-| # | Check | File:Line | Finding | Confidence |
-|---|-------|-----------|---------|------------|
-| 1 | doc_drift | pkg/foo.go:20 | Docstring mentions `timeout` param, signature has `deadline` | medium |
+| # | Check | File:Line | Finding | Confidence | Fix |
+|---|-------|-----------|---------|------------|-----|
+| 1 | doc_drift | pkg/foo.go:20 | Docstring mentions `timeout` param, signature has `deadline` (1 caller) | suspected | Update docstring parameter name from timeout to deadline |
 ```
 
+**Fix suggestions per check type:**
+- `dead_symbol`: "Remove lines N-M (function `FuncName`)"
+- `error_wrapping`: "Change `return err` to `return fmt.Errorf(\"funcName: %w\", err)`"
+- `silent_failure`: "Add `return fmt.Errorf(...)` after the if block"
+- `test_coverage`: "Add test for `FuncName` in file_test.go"
+- `coverage_gap`: "Add default case to switch statement at line N"
+- `doc_drift`: "Update docstring parameter name from X to Y"
+- `panic_not_recovered`: "Add `defer func() { if r := recover()... }()` at goroutine start"
+- `context_propagation`: "Replace `context.Background()` with `ctx` parameter"
+
 When `--json` is passed, emit structured JSON with the same fields.
+
+### Step 4.5: Batch ranking
+
+When multiple files are analyzed, sort all findings by: (1) severity tier
+(error > warning > info), (2) blast radius (non_test_callers descending),
+(3) file path alphabetically. Emit only the top N findings (default 20,
+controlled by --top flag). Append a summary line: 'Showing N of M total findings.'
+
+### Step 5: Persist results
+
+After producing the findings report, write a JSON file to
+`.agent-lsp/last-inspection.json` in the workspace root. The JSON schema:
+
+```json
+{
+  "target": "<original target path>",
+  "timestamp": "<ISO 8601>",
+  "files_analyzed": N,
+  "findings": [
+    {
+      "severity": "error|warning|info",
+      "confidence": "verified|suspected|advisory",
+      "check": "<check_type>",
+      "file": "<path>",
+      "line": N,
+      "finding": "<description>",
+      "fix": "<exact fix text>",
+      "blast_radius": N
+    }
+  ],
+  "summary": {"errors": N, "warnings": N, "info": N}
+}
+```
+
+This file is served by the `inspect://last` MCP resource for programmatic access.
 
 ## Caveats
 

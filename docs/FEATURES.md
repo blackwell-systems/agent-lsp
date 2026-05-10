@@ -295,7 +295,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `/lsp-extract-function` | `[file-path] [start-line] [end-line] [name]` | list_symbols, suggest_fixes, execute_command, apply_edit, get_diagnostics, format_document | Extract code block into named function; LSP code action primary, manual fallback with captured-variable analysis |
 | `/lsp-generate` | `[file-path:line:col] [intent]` | suggest_fixes, execute_command, apply_edit, format_document, get_diagnostics, go_to_symbol | Language server code generation: interface stubs, test skeletons, missing methods, mocks |
 | `/lsp-understand` | `[symbol-name \| file-path]` | inspect_symbol, go_to_implementation, find_callers, find_references, get_symbol_source, list_symbols, go_to_symbol | Deep Code Map: type info + implementations + call hierarchy (2-level) + references + source; synthesizes cross-symbol relationships |
-| `/lsp-inspect` | `<file-or-directory> [--checks <types>] [--json]` | get_change_impact, find_references, list_symbols, inspect_symbol, get_diagnostics, find_callers, go_to_definition, get_server_capabilities | Full code quality audit: dead symbols, test coverage, silent failures, error wrapping, doc drift, panics, context propagation; severity-tiered findings report |
+| `/lsp-inspect` | `<file-or-directory> [--checks <types>] [--json] [--top N] [--diff]` | get_change_impact, find_references, list_symbols, inspect_symbol, get_diagnostics, find_callers, go_to_definition, get_server_capabilities | Full code quality audit: dead symbols, test coverage, silent failures, error wrapping, doc drift, panics, context propagation; batch mode with --top ranking; comparison mode with --diff; blast-radius severity calibration; fix suggestions; confidence tiers (verified/suspected/advisory); result persistence via inspect://last resource |
 | `/lsp-architecture` | `[workspace-root-path]` | start_lsp, list_symbols, get_change_impact, detect_lsp_servers, find_symbol | Project-level architecture overview: language distribution, package map (capped at 30), entry points, hotspots (top 10 by reference count), dependency flow. Read-only. |
 | `/lsp-onboard` | `[workspace-root-path]` | start_lsp, detect_lsp_servers, list_symbols, find_symbol, get_change_impact, run_build, run_tests, get_diagnostics, get_editing_context | First-session project onboarding: detect languages, build system, entry points, package map, hotspots, diagnostics baseline. Produces a structured project profile. |
 
@@ -414,6 +414,15 @@ library_references: [file:line ...]
 consumer_references: { "/path/to/consumer-a": [file:line ...], ... }
 warnings: [roots that failed indexing]
 ```
+
+**`/lsp-inspect` capabilities:**
+- **Batch mode:** Directory-level inspection with `--top N` ranked output. Walks all `.go`, `.ts`, `.py` files recursively and produces findings sorted by severity then blast radius.
+- **Comparison mode:** `--diff` flag for branch-only issue detection. Filters findings to lines within git diff ranges against main. Output prefixed with "New issues introduced by this branch."
+- **Unexported dead code detection:** Pass `scope='all'` to `get_change_impact` to include unexported/lowercase symbols in dead code analysis, not just exported symbols.
+- **MCP resource `inspect://last`:** Programmatic access to the last inspection result. Results persisted to `.agent-lsp/last-inspection.json` in workspace root.
+- **Confidence tiers:** `verified` (LSP-confirmed, act immediately), `suspected` (pattern match, investigate first), `advisory` (style, optional). Replaces the previous high/medium/low labels.
+- **Fix suggestions:** Every finding includes exact fix text (e.g., "Remove lines N-M", "Change `return err` to `return fmt.Errorf(...)`").
+- **Blast-radius severity calibration:** Severity escalates based on `non_test_callers` count from `get_change_impact`. Functions with 10+ callers have findings escalated by one tier (info->warning, warning->error).
 
 ---
 
