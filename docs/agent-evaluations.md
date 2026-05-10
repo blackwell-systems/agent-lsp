@@ -128,6 +128,23 @@ write a one-paragraph summary.
 
 **Friction points addressed after evaluations:**
 - `get_change_impact` promoted to IMPORTANT in Instructions
+- `get_change_impact` now includes exported methods (receiver prefix fix)
+- `get_change_impact` now includes per-symbol test_callers (not just flat list)
 - `find_callers` description clarified (functions/methods only)
+- `find_references` and `inspect_symbol` support `position_pattern` without line/column
+- `preview_edit` net_delta no longer counts hints (severity 3/4 filtered)
+- `destroy_session` after `preview_edit` returns success instead of error
 - `format_document` description clarified (single-file scope)
 - Go test path auto-fix shipped (bare paths now auto-prefixed)
+
+---
+
+## Unprompted project assessment (GPT-5.5, fourth evaluation)
+
+After completing the 10 tasks, GPT-5.5 volunteered this unprompted assessment of the project's positioning:
+
+> "Most 'coding agent' tooling wraps shell commands, grep, tree-sitter, or editor-style LSP access in a loose way. This project is more opinionated: it exposes LSP operations as agent-native tools for blast-radius analysis, safe edits, preview diagnostics, call hierarchy, implementations, formatting, tests, and workspace simulation. The stronger idea is not just 'an agent can call LSP,' but 'an agent gets refactoring-grade workflows as structured MCP tools.'"
+>
+> "The parts that feel most distinctive are: get_change_impact (one-shot exported symbol and caller partitioning is very agent-oriented), preview_edit (speculative type-checking before touching disk is exactly the kind of guardrail coding agents need), safe_delete_symbol/rename_symbol/format_document/get_diagnostics (these turn common risky edits into structured workflows), and the evaluation angle (the project is clearly testing whether semantic tools actually beat grep/read loops, which is the right question)."
+>
+> "It's not unique in the sense that LSP, MCP, code intelligence, and refactoring tools all exist separately. But combining them into an agent-facing MCP server with safety-oriented workflows is meaningfully differentiated. The main challenge is polish: summaries, latency, noisy outputs, and trustworthiness need to be excellent for agents to prefer it over fast shell tools."
