@@ -219,6 +219,9 @@ func (m *ServerManager) StartForLanguage(ctx context.Context, rootDir, languageI
 
 // startOrConnectDaemon checks for an existing daemon and connects, or spawns a new one.
 func (m *ServerManager) startOrConnectDaemon(ctx context.Context, rootDir, languageID string, command []string) (*LSPClient, error) {
+	// Remove state for daemons whose processes died without cleanup.
+	CleanupStaleDaemons()
+
 	// Check for existing running daemon.
 	info, err := FindRunningDaemon(rootDir, languageID)
 	if err == nil && info != nil {
