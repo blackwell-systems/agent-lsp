@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [0.11.0] - 2026-05-10
+
+### Added
+
+- **`get_change_impact`: new `scope` parameter.** Pass `scope: "all"` to include unexported symbols for dead code detection. Default remains `"exported"` for backward compatibility.
+- **`/lsp-inspect`: batch mode with `--top N` flag.** Accept a directory and walk all packages, producing a ranked report sorted by severity and blast radius.
+- **`/lsp-inspect`: comparison mode with `--diff` flag.** Run on a PR diff to surface new dead code, silent failures, or coverage gaps introduced by a change.
+- **`/lsp-inspect`: fix suggestions with exact fix text.** Every finding includes the specific fix (e.g., "remove lines 42-58" for dead code). Agents can generate a PR directly from inspector output.
+- **`/lsp-inspect`: confidence tiers.** Findings now use actionable labels: "verified" (LSP confirmed, act immediately), "suspected" (pattern match, investigate first), "advisory" (style suggestion, optional).
+- **`/lsp-inspect`: blast-radius severity calibration.** Findings are weighted by caller count via `get_change_impact`. A silent failure with 50 callers ranks higher than one with 2.
+- **`/lsp-inspect`: results persisted to `.agent-lsp/last-inspection.json`.** Inspector output saved after each run for programmatic access.
+- **MCP resource `inspect://last`.** Serves the last inspection results as JSON. Agents can re-read findings without re-running the full analysis.
+
 ## [0.10.0] - 2026-05-10
 
 ### Added
