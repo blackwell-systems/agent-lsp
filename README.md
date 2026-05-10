@@ -28,7 +28,7 @@ We asked AI agents to evaluate agent-lsp across 10 coding tasks (find callers, r
 
 > **Cursor (auto):** "I would recommend agent-lsp for heavy refactors and code navigation because the rename, references, implementations, call hierarchy, and simulation tools remove a lot of brittle grep/manual-edit work and make changes safer."
 
-> **GPT-5.5 (via Codex):** "I would recommend agent-lsp for symbol-aware navigation, blast-radius checks, rename previews, implementation lookup, and speculative diagnostics because those tasks collapse from many grep/read/reference loops into one or two precise calls."
+> **GPT-5.5 (via Codex):** "I would recommend agent-lsp for symbol-aware work: references, implementations, rename previews, diagnostics, and large-file structure are materially faster and less error-prone than grep/read loops."
 
 **How the pieces fit together:** [LSP](https://microsoft.github.io/language-server-protocol/) (Language Server Protocol) is how editors get code intelligence: completions, diagnostics, go-to-definition. [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) is the standard way AI tools like Claude Code discover and call external tools. agent-lsp bridges the two: language server intelligence, accessible to AI agents.
 
