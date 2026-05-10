@@ -9,8 +9,8 @@ import (
 	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
-// mockSender records calls for test verification.
-type mockSender struct {
+// staleMockSender records calls for test verification.
+type staleMockSender struct {
 	mu       sync.Mutex
 	logs     []logEntry
 	updates  []string
@@ -20,14 +20,14 @@ type logEntry struct {
 	level, logger, message string
 }
 
-func (m *mockSender) SendLog(level, logger, message string) error {
+func (m *staleMockSender) SendLog(level, logger, message string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.logs = append(m.logs, logEntry{level, logger, message})
 	return nil
 }
 
-func (m *mockSender) SendResourceUpdated(uri string) error {
+func (m *staleMockSender) SendResourceUpdated(uri string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.updates = append(m.updates, uri)
@@ -35,7 +35,7 @@ func (m *mockSender) SendResourceUpdated(uri string) error {
 }
 
 func TestStaleNotifier_Debounce(t *testing.T) {
-	sender := &mockSender{}
+	sender := &staleMockSender{}
 	hub := NewHub(sender)
 	n := NewStaleNotifier(hub, 50*time.Millisecond)
 
@@ -58,7 +58,7 @@ func TestStaleNotifier_Debounce(t *testing.T) {
 }
 
 func TestStaleNotifier_Emits(t *testing.T) {
-	sender := &mockSender{}
+	sender := &staleMockSender{}
 	hub := NewHub(sender)
 	n := NewStaleNotifier(hub, 20*time.Millisecond)
 
@@ -99,7 +99,7 @@ func TestStaleNotifier_Emits(t *testing.T) {
 }
 
 func TestStaleNotifier_ResourceUpdate(t *testing.T) {
-	sender := &mockSender{}
+	sender := &staleMockSender{}
 	hub := NewHub(sender)
 	n := NewStaleNotifier(hub, 20*time.Millisecond)
 
@@ -118,7 +118,7 @@ func TestStaleNotifier_ResourceUpdate(t *testing.T) {
 }
 
 func TestStaleNotifier_Stop(t *testing.T) {
-	sender := &mockSender{}
+	sender := &staleMockSender{}
 	hub := NewHub(sender)
 	n := NewStaleNotifier(hub, 5*time.Second) // long interval
 
