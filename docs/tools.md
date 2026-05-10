@@ -1,6 +1,6 @@
 # agent-lsp Tool Reference
 
-All 56 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
+All 60 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
 both `line` and `column` in every tool call; the server converts internally to
 the 0-based values the LSP spec requires.
 
@@ -12,6 +12,7 @@ the 0-based values the LSP spec requires.
 - [Analysis tools](#analysis-tools): `get_diagnostics`, `get_info_on_location`, `get_completions`, `get_signature_help`, `get_code_actions`, `get_document_symbols`, `get_workspace_symbols`, `get_change_impact`, `get_cross_repo_references`, `detect_changes`
 - [Navigation tools](#navigation-tools): `get_references`, `go_to_definition`, `go_to_type_definition`, `go_to_implementation`, `go_to_declaration`
 - [Refactoring tools](#refactoring-tools): `rename_symbol`, `prepare_rename`, `format_document`, `format_range`, `apply_edit`, `execute_command`
+- [Symbol editing tools](#symbol-editing-tools): `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, `safe_delete_symbol`
 - [Utilities](#utilities): `did_change_watched_files`, `set_log_level`
 - [Code Intelligence tools](#code-intelligence-tools): `call_hierarchy`, `type_hierarchy`, `get_inlay_hints`, `get_semantic_tokens`, `get_document_highlights`
 - [Build & Test tools](#build--test-tools): `run_build`, `run_tests`, `get_tests_for_file`
@@ -1535,6 +1536,149 @@ Command executed successfully (no result returned)
   `get_code_actions` to discover commands rather than constructing them manually.
 - Some commands apply changes server-side and push `workspace/applyEdit`
   requests; others return an edit that you must apply with `apply_edit`.
+
+---
+
+## Symbol editing tools
+
+Four tools for editing, inserting, and deleting symbols by name without needing
+exact line/column coordinates. These resolve symbols via `get_document_symbols`
+internally.
+
+### `replace_symbol_body`
+
+Replace a symbol's entire body (function, method, type) by name. Resolves the
+symbol within the file using document symbols, finds its full range, and replaces
+it with the provided text.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | Absolute path to the file containing the symbol |
+| `symbol_path` | string | yes | Symbol name in dot notation (e.g. `"MyFunc"`, `"MyStruct.Method"`) |
+| `new_body` | string | yes | Complete replacement text for the symbol (including signature) |
+
+**Example call**
+
+```json
+{
+  "file_path": "/home/user/project/pkg/handler.go",
+  "symbol_path": "Handler.ServeHTTP",
+  "new_body": "func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {\n\tw.WriteHeader(http.StatusOK)\n}"
+}
+```
+
+**Notes**
+
+- The `new_body` must include the full definition (signature + body), not just the interior.
+- For methods, use `Type.Method` dot notation.
+- Fails if the symbol cannot be found in the file's document symbol tree.
+- After replacement, the language server is notified via `didChange`.
+
+---
+
+### `insert_after_symbol`
+
+Insert code immediately after a named symbol. Useful for adding a new function
+after an existing one, or appending related code near a symbol.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | Absolute path to the file |
+| `symbol_path` | string | yes | Symbol name in dot notation |
+| `code` | string | yes | Code to insert after the symbol |
+
+**Example call**
+
+```json
+{
+  "file_path": "/home/user/project/pkg/math.go",
+  "symbol_path": "Add",
+  "code": "\nfunc Subtract(a, b int) int {\n\treturn a - b\n}\n"
+}
+```
+
+**Notes**
+
+- Inserts immediately after the symbol's closing brace/end line.
+- Include leading/trailing newlines in `code` for proper spacing.
+- Fails if the symbol cannot be found.
+
+---
+
+### `insert_before_symbol`
+
+Insert code immediately before a named symbol. Useful for adding comments,
+decorators, or related code above an existing definition.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | Absolute path to the file |
+| `symbol_path` | string | yes | Symbol name in dot notation |
+| `code` | string | yes | Code to insert before the symbol |
+
+**Example call**
+
+```json
+{
+  "file_path": "/home/user/project/pkg/math.go",
+  "symbol_path": "Add",
+  "code": "// Deprecated: use AddV2 instead.\n"
+}
+```
+
+**Notes**
+
+- Inserts immediately before the symbol's start line.
+- Include trailing newline in `code` so the symbol starts on its own line.
+- Fails if the symbol cannot be found.
+
+---
+
+### `safe_delete_symbol`
+
+Delete a symbol only if it has zero references across the workspace. Performs a
+`get_references` check before deletion; refuses to delete if any callers exist.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | Absolute path to the file containing the symbol |
+| `symbol_path` | string | yes | Symbol name in dot notation |
+
+**Example call**
+
+```json
+{
+  "file_path": "/home/user/project/pkg/legacy.go",
+  "symbol_path": "DeprecatedHelper"
+}
+```
+
+**Expected output (success)**
+
+```
+Symbol "DeprecatedHelper" deleted (0 references found)
+```
+
+**Expected output (refused)**
+
+```
+Cannot delete "DeprecatedHelper": 3 references found in 2 files
+```
+
+**Notes**
+
+- Uses `get_references` with `include_declaration: false` to check for callers.
+- Refuses deletion if any reference is found, even in test files.
+- After successful deletion, notifies the language server via `didChange`.
+- Does not remove related imports or test code; use diagnostics to clean up.
 
 ---
 

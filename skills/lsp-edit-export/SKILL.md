@@ -3,7 +3,7 @@ name: lsp-edit-export
 description: Safe workflow for editing exported symbols or public APIs. Use when changing a function signature, modifying a public type, or altering any symbol used outside its own package — finds all callers first so nothing breaks silently.
 argument-hint: "[symbol-name]"
 user-invocable: true
-allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__open_document mcp__lsp__get_references mcp__lsp__get_diagnostics mcp__lsp__run_build Edit Write
+allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__open_document mcp__lsp__get_references mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__replace_symbol_body Edit Write
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -125,9 +125,21 @@ point, not a guarantee.
 
 ### Step 4 — Make the edit
 
-Apply your intended change using `Edit` or `Write`. Follow the standard edit
-workflow for the language. If renaming, update all call sites identified in
-step 2 as well — do not leave broken callers.
+Apply your intended change using `Edit` or `Write`. When replacing a complete
+function or method body, `replace_symbol_body` is an option that resolves the
+symbol by name and replaces its full range without position math:
+
+```
+mcp__lsp__replace_symbol_body({
+  "file_path": "<definition file>",
+  "symbol_path": "ExportedFunction",
+  "new_body": "<new full definition>"
+})
+```
+
+For other edits (signature changes, partial modifications), use `Edit` or `Write`.
+Follow the standard edit workflow for the language. If renaming, update all call
+sites identified in step 2 as well; do not leave broken callers.
 
 Collect diagnostics **before** the edit so you have a baseline for comparison
 in step 5:

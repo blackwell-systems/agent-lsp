@@ -3,7 +3,7 @@ name: lsp-dead-code
 description: Enumerate exported symbols in a file and surface those with zero references across the workspace. Use when auditing for dead code, cleaning up APIs, or checking which exports are safe to remove.
 argument-hint: "[file-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__get_document_symbols mcp__lsp__get_references mcp__lsp__open_document
+allowed-tools: mcp__lsp__get_document_symbols mcp__lsp__get_references mcp__lsp__open_document mcp__lsp__safe_delete_symbol
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -209,3 +209,28 @@ After generating the report:
 - **For symbols with 1–2 references in production code:** These are likely
   active but lightly used. Do not remove without checking whether they are
   part of a committed public API.
+
+## Step 5 — Optional cleanup with `safe_delete_symbol`
+
+After reviewing the dead code report and confirming candidates with the user,
+you may offer to remove confirmed zero-reference symbols using `safe_delete_symbol`:
+
+```
+mcp__lsp__safe_delete_symbol({
+  "file_path": "/abs/path/to/file.go",
+  "symbol_path": "DeadFunction"
+})
+```
+
+This tool performs its own reference check before deleting. If any references
+exist (even ones missed in the initial scan), the deletion is refused.
+
+**Requirements before using this step:**
+
+1. The user has explicitly confirmed they want the symbol removed.
+2. The symbol was classified as a confirmed dead candidate (zero LSP + zero grep references).
+3. You have reviewed the Caveats section above and communicated relevant risks.
+
+Do NOT auto-delete symbols without user confirmation. Present the dead code
+report first, let the user select which symbols to remove, then execute
+`safe_delete_symbol` for each approved removal.

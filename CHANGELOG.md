@@ -7,6 +7,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
+- **Symbol-level editing tools (4 new tools).** `replace_symbol_body` replaces a function/method/type body by name without needing line/column coordinates. `insert_after_symbol` and `insert_before_symbol` add code adjacent to a named symbol. `safe_delete_symbol` removes a symbol only after confirming zero references via `get_references`. All four resolve symbols internally via `get_document_symbols`. Skills updated: `lsp-edit-symbol` now uses `replace_symbol_body` as the primary edit path, `lsp-dead-code` offers optional cleanup via `safe_delete_symbol`, and `lsp-refactor`/`lsp-edit-export` support `replace_symbol_body` as an alternative to positional edits. Tool count: 56 to 60.
+
 - **Provider-specific rules files during `init`.** `agent-lsp init` now writes a skill awareness rules file alongside the MCP config, giving every AI provider immediate context about the 22 skills and when to use them. Claude Code gets a managed CLAUDE.md section (between sentinel comments, safe to run repeatedly). Cursor gets `.cursor/rules/agent-lsp.mdc`. Cline gets `.clinerules`. Windsurf gets `~/.windsurfrules`. Gemini CLI gets `GEMINI.md`. All use managed sections to preserve existing user content. Content generated from embedded SKILL.md files at runtime, staying in sync with shipped skills automatically.
 
 - **Fix: skill description parsing.** `parseSkillMD` now skips indented keys in SKILL.md frontmatter, preventing nested `description` fields (from `tool_permissions` phase definitions) from overwriting the top-level skill description. Four skills (lsp-refactor, lsp-rename, lsp-safe-edit, lsp-verify) had wrong descriptions in `prompts/list` responses.

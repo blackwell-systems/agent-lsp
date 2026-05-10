@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-56%2F56-brightgreen.svg" alt="CI Coverage"></a>
+  <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-60%2F60-brightgreen.svg" alt="CI Coverage"></a>
   <a href="#multi-language-support"><img src="https://img.shields.io/badge/languages-30_CI--verified-brightgreen.svg" alt="Languages"></a>
   <a href="https://github.com/blackwell-systems/mcp-assert"><img src="https://raw.githubusercontent.com/blackwell-systems/mcp-assert/main/assets/badge-passing.svg?v=3" alt="mcp-assert: passing" height="20"></a>
   <a href="https://agentskills.io"><img src="assets/badge-agentskills.svg" alt="Agent Skills"></a>
@@ -14,7 +14,7 @@
   <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
 </p>
 
-**The most complete MCP server for language intelligence.** 56 tools, 30 CI-verified languages, 22 agent workflows. Single Go binary.
+**The most complete MCP server for language intelligence.** 60 tools, 30 CI-verified languages, 22 agent workflows. Single Go binary.
 
 AI agents make incorrect code changes because they can't see the full picture: who calls this function, what breaks if I rename it, does the build still pass. Language servers have the answers, but existing MCP bridges either cold-start on every request or expose raw tools that agents use incorrectly.
 
@@ -269,13 +269,13 @@ Your AI agent calls tools automatically. The first call initializes the workspac
 start_lsp(root_dir="/your/project")
 ```
 
-This is what the agent does, not something you type. Then use any of the 56 tools. The session stays warm; no restart needed when switching files.
+This is what the agent does, not something you type. Then use any of the 60 tools. The session stays warm; no restart needed when switching files.
 
 ## What's unique about agent-lsp
 
 | Capability | Details |
 |------------|---------|
-| Tools | **56** |
+| Tools | **60** |
 | Languages (CI-verified) | **30** — end-to-end integration tests on every push |
 | Agent workflows (skills) | **22** — named multi-step procedures, discoverable via MCP `prompts/list` |
 | Speculative execution | **8 tools** — simulate changes before writing to disk |
@@ -307,7 +307,7 @@ See [docs/language-support.md](./docs/language-support.md) for the full coverage
 
 ## Tools
 
-56 tools covering navigation, analysis, refactoring, speculative execution, and session lifecycle. All CI-verified.
+60 tools covering navigation, analysis, refactoring, symbol editing, speculative execution, and session lifecycle. All CI-verified.
 
 See [docs/tools.md](./docs/tools.md) for the full reference with parameters and examples.
 

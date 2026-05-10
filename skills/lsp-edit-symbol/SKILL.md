@@ -7,6 +7,7 @@ allowed-tools:
   - mcp__lsp__get_workspace_symbols
   - mcp__lsp__get_document_symbols
   - mcp__lsp__apply_edit
+  - mcp__lsp__replace_symbol_body
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -16,11 +17,13 @@ metadata:
 # lsp-edit-symbol
 
 Edit a named symbol (function, type, variable) without needing its exact file path
-or line/column. Composes `go_to_symbol` → `get_document_symbols` → `apply_edit`.
+or line/column. Primary path uses `replace_symbol_body` for direct symbol replacement.
+Falls back to `get_workspace_symbols` + `get_document_symbols` + `apply_edit` when
+the server does not support document symbols well.
 
 ## Workflow
 
-### Step 1 — Locate the symbol
+### Step 1 — Locate the file
 
 ```json
 { "tool": "get_workspace_symbols", "query": "MyFunc" }
@@ -30,7 +33,30 @@ Returns a list of matching symbols with file URI and position. Pick the definiti
 (not a test file, not a stub). If multiple matches, use the container name or file
 path to disambiguate.
 
-### Step 2 — Get the full range
+### Step 2 — Replace the symbol body (primary path)
+
+Use `replace_symbol_body` to replace the entire function/method/type body by name:
+
+```json
+{
+  "tool": "replace_symbol_body",
+  "file_path": "/path/to/file.go",
+  "symbol_path": "MyFunc",
+  "new_body": "func MyFunc() error {\n\treturn nil\n}"
+}
+```
+
+For methods, use dot notation: `"MyStruct.Method"`.
+
+This resolves the symbol by name within the file, finds its full range, and replaces
+it atomically. No position math required.
+
+**If `replace_symbol_body` fails** (e.g., the server cannot resolve document symbols
+for this file), fall back to the manual path below.
+
+### Fallback — Manual resolution via document symbols
+
+**Step 2b — Get the full range:**
 
 ```json
 {
@@ -41,12 +67,11 @@ path to disambiguate.
 ```
 
 Find `MyFunc` in the returned tree. The `range` field covers the entire symbol
-including its body; `selectionRange` covers only the name. Use `range` when
-replacing the full definition, `selectionRange` when renaming only.
+including its body; `selectionRange` covers only the name.
 
-### Step 3 — Apply the edit
+**Step 3b — Apply the edit:**
 
-**Option A — text-match (recommended when you have the old text):**
+Option A (text-match, recommended when you have the old text):
 ```json
 {
   "tool": "apply_edit",
@@ -55,9 +80,8 @@ replacing the full definition, `selectionRange` when renaming only.
   "new_text": "func MyFunc() error {"
 }
 ```
-No position needed. Tolerates indentation differences.
 
-**Option B — positional (when you have the exact range from Step 2):**
+Option B (positional, when you have the exact range):
 ```json
 {
   "tool": "apply_edit",
@@ -76,16 +100,19 @@ No position needed. Tolerates indentation differences.
 
 | Situation | Approach |
 |-----------|----------|
-| Changing signature only | Step 1 → Step 3A with one-line old_text |
-| Replacing full body | Step 1 → Step 2 → Step 3B with full range |
+| Replacing full body | `replace_symbol_body` (primary path) |
+| Changing signature only | Step 1 + apply_edit with one-line old_text |
 | Symbol name ambiguous | Use `get_workspace_symbols` query + container name filter |
+| Server lacks document symbols | Fallback path (Step 2b + 3b) |
 | After edit | Run `get_diagnostics` to verify no errors introduced |
 
 ## Notes
 
+- `replace_symbol_body` is the preferred path for full-body replacements. It handles
+  symbol resolution and range calculation internally.
 - `get_workspace_symbols` returns declaration sites, not all references. The
   first non-test result is usually the definition.
 - Positions in `get_document_symbols` are **1-based** (shifted from LSP convention).
-  `apply_edit` `workspace_edit` expects **0-based** — subtract 1 when using positional
+  `apply_edit` `workspace_edit` expects **0-based**; subtract 1 when using positional
   mode (Option B). Text-match mode (Option A) requires no position math.
-- For renames (not edits), use `/lsp-rename` instead — it updates all call sites.
+- For renames (not edits), use `/lsp-rename` instead; it updates all call sites.

@@ -1,10 +1,10 @@
 # agent-lsp Features Dump
 
-Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. All 56 tools have `ToolAnnotations` (Title, ReadOnlyHint, DestructiveHint, IdempotentHint, OpenWorldHint) and 171+ `jsonschema` struct tags providing parameter semantics in the schema itself.
+Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. All 60 tools have `ToolAnnotations` (Title, ReadOnlyHint, DestructiveHint, IdempotentHint, OpenWorldHint) and 171+ `jsonschema` struct tags providing parameter semantics in the schema itself.
 
 ---
 
-## Tools (56 total, 56 CI-verified)
+## Tools (60 total, 60 CI-verified)
 
 ### Session & Lifecycle (8 tools)
 
@@ -142,6 +142,10 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `format_document` | Format entire file | `file_path` (string, req), `language_id` (string, opt), `insert_spaces` (bool, opt), `tab_size` (int, opt) |
 | `format_range` | Format selection | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req), `language_id` (string, opt), `tab_size` (int, opt), `insert_spaces` (bool, opt) |
 | `apply_edit` | Apply workspace edit | `file_path` (string, req), `old_text` (string, req), `new_text` (string, req) OR `workspace_edit` (object, req) |
+| `replace_symbol_body` | Replace a symbol's body by name | `file_path` (string, req), `symbol_path` (string, req), `new_body` (string, req) |
+| `insert_after_symbol` | Insert code after a named symbol | `file_path` (string, req), `symbol_path` (string, req), `code` (string, req) |
+| `insert_before_symbol` | Insert code before a named symbol | `file_path` (string, req), `symbol_path` (string, req), `code` (string, req) |
+| `safe_delete_symbol` | Delete a symbol only if zero references | `file_path` (string, req), `symbol_path` (string, req) |
 | `execute_command` | Run LSP workspace command | `command` (string, req), `arguments` (array, opt) |
 | `did_change_watched_files` | Notify of file changes | `changes` (array, req) |
 | `export_cache` | Export reference cache as gzip artifact | `dest_path` (string, req) |
@@ -232,13 +236,13 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Internally: create → apply → evaluate → discard → destroy
 - Returns `EvaluationResult` directly
 
-**Total: 56 tools** (53 core + 3 phase enforcement)
-- **CI-verified: 56** (including `set_log_level` verified separately across all 30 languages, and 3 phase enforcement tools verified via mcp-assert)
-- **ToolAnnotations:** All 56 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
+**Total: 60 tools** (57 core + 3 phase enforcement)
+- **CI-verified: 60** (including `set_log_level` verified separately across all 30 languages, and 3 phase enforcement tools verified via mcp-assert)
+- **ToolAnnotations:** All 60 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
 - **jsonschema struct tags:** 171+ tags across all Args structs; 100% parameter description coverage
 - **1-indexed coordinates:** All line/column parameters are 1-based (editor convention)
 - **0-based conversion:** `extractRange` helper converts to 0-based for LSP protocol internally
-- **Next-step hints:** Every tool response includes a contextual `hint` field suggesting the logical next tool call. For example, `get_references` hints "use get_change_impact to see the full blast radius"; `detect_changes` hints "use get_change_impact on specific files for detailed analysis." Helps agents chain tools correctly without skills, and helps less capable models navigate the 56-tool surface. Zero-cost addition: one extra field in the JSON response.
+- **Next-step hints:** Every tool response includes a contextual `hint` field suggesting the logical next tool call. For example, `get_references` hints "use get_change_impact to see the full blast radius"; `detect_changes` hints "use get_change_impact on specific files for detailed analysis." Helps agents chain tools correctly without skills, and helps less capable models navigate the 60-tool surface. Zero-cost addition: one extra field in the JSON response.
 
 ---
 
@@ -251,10 +255,10 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `/lsp-simulate` | workspace + intent | start_lsp, create_simulation_session, simulate_edit, simulate_chain, evaluate_session, commit_session, discard_session, destroy_session, simulate_edit_atomic | Full session lifecycle management; decision guide on net_delta; cleanup rule enforced |
 | `/lsp-impact` | `[symbol-name | file-path]` | go_to_symbol, call_hierarchy, type_hierarchy, get_references, get_server_capabilities, get_change_impact | Blast-radius analysis; file-level shortcut via get_change_impact; symbol-level via Steps 1–5 |
 | `/lsp-verify` | workspace_dir + changed_files | get_diagnostics, run_build, run_tests, get_tests_for_file, get_code_actions, format_document, apply_edit | Three-layer verification: LSP diagnostics + build + tests; test correlation pre-step; code actions on errors |
-| `/lsp-dead-code` | `[file-path]` | get_document_symbols, get_references, open_document | Enumerate exported symbols, check each for zero references; Step 0 warm-up sanity check required; cross-check with grep for registration patterns |
+| `/lsp-dead-code` | `[file-path]` | get_document_symbols, get_references, open_document, safe_delete_symbol | Enumerate exported symbols, check each for zero references; Step 0 warm-up sanity check required; cross-check with grep for registration patterns; optional cleanup via safe_delete_symbol |
 | `/lsp-implement` | interface name | go_to_symbol, go_to_implementation, get_references | Find all concrete implementations of an interface before changing it |
-| `/lsp-edit-export` | symbol name | go_to_symbol, get_references, call_hierarchy, get_document_symbols, get_diagnostics, apply_edit | Safe editing of public APIs — finds all callers first |
-| `/lsp-edit-symbol` | symbol name + intent | go_to_symbol, get_info_on_location, get_references, apply_edit | Edit named symbol without knowing file or position |
+| `/lsp-edit-export` | symbol name | go_to_symbol, get_references, get_diagnostics, run_build, replace_symbol_body | Safe editing of public APIs; finds all callers first; supports replace_symbol_body for full-body edits |
+| `/lsp-edit-symbol` | symbol name + intent | get_workspace_symbols, get_document_symbols, apply_edit, replace_symbol_body | Edit named symbol without knowing file or position; primary path via replace_symbol_body |
 | `/lsp-docs` | symbol name | go_to_symbol, get_info_on_location, get_symbol_documentation, get_symbol_source | Three-tier documentation: hover → offline toolchain (go doc/pydoc/cargo doc) → source |
 | `/lsp-cross-repo` | symbol + consumer-roots | start_lsp, get_workspace_symbols, get_cross_repo_references, add_workspace_folder, list_workspace_folders, go_to_implementation, call_hierarchy, get_info_on_location | Multi-root cross-repo caller analysis; results partitioned by repo |
 | `/lsp-explore` | `[symbol-name]` | start_lsp, go_to_symbol, get_info_on_location, go_to_implementation, call_hierarchy, get_references, open_document, get_server_capabilities | hover + implementations + call hierarchy + references in one pass; capability-gated steps; produces Explore Report |
@@ -262,7 +266,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `/lsp-test-correlation` | `[source-file]` | get_tests_for_file, run_tests | Find and run only tests covering an edited file |
 | `/lsp-format-code` | `[file-path]` | format_document, format_range, apply_edit | Format file or selection via language server formatter; applies edits to disk |
 | `/lsp-fix-all` | `[file-path]` | get_diagnostics, get_code_actions, apply_edit, open_document, format_document | Sequential quick-fix loop: collect diagnostics → apply one fix → re-collect; quick-fix kind only; never batches |
-| `/lsp-refactor` | `[symbol-or-file] [intent]` | get_change_impact, simulate_edit_atomic, simulate_chain, get_diagnostics, run_build, run_tests, get_tests_for_file, apply_edit, format_document | End-to-end refactor: blast-radius → speculative preview → apply → build verify → affected tests |
+| `/lsp-refactor` | `[symbol-or-file] [intent]` | get_change_impact, simulate_edit_atomic, simulate_chain, get_diagnostics, run_build, run_tests, get_tests_for_file, apply_edit, replace_symbol_body, format_document | End-to-end refactor: blast-radius, speculative preview, apply, build verify, affected tests; supports replace_symbol_body for full-body edits |
 | `/lsp-extract-function` | `[file-path] [start-line] [end-line] [name]` | get_document_symbols, get_code_actions, execute_command, apply_edit, get_diagnostics, format_document | Extract code block into named function; LSP code action primary, manual fallback with captured-variable analysis |
 | `/lsp-generate` | `[file-path:line:col] [intent]` | get_code_actions, execute_command, apply_edit, format_document, get_diagnostics, go_to_symbol | Language server code generation: interface stubs, test skeletons, missing methods, mocks |
 | `/lsp-understand` | `[symbol-name \| file-path]` | get_info_on_location, go_to_implementation, call_hierarchy, get_references, get_symbol_source, get_document_symbols, go_to_symbol | Deep Code Map: type info + implementations + call hierarchy (2-level) + references + source; synthesizes cross-symbol relationships |

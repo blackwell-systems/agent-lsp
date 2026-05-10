@@ -3,7 +3,7 @@ name: lsp-refactor
 description: End-to-end safe refactor workflow — blast-radius analysis, speculative preview, apply to disk, verify build, run affected tests. Inlines lsp-impact + lsp-safe-edit + lsp-verify + lsp-test-correlation into one coordinated sequence.
 argument-hint: "[symbol-or-file] [intent]"
 user-invocable: true
-allowed-tools: mcp__lsp__get_change_impact mcp__lsp__simulate_edit_atomic mcp__lsp__simulate_chain mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__apply_edit mcp__lsp__open_document mcp__lsp__format_document Edit Write
+allowed-tools: mcp__lsp__get_change_impact mcp__lsp__simulate_edit_atomic mcp__lsp__simulate_chain mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__apply_edit mcp__lsp__replace_symbol_body mcp__lsp__open_document mcp__lsp__format_document Edit Write
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -199,9 +199,20 @@ introduced. Do not proceed to Phase 3.
 
 Only reached if Phase 2 `net_delta <= 0`.
 
-Apply the change using the Edit or Write tool. For edits computed by simulation,
-`mcp__lsp__apply_edit` may be used directly if the simulation returned an edit
-object:
+Apply the change using the Edit or Write tool. When the edit targets a complete
+function or method body, `mcp__lsp__replace_symbol_body` is an alternative that
+resolves the symbol by name and replaces its full range without position math:
+
+```
+mcp__lsp__replace_symbol_body({
+  "file_path": "/abs/path/to/file",
+  "symbol_path": "Package.Function",
+  "new_body": "func Function() error {\n\treturn nil\n}"
+})
+```
+
+For edits computed by simulation, `mcp__lsp__apply_edit` may be used directly if
+the simulation returned an edit object:
 
 ```
 Edit(file_path: "/abs/path/to/file", old_string: "...", new_string: "...")
