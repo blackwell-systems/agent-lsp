@@ -487,7 +487,7 @@ func registerWorkspaceTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "format_document",
-		Description: "Get formatting edits for an entire document via LSP. Returns TextEdit[] describing the changes needed to format the file according to the language server's style rules. The edits are returned for inspection — they are NOT applied automatically. Use this to see what formatting changes a formatter would make.",
+		Description: "Get formatting edits for a file via LSP. Returns TextEdit[] for inspection (not applied automatically). Apply via apply_edit. Formats one file at a time; to find which files need formatting, use your shell (e.g. gofmt -l ./...).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Format Document",
 			ReadOnlyHint:    true,

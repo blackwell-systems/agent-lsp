@@ -239,7 +239,7 @@ func registerNavigationTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "find_callers",
-		Description: "Find what calls this function and what it calls. Returns incoming callers, outgoing callees, or both (default). Use before deleting or refactoring a function to understand its role in the call graph.",
+		Description: "Find what calls this function and what it calls. Returns incoming callers, outgoing callees, or both (default). Use before deleting or refactoring a function to understand its role in the call graph. Works on functions and methods only; for types, use find_references instead.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Find Callers",
 			ReadOnlyHint:    true,
