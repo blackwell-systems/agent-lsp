@@ -23,7 +23,13 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 - **Passive mode (`connect` parameter on `start_lsp`).** Connect to an already-running language server via TCP instead of spawning a new process. Pass `connect: "localhost:9999"` to reuse the IDE's warm index with zero duplicate memory or indexing. Supported by gopls (`gopls -listen=:9999`), clangd, and other servers with TCP listen mode. On shutdown, agent-lsp closes the TCP connection without killing the server process.
 
+- **`group_by=symbol` parameter on `get_diagnostics`.** Diagnostics can now be grouped by their owning symbol instead of returned as a flat list per file. Each diagnostic is assigned to the innermost containing symbol via range containment. Helps agents understand "this function is broken" vs "this file has problems." Usage: `get_diagnostics(file_path: "...", group_by: "symbol")`.
+
+- **Intent-based tool descriptions and titles.** All 7 renamed tools now have descriptions focused on agent intent rather than LSP protocol details. Titles updated to match (e.g., "Inspect Symbol" instead of "Get Hover Info", "Preview Edit" instead of "Simulate Edit (Atomic)").
+
 ### Fixed
+
+- **Go test path format.** `run_tests` with bare paths like `internal/notify` were interpreted as stdlib packages by `go test`. Now auto-prefixes `./` and appends `/...` for Go paths that don't start with `.` or `/`.
 
 - **Nil sender crash in notification channels.** workspace.go, health.go, and diagnostics.go called `hub.sender.SendLog()` directly, bypassing Hub.Send()'s nil-sender and closed-state guards. This would panic during the window between `start_lsp` and MCP session initialization when sender is nil. Fixed to route through `hub.Send()`. Found by `/lsp-inspect`.
 
