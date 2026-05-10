@@ -1,0 +1,821 @@
+title: 'Inspector Evolution: Transform lsp-inspect into a one-shot code quality laser'
+feature_slug: inspector-evolution
+verdict: SUITABLE
+suitability_assessment: |
+    Suitability gate passed on all five criteria:
+
+    1. File decomposition: 10+ distinct files across skill, tool, and docs layers. Clear
+       disjoint ownership possible with 4 agents across 2 waves.
+
+    2. Investigation-first: No unknowns. All patterns are well-understood; the existing
+       code is read and the extension points are clear.
+
+    3. Interface discoverability: The scope parameter for collectExportedSymbols and the
+       resource URI scheme can be fully specified upfront.
+
+    4. Pre-implementation status: Unexported dead code detection is already mentioned in
+       roadmap.md as planned. All other items are new. No prior partial implementations.
+
+    5. Parallelization value: Build/test cycle is >30s (Go build + go test ./...).
+       Four agents with 2-4 files each, mostly independent. Clear speedup.
+
+    Estimated times:
+    - Scout phase: ~8 min
+    - Agent execution: ~10 min (4 agents in wave 1 parallel, ~6 min each)
+    - Integration wave: ~3 min
+    - Merge and verification: ~3 min
+    Total SAW time: ~24 min
+
+    Sequential baseline: ~35 min (4 agents x 7 min avg + integration + overhead)
+    Time savings: ~11 min (31% faster)
+
+    Recommendation: Clear speedup with coordination value from disjoint ownership.
+test_command: go test ./internal/... ./cmd/...
+lint_command: go vet ./...
+file_ownership:
+    - file: skills/lsp-inspect/SKILL.md
+      agent: A
+      wave: 1
+      action: modify
+    - file: internal/tools/change_impact.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: internal/tools/change_impact_test.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/tools_analysis.go
+      agent: B
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/resources_inspect.go
+      agent: C
+      wave: 1
+      action: new
+    - file: internal/resources/inspect.go
+      agent: C
+      wave: 1
+      action: new
+    - file: internal/resources/inspect_test.go
+      agent: C
+      wave: 1
+      action: new
+    - file: docs/FEATURES.md
+      agent: D
+      wave: 1
+      action: modify
+    - file: docs/roadmap.md
+      agent: D
+      wave: 1
+      action: modify
+    - file: CHANGELOG.md
+      agent: D
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/server.go
+      agent: E
+      wave: 2
+      action: modify
+interface_contracts:
+    - name: collectAllSymbols
+      description: |
+        New function that collects ALL symbols (exported + unexported) from a DocumentSymbol tree.
+        Used when scope="all" is passed to get_change_impact.
+      definition: |
+        func collectAllSymbols(syms []types.DocumentSymbol, filePath, langID string, out *[]exportedSymbol, recurseIntoChildren bool)
+      location: internal/tools/change_impact.go
+    - name: GetChangeImpactArgs.Scope
+      description: |
+        New optional field on GetChangeImpactArgs struct. Values: "exported" (default, backward-compatible)
+        or "all" (includes unexported/lowercase symbols for dead code detection).
+      definition: |
+        type GetChangeImpactArgs struct {
+            ChangedFiles      []string `json:"changed_files" jsonschema:"List of absolute file paths to analyze for exported symbol impact"`
+            IncludeTransitive bool     `json:"include_transitive,omitempty" jsonschema:"If true, include second-order callers (callers of callers) in the results"`
+            Scope             string   `json:"scope,omitempty" jsonschema:"Symbol scope: 'exported' (default) or 'all' (includes unexported symbols for dead code detection)"`
+        }
+      location: cmd/agent-lsp/tools_analysis.go
+    - name: HandleInspectResource
+      description: |
+        Resource handler for inspect://last URI. Reads .agent-lsp/last-inspection.json
+        from the workspace root and returns its contents as application/json.
+      definition: |
+        func HandleInspectResource(_ context.Context, workspaceRoot string, uri string) (ResourceResult, error)
+      location: internal/resources/inspect.go
+    - name: registerInspectResources
+      description: |
+        Registration function for the inspect://last MCP resource. Called from server.go Run().
+      definition: |
+        func registerInspectResources(server *mcp.Server, cs *clientState)
+      location: cmd/agent-lsp/resources_inspect.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## What to implement
+
+            Rewrite `skills/lsp-inspect/SKILL.md` to add five new capabilities while preserving
+            all existing functionality. The file is the complete skill definition.
+
+            ### Changes required:
+
+            **0. Frontmatter update:**
+            Update the `description` field in the YAML frontmatter to:
+            ```
+            description: Full code quality audit for a file, package, or directory. Supports batch mode (directory walk with --top ranking), comparison mode (--diff for branch-only issues), severity calibration by blast radius, fix suggestions, and confidence tiers. Applies a check taxonomy (dead symbols, silent failures, error wrapping, coverage gaps, test coverage, doc drift, unrecovered panics, context propagation) using LSP-first strategies. Produces a severity-tiered findings report. Language-agnostic.
+            ```
+
+            Also update the `allowed-tools` frontmatter to append `Bash` (needed for git diff
+            in comparison mode). Find:
+            ```
+            allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_change_impact mcp__lsp__find_references mcp__lsp__list_symbols mcp__lsp__inspect_symbol mcp__lsp__get_diagnostics mcp__lsp__find_callers mcp__lsp__go_to_definition mcp__lsp__get_server_capabilities mcp__lsp__get_cross_repo_references
+            ```
+            Append ` Bash` to the end of that line.
+
+            **1. Severity calibration (Step 3 modification):**
+            In Step 3 "Cross-check and classify", replace the current severity assignment with:
+            - `error`: Crash paths, resource leaks, OR any finding where `non_test_callers >= 10`
+              (high blast radius amplifies severity)
+            - `warning`: May cause confusion/bugs, OR findings where `non_test_callers` is 3-9
+            - `info`: Style issue, improvement opportunity, OR `non_test_callers` <= 2
+
+            Add instruction: "Use the `non_test_callers` count from Step 1's `get_change_impact`
+            result as a severity multiplier. A silent failure in a function with 50 callers is
+            error-severity; the same pattern with 2 callers is info."
+
+            **2. Fix suggestions (Step 4 modification):**
+            Add a "Fix" column to the findings table. Each finding MUST include the exact fix text:
+            - dead_symbol: "Remove lines N-M (function `FuncName`)"
+            - error_wrapping: "Change `return err` to `return fmt.Errorf(\"funcName: %w\", err)`"
+            - silent_failure: "Add `return fmt.Errorf(...)` after the if block"
+            - test_coverage: "Add test for `FuncName` in file_test.go"
+            - coverage_gap: "Add default case to switch statement at line N"
+            - doc_drift: "Update docstring parameter name from X to Y"
+            - panic_not_recovered: "Add `defer func() { if r := recover()... }()` at goroutine start"
+            - context_propagation: "Replace `context.Background()` with `ctx` parameter"
+
+            Update the Step 4 output table format to include | Fix | column.
+
+            **3. Confidence tiers (Step 3 modification):**
+            Replace confidence labels throughout. Change:
+            - `high` -> `verified` with description "(LSP-confirmed, act immediately)"
+            - `medium` -> `suspected` with description "(pattern match, investigate first)"
+            - `low` -> `advisory` with description "(style, optional)"
+
+            Update all references in Step 1, Step 3, and Step 4 output format.
+
+            **4. Batch mode (Input section modification):**
+            Add directory detection logic to the Input section. When target is a directory:
+            - Walk all `.go`, `.ts`, `.py` files in it recursively
+            - Produce a ranked report: "Top N findings sorted by severity then blast radius"
+            - Add `--top` flag (default 20) to cap output length
+
+            Add to the flags list:
+            ```
+            --top N: Maximum findings to report (default 20). Only applies to directory/batch mode.
+            ```
+
+            Add Step 4.5 "Batch ranking":
+            "When multiple files are analyzed, sort all findings by: (1) severity tier
+            (error > warning > info), (2) blast radius (non_test_callers descending),
+            (3) file path alphabetically. Emit only the top N findings (default 20,
+            controlled by --top flag). Append a summary line: 'Showing N of M total findings.'"
+
+            **5. Comparison mode (Input section modification):**
+            Add `--diff` flag to the flags list:
+            ```
+            --diff: Only inspect files changed vs main branch. Filter findings to lines
+                    within the diff ranges. Output header: "New issues introduced by this branch."
+            ```
+
+            Add Step 0.5 "Diff mode file selection":
+            "When `--diff` is set:
+            1. Run `git diff --name-only main` to get changed files
+            2. Run `git diff main` to get line-level change ranges
+            3. Use only changed files as inspection targets
+            4. After Step 3, filter findings: keep only those whose File:Line falls within
+               a changed line range from the diff
+            5. Prepend output with: '## New issues introduced by this branch'"
+
+            **6. Cross-file impact scoring (Step 3 reinforcement):**
+            Add explicit instruction in Step 3: "For every finding, look up the symbol's
+            `non_test_callers` count from Step 1's get_change_impact result. Use this as a
+            severity multiplier: if non_test_callers >= 10, escalate severity by one tier
+            (info->warning, warning->error). Document the caller count in the finding."
+
+            **7. Inspector result persistence (new Step 5):**
+            Add Step 5 "Persist results":
+            "After producing the findings report, write a JSON file to
+            `.agent-lsp/last-inspection.json` in the workspace root. The JSON schema:
+            ```json
+            {
+              "target": "<original target path>",
+              "timestamp": "<ISO 8601>",
+              "files_analyzed": N,
+              "findings": [
+                {
+                  "severity": "error|warning|info",
+                  "confidence": "verified|suspected|advisory",
+                  "check": "<check_type>",
+                  "file": "<path>",
+                  "line": N,
+                  "finding": "<description>",
+                  "fix": "<exact fix text>",
+                  "blast_radius": N
+                }
+              ],
+              "summary": {"errors": N, "warnings": N, "info": N}
+            }
+            ```
+            This file is served by the `inspect://last` MCP resource for programmatic access."
+
+            ### Interfaces consumed
+            None (skill-only changes).
+
+            ### Tests
+            No automated tests for skill markdown. Verify the file parses as valid markdown
+            with correct frontmatter YAML.
+
+            ### Verification gate
+            ```bash
+            head -12 skills/lsp-inspect/SKILL.md | grep -c "^---"
+            # Expected: 2
+            grep -c "\-\-top" skills/lsp-inspect/SKILL.md
+            # Expected: >= 2
+            grep -c "\-\-diff" skills/lsp-inspect/SKILL.md
+            # Expected: >= 2
+            grep -c "verified" skills/lsp-inspect/SKILL.md
+            # Expected: >= 2
+            grep -c "suspected" skills/lsp-inspect/SKILL.md
+            # Expected: >= 1
+            grep -c "Fix" skills/lsp-inspect/SKILL.md
+            # Expected: >= 3
+            grep -c "Step 5" skills/lsp-inspect/SKILL.md
+            # Expected: >= 1
+            grep -c "batch" skills/lsp-inspect/SKILL.md
+            # Expected: >= 1
+            grep -c "Bash" skills/lsp-inspect/SKILL.md
+            # Expected: >= 1
+            ```
+
+            ### Constraints
+            - Do NOT modify any Go source files.
+            - Do NOT remove existing check types from the taxonomy.
+            - Do NOT change the skill name or frontmatter `name` field.
+            - Preserve all existing caveats at the end of the file.
+          files:
+            - skills/lsp-inspect/SKILL.md
+        - id: B
+          task: |
+            ## What to implement
+
+            Add `scope` parameter support to the `get_change_impact` tool. When `scope="all"`,
+            include unexported (lowercase in Go) symbols in addition to exported ones.
+
+            ### File 1: internal/tools/change_impact.go
+
+            **Add new function `collectAllSymbols`** immediately after `collectExportedSymbols`
+            (after its closing brace at the end of the function). This function has the same
+            signature but skips the export check:
+
+            ```go
+            // collectAllSymbols walks a DocumentSymbol tree and appends ALL symbols
+            // (exported and unexported) to the provided slice. Used when scope="all"
+            // is requested for dead code detection of internal helpers.
+            // Struct fields (kind 8) are still excluded.
+            func collectAllSymbols(syms []types.DocumentSymbol, filePath, langID string, out *[]exportedSymbol, recurseIntoChildren bool) {
+                var sourceLines []string
+                if data, err := os.ReadFile(filePath); err == nil {
+                    sourceLines = strings.Split(string(data), "\n")
+                }
+
+                for _, sym := range syms {
+                    if sym.Kind == 8 {
+                        continue
+                    }
+                    line := sym.SelectionRange.Start.Line
+                    char := sym.SelectionRange.Start.Character
+
+                    searchName := sym.Name
+                    if dotIdx := strings.LastIndex(searchName, "."); dotIdx >= 0 {
+                        searchName = searchName[dotIdx+1:]
+                    }
+                    if line < len(sourceLines) {
+                        if col := strings.Index(sourceLines[line], searchName); col >= 0 {
+                            char = col
+                        }
+                    }
+
+                    *out = append(*out, exportedSymbol{
+                        Name:   sym.Name,
+                        File:   filePath,
+                        LangID: langID,
+                        Position: types.Position{
+                            Line:      line,
+                            Character: char,
+                        },
+                        Line: line + 1,
+                    })
+                    if recurseIntoChildren {
+                        collectAllSymbols(sym.Children, filePath, langID, out, true)
+                    }
+                }
+            }
+            ```
+
+            **Modify `HandleGetChangeImpact`** to read the `scope` parameter. Find this exact text:
+            ```go
+            	includeTransitive := false
+            	if v, ok := args["include_transitive"].(bool); ok {
+            		includeTransitive = v
+            	}
+            ```
+
+            Insert AFTER that block:
+            ```go
+
+            	scope := "exported"
+            	if v, ok := args["scope"].(string); ok && v != "" {
+            		scope = v
+            	}
+            ```
+
+            Then replace the collector call. Find this exact text:
+            ```go
+            		collectExportedSymbols(symbols, file, langID, &allExports, true)
+            ```
+
+            Replace with:
+            ```go
+            		if scope == "all" {
+            			collectAllSymbols(symbols, file, langID, &allExports, true)
+            		} else {
+            			collectExportedSymbols(symbols, file, langID, &allExports, true)
+            		}
+            ```
+
+            ### File 2: cmd/agent-lsp/tools_analysis.go
+
+            **Modify `GetChangeImpactArgs` struct.** Find this exact text:
+            ```go
+            type GetChangeImpactArgs struct {
+            	ChangedFiles      []string `json:"changed_files" jsonschema:"List of absolute file paths to analyze for exported symbol impact"`
+            	IncludeTransitive bool     `json:"include_transitive,omitempty" jsonschema:"If true, include second-order callers (callers of callers) in the results"`
+            }
+            ```
+
+            Replace with:
+            ```go
+            type GetChangeImpactArgs struct {
+            	ChangedFiles      []string `json:"changed_files" jsonschema:"List of absolute file paths to analyze for exported symbol impact"`
+            	IncludeTransitive bool     `json:"include_transitive,omitempty" jsonschema:"If true, include second-order callers (callers of callers) in the results"`
+            	Scope             string   `json:"scope,omitempty" jsonschema:"Symbol scope: 'exported' (default) or 'all' (includes unexported symbols for dead code detection)"`
+            }
+            ```
+
+            **Update tool description** for the `get_change_impact` registration. Find the
+            Description string that starts with:
+            ```go
+            		Description: "Enumerate all exported symbols in the specified files, resolve their references across the workspace, and partition callers into test vs non-test. Returns affected_symbols (name, file, line), test_callers (with enclosing test function names), and non_test_callers. Use before editing a file to understand blast radius. Set include_transitive=true to surface second-order callers (callers of callers).",
+            ```
+
+            Replace with:
+            ```go
+            		Description: "Enumerate all exported symbols in the specified files, resolve their references across the workspace, and partition callers into test vs non-test. Returns affected_symbols (name, file, line), test_callers (with enclosing test function names), and non_test_callers. Use before editing a file to understand blast radius. Set include_transitive=true to surface second-order callers (callers of callers). Set scope='all' to include unexported symbols for comprehensive dead code detection.",
+            ```
+
+            ### File 3: internal/tools/change_impact_test.go
+
+            Add a test function `TestCollectAllSymbols` that verifies:
+            1. Given a slice of DocumentSymbols with both exported (uppercase) and unexported
+               (lowercase) names in Go, `collectAllSymbols` collects ALL of them.
+            2. Struct fields (kind 8) are still excluded.
+            3. The existing `collectExportedSymbols` only collects uppercase names given the
+               same input.
+
+            Create test with temporary file for source line resolution:
+            ```go
+            func TestCollectAllSymbols(t *testing.T) {
+                // Create temp file for source line resolution
+                dir := t.TempDir()
+                src := filepath.Join(dir, "test.go")
+                content := "package test\n\nfunc ExportedFunc() {}\n\nfunc unexportedHelper() {}\n\ntype myField struct{}\n"
+                os.WriteFile(src, []byte(content), 0644)
+
+                syms := []types.DocumentSymbol{
+                    {Name: "ExportedFunc", Kind: 12, Range: types.Range{Start: types.Position{Line: 2}, End: types.Position{Line: 2}}, SelectionRange: types.Range{Start: types.Position{Line: 2, Character: 5}}},
+                    {Name: "unexportedHelper", Kind: 12, Range: types.Range{Start: types.Position{Line: 4}, End: types.Position{Line: 4}}, SelectionRange: types.Range{Start: types.Position{Line: 4, Character: 5}}},
+                    {Name: "myField", Kind: 8, Range: types.Range{Start: types.Position{Line: 6}, End: types.Position{Line: 6}}, SelectionRange: types.Range{Start: types.Position{Line: 6, Character: 5}}},
+                }
+
+                // collectAllSymbols should include both exported and unexported, but not fields
+                var all []exportedSymbol
+                collectAllSymbols(syms, src, "go", &all, false)
+                if len(all) != 2 {
+                    t.Fatalf("expected 2 symbols, got %d", len(all))
+                }
+
+                // collectExportedSymbols should only include exported
+                var exported []exportedSymbol
+                collectExportedSymbols(syms, src, "go", &exported, false)
+                if len(exported) != 1 {
+                    t.Fatalf("expected 1 exported symbol, got %d", len(exported))
+                }
+                if exported[0].Name != "ExportedFunc" {
+                    t.Errorf("expected ExportedFunc, got %s", exported[0].Name)
+                }
+            }
+            ```
+
+            ### Interfaces consumed
+            - `types.DocumentSymbol` (existing, unchanged)
+            - `types.Position`, `types.Range` (existing, unchanged)
+
+            ### Tests
+            - `TestCollectAllSymbols` in `internal/tools/change_impact_test.go`
+
+            ### Verification gate
+            ```bash
+            go build ./...
+            go test ./internal/tools/ -run TestCollectAllSymbols -v
+            grep -c "func collectAllSymbols" internal/tools/change_impact.go
+            # Expected: 1
+            grep -c 'scope.*"all"' internal/tools/change_impact.go
+            # Expected: >= 1
+            grep -c "Scope" cmd/agent-lsp/tools_analysis.go
+            # Expected: >= 1
+            ```
+
+            ### Constraints
+            - Do NOT modify `collectExportedSymbols` itself. Add a new function.
+            - Do NOT change the default behavior. When scope is empty or "exported",
+              behavior must be identical to current.
+            - Do NOT modify any files outside your ownership list.
+            - Do NOT modify cmd/agent-lsp/server.go.
+          files:
+            - internal/tools/change_impact.go
+            - internal/tools/change_impact_test.go
+            - cmd/agent-lsp/tools_analysis.go
+        - id: C
+          task: |
+            ## What to implement
+
+            Register an MCP resource at `inspect://last` that serves the contents of
+            `.agent-lsp/last-inspection.json` from the workspace root. This enables
+            programmatic access to the most recent inspection results.
+
+            ### File 1: internal/resources/inspect.go
+
+            Create a new file in `package resources` with:
+
+            ```go
+            package resources
+
+            import (
+                "context"
+                "fmt"
+                "os"
+                "path/filepath"
+            )
+
+            // HandleInspectResource reads the last inspection results from the workspace.
+            // URI format: inspect://last
+            // Returns the contents of .agent-lsp/last-inspection.json as application/json.
+            func HandleInspectResource(_ context.Context, workspaceRoot string, uri string) (ResourceResult, error) {
+                if workspaceRoot == "" {
+                    return ResourceResult{}, fmt.Errorf("workspace root not initialized; call start_lsp first")
+                }
+                path := filepath.Join(workspaceRoot, ".agent-lsp", "last-inspection.json")
+                data, err := os.ReadFile(path)
+                if err != nil {
+                    if os.IsNotExist(err) {
+                        return ResourceResult{
+                            URI:      uri,
+                            MIMEType: "application/json",
+                            Text:     `{"error":"no inspection results found","hint":"run /lsp-inspect first"}`,
+                        }, nil
+                    }
+                    return ResourceResult{}, fmt.Errorf("reading inspection results: %w", err)
+                }
+                return ResourceResult{
+                    URI:      uri,
+                    MIMEType: "application/json",
+                    Text:     string(data),
+                }, nil
+            }
+            ```
+
+            ### File 2: internal/resources/inspect_test.go
+
+            Create test file with three tests:
+
+            ```go
+            package resources
+
+            import (
+                "context"
+                "os"
+                "path/filepath"
+                "testing"
+            )
+
+            func TestHandleInspectResource_NoWorkspace(t *testing.T) {
+                _, err := HandleInspectResource(context.Background(), "", "inspect://last")
+                if err == nil {
+                    t.Fatal("expected error for empty workspace root")
+                }
+            }
+
+            func TestHandleInspectResource_NoFile(t *testing.T) {
+                dir := t.TempDir()
+                result, err := HandleInspectResource(context.Background(), dir, "inspect://last")
+                if err != nil {
+                    t.Fatalf("unexpected error: %v", err)
+                }
+                if result.MIMEType != "application/json" {
+                    t.Errorf("expected application/json, got %s", result.MIMEType)
+                }
+                if result.Text == "" {
+                    t.Error("expected non-empty response for missing file")
+                }
+            }
+
+            func TestHandleInspectResource_FileExists(t *testing.T) {
+                dir := t.TempDir()
+                inspectDir := filepath.Join(dir, ".agent-lsp")
+                os.MkdirAll(inspectDir, 0755)
+                content := `{"findings":[],"summary":{"errors":0,"warnings":1,"info":2}}`
+                os.WriteFile(filepath.Join(inspectDir, "last-inspection.json"), []byte(content), 0644)
+
+                result, err := HandleInspectResource(context.Background(), dir, "inspect://last")
+                if err != nil {
+                    t.Fatalf("unexpected error: %v", err)
+                }
+                if result.Text != content {
+                    t.Errorf("expected %q, got %q", content, result.Text)
+                }
+                if result.URI != "inspect://last" {
+                    t.Errorf("expected URI inspect://last, got %s", result.URI)
+                }
+            }
+            ```
+
+            ### File 3: cmd/agent-lsp/resources_inspect.go
+
+            Create a new file in `package main`:
+
+            ```go
+            package main
+
+            import (
+                "context"
+                "strings"
+
+                "github.com/blackwell-systems/agent-lsp/internal/resources"
+                "github.com/modelcontextprotocol/go-sdk/mcp"
+            )
+
+            // registerInspectResources registers the inspect://last MCP resource.
+            // Must be called from Run() in server.go after the server is created.
+            func registerInspectResources(server *mcp.Server, cs *clientState) {
+                server.AddResource(&mcp.Resource{
+                    URI:         "inspect://last",
+                    Name:        "Last Inspection",
+                    Description: "Results from the most recent /lsp-inspect run (.agent-lsp/last-inspection.json)",
+                    MIMEType:    "application/json",
+                }, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+                    uri := req.Params.URI
+                    if !strings.HasPrefix(uri, "inspect://") {
+                        return nil, mcp.ResourceNotFoundError(uri)
+                    }
+                    client := cs.get()
+                    var workspaceRoot string
+                    if client != nil {
+                        workspaceRoot = client.RootDir()
+                    }
+                    result, err := resources.HandleInspectResource(ctx, workspaceRoot, uri)
+                    if err != nil {
+                        return nil, err
+                    }
+                    return &mcp.ReadResourceResult{
+                        Contents: []*mcp.ResourceContents{{
+                            URI:      result.URI,
+                            MIMEType: result.MIMEType,
+                            Text:     result.Text,
+                        }},
+                    }, nil
+                })
+            }
+            ```
+
+            ### Interfaces consumed
+            - `ResourceResult` from `internal/resources` (existing type)
+            - `clientState` from `cmd/agent-lsp/server.go` (existing type, same package)
+            - `*lsp.LSPClient.RootDir()` (existing method)
+
+            ### Tests
+            - `TestHandleInspectResource_NoWorkspace`
+            - `TestHandleInspectResource_NoFile`
+            - `TestHandleInspectResource_FileExists`
+
+            ### Verification gate
+            ```bash
+            go build ./...
+            go test ./internal/resources/ -run TestHandleInspectResource -v
+            grep -c "func HandleInspectResource" internal/resources/inspect.go
+            # Expected: 1
+            grep -c "func registerInspectResources" cmd/agent-lsp/resources_inspect.go
+            # Expected: 1
+            grep -c "inspect://last" cmd/agent-lsp/resources_inspect.go
+            # Expected: >= 1
+            ```
+
+            ### Constraints
+            - Do NOT modify `cmd/agent-lsp/server.go` (not in your ownership).
+            - Do NOT modify `internal/resources/resources.go` (not in your ownership).
+            - The handler must gracefully handle missing files (return JSON with error/hint, not Go error).
+            - Do NOT import any packages not already used in the project.
+          files:
+            - cmd/agent-lsp/resources_inspect.go
+            - internal/resources/inspect.go
+            - internal/resources/inspect_test.go
+        - id: D
+          task: |
+            ## What to implement
+
+            Update documentation files to reflect the new inspector evolution capabilities.
+
+            ### File 1: docs/FEATURES.md
+
+            Find the section that mentions inspection or lsp-inspect (search for "inspect").
+            Add or update to include these new capabilities:
+            - Batch mode: directory-level inspection with `--top N` ranked output
+            - Comparison mode: `--diff` flag for branch-only issue detection
+            - Unexported dead code detection via `scope='all'` parameter on get_change_impact
+            - MCP resource `inspect://last` for programmatic access to results
+            - Confidence tiers: verified/suspected/advisory (replacing high/medium/low)
+            - Fix suggestions: exact fix text included with every finding
+            - Blast-radius severity calibration using caller counts
+
+            ### File 2: docs/roadmap.md
+
+            Find the entry for "Unexported dead code detection" (it exists with status "Planned").
+            Change its status to "Shipped". Find this exact text:
+            ```
+            | **Unexported dead code detection** | Planned | Extend `get_change_impact` or add a new tool parameter (`scope: "all"`) to check unexported symbols in addition to exported ones. Currently only exported symbols are checked because `collectExportedSymbols` filters by uppercase. Requires walking all document symbols and checking references for each. |
+            ```
+
+            Replace "Planned" with "Shipped" in that row.
+
+            Also add entries for the other new capabilities if they don't already exist:
+            - Inspector batch mode: Shipped
+            - Inspector comparison mode (--diff): Shipped
+            - Inspector MCP resource (inspect://last): Shipped
+            - Inspector confidence tiers and fix suggestions: Shipped
+
+            ### File 3: CHANGELOG.md
+
+            Add a new section at the top (below any existing unreleased header) with entries:
+            ```
+            ### Added
+            - `get_change_impact`: new `scope` parameter ("all" includes unexported symbols for dead code detection)
+            - `/lsp-inspect`: batch mode with `--top N` flag for directory-level inspection
+            - `/lsp-inspect`: comparison mode with `--diff` flag for branch-only issues
+            - `/lsp-inspect`: fix suggestions with exact fix text for every finding
+            - `/lsp-inspect`: confidence tiers (verified/suspected/advisory)
+            - `/lsp-inspect`: blast-radius severity calibration using caller counts
+            - `/lsp-inspect`: results persisted to `.agent-lsp/last-inspection.json`
+            - MCP resource `inspect://last` serves last inspection results as JSON
+            ```
+
+            ### Interfaces consumed
+            None (documentation only).
+
+            ### Tests
+            None (documentation files).
+
+            ### Verification gate
+            ```bash
+            grep -c "scope" docs/FEATURES.md
+            # Expected: >= 1
+            grep -c "Shipped" docs/roadmap.md | head -1
+            # Expected: >= 5
+            grep -c "inspect://last" CHANGELOG.md
+            # Expected: >= 1
+            grep -c "batch" CHANGELOG.md
+            # Expected: >= 1
+            ```
+
+            ### Constraints
+            - Do NOT modify any Go source files.
+            - Do NOT modify any files outside your ownership list.
+            - Preserve existing content; only add or update relevant sections.
+          files:
+            - docs/FEATURES.md
+            - docs/roadmap.md
+            - CHANGELOG.md
+    - number: 2
+      type: integration
+      agents:
+        - id: E
+          task: |
+            ## What to implement
+
+            Wire the inspect resource registration into server startup.
+
+            ### Wire registerInspectResources
+
+            In `cmd/agent-lsp/server.go`, find this exact text:
+            ```go
+            	// Register URI templates for dynamic resource discovery.
+            	for _, tmpl := range resources.ResourceTemplates() {
+            ```
+
+            Insert BEFORE that block (with a blank line separator):
+            ```go
+            	registerInspectResources(server, cs)
+
+            ```
+
+            ### Verification gate
+            ```bash
+            go build ./...
+            go test ./cmd/... -count=1
+            grep -c "registerInspectResources" cmd/agent-lsp/server.go
+            # Expected: 1
+            ```
+
+            ### Constraints
+            - Only add the single function call. Do not restructure server.go.
+            - Do NOT modify any other files.
+          files:
+            - cmd/agent-lsp/server.go
+          dependencies:
+            - C
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: go build ./...
+          required: true
+        - type: test
+          command: go test ./internal/... ./cmd/...
+          required: true
+        - type: lint
+          command: go vet ./...
+          required: true
+post_merge_checklist:
+    groups: []
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: Agent B's collectAllSymbols duplicates too much logic from collectExportedSymbols
+          likelihood: low
+          impact: low
+          mitigation: |
+            The task explicitly provides the implementation. Even if the agent refactors
+            into a shared helper, the exported API remains backward-compatible.
+        - scenario: Agent C's resource registration fails to compile because server.go wiring is deferred
+          likelihood: medium
+          impact: low
+          mitigation: |
+            registerInspectResources is a standalone function that compiles independently.
+            The call site wiring is in Wave 2 integration agent E.
+        - scenario: Agent D's changelog edits conflict with staged CHANGELOG.md changes
+          likelihood: medium
+          impact: low
+          mitigation: |
+            Git status shows CHANGELOG.md is modified but not staged. Agent D will read
+            the current file state and add entries at the top. Merge conflict is unlikely
+            since additions are at different positions.
+        - scenario: SKILL.md rewrite loses existing content
+          likelihood: low
+          impact: medium
+          mitigation: |
+            Agent A's task explicitly says to preserve all existing functionality and
+            caveats. The verification gate checks for key existing elements.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+        E:
+            agent_id: E
+            verdict: PASS
+    summary: 'All agent briefs verified against the codebase. File existence checks pass: modify targets exist, new targets do not conflict. Symbol accuracy verified: collectExportedSymbols signature matches, GetChangeImpactArgs struct matches, HandleGetChangeImpact args parsing pattern matches, ResourceResult type exists in internal/resources, clientState and RootDir() exist, mcp.Server AddResource pattern matches existing resource registrations in server.go, and the URI template registration anchor text exists. Pattern accuracy confirmed for all agents. Interface contracts are syntactically valid and reference existing types. Import chains verified against go.mod. No disjoint ownership violations.'
+    reviewed_at: "2026-05-10T22:56:51Z"
+    issue_count: 0
+state: SCOUT_PENDING
+injection_method: hook
