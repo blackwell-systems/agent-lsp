@@ -264,7 +264,16 @@ func HandleDestroySession(ctx context.Context, mgr *session.SessionManager, args
 	// Destroy
 	err := mgr.Destroy(ctx, sessionID)
 	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("destroy_session failed: %s. If you used preview_edit, the session was already created and destroyed automatically; no separate destroy_session call is needed.", err)), nil
+		// If the session doesn't exist, it was likely already cleaned up by
+		// preview_edit (which creates and destroys sessions automatically).
+		// Return success instead of an error to avoid confusing agents.
+		result := map[string]any{
+			"session_id": sessionID,
+			"status":     "already_destroyed",
+			"note":       "Session was already cleaned up. If you used preview_edit, sessions are created and destroyed automatically.",
+		}
+		data, _ := json.Marshal(result)
+		return types.TextResult(string(data)), nil
 	}
 
 	result := map[string]any{

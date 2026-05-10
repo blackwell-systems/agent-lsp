@@ -171,12 +171,24 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 	// Cache for test file symbols to avoid redundant GetDocumentSymbols calls.
 	testSymbolCache := &sync.Map{}
 
+	// Per-symbol caller partitioning: each changed symbol gets its own
+	// test_callers and non_test_callers lists so agents know which tests
+	// cover which specific function/method.
+	type symbolWithCallers struct {
+		symbolRef
+		TestCallers    []symbolRef `json:"test_callers"`
+		NonTestCallers []symbolRef `json:"non_test_callers"`
+	}
+	var symbolsWithCallers []symbolWithCallers
+
 	for _, ref := range refResults {
-		changedSymbols = append(changedSymbols, symbolRef{
-			Name: ref.Symbol.Name,
-			File: ref.Symbol.File,
-			Line: ref.Symbol.Line,
-		})
+		entry := symbolWithCallers{
+			symbolRef: symbolRef{
+				Name: ref.Symbol.Name,
+				File: ref.Symbol.File,
+				Line: ref.Symbol.Line,
+			},
+		}
 
 		if ref.Warning != "" {
 			refWarnings = append(refWarnings, ref.Warning)
@@ -194,21 +206,32 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 					key := fmt.Sprintf("%s:%s", refPath, enclosing.Name)
 					if !testFuncSet[key] {
 						testFuncSet[key] = true
-						testFunctions = append(testFunctions, symbolRef{
+						testRef := symbolRef{
 							Name: enclosing.Name,
 							File: refPath,
 							Line: enclosing.SelectionRange.Start.Line + 1,
-						})
+						}
+						testFunctions = append(testFunctions, testRef)
+						entry.TestCallers = append(entry.TestCallers, testRef)
 					}
 				}
 			} else {
-				nonTestCallers = append(nonTestCallers, symbolRef{
+				callerRef := symbolRef{
 					Name: ref.Symbol.Name,
 					File: refPath,
 					Line: loc.Range.Start.Line + 1,
-				})
+				}
+				nonTestCallers = append(nonTestCallers, callerRef)
+				entry.NonTestCallers = append(entry.NonTestCallers, callerRef)
 			}
 		}
+
+		changedSymbols = append(changedSymbols, symbolRef{
+			Name: ref.Symbol.Name,
+			File: ref.Symbol.File,
+			Line: ref.Symbol.Line,
+		})
+		symbolsWithCallers = append(symbolsWithCallers, entry)
 	}
 
 	// Phase 3.5: Transitive references (if requested).
@@ -256,6 +279,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 
 	response := map[string]any{
 		"changed_symbols":  changedSymbols,
+		"affected_symbols": symbolsWithCallers,
 		"test_files":       testFiles,
 		"test_functions":   testFunctions,
 		"non_test_callers": nonTestCallers,
