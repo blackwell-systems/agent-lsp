@@ -347,6 +347,14 @@ func resolveBuildPath(lang, path string) string {
 // resolveTestPath returns the effective path argument for a test command.
 func resolveTestPath(lang, path string) string {
 	if path != "" {
+		// Go paths must start with ./ or / to avoid being interpreted as
+		// stdlib packages (e.g. "internal/notify" vs "./internal/notify/...").
+		if lang == "go" && path[0] != '.' && path[0] != '/' {
+			path = "./" + path
+			if !strings.HasSuffix(path, "/...") && !strings.HasSuffix(path, ".go") {
+				path = path + "/..."
+			}
+		}
 		return path
 	}
 	switch lang {

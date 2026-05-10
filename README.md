@@ -259,6 +259,21 @@ Skills are prompt files copied into your AI tool's configuration. `--copy` means
 
 Skills are also available as **MCP prompts**: any MCP client can discover them via `prompts/list` and retrieve full workflow instructions via `prompts/get`, with no manual installation required. The `install.sh` path is for AgentSkills-compatible clients (Claude Code slash commands).
 
+### Step 6: Allow tool permissions (Claude Code)
+
+For Claude Code, add `mcp__lsp__*` to your permissions allow list so all 60 tools are available without per-tool approval prompts:
+
+```json
+// ~/.claude/settings.json
+{
+  "permissions": {
+    "allow": ["mcp__lsp__*"]
+  }
+}
+```
+
+Without this, Claude Code will prompt for permission on each tool call. Other MCP clients handle permissions differently; check your client's documentation.
+
 Skills are multi-tool workflows that encode reliable procedures: blast-radius check before edit, speculative preview before write, test run after change. See [docs/skills.md](./docs/skills.md) for the full list.
 
 ### Step 6: Start working
