@@ -25,6 +25,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 - **Flaky `TestSubscribeHealth_Stop`.** Timing race on CI: health poller could fire one message before the stop channel was read. Fixed by comparing message count before/after stop instead of asserting absolute zero.
 
+- **`preview_edit` net_delta no longer counts hints.** `DiffDiagnostics` now filters out severity 3 (info) and 4 (hint) before computing the delta. Previously, hints like "interface{} can be replaced by any" counted toward net_delta, making preview_edit report confusing deltas unrelated to the actual edit. Found by GPT-5.5 agent evaluation.
+
+- **`destroy_session` error message improved.** Now explains that `preview_edit` creates and destroys sessions automatically, so a separate `destroy_session` call is not needed. Addresses confusion from agent evaluations where models called destroy_session after preview_edit and got errors.
+
 - **`find_references` and `inspect_symbol` schema fix.** `line` and `column` were required in the JSON schema even when `position_pattern` was provided as an alternative. Made them optional so agents can use `position_pattern` alone without validation errors.
 
 - **`get_change_impact` discoverability.** Promoted to IMPORTANT in MCP Instructions with "replaces manual loops over find_references." Agent evaluations showed agents manually looping over exports instead of calling it.
