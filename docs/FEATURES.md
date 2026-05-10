@@ -756,6 +756,41 @@ See [docs/phase-enforcement.md](./phase-enforcement.md) for the full design docu
 
 ---
 
+## Proactive Notifications
+
+Server-initiated MCP notifications that inform the agent about state changes without requiring a tool call. Four channels, each with independent debouncing to avoid flooding the agent during high-activity periods (e.g., initial indexing).
+
+### Notification Channels
+
+| Channel | What it reports | MCP primitive | Debounce |
+|---------|----------------|---------------|----------|
+| Diagnostic changes | New errors/warnings from the language server, or resolved diagnostics | `notifications/resources/updated` | 2 seconds |
+| Workspace ready | Language server indexing complete (all `$/progress` tokens done) | `logging/message` | None (one-shot) |
+| Process health | Language server crash or recovery | `logging/message` | None (immediate) |
+| Stale references | Watched files changed on disk; cached references may be outdated | `notifications/resources/updated` + `logging/message` | 3 seconds |
+
+### Architecture
+
+- `internal/notify/hub.go`: Central `Hub` coordinator with `NotificationSender` interface, `SetSender`, `Send`, `SendResourceUpdate`, `AddStopFunc`, `Close`. Thread-safe via `sync.RWMutex`.
+- `internal/notify/diagnostics.go`: `DiagUpdate` struct, `diagDebouncer` with configurable interval. Coalesces rapid `publishDiagnostics` updates so the agent receives one notification per stabilization window, not hundreds during indexing.
+- `internal/notify/workspace.go`: `SubscribeWorkspaceReady` polls `IsWorkspaceLoaded`, emits a JSON notification when indexing completes. 5-minute timeout.
+- `internal/notify/health.go`: `SubscribeHealth` polls `IsAlive`, emits crash/recovery notifications on state transitions.
+- `internal/notify/stale.go`: `StaleNotifier` with 3-second debounce, emits `ResourceUpdated` + log notification when files change on disk.
+- `internal/lsp/client_notify.go`: `SubscribeToFileChanges`, `IsAlive`, `IsWorkspaceLoaded` methods on `LSPClient`.
+
+### Value
+
+- Diagnostic changes: the agent knows "the file I just edited now has 3 errors" immediately, without calling `get_diagnostics`.
+- Workspace ready: replaces the current poll/block pattern for indexing completion.
+- Process health: the agent learns about a language server crash immediately, instead of discovering it on the next tool call.
+- Stale references: signals that cached `get_change_impact` / `get_references` results may be outdated after external edits.
+
+### Status
+
+Wave 1 (notification infrastructure): shipped. Wave 2 (MCP server wiring via `cmd/agent-lsp/notifications.go`): in progress.
+
+---
+
 ## Distribution Channels
 
 | Channel | Status | Command/URL |
