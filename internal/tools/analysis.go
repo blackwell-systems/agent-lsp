@@ -212,7 +212,7 @@ func HandleGetInfoOnLocation(ctx context.Context, client *lsp.LSPClient, args ma
 		return types.ErrorResult("file_path is required"), nil
 	}
 
-	line, col, err := extractPosition(args)
+	line, col, err := ExtractPositionWithPattern(args, filePath)
 	if err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
