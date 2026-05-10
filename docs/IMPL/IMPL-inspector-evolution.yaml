@@ -62,7 +62,7 @@ file_ownership:
       wave: 1
       action: new
     - file: docs/FEATURES.md
-      agent: D
+      agent: A
       wave: 1
       action: modify
     - file: docs/roadmap.md
@@ -260,6 +260,17 @@ waves:
             # Expected: >= 1
             ```
 
+            ### File 2: docs/FEATURES.md
+
+            Find the section that mentions inspection or lsp-inspect. Add or update to include:
+            - Batch mode: directory-level inspection with `--top N` ranked output
+            - Comparison mode: `--diff` flag for branch-only issue detection
+            - Unexported dead code detection via `scope='all'` parameter on get_change_impact
+            - MCP resource `inspect://last` for programmatic access to results
+            - Confidence tiers: verified/suspected/advisory (replacing high/medium/low)
+            - Fix suggestions: exact fix text included with every finding
+            - Blast-radius severity calibration using caller counts
+
             ### Constraints
             - Do NOT modify any Go source files.
             - Do NOT remove existing check types from the taxonomy.
@@ -267,6 +278,8 @@ waves:
             - Preserve all existing caveats at the end of the file.
           files:
             - skills/lsp-inspect/SKILL.md
+            - docs/FEATURES.md
+          dependencies: []
         - id: B
           task: |
             ## What to implement
@@ -713,9 +726,9 @@ waves:
             - Do NOT modify any files outside your ownership list.
             - Preserve existing content; only add or update relevant sections.
           files:
-            - docs/FEATURES.md
             - docs/roadmap.md
             - CHANGELOG.md
+      base_commit: 8cd4c2a9089bfed46a8eb70b31ec8e5aac232cba
     - number: 2
       type: integration
       agents:
@@ -817,6 +830,5 @@ critic_report:
     summary: 'All agent briefs verified against the codebase. File existence checks pass: modify targets exist, new targets do not conflict. Symbol accuracy verified: collectExportedSymbols signature matches, GetChangeImpactArgs struct matches, HandleGetChangeImpact args parsing pattern matches, ResourceResult type exists in internal/resources, clientState and RootDir() exist, mcp.Server AddResource pattern matches existing resource registrations in server.go, and the URI template registration anchor text exists. Pattern accuracy confirmed for all agents. Interface contracts are syntactically valid and reference existing types. Import chains verified against go.mod. No disjoint ownership violations.'
     reviewed_at: "2026-05-10T22:56:51Z"
     issue_count: 0
-state: "REVIEWED"
-original_branch: main
+state: REVIEWED
 injection_method: hook
