@@ -220,9 +220,9 @@ waves:
             }
             ```
 
-            For the signature field: use `client.GetHover` on the symbol's definition
-            position to get the type signature string. If hover returns nil or empty,
-            fall back to the symbol name + kind as the signature.
+            For the signature field: use `client.GetInfoOnLocation(ctx, uri, pos)` on
+            the symbol's definition position to get the type signature string (returns
+            string, error). If the result is empty, fall back to the symbol name + kind.
 
             **2. `internal/tools/context_test.go`**
 
@@ -275,7 +275,7 @@ waves:
             - `lsp.LSPClient.GetReferencesRaw(ctx, uri, pos, includeDecl) ([]types.Location, error)`
             - `lsp.LSPClient.PrepareCallHierarchy(ctx, uri, pos) ([]types.CallHierarchyItem, error)`
             - `lsp.LSPClient.GetOutgoingCalls(ctx, item) ([]types.CallHierarchyOutgoingCall, error)`
-            - `lsp.LSPClient.GetHover(ctx, uri, pos) (*types.Hover, error)`
+            - `lsp.LSPClient.GetInfoOnLocation(ctx, uri, pos) (string, error)`
             - `tools.WithDocument`, `tools.ValidateFilePath`, `tools.CreateFileURI`
             - `tools.isTestFile(path string) bool` (in change_impact.go, same package)
             - `lsp.LanguageIDFromPath(path string) string`
