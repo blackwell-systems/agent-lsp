@@ -186,6 +186,22 @@ Layer 1 (`Instructions`) is the missing piece. Implementation: set `ServerOption
 
 Content is identical across platforms (skill table, tool usage guidance, LSP-first preferences). Generated from SKILL.md files at build time via `go:embed`, keeping rules in sync with shipped skills automatically. The `init` command already knows which platform was selected; it writes the rules file alongside the MCP config in the same step.
 
+### Agent tool adoption enforcement
+
+Agents default to built-in tools (Read, Grep, Edit) over MCP tools even when the MCP tool is faster and more accurate. The provider-agnostic skill awareness layers above seed knowledge of available tools; the items below actively enforce their use.
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Disallowed reasoning patterns** | Planned | Add explicit anti-patterns to the `Instructions` string: "Do NOT rationalize using Read/Grep with 'I already know the path' or 'one Read is faster than three MCP calls'." Blocks the specific excuses models use to skip MCP tools. |
+| **Task-to-tool mapping table** | Planned | Add a concise two-column table to `Instructions` mapping common tasks to the correct tool (e.g., "See a file's structure" -> `list_symbols`, "Find all usages before editing" -> `find_references`). More scannable than paragraph-form descriptions. |
+| **Recovery-oriented error messages** | Planned | Every error message should answer "what should I do now?" not just "what went wrong." For example, if `find_references` times out: "Consider narrowing scope with a file path filter." If `preview_edit` shows errors: "Review errors_introduced, fix the issues, then re-preview." |
+| **Graceful degradation on large results** | Planned | Return shortened summaries (symbol names and file paths only) instead of failing when output exceeds size limits. Lets the agent refine its query instead of hitting a wall. |
+| **"No verification needed" assertions** | Planned | Add confidence assertions to tool descriptions where re-checking is wasteful: "If `preview_edit` returns `net_delta: 0`, the edit is safe to apply without further verification." Reduces unnecessary follow-up tool calls. |
+| **Claude Code suggestion hook** | Exploring | Optional hook that suggests (not blocks) agent-lsp tools when the agent uses grep/read for tasks that LSP handles better (e.g., finding references, getting type info). Non-blocking: logs a suggestion, does not deny the tool call. Must not interfere with non-code tasks (reading configs, markdown, logs). May not be worth the friction. |
+| **Claude Code auto-approval hook** | Planned | When Claude Code is in `auto` or `acceptEdits` mode, auto-approve agent-lsp editing tools (apply_edit, replace_symbol_body, rename_symbol). Removes the friction asymmetry where built-in Edit is auto-approved but MCP tools require confirmation. |
+| **Per-client tool description overrides** | Planned | Tune tool descriptions based on which client is connected. In Claude Code, `list_symbols` description says "use this instead of Read for file structure." In Cursor, skip that guidance since Cursor has its own LSP. Requires detecting the client from the MCP initialize handshake. |
+| **Cross-referencing in tool descriptions** | Planned | Every tool that has an alternative should explicitly say "instead of this, consider X when Y." For example, `apply_edit` description: "For full function/method replacements, consider `replace_symbol_body` which resolves by symbol name instead of text matching." |
+
 ## Skills
 
 22 skills shipped. See [skills.md](skills.md) for the full catalog.
