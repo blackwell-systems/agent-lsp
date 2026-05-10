@@ -731,6 +731,7 @@ waves:
             - C
             - D
             - F
+      base_commit: aa0b441b72060176036c6320b0d9bd90b56a267a
 quality_gates:
     level: standard
     gates:
@@ -918,4 +919,3 @@ critic_report:
     reviewed_at: "2026-05-10T06:41:46Z"
     issue_count: 0
 state: REVIEWED
-original_branch: main
