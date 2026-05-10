@@ -31,9 +31,7 @@ func SubscribeWorkspaceReady(hub *Hub, client WorkspaceReadySubscriber, pollInte
 
 	emit := func() {
 		msg, _ := json.Marshal(payload)
-		if hub.sender != nil {
-			_ = hub.sender.SendLog("info", "workspace", string(msg))
-		}
+		hub.Send("info", "workspace", string(msg))
 	}
 
 	// If already loaded, emit immediately and return no-op.

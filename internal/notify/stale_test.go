@@ -5,8 +5,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // staleMockSender records calls for test verification.
@@ -137,24 +135,3 @@ func TestStaleNotifier_Stop(t *testing.T) {
 	}
 }
 
-func TestAdaptFileChangeEvents(t *testing.T) {
-	events := []types.FileChangeEvent{
-		{URI: "file:///foo.go", Type: 1},
-		{URI: "file:///bar.go", Type: 2},
-		{URI: "file:///baz.go", Type: 3},
-	}
-
-	result := AdaptFileChangeEvents(events)
-
-	if len(result) != 3 {
-		t.Fatalf("expected 3 results, got %d", len(result))
-	}
-	for i, r := range result {
-		if r.URI != events[i].URI {
-			t.Errorf("[%d] URI mismatch: %s vs %s", i, r.URI, events[i].URI)
-		}
-		if r.ChangeType != events[i].Type {
-			t.Errorf("[%d] Type mismatch: %d vs %d", i, r.ChangeType, events[i].Type)
-		}
-	}
-}

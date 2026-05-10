@@ -45,9 +45,7 @@ func SubscribeHealth(hub *Hub, checker HealthChecker, pollInterval time.Duration
 						Message: "Language server process exited unexpectedly",
 					}
 					msg, _ := json.Marshal(p)
-					if hub.sender != nil {
-						_ = hub.sender.SendLog("error", "health", string(msg))
-					}
+					hub.Send("error", "health", string(msg))
 				} else if !alive && current {
 					// Recovered.
 					p := healthPayload{
@@ -56,9 +54,7 @@ func SubscribeHealth(hub *Hub, checker HealthChecker, pollInterval time.Duration
 						Message: "Language server process recovered",
 					}
 					msg, _ := json.Marshal(p)
-					if hub.sender != nil {
-						_ = hub.sender.SendLog("info", "health", string(msg))
-					}
+					hub.Send("info", "health", string(msg))
 				}
 				alive = current
 			}

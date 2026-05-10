@@ -6,8 +6,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // FileChange represents a single file system change event.
@@ -102,14 +100,3 @@ func (n *StaleNotifier) flush() {
 	n.hub.Send("info", "file_watcher", string(data))
 }
 
-// AdaptFileChangeEvents converts from types.FileChangeEvent to FileChange.
-func AdaptFileChangeEvents(changes []types.FileChangeEvent) []FileChange {
-	out := make([]FileChange, len(changes))
-	for i, c := range changes {
-		out[i] = FileChange{
-			URI:        c.URI,
-			ChangeType: c.Type,
-		}
-	}
-	return out
-}

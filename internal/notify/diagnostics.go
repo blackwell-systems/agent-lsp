@@ -115,9 +115,7 @@ func SubscribeDiagnostics(hub *Hub, subscriber DiagnosticSubscriber) func() {
 		if err != nil {
 			return
 		}
-		if hub.sender != nil {
-			hub.sender.SendLog("info", "diagnostics", string(msg))
-		}
+		hub.Send("info", "diagnostics", string(msg))
 	}
 
 	debouncer := newDiagDebouncer(2*time.Second, emit)
