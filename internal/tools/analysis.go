@@ -371,14 +371,14 @@ func HandleGetDocumentSymbols(ctx context.Context, client *lsp.LSPClient, args m
 
 	docSymbolHint := "Use get_change_impact with this file to analyze blast radius."
 	if format == "outline" {
-		return appendHint(types.TextResult(renderOutline(shifted, 0)), docSymbolHint), nil
+		return AppendTokenMeta(appendHint(types.TextResult(renderOutline(shifted, 0)), docSymbolHint), filePath), nil
 	}
 
 	data, mErr := json.Marshal(shifted)
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling document symbols: %s", mErr)), nil
 	}
-	return appendHint(types.TextResult(string(data)), docSymbolHint), nil
+	return AppendTokenMeta(appendHint(types.TextResult(string(data)), docSymbolHint), filePath), nil
 }
 
 // workspaceSymbolEnriched is a SymbolInformation with an optional hover field.

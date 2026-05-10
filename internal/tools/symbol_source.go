@@ -126,5 +126,5 @@ func HandleGetSymbolSource(ctx context.Context, client *lsp.LSPClient, args map[
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling result: %s", mErr)), nil
 	}
-	return types.TextResult(string(data)), nil
+	return AppendTokenMeta(types.TextResult(string(data)), cleanPath), nil
 }
