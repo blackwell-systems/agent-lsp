@@ -1,3 +1,4 @@
+completion_date: "2026-05-10"
 title: 'Inspector Evolution: Transform lsp-inspect into a one-shot code quality laser'
 feature_slug: inspector-evolution
 verdict: SUITABLE
@@ -766,6 +767,7 @@ waves:
             - cmd/agent-lsp/server.go
           dependencies:
             - C
+          context_source: prepared-brief
 quality_gates:
     level: standard
     gates:
@@ -779,7 +781,58 @@ quality_gates:
           command: go vet ./...
           required: true
 post_merge_checklist:
-    groups: []
+    groups:
+        - title: Background Service Initialization
+          items:
+            - description: Verify if inspect_test.go needs initialization in Server constructor
+completion_reports:
+    A:
+        status: complete
+        branch: saw/inspector-evolution/wave1-agent-A
+        commit: da0d5b3
+        files_changed:
+            - skills/lsp-inspect/SKILL.md
+            - docs/FEATURES.md
+        verification: PASS
+        notes: SKILL.md rewritten with all 7 new capabilities (batch mode, diff mode, severity calibration, fix suggestions, confidence tiers, cross-file impact scoring, result persistence). FEATURES.md updated with new capabilities summary.
+    B:
+        status: complete
+        branch: saw/inspector-evolution/wave1-agent-B
+        commit: fe05bdc
+        files_changed:
+            - internal/tools/change_impact.go
+            - internal/tools/change_impact_test.go
+            - cmd/agent-lsp/tools_analysis.go
+        tests_added:
+            - TestCollectAllSymbols
+        verification: PASS
+    C:
+        status: complete
+        branch: saw/inspector-evolution/wave1-agent-C
+        commit: 43add24
+        files_changed:
+            - internal/resources/inspect.go
+            - internal/resources/inspect_test.go
+            - cmd/agent-lsp/resources_inspect.go
+        files_created:
+            - internal/resources/inspect.go
+            - internal/resources/inspect_test.go
+            - cmd/agent-lsp/resources_inspect.go
+        tests_added:
+            - TestHandleInspectResource_NoWorkspace
+            - TestHandleInspectResource_NoFile
+            - TestHandleInspectResource_FileExists
+        verification: PASS
+        notes: inspect://last resource handler complete. registerInspectResources must be called from server.go Run() by integration agent.
+    D:
+        status: complete
+        branch: saw/inspector-evolution/wave1-agent-D
+        commit: 0ce5309
+        files_changed:
+            - docs/roadmap.md
+            - CHANGELOG.md
+        verification: PASS
+        notes: Updated roadmap inspector entries to Shipped. Added 0.11.0 CHANGELOG section with all inspector evolution features.
 pre_mortem:
     overall_risk: low
     rows:
@@ -829,5 +882,5 @@ critic_report:
     summary: 'All agent briefs verified against the codebase. File existence checks pass: modify targets exist, new targets do not conflict. Symbol accuracy verified: collectExportedSymbols signature matches, GetChangeImpactArgs struct matches, HandleGetChangeImpact args parsing pattern matches, ResourceResult type exists in internal/resources, clientState and RootDir() exist, mcp.Server AddResource pattern matches existing resource registrations in server.go, and the URI template registration anchor text exists. Pattern accuracy confirmed for all agents. Interface contracts are syntactically valid and reference existing types. Import chains verified against go.mod. No disjoint ownership violations.'
     reviewed_at: "2026-05-10T22:56:51Z"
     issue_count: 0
-state: REVIEWED
+state: COMPLETE
 injection_method: hook
