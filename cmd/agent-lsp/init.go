@@ -121,8 +121,9 @@ func runInit(args []string) {
 	// Step 8: Write provider-specific rules file for skill awareness.
 	rulesPath := resolveRulesPath(choice)
 	if rulesPath != "" {
-		rulesContent := generateRulesContent()
-		if choice == 1 || choice == 2 {
+		isClaudeCode := choice == 1 || choice == 2
+		rulesContent := generateRulesContent(isClaudeCode)
+		if isClaudeCode {
 			// Claude Code: inject managed section into CLAUDE.md.
 			if err := writeManagedSection(rulesPath, rulesContent); err != nil {
 				fmt.Fprintf(os.Stderr, "warning: could not write rules to %s: %v\n", rulesPath, err)
@@ -285,15 +286,29 @@ func resolveRulesPath(choice int) string {
 }
 
 // generateRulesContent builds the skill awareness rules from embedded SKILL.md
-// files. The content is the same for all providers; only the target file differs.
-func generateRulesContent() string {
+// files. When isClaudeCode is true, adds stronger enforcement language specific
+// to Claude Code's built-in tools (Read, Grep, Edit).
+func generateRulesContent(isClaudeCode ...bool) string {
+	claude := len(isClaudeCode) > 0 && isClaudeCode[0]
 	var b strings.Builder
 	b.WriteString("## agent-lsp Skills\n\n")
 	b.WriteString("agent-lsp provides 60 code intelligence tools and 22 workflow skills.\n")
-	b.WriteString("Prefer LSP tools over Grep/Glob/Read for code navigation.\n\n")
+	b.WriteString("Prefer these tools over text search for code intelligence tasks.\n\n")
 	b.WriteString("**Before editing code:** call `get_change_impact` for blast-radius analysis.\n")
 	b.WriteString("**Before applying edits:** call `preview_edit` to preview the diagnostic delta.\n")
 	b.WriteString("**After any change:** call `get_diagnostics`, then `run_build` and `run_tests`.\n\n")
+	if claude {
+		b.WriteString("**Task-to-tool mapping (use these instead of Read/Grep for code):**\n\n")
+		b.WriteString("| Task | Use this | Not this |\n")
+		b.WriteString("|------|----------|----------|\n")
+		b.WriteString("| See file structure | `list_symbols` | `Read` + manual scanning |\n")
+		b.WriteString("| Find a symbol by name | `find_symbol` | `Grep` across files |\n")
+		b.WriteString("| Find all usages | `find_references` | `Grep` for the name |\n")
+		b.WriteString("| Understand a symbol | `inspect_symbol` | `Read` the file |\n")
+		b.WriteString("| What calls this function | `find_callers` | `Grep` for the name |\n")
+		b.WriteString("| Replace a function body | `replace_symbol_body` | `Edit` with text matching |\n")
+		b.WriteString("| Delete unused symbol | `safe_delete_symbol` | `Edit` to remove lines |\n\n")
+	}
 	b.WriteString("| Skill | Description |\n")
 	b.WriteString("|-------|-------------|\n")
 

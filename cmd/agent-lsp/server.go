@@ -315,9 +315,19 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Version: Version,
 	}, &mcp.ServerOptions{
 		Instructions: "This server provides 60 code intelligence tools and 22 multi-step workflow skills across 30 languages. " +
-			"Before editing code: call get_change_impact to analyze blast radius. " +
-			"Before applying edits: call preview_edit to preview the diagnostic delta. " +
-			"After any change: call get_diagnostics to verify, then run_build and run_tests. " +
+			"Task-to-tool mapping: " +
+			"see file structure -> list_symbols; " +
+			"find symbol by name -> find_symbol; " +
+			"find all usages -> find_references; " +
+			"understand a symbol -> inspect_symbol; " +
+			"what calls this -> find_callers; " +
+			"blast radius before editing -> get_change_impact; " +
+			"preview edit impact -> preview_edit; " +
+			"replace a function body -> replace_symbol_body; " +
+			"delete unused code -> safe_delete_symbol; " +
+			"available quick fixes -> suggest_fixes. " +
+			"Workflow: get_change_impact before editing, preview_edit before applying, get_diagnostics after changes. " +
+			"Prefer these tools over text search for code intelligence tasks (finding references, type info, file structure, symbol search). " +
 			"Call prompts/get with a skill name (e.g. lsp-refactor, lsp-inspect, lsp-verify) for full workflow instructions.",
 		// Wire MCP log notifications once the client session initializes.
 		InitializedHandler: func(_ context.Context, req *mcp.InitializedRequest) {

@@ -171,7 +171,7 @@ func HandleReplaceSymbolBody(ctx context.Context, client *lsp.LSPClient, args ma
 
 	loc, err := ResolveSymbolByNamePath(ctx, client, filePath, symbolPath)
 	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("resolve symbol: %s", err)), nil
+		return types.ErrorResult(fmt.Sprintf("resolve symbol: %s. Use list_symbols to see available symbols in the file.", err)), nil
 	}
 
 	// Body starts at line after SelectionRange end.
@@ -221,7 +221,7 @@ func HandleInsertAfterSymbol(ctx context.Context, client *lsp.LSPClient, args ma
 
 	loc, err := ResolveSymbolByNamePath(ctx, client, filePath, symbolPath)
 	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("resolve symbol: %s", err)), nil
+		return types.ErrorResult(fmt.Sprintf("resolve symbol: %s. Use list_symbols to see available symbols in the file.", err)), nil
 	}
 
 	// Insert at the end of the symbol range.
@@ -268,7 +268,7 @@ func HandleInsertBeforeSymbol(ctx context.Context, client *lsp.LSPClient, args m
 
 	loc, err := ResolveSymbolByNamePath(ctx, client, filePath, symbolPath)
 	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("resolve symbol: %s", err)), nil
+		return types.ErrorResult(fmt.Sprintf("resolve symbol: %s. Use list_symbols to see available symbols in the file.", err)), nil
 	}
 
 	// Insert at the start of the symbol range (column 0 of its start line).
@@ -315,7 +315,7 @@ func HandleSafeDeleteSymbol(ctx context.Context, client *lsp.LSPClient, args map
 
 	loc, err := ResolveSymbolByNamePath(ctx, client, filePath, symbolPath)
 	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("resolve symbol: %s", err)), nil
+		return types.ErrorResult(fmt.Sprintf("resolve symbol: %s. Use list_symbols to see available symbols in the file.", err)), nil
 	}
 
 	// Check references (excluding the declaration itself).
@@ -326,7 +326,7 @@ func HandleSafeDeleteSymbol(ctx context.Context, client *lsp.LSPClient, args map
 	}
 
 	if len(refs) > 0 {
-		return types.ErrorResult(fmt.Sprintf("symbol has %d references; cannot safely delete", len(refs))), nil
+		return types.ErrorResult(fmt.Sprintf("symbol has %d references; cannot safely delete. Use find_references to see callers, update them first, then retry safe_delete_symbol.", len(refs))), nil
 	}
 
 	// Delete the entire symbol range.
