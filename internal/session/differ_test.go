@@ -316,21 +316,25 @@ func TestDiffDiagnostics_Mixed(t *testing.T) {
 
 	introduced, resolved := DiffDiagnostics(baseline, current)
 
-	if len(introduced) != 2 {
-		t.Errorf("expected 2 introduced errors, got %d", len(introduced))
+	// Only errors (severity 1) and warnings (severity 2) count toward delta.
+	// Info (severity 3) is filtered out.
+	if len(introduced) != 1 {
+		t.Errorf("expected 1 introduced error (info filtered), got %d", len(introduced))
 	}
 	if len(resolved) != 2 {
 		t.Errorf("expected 2 resolved errors, got %d", len(resolved))
 	}
 
-	// Check introduced diagnostics
-	if introduced[0].Message != "new error 1" || introduced[1].Message != "new info" {
-		t.Errorf("introduced messages don't match: %q, %q", introduced[0].Message, introduced[1].Message)
+	// Check introduced diagnostics (only "new error 1", not "new info")
+	if len(introduced) > 0 && introduced[0].Message != "new error 1" {
+		t.Errorf("introduced message doesn't match: got %q, want %q", introduced[0].Message, "new error 1")
 	}
 
 	// Check resolved diagnostics
-	if resolved[0].Message != "old error 1" || resolved[1].Message != "old error 2" {
-		t.Errorf("resolved messages don't match: %q, %q", resolved[0].Message, resolved[1].Message)
+	if len(resolved) >= 2 {
+		if resolved[0].Message != "old error 1" || resolved[1].Message != "old error 2" {
+			t.Errorf("resolved messages don't match: %q, %q", resolved[0].Message, resolved[1].Message)
+		}
 	}
 }
 

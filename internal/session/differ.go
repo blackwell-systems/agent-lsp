@@ -66,6 +66,13 @@ func diagnosticFingerprint(d types.LSPDiagnostic) string {
 // - resolved: diagnostics present in baseline but not matched in current
 // Returns DiagnosticEntry slices with 1-indexed line/column positions.
 func DiffDiagnostics(baseline, current []types.LSPDiagnostic) (introduced, resolved []DiagnosticEntry) {
+	// Filter to errors and warnings only. Info (3) and hint (4) diagnostics
+	// are style suggestions that should not affect net_delta or safe-to-apply
+	// decisions. Including them causes confusing deltas when hints shift
+	// due to unrelated code changes.
+	baseline = filterSignificant(baseline)
+	current = filterSignificant(current)
+
 	// Build a count map from baseline for O(1) membership tests.
 	baseCount := make(map[string]int, len(baseline))
 	for _, d := range baseline {
@@ -118,6 +125,18 @@ func DiffDiagnostics(baseline, current []types.LSPDiagnostic) (introduced, resol
 	}
 
 	return introduced, resolved
+}
+
+// filterSignificant returns only errors (severity 1) and warnings (severity 2).
+// Info and hint diagnostics are excluded from net_delta calculations.
+func filterSignificant(diags []types.LSPDiagnostic) []types.LSPDiagnostic {
+	out := make([]types.LSPDiagnostic, 0, len(diags))
+	for _, d := range diags {
+		if d.Severity <= 2 {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // SeverityString converts an LSP severity int to a human-readable string.

@@ -264,7 +264,7 @@ func HandleDestroySession(ctx context.Context, mgr *session.SessionManager, args
 	// Destroy
 	err := mgr.Destroy(ctx, sessionID)
 	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("destroy_session failed: %s", err)), nil
+		return types.ErrorResult(fmt.Sprintf("destroy_session failed: %s. If you used preview_edit, the session was already created and destroyed automatically; no separate destroy_session call is needed.", err)), nil
 	}
 
 	result := map[string]any{
