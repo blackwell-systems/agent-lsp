@@ -7,10 +7,10 @@ package main_test
 // equivalence, but shape.
 //
 // "Structural consistency" means:
-//   - get_document_symbols → JSON array; every item has a "name" string field
+//   - list_symbols → JSON array; every item has a "name" string field
 //   - go_to_definition    → empty/error OR contains a "file" or "uri" string
 //   - get_diagnostics     → JSON array; every item has "severity" and "message" fields
-//   - get_info_on_location (hover) → has a "contents" field if non-empty
+//   - inspect_symbol (hover) → has a "contents" field if non-empty
 //
 // Languages run in parallel. A language/tool combo is skipped gracefully when
 // the LSP binary isn't on PATH. Shape failures use t.Errorf so all languages
@@ -186,38 +186,38 @@ func runConsistencyChecks(t *testing.T, binaryPath string, lang consistencyLangC
 	checkHoverShape(t, ctx, session, lang)
 }
 
-// checkDocumentSymbolsShape asserts that get_document_symbols returns a JSON
+// checkDocumentSymbolsShape asserts that list_symbols returns a JSON
 // array where every item has a "name" string field.
 func checkDocumentSymbolsShape(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang consistencyLangConfig) {
 	t.Helper()
-	res, err := callTool(ctx, session, "get_document_symbols", map[string]any{
+	res, err := callTool(ctx, session, "list_symbols", map[string]any{
 		"file_path":   lang.file,
 		"language_id": lang.id,
 	})
 	if err != nil {
-		t.Errorf("[%s] get_document_symbols: transport error: %v", lang.name, err)
+		t.Errorf("[%s] list_symbols: transport error: %v", lang.name, err)
 		return
 	}
 	if res.IsError {
 		// IsError is acceptable — some servers don't support document symbols.
-		t.Logf("[%s] get_document_symbols: skipping shape check — IsError=true", lang.name)
+		t.Logf("[%s] list_symbols: skipping shape check — IsError=true", lang.name)
 		return
 	}
 	text, err := textFromResult(res)
 	if err != nil {
-		t.Errorf("[%s] get_document_symbols: failed to extract text: %v", lang.name, err)
+		t.Errorf("[%s] list_symbols: failed to extract text: %v", lang.name, err)
 		return
 	}
 	if text == "" {
 		// Empty response is acceptable (server may not support the capability).
-		t.Logf("[%s] get_document_symbols: empty response — skipping shape check", lang.name)
+		t.Logf("[%s] list_symbols: empty response — skipping shape check", lang.name)
 		return
 	}
 
 	// Shape: must be a JSON array.
 	var items []map[string]any
 	if err := json.Unmarshal([]byte(text), &items); err != nil {
-		t.Errorf("[%s] get_document_symbols: response is not a JSON array: %s", lang.name, text)
+		t.Errorf("[%s] list_symbols: response is not a JSON array: %s", lang.name, text)
 		return
 	}
 
@@ -225,14 +225,14 @@ func checkDocumentSymbolsShape(t *testing.T, ctx context.Context, session *mcp.C
 	for i, item := range items {
 		nameVal, hasName := item["name"]
 		if !hasName {
-			t.Errorf("[%s] get_document_symbols: item[%d] missing \"name\" field: %v", lang.name, i, item)
+			t.Errorf("[%s] list_symbols: item[%d] missing \"name\" field: %v", lang.name, i, item)
 			continue
 		}
 		if _, ok := nameVal.(string); !ok {
-			t.Errorf("[%s] get_document_symbols: item[%d].name is not a string: %T", lang.name, i, nameVal)
+			t.Errorf("[%s] list_symbols: item[%d].name is not a string: %T", lang.name, i, nameVal)
 		}
 	}
-	t.Logf("[%s] get_document_symbols: shape OK (%d symbols)", lang.name, len(items))
+	t.Logf("[%s] list_symbols: shape OK (%d symbols)", lang.name, len(items))
 }
 
 // checkGoToDefinitionShape asserts that go_to_definition returns either an
@@ -346,32 +346,32 @@ func checkGetDiagnosticsShape(t *testing.T, ctx context.Context, session *mcp.Cl
 	t.Logf("[%s] get_diagnostics: shape OK (%d diagnostics)", lang.name, len(items))
 }
 
-// checkHoverShape asserts that get_info_on_location returns a "contents" field
+// checkHoverShape asserts that inspect_symbol returns a "contents" field
 // (string or object) when the response is non-empty.
 func checkHoverShape(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang consistencyLangConfig) {
 	t.Helper()
-	res, err := callTool(ctx, session, "get_info_on_location", map[string]any{
+	res, err := callTool(ctx, session, "inspect_symbol", map[string]any{
 		"file_path":   lang.file,
 		"language_id": lang.id,
 		"line":        lang.hoverLine,
 		"column":      lang.hoverColumn,
 	})
 	if err != nil {
-		t.Errorf("[%s] get_info_on_location: transport error: %v", lang.name, err)
+		t.Errorf("[%s] inspect_symbol: transport error: %v", lang.name, err)
 		return
 	}
 	if res.IsError {
-		t.Logf("[%s] get_info_on_location: skipping shape check — IsError=true", lang.name)
+		t.Logf("[%s] inspect_symbol: skipping shape check — IsError=true", lang.name)
 		return
 	}
 	text, err := textFromResult(res)
 	if err != nil {
-		t.Errorf("[%s] get_info_on_location: failed to extract text: %v", lang.name, err)
+		t.Errorf("[%s] inspect_symbol: failed to extract text: %v", lang.name, err)
 		return
 	}
 	if text == "" {
 		// Empty is acceptable — some servers return nothing for certain positions.
-		t.Logf("[%s] get_info_on_location: empty response — skipping shape check", lang.name)
+		t.Logf("[%s] inspect_symbol: empty response — skipping shape check", lang.name)
 		return
 	}
 
@@ -380,7 +380,7 @@ func checkHoverShape(t *testing.T, ctx context.Context, session *mcp.ClientSessi
 	var obj map[string]any
 	if err := json.Unmarshal([]byte(text), &obj); err != nil {
 		// Non-JSON plain-text hover responses are acceptable.
-		t.Logf("[%s] get_info_on_location: plain-text response — shape OK", lang.name)
+		t.Logf("[%s] inspect_symbol: plain-text response — shape OK", lang.name)
 		return
 	}
 
@@ -390,12 +390,12 @@ func checkHoverShape(t *testing.T, ctx context.Context, session *mcp.ClientSessi
 		_, hasMarkup := obj["markup"]
 		_, hasKind := obj["kind"]
 		if !hasValue && !hasMarkup && !hasKind {
-			t.Errorf("[%s] get_info_on_location: JSON response missing \"contents\" (and no \"value\"/\"markup\"/\"kind\"): %v",
+			t.Errorf("[%s] inspect_symbol: JSON response missing \"contents\" (and no \"value\"/\"markup\"/\"kind\"): %v",
 				lang.name, fmt.Sprintf("%.200s", text))
 		} else {
-			t.Logf("[%s] get_info_on_location: response uses alternative field — shape OK", lang.name)
+			t.Logf("[%s] inspect_symbol: response uses alternative field — shape OK", lang.name)
 		}
 		return
 	}
-	t.Logf("[%s] get_info_on_location: shape OK (has \"contents\" field)", lang.name)
+	t.Logf("[%s] inspect_symbol: shape OK (has \"contents\" field)", lang.name)
 }

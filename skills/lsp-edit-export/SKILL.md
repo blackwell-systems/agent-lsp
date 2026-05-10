@@ -3,7 +3,7 @@ name: lsp-edit-export
 description: Safe workflow for editing exported symbols or public APIs. Use when changing a function signature, modifying a public type, or altering any symbol used outside its own package — finds all callers first so nothing breaks silently.
 argument-hint: "[symbol-name]"
 user-invocable: true
-allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__open_document mcp__lsp__get_references mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__replace_symbol_body Edit Write
+allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__open_document mcp__lsp__find_references mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__replace_symbol_body Edit Write
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -68,12 +68,12 @@ line/column. Record this position — you will need it in step 2.
 
 ### Step 2 — Discover all callers
 
-Call `get_references` using the `position_pattern` field to express the cursor
+Call `find_references` using the `position_pattern` field to express the cursor
 position as a readable text pattern rather than raw coordinates. The `@@` marker
 indicates exactly where the cursor sits (the character immediately after `@@`):
 
 ```
-mcp__lsp__get_references({
+mcp__lsp__find_references({
   "file_path": "<definition file from step 1>",
   "position_pattern": "func @@ExportedFunction(",
   "include_declaration": false
@@ -194,7 +194,7 @@ Goal: rename exported function `ParseConfig` → `LoadConfig` in pkg/config
 Step 1 — go_to_symbol: symbol_path="config.ParseConfig"
   → pkg/config/parser.go:42:6
 
-Step 2 — get_references: position_pattern="func @@ParseConfig("
+Step 2 — find_references: position_pattern="func @@ParseConfig("
   → 7 references in 4 files
 
 Step 3 — gate:

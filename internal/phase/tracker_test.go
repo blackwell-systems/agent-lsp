@@ -282,7 +282,7 @@ func TestRenameSkill_FullWorkflow(t *testing.T) {
 		t.Fatalf("expected preview phase, got %s", s.CurrentPhase)
 	}
 	assertAllowed(t, tracker, "prepare_rename")
-	assertAllowed(t, tracker, "get_references")
+	assertAllowed(t, tracker, "find_references")
 	assertAllowed(t, tracker, "rename_symbol") // dry_run=true
 
 	// apply_edit should be forbidden in preview.
@@ -316,8 +316,8 @@ func TestRefactorSkill_ApplyBlockedInBlastRadius(t *testing.T) {
 	// apply_edit forbidden in blast_radius.
 	assertForbidden(t, tracker, "apply_edit")
 
-	// simulate_edit_atomic forbidden in blast_radius.
-	assertForbidden(t, tracker, "simulate_edit_atomic")
+	// preview_edit forbidden in blast_radius.
+	assertForbidden(t, tracker, "preview_edit")
 
 	// get_change_impact allowed.
 	assertAllowed(t, tracker, "get_change_impact")

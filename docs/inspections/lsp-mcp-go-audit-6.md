@@ -3,7 +3,7 @@
 **Date:** 2026-04-09
 **Auditor:** Inspector Agent (claude-sonnet-4-6)
 **Areas:** `internal/tools`, `internal/lsp`, `internal/session`, `cmd/agent-lsp`, `internal/uri`, `internal/logging`, `internal/resources`
-**LSP status:** gopls started but returned "no package metadata" for all `get_references` calls (go.work conflict from parent workspace). Symbol-level dead-code checks use Grep fallback annotated accordingly. All structural findings are direct code reads.
+**LSP status:** gopls started but returned "no package metadata" for all `find_references` calls (go.work conflict from parent workspace). Symbol-level dead-code checks use Grep fallback annotated accordingly. All structural findings are direct code reads.
 
 ---
 
@@ -340,7 +340,7 @@ This matches the pattern used in `simulation.go`, `analysis.go`, and all other h
 | H3      | Specification analysis + code read | N/A |
 | All others | Structural / code read | N/A |
 
-gopls returned "no package metadata" for all `get_references` calls during this session due to a `go.work` conflict in the parent directory. No `dead_symbol` checks requiring `findReferences` were attempted. All findings are based on direct code reads with high structural confidence.
+gopls returned "no package metadata" for all `find_references` calls during this session due to a `go.work` conflict in the parent directory. No `dead_symbol` checks requiring `findReferences` were attempted. All findings are based on direct code reads with high structural confidence.
 
 ---
 

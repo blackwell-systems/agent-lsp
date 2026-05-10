@@ -19,7 +19,7 @@ trace:
       file_path: "fixtures/go/main.go"
       line: 6
       column: 6
-  - tool: get_references
+  - tool: find_references
     args:
       file_path: "fixtures/go/main.go"
       line: 6

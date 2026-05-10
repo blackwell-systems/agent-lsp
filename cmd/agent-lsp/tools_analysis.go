@@ -1,8 +1,8 @@
 // tools_analysis.go defines MCP tool registrations for code analysis:
-// get_info_on_location (hover), get_completions, get_signature_help,
-// get_code_actions, get_document_symbols, get_workspace_symbols,
+// inspect_symbol (hover), get_completions, get_signature_help,
+// suggest_fixes, list_symbols, find_symbol,
 // get_document_highlights, get_inlay_hints, get_semantic_tokens,
-// call_hierarchy, type_hierarchy, get_change_impact, and
+// find_callers, type_hierarchy, get_change_impact, and
 // get_cross_repo_references.
 //
 // Analysis tools are read-only: they query the language server for
@@ -125,7 +125,7 @@ type GetCrossRepoReferencesArgs struct {
 
 func registerAnalysisTools(d toolDeps) {
 	addToolWithPhaseCheck(d, &mcp.Tool{
-		Name:        "get_info_on_location",
+		Name:        "inspect_symbol",
 		Description: "Get information on a specific location in a file via LSP hover. Use this tool to retrieve detailed type information, documentation, and other contextual details about symbols in your code. Particularly useful for understanding variable types, function signatures, and module documentation at a specific location in the code. Use this whenever you need to get a better idea on what a particular function is doing in that context.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Get Hover Info",
@@ -167,7 +167,7 @@ func registerAnalysisTools(d toolDeps) {
 	})
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
-		Name:        "get_code_actions",
+		Name:        "suggest_fixes",
 		Description: "Get code actions for a specific range in a file. Use this tool to obtain available refactorings, quick fixes, and other code modifications that can be applied to a selected code range. Examples include adding imports, fixing errors, or implementing interfaces.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Get Code Actions",
@@ -181,7 +181,7 @@ func registerAnalysisTools(d toolDeps) {
 	})
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
-		Name:        "get_document_symbols",
+		Name:        "list_symbols",
 		Description: "Get all symbols defined in a document via LSP (functions, classes, variables, methods, etc.). Returns a hierarchical DocumentSymbol tree or flat SymbolInformation list depending on server support. Use this to get a structural overview of a file. Pass format: \"outline\" for compact markdown output (name [Kind] :line) optimized for LLM consumption — ~5x fewer tokens than JSON for the same structural information.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Get Document Symbols",
@@ -195,7 +195,7 @@ func registerAnalysisTools(d toolDeps) {
 	})
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
-		Name:        "get_workspace_symbols",
+		Name:        "find_symbol",
 		Description: "Search for symbols across the entire workspace via LSP. Returns all matching symbols with name, kind, and location. detail_level controls enrichment: omit or use \"basic\" for names/locations only; use \"hover\" to also return hover info (type signature + docs) for a paginated window of results. limit (default 3) and offset (default 0) control which symbols get enriched — use offset to step through results without re-running the search.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Get Workspace Symbols",
@@ -209,7 +209,7 @@ func registerAnalysisTools(d toolDeps) {
 	})
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
-		Name:        "get_references",
+		Name:        "find_references",
 		Description: "Find all references to a symbol at a specific location in a file via LSP. Returns every location in the codebase where the symbol is used. Use this to determine if a symbol is dead (zero references), to understand call sites before refactoring, or to trace data flow. Results include file path and line/column for each reference.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Find References",
@@ -294,7 +294,7 @@ func registerAnalysisTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "get_cross_repo_references",
-		Description: "Find all references to a library symbol across one or more consumer repositories. Adds each consumer_root as a workspace folder, waits for indexing, then calls get_references and partitions results by repo. Returns library_references (within the primary repo), consumer_references (map of root → locations), and warnings (roots that could not be indexed). Use before changing a shared library API to find all downstream callers.",
+		Description: "Find all references to a library symbol across one or more consumer repositories. Adds each consumer_root as a workspace folder, waits for indexing, then calls find_references and partitions results by repo. Returns library_references (within the primary repo), consumer_references (map of root → locations), and warnings (roots that could not be indexed). Use before changing a shared library API to find all downstream callers.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Get Cross-Repo References",
 			ReadOnlyHint:    true,

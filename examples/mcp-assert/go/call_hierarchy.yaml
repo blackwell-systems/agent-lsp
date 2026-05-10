@@ -1,4 +1,4 @@
-name: call_hierarchy shows callers of Greet method
+name: find_callers shows callers of Greet method
 server:
   command: agent-lsp
   args: ["go:gopls"]
@@ -21,7 +21,7 @@ setup:
     args:
       file_path: "{{fixture}}/greeter.go"
 assert:
-  tool: call_hierarchy
+  tool: find_callers
   args:
     file_path: "{{fixture}}/main.go"
     line: 13

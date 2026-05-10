@@ -37,7 +37,7 @@
 
 ## CI tool coverage matrix
 
-Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `get_info_on_location`) verified for all 30 languages. Tier 2: 34 additional tools.
+Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verified for all 30 languages. Tier 2: 34 additional tools.
 
 | Language | Tier 1 | symbols | definition | references | completions | workspace | format | declaration | type_hierarchy | hover | call_hier | sem_tok | sig_help |
 |----------|--------|---------|------------|------------|-------------|-----------|--------|-------------|----------------|-------|-----------|---------|----------|

@@ -3,7 +3,7 @@ name: lsp-inspect
 description: Full code quality audit for a file or package. Applies a check taxonomy (dead symbols, silent failures, error wrapping, coverage gaps, test coverage, doc drift, unrecovered panics, context propagation) using LSP-first strategies. Produces a severity-tiered findings report. Language-agnostic.
 argument-hint: "<file-or-directory> [--checks <type1>,<type2>] [--json]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_change_impact mcp__lsp__get_references mcp__lsp__get_document_symbols mcp__lsp__get_info_on_location mcp__lsp__get_diagnostics mcp__lsp__call_hierarchy mcp__lsp__go_to_definition mcp__lsp__get_server_capabilities mcp__lsp__get_cross_repo_references
+allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_change_impact mcp__lsp__find_references mcp__lsp__list_symbols mcp__lsp__inspect_symbol mcp__lsp__get_diagnostics mcp__lsp__find_callers mcp__lsp__go_to_definition mcp__lsp__get_server_capabilities mcp__lsp__get_cross_repo_references
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -46,12 +46,12 @@ levels.
 
 | Check | What it finds | LSP strategy |
 |-------|--------------|--------------|
-| `dead_symbol` | Exported symbol with zero references | Tier 1A: `get_change_impact` batch; Tier 1B: `get_references` per-symbol |
+| `dead_symbol` | Exported symbol with zero references | Tier 1A: `get_change_impact` batch; Tier 1B: `find_references` per-symbol |
 | `test_coverage` | Exported symbol with no test callers | Tier 1A: `get_change_impact` test_callers field |
 | `silent_failure` | Error/exception suppressed without re-raise or logging | Read code, identify bare `except:`, empty `if err != nil {}`, swallowed returns |
 | `error_wrapping` | Error returned/raised without context | Read code, identify `return err` without `fmt.Errorf` wrapping or `raise` without `from` |
 | `coverage_gap` | Unhandled input, error path, or code branch | Read code, identify switch/match without default, unchecked type assertions |
-| `doc_drift` | Docstring/comment that doesn't match the actual signature | Compare `get_info_on_location` hover text against source |
+| `doc_drift` | Docstring/comment that doesn't match the actual signature | Compare `inspect_symbol` hover text against source |
 | `panic_not_recovered` | Unhandled crash in a goroutine or async context | Read code, identify `go func()` without recover, unguarded `.unwrap()` |
 | `context_propagation` | Function receives context but creates a fresh root for callees | Read code, identify `context.Background()` in functions with `ctx` parameter |
 
@@ -70,7 +70,7 @@ mcp__lsp__open_document(file_path="<target_file>", language_id="<lang>")
 ```
 
 **Warm-up check (mandatory):** Pick one symbol you know is actively used.
-Call `get_references` on it. If it returns `[]`, wait 3-5 seconds and retry.
+Call `find_references` on it. If it returns `[]`, wait 3-5 seconds and retry.
 Do not proceed until a known-active symbol returns >= 1 reference.
 
 ### Step 1: Batch analysis (Tier 1A)
@@ -91,7 +91,7 @@ Classify immediately:
 - `non_test_callers > 0 AND test_callers == 0` -> untested export
 
 If `get_change_impact` fails or is unavailable, fall back to Tier 1B
-(`get_references` per-symbol) for `dead_symbol` checks.
+(`find_references` per-symbol) for `dead_symbol` checks.
 
 ### Step 2: Heuristic checks (LLM-driven)
 
@@ -117,7 +117,7 @@ Apply the following checks by reading and reasoning about the code:
 **doc_drift:** For exported functions, compare:
 - Parameter names in docstring vs actual signature
 - Return type described in doc vs actual return
-- Use `get_info_on_location` hover text to cross-reference
+- Use `inspect_symbol` hover text to cross-reference
 
 **panic_not_recovered:** Look for:
 - Go: `go func() { ... }()` without `defer recover()`

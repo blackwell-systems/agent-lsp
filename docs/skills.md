@@ -40,7 +40,7 @@ Blast-radius analysis for a symbol or file. Finds all direct references, callers
 - You want to know whether a change is low-risk (1–5 files) or high-risk (> 20 files) before committing to it.
 
 **What it does that raw tools miss:**
-Raw `get_references` tells you reference count. lsp-impact runs references, call hierarchy, and type hierarchy together, then classifies the result with a risk level, so you get a decision recommendation, not just numbers. The file-level mode (`get_change_impact`) surfaces all exported symbols at once without a symbol-by-symbol loop.
+Raw `find_references` tells you reference count. lsp-impact runs references, call hierarchy, and type hierarchy together, then classifies the result with a risk level, so you get a decision recommendation, not just numbers. The file-level mode (`get_change_impact`) surfaces all exported symbols at once without a symbol-by-symbol loop.
 
 ---
 
@@ -68,7 +68,7 @@ Enumerate exported symbols in a file and surface those with zero references acro
 - Checking whether a function you are about to delete has any hidden callers.
 
 **What it does that raw tools miss:**
-Doesn't just call `get_references`. It verifies indexing is complete before classifying anything (a common failure mode that produces false dead-code candidates), then cross-checks zero-reference results against grep for registration patterns that LSP cannot see (e.g., `router.Handle("/path", myHandler)`). The result is a classified report, not a raw list.
+Doesn't just call `find_references`. It verifies indexing is complete before classifying anything (a common failure mode that produces false dead-code candidates), then cross-checks zero-reference results against grep for registration patterns that LSP cannot see (e.g., `router.Handle("/path", myHandler)`). The result is a classified report, not a raw list.
 
 ---
 
@@ -89,7 +89,7 @@ speculatively before writing to disk, then diffs errors introduced vs. resolved.
 - After an edit surfaces new errors, lsp-safe-edit automatically queries code actions at each error location.
 
 **What it does that raw tools miss:**
-`simulate_edit_atomic` previews the error delta without touching disk. Most agents skip this and apply edits blind. The `simulate_chain` path handles multi-step renames and signature changes: it evaluates each step in sequence and reports exactly how far through the chain is safe to apply.
+`preview_edit` previews the error delta without touching disk. Most agents skip this and apply edits blind. The `simulate_chain` path handles multi-step renames and signature changes: it evaluates each step in sequence and reports exactly how far through the chain is safe to apply.
 
 ---
 
@@ -104,7 +104,7 @@ then commit or discard without touching any files.
 - Recovering a patch across an MCP server restart: `commit_session(apply: false)` returns a portable patch.
 
 **What it does that raw tools miss:**
-Unlike `simulate_edit_atomic` (single edit, atomic), lsp-simulate manages a full session lifecycle: create, apply multiple edits, evaluate, commit or discard. The `simulate_chain` tool evaluates diagnostics after every step, reporting exactly which step first introduces an error.
+Unlike `preview_edit` (single edit, atomic), lsp-simulate manages a full session lifecycle: create, apply multiple edits, evaluate, commit or discard. The `simulate_chain` tool evaluates diagnostics after every step, reporting exactly which step first introduces an error.
 
 ---
 
@@ -118,7 +118,7 @@ Edit a named symbol without knowing its file path or line number.
 - Changing only the signature line (not the body) of a function you can name precisely.
 
 **What it does that raw tools miss:**
-Composes `get_workspace_symbols` → `get_document_symbols` → `apply_edit` to resolve a symbol name to its exact range. Supports text-match apply (no position math needed) and positional apply (when you need to replace a full body). This removes the "find the file, find the line" manual step that agents frequently get wrong.
+Composes `find_symbol` → `list_symbols` → `apply_edit` to resolve a symbol name to its exact range. Supports text-match apply (no position math needed) and positional apply (when you need to replace a full body). This removes the "find the file, find the line" manual step that agents frequently get wrong.
 
 ---
 
@@ -168,7 +168,7 @@ references in one pass.
 - Quick single-symbol triage before deciding whether to dig deeper with lsp-understand.
 
 **What it does that raw tools miss:**
-Runs hover, `go_to_implementation`, `call_hierarchy` (incoming), and `get_references` in parallel against a single symbol and formats them into a single Explore Report. Capability-gated: steps that the language server doesn't support are skipped cleanly rather than failing.
+Runs hover, `go_to_implementation`, `find_callers` (incoming), and `find_references` in parallel against a single symbol and formats them into a single Explore Report. Capability-gated: steps that the language server doesn't support are skipped cleanly rather than failing.
 
 ---
 
@@ -211,7 +211,7 @@ Find all callers of a library symbol across one or more consumer repositories.
 - Before deleting a symbol: verify no cross-repo dependents exist.
 
 **What it does that raw tools miss:**
-`get_cross_repo_references` adds each consumer as a workspace folder, waits for indexing, runs `get_references` across all roots, and returns results partitioned by repo, so you see `api-service: [main.go:14, app.go:31]` and `worker-service: [runner.go:8]` in one call rather than setting up multi-root workspaces manually. Warnings flag any consumer root that failed to index.
+`get_cross_repo_references` adds each consumer as a workspace folder, waits for indexing, runs `find_references` across all roots, and returns results partitioned by repo, so you see `api-service: [main.go:14, app.go:31]` and `worker-service: [runner.go:8]` in one call rather than setting up multi-root workspaces manually. Warnings flag any consumer root that failed to index.
 
 ---
 
@@ -226,7 +226,7 @@ file, and get type info at a position.
 - Getting the type signature of a symbol at a specific position without a workspace-wide search.
 
 **What it does that raw tools miss:**
-`get_document_highlights` is significantly faster than `get_references` for file-local queries because it doesn't scan the workspace index. This skill routes correctly: use highlights for file-local, escalate to `get_references` (lsp-impact) only when cross-file results are needed. Coordinates from `get_document_symbols` feed directly into highlights and hover without manual position math.
+`get_document_highlights` is significantly faster than `find_references` for file-local queries because it doesn't scan the workspace index. This skill routes correctly: use highlights for file-local, escalate to `find_references` (lsp-impact) only when cross-file results are needed. Coordinates from `list_symbols` feed directly into highlights and hover without manual position math.
 
 ---
 
@@ -276,7 +276,7 @@ the full suite.
 - Debugging a test failure: find which test file corresponds to a broken source file.
 
 **What it does that raw tools miss:**
-`get_tests_for_file` maps source files to test files without text search. The skill then uses `get_workspace_symbols` to enumerate specific test function names, so `run_tests` can be scoped to a filter rather than a package, which is faster than running `./...`. Falls back to symbol search for test function names when the mapping returns no results.
+`get_tests_for_file` maps source files to test files without text search. The skill then uses `find_symbol` to enumerate specific test function names, so `run_tests` can be scoped to a filter rather than a package, which is faster than running `./...`. Falls back to symbol search for test function names when the mapping returns no results.
 
 ---
 
@@ -311,7 +311,7 @@ skeletons, add missing methods, generate mock types.
 - Rust: implement all trait members for a `impl Trait for Type {}` block.
 
 **What it does that raw tools miss:**
-Routes to the language server's native generator actions via `get_code_actions` and `execute_command`, which produce server-correct output (proper types, proper signatures) rather than templated boilerplate. When no code action is available, falls back with language-specific manual guidance rather than failing silently. Requires confirmation when multiple generator actions match the intent.
+Routes to the language server's native generator actions via `suggest_fixes` and `execute_command`, which produce server-correct output (proper types, proper signatures) rather than templated boilerplate. When no code action is available, falls back with language-specific manual guidance rather than failing silently. Requires confirmation when multiple generator actions match the intent.
 
 ---
 
@@ -402,9 +402,9 @@ doc drift, coverage gaps, panics, context propagation).
 /lsp-inspect src/ --json            # Structured output
 ```
 
-Composes: `get_change_impact` (batch), `get_references` (fallback),
-`get_document_symbols`, `get_info_on_location`, `get_diagnostics`,
-`call_hierarchy`, source reading with heuristic pattern matching.
+Composes: `get_change_impact` (batch), `find_references` (fallback),
+`list_symbols`, `inspect_symbol`, `get_diagnostics`,
+`find_callers`, source reading with heuristic pattern matching.
 
 Output: severity-tiered findings report (errors, warnings, info) with
 per-finding confidence levels (high/medium/low) and LSP tier annotation.
@@ -458,7 +458,7 @@ files ranked by blast radius.
 - Documenting a project's structure for a design review or handoff.
 
 **What it does that raw tools miss:**
-Composes `detect_lsp_servers`, `get_workspace_symbols`, `get_document_symbols`, and `get_change_impact` into a single structured overview. Discovers languages automatically, builds a package map (capped at 30 packages), identifies entry points by convention (`main`, `Run`, `Handler`), and ranks hotspot files by non-test caller count. The persistent reference cache makes repeated hotspot queries instant. Enforces depth limits to prevent runaway analysis on massive codebases.
+Composes `detect_lsp_servers`, `find_symbol`, `list_symbols`, and `get_change_impact` into a single structured overview. Discovers languages automatically, builds a package map (capped at 30 packages), identifies entry points by convention (`main`, `Run`, `Handler`), and ranks hotspot files by non-test caller count. The persistent reference cache makes repeated hotspot queries instant. Enforces depth limits to prevent runaway analysis on massive codebases.
 
 ---
 

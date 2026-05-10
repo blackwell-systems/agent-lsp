@@ -44,7 +44,7 @@ func HandleGetCrossRepoReferences(ctx context.Context, client *lsp.LSPClient, ar
 	// so arg errors are reported regardless of client state.
 	rawRoots, ok := args["consumer_roots"].([]any)
 	if !ok || len(rawRoots) == 0 {
-		return types.ErrorResult("consumer_roots must be non-empty; use get_references for single-repo lookup"), nil
+		return types.ErrorResult("consumer_roots must be non-empty; use find_references for single-repo lookup"), nil
 	}
 	consumerRoots := make([]string, 0, len(rawRoots))
 	for _, r := range rawRoots {
@@ -55,7 +55,7 @@ func HandleGetCrossRepoReferences(ctx context.Context, client *lsp.LSPClient, ar
 		consumerRoots = append(consumerRoots, s)
 	}
 	if len(consumerRoots) == 0 {
-		return types.ErrorResult("consumer_roots must be non-empty; use get_references for single-repo lookup"), nil
+		return types.ErrorResult("consumer_roots must be non-empty; use find_references for single-repo lookup"), nil
 	}
 
 	if err := CheckInitialized(client); err != nil {
@@ -88,7 +88,7 @@ func HandleGetCrossRepoReferences(ctx context.Context, client *lsp.LSPClient, ar
 		return client.GetReferences(ctx, fURI, pos, false)
 	})
 	if wErr != nil {
-		return types.ErrorResult(fmt.Sprintf("get_references: %s", wErr)), nil
+		return types.ErrorResult(fmt.Sprintf("find_references: %s", wErr)), nil
 	}
 
 	// Try to get the symbol name via hover (separate WithDocument call).

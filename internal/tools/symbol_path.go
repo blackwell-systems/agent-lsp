@@ -33,7 +33,7 @@ func HandleGoToSymbol(ctx context.Context, client *lsp.LSPClient, args map[strin
 
 	syms, err := client.GetWorkspaceSymbols(ctx, leafName)
 	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("get_workspace_symbols: %s", err)), nil
+		return types.ErrorResult(fmt.Sprintf("find_symbol: %s", err)), nil
 	}
 
 	if len(syms) == 0 {
@@ -64,7 +64,7 @@ func HandleGoToSymbol(ctx context.Context, client *lsp.LSPClient, args map[strin
 		return types.ErrorResult(fmt.Sprintf("get_definition: %s", wErr)), nil
 	}
 
-	goToSymHint := "Use get_info_on_location for type info, or get_references for all usages."
+	goToSymHint := "Use inspect_symbol for type info, or find_references for all usages."
 	if len(locs) > 0 {
 		res, err := locationsResult(locs)
 		if err != nil {

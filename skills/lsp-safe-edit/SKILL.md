@@ -1,8 +1,8 @@
 ---
 name: lsp-safe-edit
-description: Wrap any code edit with before/after diagnostic comparison. Speculatively previews the change first (simulate_edit_atomic), then applies to disk only if the error delta is acceptable. If post-edit errors appear, surfaces code actions for quick fixes. Handles single and multi-file edits.
+description: Wrap any code edit with before/after diagnostic comparison. Speculatively previews the change first (preview_edit), then applies to disk only if the error delta is acceptable. If post-edit errors appear, surfaces code actions for quick fixes. Handles single and multi-file edits.
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_diagnostics mcp__lsp__simulate_edit_atomic mcp__lsp__simulate_chain mcp__lsp__get_code_actions mcp__lsp__format_document mcp__lsp__apply_edit Edit Write Bash
+allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_diagnostics mcp__lsp__preview_edit mcp__lsp__simulate_chain mcp__lsp__suggest_fixes mcp__lsp__format_document mcp__lsp__apply_edit Edit Write Bash
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -22,7 +22,7 @@ metadata:
       speculative_preview:
         description: "Simulate the edit in memory before touching disk"
         allowed:
-          - "mcp__lsp__simulate_edit_atomic"
+          - "mcp__lsp__preview_edit"
           - "mcp__lsp__simulate_chain"
         forbidden:
           - "mcp__lsp__apply_edit"
@@ -40,7 +40,7 @@ metadata:
         description: "Collect post-edit diagnostics, surface code actions, format"
         allowed:
           - "mcp__lsp__get_diagnostics"
-          - "mcp__lsp__get_code_actions"
+          - "mcp__lsp__suggest_fixes"
           - "mcp__lsp__apply_edit"        # for applying code action fixes
           - "mcp__lsp__format_document"
         forbidden:
@@ -97,13 +97,13 @@ BEFORE = mcp__lsp__get_diagnostics(file_path: "/abs/path/to/file.go")
 If the server returns an empty list immediately after open, wait briefly and
 retry — LSP analysis is async.
 
-### Step 3 — Speculative preview (simulate_edit_atomic)
+### Step 3 — Speculative preview (preview_edit)
 
-Before touching disk, call `mcp__lsp__simulate_edit_atomic` to preview the
+Before touching disk, call `mcp__lsp__preview_edit` to preview the
 error delta of the intended change:
 
 ```
-mcp__lsp__simulate_edit_atomic(
+mcp__lsp__preview_edit(
   file_path: "/abs/path/to/file.go",
   start_line: <N>,
   start_column: <col>,
@@ -125,7 +125,7 @@ writing to disk.
 
 If `net_delta > 0` and user says "n", stop. Do not apply the edit.
 
-**Multi-file edits:** `simulate_edit_atomic` covers one file at a time. For
+**Multi-file edits:** `preview_edit` covers one file at a time. For
 edits spanning multiple files, run it for each file independently and sum the
 deltas. If any file shows `net_delta > 0`, pause before continuing.
 
@@ -215,11 +215,11 @@ Match by `(file, line, message)` tuple to handle line-number shifts. Treat
 
 ### Step 7 — Surface code actions if errors were introduced
 
-If any new `error`-severity diagnostics appear, call `mcp__lsp__get_code_actions`
+If any new `error`-severity diagnostics appear, call `mcp__lsp__suggest_fixes`
 at each error location to surface quick fixes:
 
 ```
-mcp__lsp__get_code_actions(
+mcp__lsp__suggest_fixes(
   file_path: "<file>",
   start_line: <error line>,
   start_column: 1,

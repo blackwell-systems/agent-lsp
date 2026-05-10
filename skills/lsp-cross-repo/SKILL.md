@@ -3,7 +3,7 @@ name: lsp-cross-repo
 description: Cross-repository analysis — find all callers of a library symbol in one or more consumer repos. Use when refactoring a shared library and need to understand how consumers use it.
 argument-hint: "[symbol-name] in [library-file:line:col] used by [consumer-root ...]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__get_workspace_symbols mcp__lsp__get_cross_repo_references mcp__lsp__add_workspace_folder mcp__lsp__list_workspace_folders mcp__lsp__go_to_implementation mcp__lsp__call_hierarchy mcp__lsp__get_info_on_location
+allowed-tools: mcp__lsp__start_lsp mcp__lsp__find_symbol mcp__lsp__get_cross_repo_references mcp__lsp__add_workspace_folder mcp__lsp__list_workspace_folders mcp__lsp__go_to_implementation mcp__lsp__find_callers mcp__lsp__inspect_symbol
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -44,7 +44,7 @@ mcp__lsp__start_lsp({ "root_dir": "/path/to/library" })
 Find the symbol's definition to get `file_path`, `line`, and `column`:
 
 ```
-mcp__lsp__get_workspace_symbols({ "query": "<symbol-name>" })
+mcp__lsp__find_symbol({ "query": "<symbol-name>" })
 ```
 
 Pick the result in the library repo (not a test file).
@@ -53,7 +53,7 @@ Pick the result in the library repo (not a test file).
 
 Call `get_cross_repo_references` with the symbol location and all consumer repo
 roots. This adds each consumer as a workspace folder, waits for indexing, runs
-`get_references` across all roots, and returns results partitioned by repo:
+`find_references` across all roots, and returns results partitioned by repo:
 
 ```
 mcp__lsp__get_cross_repo_references({
@@ -85,7 +85,7 @@ Returns:
 For a deeper look at how consumers call the symbol:
 
 ```
-mcp__lsp__call_hierarchy({
+mcp__lsp__find_callers({
   "file_path": "<library-file>",
   "line": <line>,
   "column": <column>,
@@ -133,7 +133,7 @@ mcp__lsp__go_to_implementation({
 # Refactoring ParseConfig in a shared config library used by 3 services
 
 start_lsp(root_dir="/repos/config-lib")
-get_workspace_symbols(query="ParseConfig")        # find definition → file:42:6
+find_symbol(query="ParseConfig")        # find definition → file:42:6
 get_cross_repo_references(
   symbol_file="/repos/config-lib/pkg/config/parser.go",
   line=42, column=6,

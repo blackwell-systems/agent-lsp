@@ -1,4 +1,4 @@
-name: get_document_symbols lists Person type and methods
+name: list_symbols lists Person type and methods
 server:
   command: agent-lsp
   args: ["go:gopls"]
@@ -11,7 +11,7 @@ setup:
       file_path: "{{fixture}}/main.go"
       language_id: go
 assert:
-  tool: get_document_symbols
+  tool: list_symbols
   args:
     file_path: "{{fixture}}/main.go"
   expect:

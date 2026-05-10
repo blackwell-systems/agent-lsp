@@ -3,7 +3,7 @@ name: lsp-understand
 description: Deep-dive exploration of unfamiliar code — given a symbol or file, builds a complete Code Map showing type info, implementations, call hierarchy (2-level depth limit), all references, and source. Broader than lsp-explore: accepts files, synthesizes multi-symbol relationships, and produces a navigable dependency map.
 argument-hint: "[symbol-name | file-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__get_info_on_location mcp__lsp__go_to_implementation mcp__lsp__call_hierarchy mcp__lsp__get_references mcp__lsp__get_symbol_source mcp__lsp__get_document_symbols mcp__lsp__open_document mcp__lsp__go_to_symbol mcp__lsp__get_server_capabilities
+allowed-tools: mcp__lsp__inspect_symbol mcp__lsp__go_to_implementation mcp__lsp__find_callers mcp__lsp__find_references mcp__lsp__get_symbol_source mcp__lsp__list_symbols mcp__lsp__open_document mcp__lsp__go_to_symbol mcp__lsp__get_server_capabilities
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -59,7 +59,7 @@ Call `mcp__lsp__get_server_capabilities` before Step 2 to determine which
 capabilities are available. Skip steps that require missing capabilities:
 
 - `go_to_implementation`: skip Step 2b if `implementationProvider: false`
-- `call_hierarchy`: skip Steps 2c and 2d if `callHierarchyProvider: false`; note
+- `find_callers`: skip Steps 2c and 2d if `callHierarchyProvider: false`; note
   in the Code Map output that call hierarchy was unavailable
 
 ---
@@ -91,12 +91,12 @@ The single symbol becomes the sole entry point.
 
 ### Mode B: File Path
 
-Call `mcp__lsp__open_document` then `mcp__lsp__get_document_symbols`:
+Call `mcp__lsp__open_document` then `mcp__lsp__list_symbols`:
 
 ```
 mcp__lsp__open_document({ "file_path": "<absolute path>" })
 
-mcp__lsp__get_document_symbols({ "file_path": "<absolute path>" })
+mcp__lsp__list_symbols({ "file_path": "<absolute path>" })
 → returns: list of symbols with kind, line, column
 ```
 
@@ -120,11 +120,11 @@ calls within each step.
 
 ### 2a — Type Info and Docs
 
-Call `mcp__lsp__get_info_on_location` using `position_pattern` with the `@@`
+Call `mcp__lsp__inspect_symbol` using `position_pattern` with the `@@`
 marker (see references/patterns.md):
 
 ```
-mcp__lsp__get_info_on_location({
+mcp__lsp__inspect_symbol({
   "file_path": "<file>",
   "position_pattern": "<symbol@@name>",
   "line_scope_start": <line - 5>,
@@ -159,7 +159,7 @@ If `callHierarchyProvider` is available:
 **Level 1 — Direct callers:**
 
 ```
-mcp__lsp__call_hierarchy({
+mcp__lsp__find_callers({
   "file_path": "<file>",
   "line": <line>,
   "column": <column>,
@@ -170,10 +170,10 @@ mcp__lsp__call_hierarchy({
 
 **Level 2 — Callers of callers:**
 
-For each Level 1 caller, call `mcp__lsp__call_hierarchy` once more:
+For each Level 1 caller, call `mcp__lsp__find_callers` once more:
 
 ```
-mcp__lsp__call_hierarchy({
+mcp__lsp__find_callers({
   "file_path": "<caller file>",
   "line": <caller line>,
   "column": <caller column>,
@@ -191,7 +191,7 @@ If Level 2 callers > 10: summarize by count and file, do not list individually.
 If `callHierarchyProvider` is available:
 
 ```
-mcp__lsp__call_hierarchy({
+mcp__lsp__find_callers({
   "file_path": "<file>",
   "line": <line>,
   "column": <column>,
@@ -205,7 +205,7 @@ mcp__lsp__call_hierarchy({
 ### 2e — All References
 
 ```
-mcp__lsp__get_references({
+mcp__lsp__find_references({
   "file_path": "<file>",
   "line": <line>,
   "column": <column>,
@@ -302,32 +302,32 @@ Goal: understand how the file pkg/codec/encoder.go works as a whole
 
 Step 1 — Mode B (file path)
   open_document: pkg/codec/encoder.go
-  get_document_symbols: pkg/codec/encoder.go
+  list_symbols: pkg/codec/encoder.go
   → exported symbols: Encoder (type), Encode (func), Reset (func), NewEncoder (func)
   → 4 exported symbols (under 10 cap)
 
 get_server_capabilities
   → go_to_implementation: supported
-  → call_hierarchy: supported
+  → find_callers: supported
 
 Step 2 — Per-symbol analysis (run in parallel across symbols)
 
   Symbol: NewEncoder (pkg/codec/encoder.go:12)
-    get_info_on_location → "func NewEncoder(w io.Writer) *Encoder"
+    inspect_symbol → "func NewEncoder(w io.Writer) *Encoder"
     go_to_implementation → 0 (concrete function)
-    call_hierarchy incoming L1 → 5 callers
-    call_hierarchy incoming L2 → 3 callers of those callers
-    call_hierarchy outgoing → calls: bufio.NewWriter
-    get_references → 5 sites in 3 files
+    find_callers incoming L1 → 5 callers
+    find_callers incoming L2 → 3 callers of those callers
+    find_callers outgoing → calls: bufio.NewWriter
+    find_references → 5 sites in 3 files
     get_symbol_source → implementation body
 
   Symbol: Encode (pkg/codec/encoder.go:28)
-    get_info_on_location → "func (e *Encoder) Encode(v any) error"
+    inspect_symbol → "func (e *Encoder) Encode(v any) error"
     go_to_implementation → implements codec.Encoder interface
-    call_hierarchy incoming L1 → 8 callers (listed)
-    call_hierarchy incoming L2 → > 10: "12 additional callers across 5 files"
-    call_hierarchy outgoing → calls: NewEncoder, e.w.Flush
-    get_references → 8 sites in 5 files
+    find_callers incoming L1 → 8 callers (listed)
+    find_callers incoming L2 → > 10: "12 additional callers across 5 files"
+    find_callers outgoing → calls: NewEncoder, e.w.Flush
+    find_references → 8 sites in 5 files
     get_symbol_source → implementation body
 
   (similar for Encoder type and Reset func...)

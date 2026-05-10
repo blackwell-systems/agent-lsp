@@ -80,4 +80,4 @@ Fix: Run `gofmt` on the file to correct the indentation at lines 291–292. This
 
 ## Not Checked — Tooling Constraints
 
-- LSP MCP tools (`mcp__lsp__start_lsp`, `mcp__lsp__get_references`, `mcp__lsp__get_info_on_location`) could not be invoked via Bash or the available tool interface in this environment. All dead_symbol findings used Grep across the full repository as fallback. These carry `confidence: reduced` and should be re-verified with `gopls` references before acting on them. The primary findings (logging race, StartAll leak, unused registry parameter) do not depend on LSP — they are visible from static code reading.
+- LSP MCP tools (`mcp__lsp__start_lsp`, `mcp__lsp__find_references`, `mcp__lsp__inspect_symbol`) could not be invoked via Bash or the available tool interface in this environment. All dead_symbol findings used Grep across the full repository as fallback. These carry `confidence: reduced` and should be re-verified with `gopls` references before acting on them. The primary findings (logging race, StartAll leak, unused registry parameter) do not depend on LSP — they are visible from static code reading.

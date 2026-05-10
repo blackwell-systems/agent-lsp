@@ -1,10 +1,10 @@
 # Trajectory assertion: validates the /lsp-understand skill protocol.
-# get_server_capabilities must be called before go_to_implementation and call_hierarchy.
+# get_server_capabilities must be called before go_to_implementation and find_callers.
 # For Mode A (symbol): go_to_symbol must be the entry point.
-# get_info_on_location (hover) must follow symbol location.
-# call_hierarchy direction=incoming must appear (Level 1 callers).
-# call_hierarchy direction=outgoing must appear (outgoing calls).
-# get_references must follow call_hierarchy (all reference sites).
+# inspect_symbol (hover) must follow symbol location.
+# find_callers direction=incoming must appear (Level 1 callers).
+# find_callers direction=outgoing must appear (outgoing calls).
+# find_references must follow find_callers (all reference sites).
 # get_symbol_source is the final per-symbol step (retrieve implementation).
 # Read-only — apply_edit and rename_symbol must NOT appear.
 name: lsp-understand follows skill protocol
@@ -14,7 +14,7 @@ trace:
       symbol_path: "main.Item"
   - tool: get_server_capabilities
     args: {}
-  - tool: get_info_on_location
+  - tool: inspect_symbol
     args:
       file_path: "fixtures/go/main.go"
       line: 6
@@ -24,19 +24,19 @@ trace:
       file_path: "fixtures/go/main.go"
       line: 6
       column: 6
-  - tool: call_hierarchy
+  - tool: find_callers
     args:
       file_path: "fixtures/go/main.go"
       line: 6
       column: 6
       direction: "incoming"
-  - tool: call_hierarchy
+  - tool: find_callers
     args:
       file_path: "fixtures/go/main.go"
       line: 6
       column: 6
       direction: "outgoing"
-  - tool: get_references
+  - tool: find_references
     args:
       file_path: "fixtures/go/main.go"
       line: 6
@@ -48,8 +48,8 @@ trace:
       line: 6
 trajectory:
   - type: order
-    tools: ["go_to_symbol", "get_info_on_location", "get_references", "get_symbol_source"]
+    tools: ["go_to_symbol", "inspect_symbol", "find_references", "get_symbol_source"]
   - type: presence
-    tools: ["go_to_symbol", "get_info_on_location", "get_references", "get_symbol_source"]
+    tools: ["go_to_symbol", "inspect_symbol", "find_references", "get_symbol_source"]
   - type: absence
     tools: ["apply_edit", "rename_symbol"]

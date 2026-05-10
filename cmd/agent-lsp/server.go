@@ -316,7 +316,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	}, &mcp.ServerOptions{
 		Instructions: "This server provides 56 code intelligence tools and 22 multi-step workflow skills across 30 languages. " +
 			"Before editing code: call get_change_impact to analyze blast radius. " +
-			"Before applying edits: call simulate_edit_atomic to preview the diagnostic delta. " +
+			"Before applying edits: call preview_edit to preview the diagnostic delta. " +
 			"After any change: call get_diagnostics to verify, then run_build and run_tests. " +
 			"Call prompts/get with a skill name (e.g. lsp-refactor, lsp-inspect, lsp-verify) for full workflow instructions.",
 		// Wire MCP log notifications once the client session initializes.

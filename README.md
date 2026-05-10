@@ -36,7 +36,7 @@ agent-lsp CI runs **30 real language servers** against real fixture codebases on
 
 Simulate changes in memory before writing to disk. No other MCP-LSP implementation has this.
 
-`simulate_edit_atomic` previews the diagnostic impact of any edit. You see exactly what breaks before the file is touched. `simulate_chain` evaluates a sequence of dependent edits (rename a function, update all callers, change the return type) and reports which step first introduces an error.
+`preview_edit` previews the diagnostic impact of any edit. You see exactly what breaks before the file is touched. `simulate_chain` evaluates a sequence of dependent edits (rename a function, update all callers, change the return type) and reports which step first introduces an error.
 
 8 speculative execution tools. See [docs/speculative-execution.md](./docs/speculative-execution.md) for the full workflow.
 
@@ -46,13 +46,13 @@ Structured LSP responses use **5-34x fewer tokens** than grep/read on the same t
 
 ### Persistent daemon mode
 
-Python and TypeScript projects need minutes of background indexing before `get_references` works. agent-lsp automatically spawns a persistent daemon broker that survives between sessions, so the workspace stays indexed. First session: daemon starts and indexes (~10s for FastAPI). Subsequent sessions: instant connection to the warm daemon. Auto-exits after 30 minutes of inactivity. Go, Rust, and other fast-indexing languages bypass this entirely (zero overhead).
+Python and TypeScript projects need minutes of background indexing before `find_references` works. agent-lsp automatically spawns a persistent daemon broker that survives between sessions, so the workspace stays indexed. First session: daemon starts and indexes (~10s for FastAPI). Subsequent sessions: instant connection to the warm daemon. Auto-exits after 30 minutes of inactivity. Go, Rust, and other fast-indexing languages bypass this entirely (zero overhead).
 
 ### Phase enforcement
 
 Skills tell agents the correct order of operations. Phase enforcement makes the runtime *block* violations instead of trusting the agent to follow instructions.
 
-When an agent activates a skill, every tool call is checked against the current phase's permissions. Calling `apply_edit` during blast-radius analysis doesn't silently proceed; it returns an error with specific recovery guidance ("complete the blast_radius phase first, allowed tools: [get_change_impact, get_references]"). Phases advance automatically as the agent calls tools from later phases.
+When an agent activates a skill, every tool call is checked against the current phase's permissions. Calling `apply_edit` during blast-radius analysis doesn't silently proceed; it returns an error with specific recovery guidance ("complete the blast_radius phase first, allowed tools: [get_change_impact, find_references]"). Phases advance automatically as the agent calls tools from later phases.
 
 No other MCP tool provider enforces workflow ordering at runtime. See [docs/phase-enforcement.md](./docs/phase-enforcement.md).
 

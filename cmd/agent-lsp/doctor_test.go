@@ -39,7 +39,7 @@ func TestPrintDoctorReport_OkServer(t *testing.T) {
 			ServerName:    "gopls",
 			ServerVersion: "0.17.1",
 			Capabilities:  []string{"hoverProvider", "definitionProvider"},
-			Tools:         []string{"get_info_on_location", "go_to_definition"},
+			Tools:         []string{"inspect_symbol", "go_to_definition"},
 		},
 	}
 	// Must not panic.

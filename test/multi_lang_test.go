@@ -59,8 +59,8 @@ type langConfig struct {
 	renameSymbolLine   int    // for rename_symbol / prepare_rename
 	renameSymbolColumn int    // for rename_symbol / prepare_rename
 	renameSymbolName   string // new_name for rename_symbol
-	codeActionLine     int    // start line for get_code_actions range; uses hoverLine if 0
-	codeActionEndLine  int    // end line for get_code_actions range; codeActionLine+1 if 0
+	codeActionLine     int    // start line for suggest_fixes range; uses hoverLine if 0
+	codeActionEndLine  int    // end line for suggest_fixes range; codeActionLine+1 if 0
 }
 
 // toolResult holds the outcome of a single Tier 2 tool test.
@@ -278,24 +278,24 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 	_ = json.Unmarshal([]byte(diagText), &diagItems)
 	t.Logf("[%s] diagnostics count: %d", lang.name, len(diagItems))
 
-	// --- Tier 1: get_info_on_location (hover) ---
-	res, err = callTool(ctx, session, "get_info_on_location", map[string]any{
+	// --- Tier 1: inspect_symbol (hover) ---
+	res, err = callTool(ctx, session, "inspect_symbol", map[string]any{
 		"file_path":   lang.file,
 		"language_id": lang.id,
 		"line":        lang.hoverLine,
 		"column":      lang.hoverColumn,
 	})
 	if err != nil {
-		t.Errorf("[%s] get_info_on_location failed: %v", lang.name, err)
+		t.Errorf("[%s] inspect_symbol failed: %v", lang.name, err)
 		return langTestResult{tier1: "fail"}
 	}
 	if res.IsError {
-		t.Errorf("[%s] get_info_on_location returned IsError=true: %v", lang.name, res.Content)
+		t.Errorf("[%s] inspect_symbol returned IsError=true: %v", lang.name, res.Content)
 		return langTestResult{tier1: "fail"}
 	}
 	hoverText, err := textFromResult(res)
 	if err != nil {
-		t.Errorf("[%s] get_info_on_location: %v", lang.name, err)
+		t.Errorf("[%s] inspect_symbol: %v", lang.name, err)
 		return langTestResult{tier1: "fail"}
 	}
 	if len(hoverText) == 0 {
@@ -304,7 +304,7 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 			// indexing the workspace. Skip rather than fail.
 			t.Skipf("[%s] skipping: server returned no diagnostics and no hover (workspace not indexed)", lang.name)
 		}
-		t.Errorf("[%s] get_info_on_location returned empty hover text", lang.name)
+		t.Errorf("[%s] inspect_symbol returned empty hover text", lang.name)
 		return langTestResult{tier1: "fail"}
 	}
 
@@ -349,32 +349,32 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 	return langTestResult{tier1: "pass", tier2: tier2Results}
 }
 
-// testDocumentSymbols tests the get_document_symbols tool.
+// testDocumentSymbols tests the list_symbols tool.
 func testDocumentSymbols(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
 	t.Helper()
-	res, err := callTool(ctx, session, "get_document_symbols", map[string]any{
+	res, err := callTool(ctx, session, "list_symbols", map[string]any{
 		"file_path":   lang.file,
 		"language_id": lang.id,
 	})
 	if err != nil {
-		return toolResult{tool: "get_document_symbols", status: "fail", detail: err.Error()}
+		return toolResult{tool: "list_symbols", status: "fail", detail: err.Error()}
 	}
 	if res.IsError {
-		return toolResult{tool: "get_document_symbols", status: "fail",
+		return toolResult{tool: "list_symbols", status: "fail",
 			detail: fmt.Sprintf("tool returned IsError=true: %v", res.Content)}
 	}
 	text, err := textFromResult(res)
 	if err != nil {
-		return toolResult{tool: "get_document_symbols", status: "fail",
-			detail: fmt.Sprintf("failed to parse get_document_symbols response: %v", err)}
+		return toolResult{tool: "list_symbols", status: "fail",
+			detail: fmt.Sprintf("failed to parse list_symbols response: %v", err)}
 	}
 	var items []map[string]any
 	if err := json.Unmarshal([]byte(text), &items); err != nil {
-		return toolResult{tool: "get_document_symbols", status: "fail",
-			detail: fmt.Sprintf("failed to parse get_document_symbols response: %s", text)}
+		return toolResult{tool: "list_symbols", status: "fail",
+			detail: fmt.Sprintf("failed to parse list_symbols response: %s", text)}
 	}
 	if len(items) == 0 {
-		return toolResult{tool: "get_document_symbols", status: "fail", detail: "empty symbol list"}
+		return toolResult{tool: "list_symbols", status: "fail", detail: "empty symbol list"}
 	}
 	found := false
 	for _, item := range items {
@@ -384,10 +384,10 @@ func testDocumentSymbols(t *testing.T, ctx context.Context, session *mcp.ClientS
 		}
 	}
 	if !found {
-		return toolResult{tool: "get_document_symbols", status: "fail",
+		return toolResult{tool: "list_symbols", status: "fail",
 			detail: fmt.Sprintf("symbol %q not found in results", lang.symbolName)}
 	}
-	return toolResult{tool: "get_document_symbols", status: "pass"}
+	return toolResult{tool: "list_symbols", status: "pass"}
 }
 
 // testGoToDefinition tests the go_to_definition tool.
@@ -463,7 +463,7 @@ func testGoToDefinition(t *testing.T, ctx context.Context, session *mcp.ClientSe
 	return toolResult{tool: "go_to_definition", status: "pass"}
 }
 
-// testGetReferences tests the get_references tool.
+// testGetReferences tests the find_references tool.
 func testGetReferences(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
 	t.Helper()
 
@@ -478,7 +478,7 @@ func testGetReferences(t *testing.T, ctx context.Context, session *mcp.ClientSes
 		}
 	}
 
-	res, err := callTool(ctx, session, "get_references", map[string]any{
+	res, err := callTool(ctx, session, "find_references", map[string]any{
 		"file_path":           lang.file,
 		"language_id":         lang.id,
 		"line":                lang.referenceLine,
@@ -486,31 +486,31 @@ func testGetReferences(t *testing.T, ctx context.Context, session *mcp.ClientSes
 		"include_declaration": true,
 	})
 	if err != nil {
-		return toolResult{tool: "get_references", status: "fail", detail: err.Error()}
+		return toolResult{tool: "find_references", status: "fail", detail: err.Error()}
 	}
 	if res.IsError {
-		return toolResult{tool: "get_references", status: "fail",
+		return toolResult{tool: "find_references", status: "fail",
 			detail: fmt.Sprintf("tool returned IsError=true: %v", res.Content)}
 	}
 	text, err := textFromResult(res)
 	if err != nil {
-		return toolResult{tool: "get_references", status: "fail",
-			detail: fmt.Sprintf("failed to parse get_references response: %v", err)}
+		return toolResult{tool: "find_references", status: "fail",
+			detail: fmt.Sprintf("failed to parse find_references response: %v", err)}
 	}
 	var items []any
 	if err := json.Unmarshal([]byte(text), &items); err != nil {
-		return toolResult{tool: "get_references", status: "fail",
-			detail: fmt.Sprintf("failed to parse get_references response: %s", text)}
+		return toolResult{tool: "find_references", status: "fail",
+			detail: fmt.Sprintf("failed to parse find_references response: %s", text)}
 	}
 	minRefs := 1
 	if lang.secondFile != "" {
 		minRefs = 2
 	}
 	if len(items) < minRefs {
-		return toolResult{tool: "get_references", status: "fail",
+		return toolResult{tool: "find_references", status: "fail",
 			detail: fmt.Sprintf("expected >= %d references, got %d", minRefs, len(items))}
 	}
-	return toolResult{tool: "get_references", status: "pass"}
+	return toolResult{tool: "find_references", status: "pass"}
 }
 
 // testGetCompletions tests the get_completions tool.
@@ -557,31 +557,31 @@ func testGetCompletions(t *testing.T, ctx context.Context, session *mcp.ClientSe
 	return toolResult{tool: "get_completions", status: "pass"}
 }
 
-// testWorkspaceSymbols tests the get_workspace_symbols tool.
+// testWorkspaceSymbols tests the find_symbol tool.
 func testWorkspaceSymbols(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
 	t.Helper()
-	res, err := callTool(ctx, session, "get_workspace_symbols", map[string]any{
+	res, err := callTool(ctx, session, "find_symbol", map[string]any{
 		"query": lang.workspaceSymbol,
 	})
 	if err != nil {
-		return toolResult{tool: "get_workspace_symbols", status: "fail", detail: err.Error()}
+		return toolResult{tool: "find_symbol", status: "fail", detail: err.Error()}
 	}
 	if res.IsError {
-		return toolResult{tool: "get_workspace_symbols", status: "fail",
+		return toolResult{tool: "find_symbol", status: "fail",
 			detail: fmt.Sprintf("tool returned IsError=true: %v", res.Content)}
 	}
 	text, err := textFromResult(res)
 	if err != nil {
-		return toolResult{tool: "get_workspace_symbols", status: "fail",
-			detail: fmt.Sprintf("failed to parse get_workspace_symbols response: %v", err)}
+		return toolResult{tool: "find_symbol", status: "fail",
+			detail: fmt.Sprintf("failed to parse find_symbol response: %v", err)}
 	}
 	var items []map[string]any
 	if err := json.Unmarshal([]byte(text), &items); err != nil {
-		return toolResult{tool: "get_workspace_symbols", status: "fail",
-			detail: fmt.Sprintf("failed to parse get_workspace_symbols response: %s", text)}
+		return toolResult{tool: "find_symbol", status: "fail",
+			detail: fmt.Sprintf("failed to parse find_symbol response: %s", text)}
 	}
 	if len(items) == 0 {
-		return toolResult{tool: "get_workspace_symbols", status: "fail", detail: "empty workspace symbol list"}
+		return toolResult{tool: "find_symbol", status: "fail", detail: "empty workspace symbol list"}
 	}
 	found := false
 	for _, item := range items {
@@ -591,10 +591,10 @@ func testWorkspaceSymbols(t *testing.T, ctx context.Context, session *mcp.Client
 		}
 	}
 	if !found {
-		return toolResult{tool: "get_workspace_symbols", status: "fail",
+		return toolResult{tool: "find_symbol", status: "fail",
 			detail: fmt.Sprintf("symbol %q not found in workspace symbols", lang.workspaceSymbol)}
 	}
-	return toolResult{tool: "get_workspace_symbols", status: "pass"}
+	return toolResult{tool: "find_symbol", status: "pass"}
 }
 
 // testFormatDocument tests the format_document tool.
@@ -736,40 +736,40 @@ func testTypeHierarchy(t *testing.T, ctx context.Context, session *mcp.ClientSes
 	return toolResult{tool: "type_hierarchy", status: "pass"}
 }
 
-// testGetInfoOnLocation tests the get_info_on_location (hover) tool.
+// testGetInfoOnLocation tests the inspect_symbol (hover) tool.
 func testGetInfoOnLocation(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
 	t.Helper()
 	if lang.hoverLine == 0 {
-		return toolResult{tool: "get_info_on_location", status: "skip", detail: "no hover position configured"}
+		return toolResult{tool: "inspect_symbol", status: "skip", detail: "no hover position configured"}
 	}
-	res, err := callTool(ctx, session, "get_info_on_location", map[string]any{
+	res, err := callTool(ctx, session, "inspect_symbol", map[string]any{
 		"file_path":   lang.file,
 		"language_id": lang.id,
 		"line":        lang.hoverLine,
 		"column":      lang.hoverColumn,
 	})
 	if err != nil {
-		return toolResult{tool: "get_info_on_location", status: "fail", detail: err.Error()}
+		return toolResult{tool: "inspect_symbol", status: "fail", detail: err.Error()}
 	}
 	if res.IsError {
-		return toolResult{tool: "get_info_on_location", status: "skip",
+		return toolResult{tool: "inspect_symbol", status: "skip",
 			detail: fmt.Sprintf("server does not support hover: %v", res.Content)}
 	}
 	text, err := textFromResult(res)
 	if err != nil || strings.TrimSpace(text) == "" {
-		return toolResult{tool: "get_info_on_location", status: "skip", detail: "empty hover response"}
+		return toolResult{tool: "inspect_symbol", status: "skip", detail: "empty hover response"}
 	}
-	return toolResult{tool: "get_info_on_location", status: "pass"}
+	return toolResult{tool: "inspect_symbol", status: "pass"}
 }
 
-// testCallHierarchy tests the call_hierarchy tool.
+// testCallHierarchy tests the find_callers tool.
 // Uses the hover position which points at a function/method declaration in every fixture.
 func testCallHierarchy(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
 	t.Helper()
 	if lang.hoverLine == 0 {
-		return toolResult{tool: "call_hierarchy", status: "skip", detail: "no position configured"}
+		return toolResult{tool: "find_callers", status: "skip", detail: "no position configured"}
 	}
-	res, err := callTool(ctx, session, "call_hierarchy", map[string]any{
+	res, err := callTool(ctx, session, "find_callers", map[string]any{
 		"file_path":   lang.file,
 		"language_id": lang.id,
 		"line":        lang.hoverLine,
@@ -777,16 +777,16 @@ func testCallHierarchy(t *testing.T, ctx context.Context, session *mcp.ClientSes
 		"direction":   "both",
 	})
 	if err != nil {
-		return toolResult{tool: "call_hierarchy", status: "fail", detail: err.Error()}
+		return toolResult{tool: "find_callers", status: "fail", detail: err.Error()}
 	}
 	if res.IsError {
-		return toolResult{tool: "call_hierarchy", status: "skip",
+		return toolResult{tool: "find_callers", status: "skip",
 			detail: fmt.Sprintf("server does not support callHierarchy: %v", res.Content)}
 	}
 	text, err := textFromResult(res)
 	if err != nil {
-		return toolResult{tool: "call_hierarchy", status: "fail",
-			detail: fmt.Sprintf("failed to parse call_hierarchy response: %v", err)}
+		return toolResult{tool: "find_callers", status: "fail",
+			detail: fmt.Sprintf("failed to parse find_callers response: %v", err)}
 	}
 	var result struct {
 		Items   []map[string]any `json:"items"`
@@ -795,15 +795,15 @@ func testCallHierarchy(t *testing.T, ctx context.Context, session *mcp.ClientSes
 	}
 	if err := json.Unmarshal([]byte(text), &result); err != nil {
 		if strings.Contains(text, "No call hierarchy") {
-			return toolResult{tool: "call_hierarchy", status: "skip", detail: "no call hierarchy item at position"}
+			return toolResult{tool: "find_callers", status: "skip", detail: "no call hierarchy item at position"}
 		}
-		return toolResult{tool: "call_hierarchy", status: "fail",
-			detail: fmt.Sprintf("failed to unmarshal call_hierarchy response: %s", text)}
+		return toolResult{tool: "find_callers", status: "fail",
+			detail: fmt.Sprintf("failed to unmarshal find_callers response: %s", text)}
 	}
 	if len(result.Items) == 0 {
-		return toolResult{tool: "call_hierarchy", status: "skip", detail: "no items returned"}
+		return toolResult{tool: "find_callers", status: "skip", detail: "no items returned"}
 	}
-	return toolResult{tool: "call_hierarchy", status: "pass"}
+	return toolResult{tool: "find_callers", status: "pass"}
 }
 
 // testGetSemanticTokens tests the get_semantic_tokens tool over a small range.
@@ -971,7 +971,7 @@ func testGetInlayHints(t *testing.T, ctx context.Context, session *mcp.ClientSes
 	return toolResult{tool: "get_inlay_hints", status: "pass"}
 }
 
-// testGetCodeActions tests the get_code_actions tool.
+// testGetCodeActions tests the suggest_fixes tool.
 func testGetCodeActions(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
 	t.Helper()
 	startLine := lang.codeActionLine
@@ -979,13 +979,13 @@ func testGetCodeActions(t *testing.T, ctx context.Context, session *mcp.ClientSe
 		startLine = lang.hoverLine
 	}
 	if startLine == 0 {
-		return toolResult{tool: "get_code_actions", status: "skip", detail: "no position configured"}
+		return toolResult{tool: "suggest_fixes", status: "skip", detail: "no position configured"}
 	}
 	endLine := lang.codeActionEndLine
 	if endLine == 0 {
 		endLine = startLine + 1
 	}
-	res, err := callTool(ctx, session, "get_code_actions", map[string]any{
+	res, err := callTool(ctx, session, "suggest_fixes", map[string]any{
 		"file_path":    lang.file,
 		"language_id":  lang.id,
 		"start_line":   startLine,
@@ -994,19 +994,19 @@ func testGetCodeActions(t *testing.T, ctx context.Context, session *mcp.ClientSe
 		"end_column":   120,
 	})
 	if err != nil {
-		return toolResult{tool: "get_code_actions", status: "fail", detail: err.Error()}
+		return toolResult{tool: "suggest_fixes", status: "fail", detail: err.Error()}
 	}
 	if res.IsError {
-		return toolResult{tool: "get_code_actions", status: "skip",
+		return toolResult{tool: "suggest_fixes", status: "skip",
 			detail: fmt.Sprintf("server does not support codeActions: %v", res.Content)}
 	}
 	_, err = textFromResult(res)
 	if err != nil {
-		return toolResult{tool: "get_code_actions", status: "fail",
+		return toolResult{tool: "suggest_fixes", status: "fail",
 			detail: fmt.Sprintf("failed to parse response: %v", err)}
 	}
 	// Empty action list is valid — the range may have no applicable actions.
-	return toolResult{tool: "get_code_actions", status: "pass"}
+	return toolResult{tool: "suggest_fixes", status: "pass"}
 }
 
 // testPrepareRename tests the prepare_rename validation step.
@@ -1571,7 +1571,7 @@ func testRestartLspServer(t *testing.T, ctx context.Context, session *mcp.Client
 		"language_id": lang.id,
 	})
 	time.Sleep(2 * time.Second)
-	verify, err := callTool(ctx, session, "get_info_on_location", map[string]any{
+	verify, err := callTool(ctx, session, "inspect_symbol", map[string]any{
 		"file_path":   lang.file,
 		"language_id": lang.id,
 		"line":        lang.hoverLine,
@@ -1720,13 +1720,13 @@ func TestGetChangeImpact(t *testing.T) {
 		"file_path": mainFile, "language_id": "go",
 	})
 
-	// Warmup probe: poll get_references on a known symbol (Person at main.go:6:5)
+	// Warmup probe: poll find_references on a known symbol (Person at main.go:6:5)
 	// until gopls returns cross-file results. Log each attempt to diagnose CI.
 	t.Log("waiting for gopls indexing (warmup probe on Person type)...")
 	ready := false
 	warmupDeadline := time.Now().Add(180 * time.Second)
 	for attempt := 1; time.Now().Before(warmupDeadline); attempt++ {
-		probeRes, probeErr := callTool(ctx, session, "get_references", map[string]any{
+		probeRes, probeErr := callTool(ctx, session, "find_references", map[string]any{
 			"file_path": mainFile, "line": float64(6), "column": float64(6),
 		})
 		if probeErr != nil {
@@ -1932,21 +1932,21 @@ func printMultiLangSummary(t *testing.T, results []langResult) {
 			"%-14s | %-2s | %-7s | %-10s | %-10s | %-11s | %-9s | %-6s | %-11s | %-13s | %-5s | %-9s | %-8s | %-8s | %-10s | %-10s | %-8s | %-8s | %-6s | %-8s | %-10s | %-8s | %-10s | %-11s | %-10s | %-12s | %-12s | %-17s | %-10s",
 			r.name,
 			statusIcon(r.tier1),
-			get("get_document_symbols"),
+			get("list_symbols"),
 			get("go_to_definition"),
-			get("get_references"),
+			get("find_references"),
 			get("get_completions"),
-			get("get_workspace_symbols"),
+			get("find_symbol"),
 			get("format_document"),
 			get("go_to_declaration"),
 			get("type_hierarchy"),
-			get("get_info_on_location"),
-			get("call_hierarchy"),
+			get("inspect_symbol"),
+			get("find_callers"),
 			get("get_semantic_tokens"),
 			get("get_signature_help"),
 			get("get_document_highlights"),
 			get("get_inlay_hints"),
-			get("get_code_actions"),
+			get("suggest_fixes"),
 			get("prepare_rename"),
 			get("rename_symbol"),
 			get("get_server_capabilities"),
@@ -1995,7 +1995,7 @@ func TestMultiLanguage(t *testing.T) {
 	printMultiLangSummary(t, results)
 }
 
-// TestFuzzyPositionFallback verifies that go_to_definition and get_references
+// TestFuzzyPositionFallback verifies that go_to_definition and find_references
 // succeed when called with positions that are off by one line from the exact
 // symbol location, exercising the fuzzy position fallback path end-to-end
 // against a real gopls instance.
@@ -2077,9 +2077,9 @@ func TestFuzzyPositionFallback(t *testing.T) {
 		}
 	}
 
-	// Test get_references with off-by-one positions.
+	// Test find_references with off-by-one positions.
 	for _, offByOneLine := range []int{5, 7} {
-		res, err = callTool(ctx, session, "get_references", map[string]any{
+		res, err = callTool(ctx, session, "find_references", map[string]any{
 			"file_path":           mainFile,
 			"language_id":         "go",
 			"line":                offByOneLine,
@@ -2087,19 +2087,19 @@ func TestFuzzyPositionFallback(t *testing.T) {
 			"include_declaration": true,
 		})
 		if err != nil {
-			t.Errorf("get_references(line=%d): unexpected transport error: %v", offByOneLine, err)
+			t.Errorf("find_references(line=%d): unexpected transport error: %v", offByOneLine, err)
 			continue
 		}
 		if res.IsError {
 			text, _ := textFromResult(res)
-			t.Logf("get_references(line=%d): server error: %s", offByOneLine, text)
+			t.Logf("find_references(line=%d): server error: %s", offByOneLine, text)
 			continue
 		}
 		text, terr := textFromResult(res)
 		if terr != nil {
-			t.Errorf("get_references(line=%d): extract text: %v", offByOneLine, terr)
+			t.Errorf("find_references(line=%d): extract text: %v", offByOneLine, terr)
 			continue
 		}
-		t.Logf("get_references(line=%d): result len=%d", offByOneLine, len(text))
+		t.Logf("find_references(line=%d): result len=%d", offByOneLine, len(text))
 	}
 }

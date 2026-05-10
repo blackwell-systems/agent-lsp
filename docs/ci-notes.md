@@ -18,11 +18,11 @@ Implementation details for contributors and maintainers about the language serve
 
 **MongoDB:** The language server is extracted from the `mongodb-js/vscode` VS Code extension VSIX at `dist/languageServer.js`. The CI job has `continue-on-error: true` since the extracted server may behave differently outside a VS Code extension host context. Requires a live `mongo:7` service container provisioned automatically.
 
-**Zig (zls):** Upgraded from zls 0.13.0 to zls 0.14.0 in CI. 21 verified capabilities: Tier 1 (start_lsp, open_document, get_diagnostics, hover), symbols, definition, references, completions, format, semantic_tokens, signature_help, highlights, code_actions, rename, server_capabilities, workspace_folders, type_definition, format_range, apply_edit, detect_servers, close_document, did_change_watched_files, symbol_source. **Known limitation:** workspace_symbols fails — zls 0.14.0 advertises support but may need a specific query format. **Not supported by zls:** declaration (C-only test), type_hierarchy, call_hierarchy, inlay_hints, prepare_rename, go_to_implementation.
+**Zig (zls):** Upgraded from zls 0.13.0 to zls 0.14.0 in CI. 21 verified capabilities: Tier 1 (start_lsp, open_document, get_diagnostics, hover), symbols, definition, references, completions, format, semantic_tokens, signature_help, highlights, code_actions, rename, server_capabilities, workspace_folders, type_definition, format_range, apply_edit, detect_servers, close_document, did_change_watched_files, symbol_source. **Known limitation:** workspace_symbols fails — zls 0.14.0 advertises support but may need a specific query format. **Not supported by zls:** declaration (C-only test), type_hierarchy, find_callers, inlay_hints, prepare_rename, go_to_implementation.
 
-**Gleam:** Requires `gleam build --target javascript` before tests (no Erlang on CI runners). The import path in fixtures uses `person` (not `fixture/person`). The built-in LSP (`gleam lsp`) passes 17 capabilities: Tier 1 (start_lsp, open_document, get_diagnostics, hover), symbols, definition, references, completions, format, code_actions, prepare_rename, rename, server_capabilities, workspace_folders, type_definition, format_range, apply_edit, detect_servers, close_document, did_change_watched_files, and symbol_source. Workspace symbols fails (not implemented upstream, gleam-lang/gleam#5191). Declaration, type_hierarchy, call_hierarchy, semantic_tokens, signature_help, highlights, inlay_hints, and go_to_implementation skip (server does not advertise support).
+**Gleam:** Requires `gleam build --target javascript` before tests (no Erlang on CI runners). The import path in fixtures uses `person` (not `fixture/person`). The built-in LSP (`gleam lsp`) passes 17 capabilities: Tier 1 (start_lsp, open_document, get_diagnostics, hover), symbols, definition, references, completions, format, code_actions, prepare_rename, rename, server_capabilities, workspace_folders, type_definition, format_range, apply_edit, detect_servers, close_document, did_change_watched_files, and symbol_source. Workspace symbols fails (not implemented upstream, gleam-lang/gleam#5191). Declaration, type_hierarchy, find_callers, semantic_tokens, signature_help, highlights, inlay_hints, and go_to_implementation skip (server does not advertise support).
 
-**Elixir (elixir-ls):** Runs with `continue-on-error: true` using `erlef/setup-beam@v1` (Elixir 1.16 / OTP 26). 16 verified capabilities: Tier 1 (start_lsp, open_document, get_diagnostics, hover), definition, references, completions, workspace_symbols, format, signature_help, call_hierarchy, code_actions, server_capabilities, workspace_folders, format_range, apply_edit, detect_servers, close_document, did_change_watched_files. **Known limitation:** `get_document_symbols` (symbols) fails because ElixirLS needs more compile time than the 20s init wait provides. **Not supported by ElixirLS:** declaration, type_hierarchy, semantic_tokens, highlights, inlay_hints, prepare_rename, rename, type_definition, go_to_implementation, symbol_source.
+**Elixir (elixir-ls):** Runs with `continue-on-error: true` using `erlef/setup-beam@v1` (Elixir 1.16 / OTP 26). 16 verified capabilities: Tier 1 (start_lsp, open_document, get_diagnostics, hover), definition, references, completions, workspace_symbols, format, signature_help, find_callers, code_actions, server_capabilities, workspace_folders, format_range, apply_edit, detect_servers, close_document, did_change_watched_files. **Known limitation:** `list_symbols` (symbols) fails because ElixirLS needs more compile time than the 20s init wait provides. **Not supported by ElixirLS:** declaration, type_hierarchy, semantic_tokens, highlights, inlay_hints, prepare_rename, rename, type_definition, go_to_implementation, symbol_source.
 
 **Clojure (clojure-lsp), Nix (nil), Dart (dart language-server), MongoDB (mongodb-language-server):** CI-verified as of the `ci-coverage-expansion` IMPL.
 
@@ -87,19 +87,19 @@ Runs deterministic assertions against agent-lsp through the MCP stdio transport 
 
 | Assertion | Tool tested | What it verifies |
 |---|---|---|
-| hover | `get_info_on_location` | Returns type info for `Person` at definition site |
+| hover | `inspect_symbol` | Returns type info for `Person` at definition site |
 | definition | `go_to_definition` | Resolves `Person` reference in greeter.go to main.go |
-| references | `get_references` | Finds cross-file callers (main.go + greeter.go), min 2 results |
+| references | `find_references` | Finds cross-file callers (main.go + greeter.go), min 2 results |
 | diagnostics | `get_diagnostics` | Clean diagnostics for a valid file |
-| symbols | `get_document_symbols` | Lists `Person` type and `Greet` method |
+| symbols | `list_symbols` | Lists `Person` type and `Greet` method |
 | completions | `get_completions` | Returns non-empty completions at a method call site |
-| speculative | `simulate_edit_atomic` | Detects type error (`return 42` in `string` method), returns `net_delta` |
+| speculative | `preview_edit` | Detects type error (`return 42` in `string` method), returns `net_delta` |
 
 **Warmup pattern:** The `references` and `speculative` assertions include `get_diagnostics` setup steps to give gopls time to index the workspace before the actual assertion. Without this, gopls may not have cross-file relationships indexed and returns incomplete results.
 
 **Timeout:** Each assertion has a 120s timeout. The references assertion typically takes ~27s (gopls indexing time). Total job runtime is ~2 minutes.
 
-**Adding new tool correctness assertions:** Create a YAML file in `examples/mcp-assert/go/` following the existing format. Use `{{fixture}}` for fixture directory substitution. Add warmup steps (`get_diagnostics` or `get_references`) if the assertion depends on cross-file indexing.
+**Adding new tool correctness assertions:** Create a YAML file in `examples/mcp-assert/go/` following the existing format. Use `{{fixture}}` for fixture directory substitution. Add warmup steps (`get_diagnostics` or `find_references`) if the assertion depends on cross-file indexing.
 
 ## Speculative session test job
 

@@ -3,7 +3,7 @@ name: lsp-rename
 description: Two-phase safe rename across the entire workspace. Use when renaming any symbol, function, method, variable, type, or identifier — shows all affected sites before executing atomically via LSP. Never renames without confirmation.
 argument-hint: "[old-name] [new-name]"
 user-invocable: true
-allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__prepare_rename mcp__lsp__get_references mcp__lsp__rename_symbol mcp__lsp__apply_edit mcp__lsp__get_diagnostics
+allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__prepare_rename mcp__lsp__find_references mcp__lsp__rename_symbol mcp__lsp__apply_edit mcp__lsp__get_diagnostics
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -19,7 +19,7 @@ metadata:
         allowed:
           - "mcp__lsp__go_to_symbol"
           - "mcp__lsp__prepare_rename"
-          - "mcp__lsp__get_references"
+          - "mcp__lsp__find_references"
           - "mcp__lsp__rename_symbol"    # dry_run=true only
         forbidden:
           - "mcp__lsp__apply_edit"
@@ -100,10 +100,10 @@ Only proceed to Step 3 if `prepare_rename` succeeds.
 
 ### Step 3 — Enumerate references
 
-Call `mcp__lsp__get_references` at the definition location from Step 1:
+Call `mcp__lsp__find_references` at the definition location from Step 1:
 
 ```
-mcp__lsp__get_references
+mcp__lsp__find_references
   file_path: "<file from Step 1>"
   position_pattern: "<symbol>@@"   # @@ immediately after the symbol name
   # fallback: use line/column from Step 1 if position_pattern is unavailable
@@ -133,7 +133,7 @@ Display the preview summary to the user:
 
 ```
 Rename preview: OldName -> NewName
-  Locations to update: N (from get_references count)
+  Locations to update: N (from find_references count)
   Files affected:      M (distinct files in workspace_edit)
   Language server:     <gopls | typescript-language-server | rust-analyzer | ...>
 
@@ -153,7 +153,7 @@ Wait for user input. Do not apply any edit until the user answers "y" or "yes".
 
 ## Edge Case: 0 References
 
-If `get_references` returns an empty list (the symbol exists but has no external
+If `find_references` returns an empty list (the symbol exists but has no external
 usages), warn the user before stopping:
 
 > Warning: no references found for `OldName`. The symbol may be unexported,

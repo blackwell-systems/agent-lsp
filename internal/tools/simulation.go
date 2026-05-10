@@ -1,5 +1,5 @@
 // simulation.go implements the MCP tool handlers for speculative execution:
-// create_simulation_session, simulate_edit, simulate_edit_atomic,
+// create_simulation_session, simulate_edit, preview_edit,
 // simulate_chain, evaluate_session, commit_session, discard_session,
 // and destroy_session.
 //
@@ -13,7 +13,7 @@
 //  4. commit_session (if safe) or discard_session (if not).
 //  5. destroy_session: release resources.
 //
-// simulate_edit_atomic combines steps 2-3 into a single call: apply one edit,
+// preview_edit combines steps 2-3 into a single call: apply one edit,
 // evaluate immediately, and return the delta. This is the most common path
 // for single-edit safety checks.
 //

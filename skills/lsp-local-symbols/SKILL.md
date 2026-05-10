@@ -3,7 +3,7 @@ name: lsp-local-symbols
 description: Fast file-scoped symbol analysis — find all usages of a symbol within the current file, list all symbols defined in the file, and get type info at a position. Use when you need local-scope analysis without a workspace-wide search.
 argument-hint: "[symbol-name] in [file-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__open_document mcp__lsp__get_document_symbols mcp__lsp__get_info_on_location mcp__lsp__get_document_highlights
+allowed-tools: mcp__lsp__open_document mcp__lsp__list_symbols mcp__lsp__inspect_symbol mcp__lsp__get_document_highlights
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -25,8 +25,8 @@ Read-only — does not modify any files.
 ## When to use
 
 - "Where is `x` used in this file?" — use `get_document_highlights`
-- "What functions and types are defined in this file?" — use `get_document_symbols`
-- "What type does this symbol have?" — use `get_info_on_location`
+- "What functions and types are defined in this file?" — use `list_symbols`
+- "What type does this symbol have?" — use `inspect_symbol`
 - Reviewing a file before editing — get the full symbol map first
 - Local refactor scoping — confirm a symbol is only used in one place before inlining it
 
@@ -37,7 +37,7 @@ references. Use `/lsp-dead-code` when auditing exported symbols for zero callers
 
 `get_document_highlights` is file-scoped by design — it only finds usages within
 the open file. If a symbol is used across multiple files, this skill will not
-find those. Use `get_references` (via `/lsp-impact`) for cross-file analysis.
+find those. Use `find_references` (via `/lsp-impact`) for cross-file analysis.
 
 ---
 
@@ -58,7 +58,7 @@ mcp__lsp__open_document
 Get the full symbol tree for the file:
 
 ```
-mcp__lsp__get_document_symbols
+mcp__lsp__list_symbols
   file_path: "/abs/path/to/file.go"
 ```
 
@@ -73,7 +73,7 @@ Use this to:
 **Reading the output:** Each symbol has a `range` (full body including braces)
 and a `selectionRange` (just the name). Coordinates are 1-based. Use
 `selectionRange.start.line` and `selectionRange.start.character` as inputs to
-`get_document_highlights` and `get_info_on_location`.
+`get_document_highlights` and `inspect_symbol`.
 
 ### Step 3 — Find all usages within the file
 
@@ -92,8 +92,8 @@ Returns every occurrence of the symbol within the file, classified as:
 - `text` — a text match (fallback when semantic classification isn't available)
 
 **Speed note:** `get_document_highlights` is significantly faster than
-`get_references` for file-local queries — it does not scan the entire workspace
-index. Use it first; escalate to `get_references` only if you need cross-file
+`find_references` for file-local queries — it does not scan the entire workspace
+index. Use it first; escalate to `find_references` only if you need cross-file
 results.
 
 ### Step 4 — Get type information (optional)
@@ -101,7 +101,7 @@ results.
 For any position of interest, get the type signature and docs:
 
 ```
-mcp__lsp__get_info_on_location
+mcp__lsp__inspect_symbol
   file_path: "/abs/path/to/file.go"
   line: <line>
   column: <column>
@@ -142,7 +142,7 @@ N occurrences across M lines:
 
 ## Type info
 
-`<symbol>`: <type signature from get_info_on_location>
+`<symbol>`: <type signature from inspect_symbol>
 ```
 
 ---
@@ -151,9 +151,9 @@ N occurrences across M lines:
 
 | Question | Tool |
 |----------|------|
-| What's in this file? | `get_document_symbols` |
+| What's in this file? | `list_symbols` |
 | Where is X used in this file? | `get_document_highlights` |
-| What type is X? | `get_info_on_location` |
+| What type is X? | `inspect_symbol` |
 | Is X safe to inline (used once)? | `get_document_highlights` — count occurrences |
 | Is X used outside this file? | Use `/lsp-impact` instead |
 | Is X dead code (no callers anywhere)? | Use `/lsp-dead-code` instead |
@@ -166,12 +166,12 @@ N occurrences across M lines:
 # "Where is the `config` variable used in server.go?"
 
 open_document(file_path="/repo/server.go", language_id="go")
-get_document_symbols(file_path="/repo/server.go")
+list_symbols(file_path="/repo/server.go")
   → finds `config` at selectionRange line 42, col 2
 
 get_document_highlights(file_path="/repo/server.go", line=42, column=2)
   → returns 7 occurrences: 1 write (line 42), 6 reads
 
-get_info_on_location(file_path="/repo/server.go", line=42, column=2)
+inspect_symbol(file_path="/repo/server.go", line=42, column=2)
   → "config *Config — the parsed server configuration"
 ```

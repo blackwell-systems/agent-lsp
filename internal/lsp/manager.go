@@ -135,7 +135,7 @@ func (m *ServerManager) ClientForFile(filePath string) *LSPClient {
 }
 
 // DefaultClient returns the primary (or only) LSPClient.
-// Used for tools that are not file-specific (e.g. get_workspace_symbols).
+// Used for tools that are not file-specific (e.g. find_symbol).
 func (m *ServerManager) DefaultClient() *LSPClient {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

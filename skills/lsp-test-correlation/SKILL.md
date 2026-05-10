@@ -3,7 +3,7 @@ name: lsp-test-correlation
 description: Find and run the tests that cover a source file. Use after editing a file to discover exactly which test files and test functions need to run — without running the entire test suite.
 argument-hint: "[file-path] [optional: run=true]"
 user-invocable: true
-allowed-tools: mcp__lsp__get_tests_for_file mcp__lsp__get_workspace_symbols mcp__lsp__open_document mcp__lsp__run_tests
+allowed-tools: mcp__lsp__get_tests_for_file mcp__lsp__find_symbol mcp__lsp__open_document mcp__lsp__run_tests
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -50,21 +50,21 @@ directory). See Step 2 for fallback.
 
 ### Step 2 — Enumerate test functions (fallback or enrichment)
 
-If `get_tests_for_file` returns test files, use `get_workspace_symbols` to list
+If `get_tests_for_file` returns test files, use `find_symbol` to list
 the test functions defined in those files:
 
 ```
-mcp__lsp__get_workspace_symbols({ "query": "Test" })
+mcp__lsp__find_symbol({ "query": "Test" })
 ```
 
 Filter results to the correlated test files from Step 1. This gives you the
 specific test function names to run rather than the whole test file.
 
-**Fallback (no test files found):** query `get_workspace_symbols` for test
+**Fallback (no test files found):** query `find_symbol` for test
 functions that contain the changed symbol's name:
 
 ```
-mcp__lsp__get_workspace_symbols({ "query": "Test<ChangedFunctionName>" })
+mcp__lsp__find_symbol({ "query": "Test<ChangedFunctionName>" })
 ```
 
 This catches cases where `get_tests_for_file` misses indirect coverage.
@@ -152,8 +152,8 @@ Deduplicated test files to run: 3
 
 | Situation | Action |
 |-----------|--------|
-| `get_tests_for_file` returns test files | Use those; enumerate functions via `get_workspace_symbols` |
-| No test files returned | Fallback to `get_workspace_symbols` with changed symbol names |
+| `get_tests_for_file` returns test files | Use those; enumerate functions via `find_symbol` |
+| No test files returned | Fallback to `find_symbol` with changed symbol names |
 | Test files found but no matching test functions | Report gap — this source file may lack unit test coverage |
 | More than 10 test files returned | Don't run all; use `/lsp-verify` for full suite instead |
 | Test fails | Run `/lsp-verify` for full diagnostic picture |
@@ -168,7 +168,7 @@ Deduplicated test files to run: 3
 get_tests_for_file(file_path="/repo/internal/tools/symbol_source.go")
   → internal/tools/symbol_source_test.go
 
-get_workspace_symbols(query="TestGetSymbolSource")
+find_symbol(query="TestGetSymbolSource")
   → TestGetSymbolSource_ContainsPosition (line 12)
   → TestGetSymbolSource_FindInnermost (line 34)
   → TestGetSymbolSource_PositionPattern (line 67)

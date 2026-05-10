@@ -7,7 +7,7 @@
 # To test real agent behavior, use audit_log: path/to/agent.jsonl instead.
 name: lsp-rename follows skill protocol
 trace:
-  - tool: get_references
+  - tool: find_references
     args:
       file_path: "fixtures/go/main.go"
       line: 6

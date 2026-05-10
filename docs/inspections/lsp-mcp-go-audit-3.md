@@ -101,7 +101,7 @@ succeeds but `Evaluate` fails (lines 325–327), the function returns early befo
 line 332. `Destroy` does not revert LSP state — it only removes the session entry from
 the map. The LSP client is therefore left holding the modified file content for the
 duration of the process, or until the file is reopened. Subsequent `get_diagnostics`,
-`get_info_on_location`, or `go_to_definition` calls on that file will operate on stale
+`inspect_symbol`, or `go_to_definition` calls on that file will operate on stale
 in-memory content until the next `open_document` or `get_diagnostics` call triggers a
 `ReopenDocument`.
 

@@ -1,4 +1,4 @@
-name: get_workspace_symbols finds Person type
+name: find_symbol finds Person type
 server:
   command: agent-lsp
   args: ["go:gopls"]
@@ -11,7 +11,7 @@ setup:
       file_path: "{{fixture}}/main.go"
       language_id: go
 assert:
-  tool: get_workspace_symbols
+  tool: find_symbol
   args:
     query: "Greet"
   expect:

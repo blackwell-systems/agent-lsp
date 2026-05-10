@@ -15,7 +15,7 @@ import (
 // a range and an optional kind: 1=Text, 2=Read, 3=Write.
 //
 // Use this to find all local usages of a variable, parameter, or field
-// without the overhead of get_references. Returns an empty array when the
+// without the overhead of find_references. Returns an empty array when the
 // server does not support documentHighlightProvider.
 func HandleGetDocumentHighlights(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {

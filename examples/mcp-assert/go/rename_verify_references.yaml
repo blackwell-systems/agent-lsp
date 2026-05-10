@@ -22,7 +22,7 @@ setup:
   - tool: get_diagnostics
     args:
       file_path: "{{fixture}}/greeter.go"
-  - tool: get_references
+  - tool: find_references
     args:
       file_path: "{{fixture}}/main.go"
       line: 16

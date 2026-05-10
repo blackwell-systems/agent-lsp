@@ -15,7 +15,7 @@ func TestMatchToolPattern(t *testing.T) {
 
 		// Wildcard suffix.
 		{"simulate_*", "simulate_edit", true},
-		{"simulate_*", "simulate_edit_atomic", true},
+		{"simulate_*", "preview_edit", false},
 		{"simulate_*", "simulate_chain", true},
 		{"simulate_*", "simulate_", true},
 		{"simulate_*", "simulate", false},

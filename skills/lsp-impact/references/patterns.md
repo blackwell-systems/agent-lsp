@@ -21,7 +21,7 @@ Use this format when producing the output in Step 5 of lsp-impact:
 - path/to/file1.go  lines: 12, 45
 - path/to/file2.go  line: 3
 
-### Callers (call_hierarchy incoming)
+### Callers (find_callers incoming)
 <call tree listing, or "not supported by this server">
 
 ### Type Hierarchy
@@ -47,7 +47,7 @@ Subtypes:   <list or "not applicable (function)">
 
 ## 2. Capability Check Pattern
 
-`call_hierarchy` and `type_hierarchy` are optional LSP features. Not all
+`find_callers` and `type_hierarchy` are optional LSP features. Not all
 language servers implement them.
 
 Always call `get_server_capabilities()` before attempting these tools. Check
@@ -56,15 +56,15 @@ the `supported_tools` list in the response:
 ```
 mcp__lsp__get_server_capabilities()
 → {
-    supported_tools: ["go_to_symbol", "get_references", "call_hierarchy", ...],
+    supported_tools: ["go_to_symbol", "find_references", "find_callers", ...],
     unsupported_tools: ["type_hierarchy", ...]
   }
 ```
 
-**If `call_hierarchy` is not in `supported_tools`:** skip Step 3 entirely.
+**If `find_callers` is not in `supported_tools`:** skip Step 3 entirely.
 In the Impact Report, write:
 ```
-### Callers (call_hierarchy incoming)
+### Callers (find_callers incoming)
 not supported by this server
 ```
 
@@ -81,7 +81,7 @@ and document the gap in the report.
 
 ---
 
-## 3. position_pattern Examples for get_references
+## 3. position_pattern Examples for find_references
 
 The `@@` marker places the cursor immediately before the first character of
 the symbol name. Use these patterns for common language constructs:

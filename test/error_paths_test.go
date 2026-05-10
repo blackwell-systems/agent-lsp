@@ -222,10 +222,10 @@ func TestErrorPaths(t *testing.T) {
 	})
 
 	// -------------------------------------------------------------------------
-	// simulate_edit_atomic — out-of-bounds range
+	// preview_edit — out-of-bounds range
 	// -------------------------------------------------------------------------
-	t.Run("simulate_edit_atomic/out_of_bounds_range", func(t *testing.T) {
-		res, err := callTool(ctx, session, "simulate_edit_atomic", map[string]any{
+	t.Run("preview_edit/out_of_bounds_range", func(t *testing.T) {
+		res, err := callTool(ctx, session, "preview_edit", map[string]any{
 			"workspace_root": goFixture,
 			"language":       "go",
 			"file_path":      mainFile,
@@ -239,13 +239,13 @@ func TestErrorPaths(t *testing.T) {
 		if !ok {
 			t.Errorf("expected well-formed response for out-of-bounds range, got: %s", detail)
 		} else {
-			t.Logf("simulate_edit_atomic/out_of_bounds_range: %s", detail)
+			t.Logf("preview_edit/out_of_bounds_range: %s", detail)
 		}
 	})
 
-	// simulate_edit_atomic — empty new_text (deletion)
-	t.Run("simulate_edit_atomic/empty_new_text", func(t *testing.T) {
-		res, err := callTool(ctx, session, "simulate_edit_atomic", map[string]any{
+	// preview_edit — empty new_text (deletion)
+	t.Run("preview_edit/empty_new_text", func(t *testing.T) {
+		res, err := callTool(ctx, session, "preview_edit", map[string]any{
 			"workspace_root": goFixture,
 			"language":       "go",
 			"file_path":      mainFile,
@@ -256,21 +256,21 @@ func TestErrorPaths(t *testing.T) {
 			"new_text":       "",
 		})
 		if res == nil && err == nil {
-			t.Errorf("simulate_edit_atomic returned nil result and nil error — likely a crash")
+			t.Errorf("preview_edit returned nil result and nil error — likely a crash")
 			return
 		}
 		_, detail := isWellFormedResponse(res, err)
-		t.Logf("simulate_edit_atomic/empty_new_text: %s", detail)
+		t.Logf("preview_edit/empty_new_text: %s", detail)
 	})
 
 	// -------------------------------------------------------------------------
-	// get_references — position on whitespace / blank line
+	// find_references — position on whitespace / blank line
 	// -------------------------------------------------------------------------
-	t.Run("get_references/whitespace_position", func(t *testing.T) {
+	t.Run("find_references/whitespace_position", func(t *testing.T) {
 		// Line 11 in main.go is the blank line between Greet() and add().
 		// A reference request on whitespace should return empty results or a
 		// structured error — not a crash.
-		res, err := callTool(ctx, session, "get_references", map[string]any{
+		res, err := callTool(ctx, session, "find_references", map[string]any{
 			"file_path":   mainFile,
 			"language_id": "go",
 			"line":        11,
@@ -280,7 +280,7 @@ func TestErrorPaths(t *testing.T) {
 		if !ok {
 			t.Errorf("expected well-formed response for whitespace position, got: %s", detail)
 		} else {
-			t.Logf("get_references/whitespace_position: %s", detail)
+			t.Logf("find_references/whitespace_position: %s", detail)
 		}
 	})
 

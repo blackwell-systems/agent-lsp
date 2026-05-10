@@ -1,7 +1,7 @@
 # Trajectory assertion: validates the /lsp-fix-all skill protocol.
 # open_document must precede get_diagnostics (load file into LSP).
-# get_diagnostics must precede get_code_actions (need error locations first).
-# get_code_actions must precede apply_edit (determine applicable quick-fix).
+# get_diagnostics must precede suggest_fixes (need error locations first).
+# suggest_fixes must precede apply_edit (determine applicable quick-fix).
 # After each apply_edit, get_diagnostics must be re-called (line numbers shift).
 # format_document must be the final step after all fixes are applied.
 # execute_command must NOT appear (apply_edit only, per safety rule).
@@ -13,7 +13,7 @@ trace:
   - tool: get_diagnostics
     args:
       file_path: "fixtures/go/main.go"
-  - tool: get_code_actions
+  - tool: suggest_fixes
     args:
       file_path: "fixtures/go/main.go"
       start_line: 5
@@ -31,8 +31,8 @@ trace:
       file_path: "fixtures/go/main.go"
 trajectory:
   - type: order
-    tools: ["open_document", "get_diagnostics", "get_code_actions", "apply_edit", "format_document"]
+    tools: ["open_document", "get_diagnostics", "suggest_fixes", "apply_edit", "format_document"]
   - type: presence
-    tools: ["open_document", "get_diagnostics", "get_code_actions", "apply_edit", "format_document"]
+    tools: ["open_document", "get_diagnostics", "suggest_fixes", "apply_edit", "format_document"]
   - type: absence
     tools: ["execute_command"]

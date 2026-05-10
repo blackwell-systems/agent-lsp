@@ -12,7 +12,7 @@ type ClientResolver interface {
 	ClientForFile(filePath string) *LSPClient
 
 	// DefaultClient returns the primary (or only) LSPClient.
-	// Used for tools that are not file-specific (e.g. get_workspace_symbols).
+	// Used for tools that are not file-specific (e.g. find_symbol).
 	DefaultClient() *LSPClient
 
 	// AllClients returns all managed clients, including nil entries filtered out.

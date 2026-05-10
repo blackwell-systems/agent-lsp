@@ -137,10 +137,10 @@ Current editing tools (`apply_edit`, `rename_symbol`) operate on raw text or LSP
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **`replace_symbol_body`** | Planned | Replace the body of a named function, method, or type. Resolves the symbol via `get_document_symbols`, extracts its full range, applies the replacement. The agent says "replace function X with this new implementation" without knowing line numbers. |
+| **`replace_symbol_body`** | Planned | Replace the body of a named function, method, or type. Resolves the symbol via `list_symbols`, extracts its full range, applies the replacement. The agent says "replace function X with this new implementation" without knowing line numbers. |
 | **`insert_after_symbol`** | Planned | Insert code after a named symbol definition. Useful for adding a new method after an existing one, or a new function after a related helper. |
 | **`insert_before_symbol`** | Planned | Insert code before a named symbol definition. Useful for adding imports, comments, or related types before their first consumer. |
-| **`safe_delete_symbol`** | Planned | Delete a symbol only if it has zero references (verified via `get_references` before deletion). Prevents accidental removal of active code. |
+| **`safe_delete_symbol`** | Planned | Delete a symbol only if it has zero references (verified via `find_references` before deletion). Prevents accidental removal of active code. |
 
 These complement the existing `apply_edit` (which remains available for raw text edits) and `/lsp-edit-symbol` skill (which orchestrates a multi-step workflow). The difference: symbol-level tools are single atomic calls, not multi-step skills. Higher-level abstraction, lower error rate.
 
@@ -200,13 +200,13 @@ Current skills are oriented around modifying existing code. These skills target 
 | `/lsp-implement` (extend) | Given an interface or type definition, generate the full implementation using `get_completions` to discover required methods, verify it compiles via diagnostics, format. |
 | `/lsp-discover-api` | Completion-driven API exploration. Open a file, place the cursor after a package qualifier, call `get_completions` to show available methods/fields. Use LSP knowledge instead of training data (which may be outdated). |
 | `/lsp-bootstrap` | Project scaffolding with LSP verification. Create build files (go.mod, package.json, Cargo.toml), start LSP, confirm indexing works, verify initial diagnostics are clean before writing application code. |
-| `/lsp-wire` | After creating a new package/module, verify it's importable from the intended consumer, check the public API surface via `get_document_symbols`, confirm no dangling imports or missing exports. |
+| `/lsp-wire` | After creating a new package/module, verify it's importable from the intended consumer, check the public API surface via `list_symbols`, confirm no dangling imports or missing exports. |
 
 ### Inspection skill (shipped)
 
 | Skill | Description |
 |-------|-------------|
-| `/lsp-inspect` | Full code quality audit for a file or package. Composes `get_change_impact` (batch dead symbol + test coverage), `get_references` (per-symbol verification), `get_diagnostics` (error detection), and LLM reasoning checks (silent failures, error wrapping, doc drift, coverage gaps). Produces a severity-tiered findings report. Replaces the external `agentskills-code-inspector` with a first-party skill that has direct access to the warm LSP session. Language-agnostic: works with any configured language server. |
+| `/lsp-inspect` | Full code quality audit for a file or package. Composes `get_change_impact` (batch dead symbol + test coverage), `find_references` (per-symbol verification), `get_diagnostics` (error detection), and LLM reasoning checks (silent failures, error wrapping, doc drift, coverage gaps). Produces a severity-tiered findings report. Replaces the external `agentskills-code-inspector` with a first-party skill that has direct access to the warm LSP session. Language-agnostic: works with any configured language server. |
 
 Rationale: The inspector workflow was previously a separate repo that orchestrated agent-lsp's tools via MCP round-trips. Shipping it as a bundled skill eliminated: (1) separate installation, (2) MCP permission setup for background agents, (3) warmup gate complexity, (4) redundant `start_lsp` calls. The mechanical checks (`dead_symbol`, `test_coverage`) use `get_change_impact` directly. The reasoning checks (`silent_failure`, `error_wrapping`, `doc_drift`) are LLM-driven heuristics defined in the skill markdown. `/lsp-inspect` is now the 21st shipped skill.
 
@@ -235,7 +235,7 @@ compatibility: Requires the agent-lsp MCP server
 metadata:
   required-capabilities: referencesProvider documentSymbolProvider
   optional-capabilities: callHierarchyProvider typeHierarchyProvider
-allowed-tools: mcp__lsp__get_references mcp__lsp__call_hierarchy ...
+allowed-tools: mcp__lsp__find_references mcp__lsp__find_callers ...
 ---
 ```
 
@@ -262,7 +262,7 @@ Skills that target the "Strong" tier should avoid hard dependencies on `callHier
 | **`required-capabilities` metadata** | **Shipped** | Space-separated list of LSP server capability keys in SKILL.md frontmatter `metadata` field. All 22 skills declare required and optional capabilities. |
 | **`optional-capabilities` metadata** | **Shipped** | Same format. Steps using these capabilities skip cleanly when unavailable. No warning on activation. |
 | **Capability check tool** | **Shipped** | Integrated into `get_server_capabilities`: `skills` array classifies all 22 skills as supported/partial/unsupported based on the current server's capabilities. |
-| **Degraded-mode skill variants** | Planned | For high-value skills like `/lsp-impact`, define a degraded path in the skill body that uses only `get_references` when call/type hierarchy are unavailable. Explicit in the prose, not a separate skill file. |
+| **Degraded-mode skill variants** | Planned | For high-value skills like `/lsp-impact`, define a degraded path in the skill body that uses only `find_references` when call/type hierarchy are unavailable. Explicit in the prose, not a separate skill file. |
 
 ### Fits the AgentSkills spec
 
@@ -320,8 +320,8 @@ Instrument the existing test suite to capture per-language timing data on every 
 |--------|-----|-------|
 | Server init time | `start_lsp` to first successful response | Existing multi-lang tests |
 | Diagnostic settle time | `open_document` to `get_diagnostics` returning stable results | Existing multi-lang tests |
-| Speculative execution confidence | `confidence` field from `simulate_edit_atomic` (`high`/`partial`/`eventual`) | New speculative test per language |
-| Speculative round-trip time | `simulate_edit_atomic` call to response | New speculative test per language |
+| Speculative execution confidence | `confidence` field from `preview_edit` (`high`/`partial`/`eventual`) | New speculative test per language |
+| Speculative round-trip time | `preview_edit` call to response | New speculative test per language |
 | Cross-file propagation time | Edit file A → diagnostics update in file B | New test using multi-file fixtures |
 | Tool latency (hover, definition, references, completions) | Per-call `time.Since` wrapping | Existing tier-2 tool tests |
 
@@ -407,7 +407,7 @@ Two categories of eval frameworks exist, and neither addresses what agent-lsp ne
 
 **MCP eval frameworks** ([mcp-evals](https://github.com/mclenhard/mcp-evals) 129 stars, [alpic-ai/mcp-eval](https://github.com/alpic-ai/mcp-eval) 21 stars, [lastmile-ai/mcp-eval](https://github.com/lastmile-ai/mcp-eval) 20 stars, [dylibso/mcpx-eval](https://github.com/dylibso/mcpx-eval) 22 stars, [gleanwork/mcp-server-tester](https://github.com/gleanwork/mcp-server-tester) 13 stars) test MCP servers directly, but every one uses **LLM-as-judge** scoring. They send a prompt, get a response, and ask an LLM "was this good?" on a 1-5 rubric. This makes sense for subjective tool outputs (e.g., "summarize this document") but is the wrong approach for deterministic tools.
 
-When `get_references` is called on line 42 of a Go file, the correct answer is a deterministic set of locations. No LLM-as-judge is needed. The tool either returns the right locations or it does not. Paying for GPT-4 API calls to grade a response that can be verified with `assert.Equal` is wasteful and introduces false variance.
+When `find_references` is called on line 42 of a Go file, the correct answer is a deterministic set of locations. No LLM-as-judge is needed. The tool either returns the right locations or it does not. Paying for GPT-4 API calls to grade a response that can be verified with `assert.Equal` is wasteful and introduces false variance.
 
 **The gap:** At the time of writing, no framework combined deterministic tool correctness testing with MCP server evaluation. No framework tested across multiple languages or programming environments. No framework measured tool reliability or skill protocol compliance. **mcp-assert now fills this gap** (see below).
 
@@ -493,7 +493,7 @@ func TestToolCorrectness(t *testing.T) {
         assert   func(t *testing.T, result string)
     }{
         {
-            tool: "get_references", language: "go",
+            tool: "find_references", language: "go",
             fixture: "test/fixtures/go",
             input: map[string]any{
                 "file_path": "greeter.go", "line": 10, "column": 6,
@@ -506,7 +506,7 @@ func TestToolCorrectness(t *testing.T) {
             },
         },
         {
-            tool: "get_references", language: "gleam",
+            tool: "find_references", language: "gleam",
             fixture: "test/fixtures/gleam",
             input: map[string]any{
                 "file_path": "src/person.gleam", "line": 1, "column": 10,
@@ -571,7 +571,7 @@ test/evals/
 
 ### Speculative execution as a built-in grader
 
-`simulate_edit_atomic` is a code-based grader for edit quality. `net_delta == 0` means the edit is safe. `net_delta > 0` means the agent introduced errors. This is unique to agent-lsp: the tool itself is the eval.
+`preview_edit` is a code-based grader for edit quality. `net_delta == 0` means the edit is safe. `net_delta > 0` means the agent introduced errors. This is unique to agent-lsp: the tool itself is the eval.
 
 **Metric to track:** First-attempt success rate. What percentage of agent edits produce `net_delta == 0` on first attempt, without a retry? Track this across:
 
@@ -603,8 +603,8 @@ The audit trail (`--audit-log`) is a transcript. Post-session graders analyze th
 
 | Grader | What it checks | Type |
 |--------|---------------|------|
-| **Blast-radius-first** | Was `get_change_impact` or `get_references` called before any `apply_edit` on an exported symbol? | Transcript |
-| **Simulate-before-apply** | Was `simulate_edit_atomic` called before `apply_edit` when a skill was active? | Transcript |
+| **Blast-radius-first** | Was `get_change_impact` or `find_references` called before any `apply_edit` on an exported symbol? | Transcript |
+| **Simulate-before-apply** | Was `preview_edit` called before `apply_edit` when a skill was active? | Transcript |
 | **Rename protocol** | Was `prepare_rename` called before `rename_symbol`? | Transcript |
 | **Uncaught regression** | Did any `apply_edit` produce `net_delta > 0` without a subsequent `discard_session` or fix? | Outcome |
 | **Tool error rate** | What percentage of tool calls returned `IsError: true`? High rates indicate misconfiguration or model confusion. | Metric |
@@ -702,7 +702,7 @@ When an agent activates a skill, agent-lsp tracks which phase the skill is in ba
 
 ```
 Agent calls prepare_rename -> phase = "preview"
-Agent calls get_references -> still "preview"
+Agent calls find_references -> still "preview"
 Agent tries apply_edit     -> BLOCKED: "apply_edit is not allowed in the preview phase. 
                                Complete the preview by calling rename_symbol first."
 Agent calls rename_symbol  -> phase = "execute", apply_edit now allowed
@@ -747,9 +747,9 @@ See [docs/phase-enforcement.md](phase-enforcement.md) for the full design docume
 |---------|--------|-------------|
 | **LSP server mode (proxy architecture)** | Planned | Expose agent-lsp as an LSP server that editors connect to directly, not just an MCP server for AI agents. Today agent-lsp is a client of gopls/pyright; in this mode it becomes a transparent proxy that sits between the editor and the language server, intercepting and enriching the LSP stream. Standard LSP requests (hover, go-to-definition, completions) pass through to the real language server. agent-lsp injects its own capabilities on top: (1) speculative execution results surfaced as LSP diagnostics (the editor shows "this edit would introduce 3 errors" inline), (2) blast-radius annotations as code lenses ("42 callers" above each exported function), (3) skill-driven refactors exposed as code actions (right-click a function, select "Safe Refactor" which runs the full /lsp-refactor workflow), (4) dead-symbol detection as dimmed/unused diagnostics. The editor gets agent-lsp's intelligence natively without MCP or an AI agent in the loop. This opens a second market: developers who want agent-lsp's analysis but use traditional editors (VS Code, Neovim, Helix, Emacs) without an AI agent. Implementation: agent-lsp listens on a port or stdio as an LSP server (using Go's `gopls/internal/protocol` types or a lightweight LSP server library), proxies all requests to the real language server, and intercepts responses to enrich them. The persistent cache (Layer 3) serves the enrichment data without re-querying. Inspired by lsp-ai's architecture (3.2K stars, Rust) which proved editors will connect to a proxy language server that adds capabilities. This is a v2.0 architectural shift, not a feature addition. |
 | **Observability** | Planned | Metrics (requests/sec, latency per tool, error rate) for production deployments, valuable for teams running agent-lsp as shared infrastructure |
-| **Persistent knowledge graph** | **Shipped** (reference cache layer) | Language-agnostic infrastructure layer below the LSP clients. Caches LSP-derived data (symbol references, call hierarchies, type relationships, diagnostic baselines, clone fingerprints) in a persistent SQLite store. Schema is language-agnostic: a Go function calling a Python function via cross-repo lives in the same graph. This layer is the foundation for `detect_changes`, `/lsp-architecture`, near-clone detection, and the team-shared index artifact. Implementation: pure Go SQLite (`modernc.org/sqlite`) initially; CGo acceleration (`mattn/go-sqlite3` + C libraries) if clone detection or semantic search require bulk computation at scale. The server/concurrency/protocol layer stays pure Go; only compute-intensive graph operations would use C under the hood. **Lifecycle:** Storage at `~/.agent-lsp/cache/<workspace-hash>/graph.db`, created on first `start_lsp`. Population is opportunistic: every LSP response (`get_references`, `get_change_impact`, `get_document_symbols`) is cached as a side effect, no separate index step. Invalidation via file watcher: on file change, evict cached entries for that file plus transitive dependents (if known from cached call graph); next query re-queries the LSP server and re-caches. Staleness guard: on session start, check `max(cached_at)`; if older than configurable threshold, invalidate all and repopulate organically. Corruption handling: SQLite WAL mode for crash safety; on open, `PRAGMA integrity_check`; if corrupted, delete and start fresh (cache is disposable). Cleanup: `agent-lsp cleanup` removes caches for workspaces that no longer exist on disk; daemon auto-scans on startup. Size management: configurable max cache size (default 500MB), LRU eviction by workspace. The cache is not mandatory: agent-lsp works without it (queries LSP directly, like today). Missing, corrupted, or stale cache falls back to existing behavior transparently. |
+| **Persistent knowledge graph** | **Shipped** (reference cache layer) | Language-agnostic infrastructure layer below the LSP clients. Caches LSP-derived data (symbol references, call hierarchies, type relationships, diagnostic baselines, clone fingerprints) in a persistent SQLite store. Schema is language-agnostic: a Go function calling a Python function via cross-repo lives in the same graph. This layer is the foundation for `detect_changes`, `/lsp-architecture`, near-clone detection, and the team-shared index artifact. Implementation: pure Go SQLite (`modernc.org/sqlite`) initially; CGo acceleration (`mattn/go-sqlite3` + C libraries) if clone detection or semantic search require bulk computation at scale. The server/concurrency/protocol layer stays pure Go; only compute-intensive graph operations would use C under the hood. **Lifecycle:** Storage at `~/.agent-lsp/cache/<workspace-hash>/graph.db`, created on first `start_lsp`. Population is opportunistic: every LSP response (`find_references`, `get_change_impact`, `list_symbols`) is cached as a side effect, no separate index step. Invalidation via file watcher: on file change, evict cached entries for that file plus transitive dependents (if known from cached call graph); next query re-queries the LSP server and re-caches. Staleness guard: on session start, check `max(cached_at)`; if older than configurable threshold, invalidate all and repopulate organically. Corruption handling: SQLite WAL mode for crash safety; on open, `PRAGMA integrity_check`; if corrupted, delete and start fresh (cache is disposable). Cleanup: `agent-lsp cleanup` removes caches for workspaces that no longer exist on disk; daemon auto-scans on startup. Size management: configurable max cache size (default 500MB), LRU eviction by workspace. The cache is not mandatory: agent-lsp works without it (queries LSP directly, like today). Missing, corrupted, or stale cache falls back to existing behavior transparently. |
 | **`detect_changes` tool** | **Shipped** | Single-call "what did I break?" workflow. Runs `git diff` to identify changed files, feeds them to `get_change_impact`, returns affected symbols with risk classification. Eliminates the manual step of identifying which files to analyze. Inspired by codebase-memory-mcp's `detect_changes`. |
-| **`/lsp-architecture` skill** | **Shipped** | Project-level architecture overview in one call. Runs `get_document_symbols` across all packages, synthesizes package dependency graph, entry points, layer structure, and hotspots (files with highest fan-out/fan-in). Currently `/lsp-understand` only does per-file analysis. |
+| **`/lsp-architecture` skill** | **Shipped** | Project-level architecture overview in one call. Runs `list_symbols` across all packages, synthesizes package dependency graph, entry points, layer structure, and hotspots (files with highest fan-out/fan-in). Currently `/lsp-understand` only does per-file analysis. |
 | **Near-clone detection in `/lsp-inspect`** | Planned | New check type `duplicate_semantics` that identifies functions with high structural similarity. Uses AST-level comparison (shared statement patterns, parameter shapes) rather than text similarity. Surfaces "these two functions are 90% identical, consider extracting a shared helper." |
 | **Team-shared index artifact** | **Shipped** | Persist a warm-index snapshot (reference counts, symbol graph, diagnostic baseline) as a compressed file that can be committed to the repo. New sessions load cached state instead of re-indexing from scratch. Eliminates cold-start cost for teams. |
 | **`agent-lsp update`** | **Shipped** | Self-update to the latest release; fetches from GitHub Releases and replaces the binary in-place. |
@@ -759,7 +759,7 @@ See [docs/phase-enforcement.md](phase-enforcement.md) for the full design docume
 | **Cross-service HTTP route linking** | Planned | Match `fetch("/api/users")` call sites to `@app.route("/api/users")` handler definitions across files and repos. Extends `get_cross_repo_references` beyond symbol-level to HTTP route-level cross-service analysis. |
 | **Git coupling analysis** | Planned | Identify files that change together frequently (e.g., "payment_handler.py changes alongside user_service.py 80% of the time"). Mine `git log` for co-change patterns. Integrate with `detect_changes`: when a file is modified, surface coupled files the agent should also review. Implementation: `git log --name-only --format=""` parsed into a co-occurrence matrix, filtered by threshold (default 60%). Lightweight addition to `detect_changes` response. Inspired by Axon's coupling heatmap. |
 | **Async execution flow tracing** | Planned | Trace call chains across async boundaries (callbacks, goroutine launches, event emitters, promise chains). LSP's call hierarchy is synchronous: `go func() { doWork() }()` doesn't show `doWork` as a caller of the launching function. Static analysis of `go func`, `asyncio.create_task`, `.then()`, `EventEmitter.on()` patterns to build async edges in the call graph. Enhances `/lsp-inspect` (find unrecovered panics in async paths) and `/lsp-impact` (blast radius across async boundaries). |
-| **Next-step hints in tool responses** | **Shipped** | Every tool response includes a contextual `hint` field suggesting the logical next tool call. Example: `get_references` returns "use get_change_impact to see the full blast radius." Helps agents chain tools correctly without skills, and helps less capable models navigate the 56-tool surface. Zero-cost addition: one extra field in the JSON response. |
+| **Next-step hints in tool responses** | **Shipped** | Every tool response includes a contextual `hint` field suggesting the logical next tool call. Example: `find_references` returns "use get_change_impact to see the full blast radius." Helps agents chain tools correctly without skills, and helps less capable models navigate the 56-tool surface. Zero-cost addition: one extra field in the JSON response. |
 | **Tree-sitter fallback** | Planned | See Massive Codebase Strategy section below. |
 | **Selective indexing** | **Shipped** | Auto-detects package boundary for Python/TypeScript on workspaces with 500+ source files. Generates scoped language server config. Scope shifts automatically on `open_document`. See Massive Codebase Strategy section below. |
 

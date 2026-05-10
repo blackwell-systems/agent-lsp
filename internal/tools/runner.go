@@ -6,7 +6,7 @@
 // Types defined here (BuildResult, TestResult, TestFileResult) are the
 // structured JSON responses returned to MCP clients. TestFailure.Location
 // uses LSP-normalized locations so failure sites can be navigated with
-// go_to_definition or get_references.
+// go_to_definition or find_references.
 package tools
 
 import "github.com/blackwell-systems/agent-lsp/internal/types"
@@ -28,7 +28,7 @@ type BuildResult struct {
 
 // TestFailure is a single test failure entry returned by run_tests.
 // Location is an LSP-normalized location (file URI + range) for interop
-// with go_to_definition, get_references, and other LSP tools.
+// with go_to_definition, find_references, and other LSP tools.
 type TestFailure struct {
 	File     string          `json:"file"`
 	Line     int             `json:"line"`

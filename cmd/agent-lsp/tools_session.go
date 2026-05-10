@@ -1,5 +1,5 @@
 // tools_session.go defines MCP tool registrations for speculative execution:
-// create_simulation_session, simulate_edit, simulate_edit_atomic,
+// create_simulation_session, simulate_edit, preview_edit,
 // simulate_chain, evaluate_session, commit_session, discard_session,
 // and destroy_session.
 //
@@ -213,7 +213,7 @@ func registerSessionTools(d toolDeps) {
 	})
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
-		Name:        "simulate_edit_atomic",
+		Name:        "preview_edit",
 		Description: "One-shot atomic operation: create session, apply edit, evaluate, and destroy. Returns evaluation result. Use for quick what-if checks without managing session lifecycle manually. Requires start_lsp to be called first. All line/column positions are 1-indexed. net_delta: 0 means the edit is safe to apply.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Simulate Edit (Atomic)",

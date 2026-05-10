@@ -58,7 +58,7 @@ func HandleCallHierarchy(ctx context.Context, client *lsp.LSPClient, args map[st
 		return client.PrepareCallHierarchy(ctx, fileURI, pos)
 	})
 	if wErr != nil {
-		return types.ErrorResult(fmt.Sprintf("call_hierarchy (prepare): %s", wErr)), nil
+		return types.ErrorResult(fmt.Sprintf("find_callers (prepare): %s", wErr)), nil
 	}
 
 	if len(items) == 0 {
@@ -71,14 +71,14 @@ func HandleCallHierarchy(ctx context.Context, client *lsp.LSPClient, args map[st
 		if direction == "incoming" || direction == "both" {
 			calls, callErr := client.GetIncomingCalls(ctx, item)
 			if callErr != nil {
-				return types.ErrorResult(fmt.Sprintf("call_hierarchy (incoming): %s", callErr)), nil
+				return types.ErrorResult(fmt.Sprintf("find_callers (incoming): %s", callErr)), nil
 			}
 			result.Incoming = append(result.Incoming, calls...)
 		}
 		if direction == "outgoing" || direction == "both" {
 			calls, callErr := client.GetOutgoingCalls(ctx, item)
 			if callErr != nil {
-				return types.ErrorResult(fmt.Sprintf("call_hierarchy (outgoing): %s", callErr)), nil
+				return types.ErrorResult(fmt.Sprintf("find_callers (outgoing): %s", callErr)), nil
 			}
 			result.Outgoing = append(result.Outgoing, calls...)
 		}

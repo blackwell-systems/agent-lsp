@@ -18,13 +18,13 @@ Every LSP 3.17 method and its MCP surface. "Protocol only" means the method is c
 | `textDocument/didClose` | §3.15.9 | `close_document` | ✓ |
 | `textDocument/didChange` | §3.15.8 | — | ✓ protocol only (sent internally by `open_document` for already-open files and by simulation edits) |
 | `textDocument/publishDiagnostics` | §3.17.1 | `get_diagnostics` | ✓ |
-| `textDocument/hover` | §3.15.11 | `get_info_on_location` | ✓ |
+| `textDocument/hover` | §3.15.11 | `inspect_symbol` | ✓ |
 | `textDocument/completion` | §3.15.13 | `get_completions` | ✓ |
 | `textDocument/signatureHelp` | §3.15.14 | `get_signature_help` | ✓ |
 | `textDocument/definition` | §3.15.2 | `go_to_definition` | ✓ |
-| `textDocument/references` | §3.15.8 | `get_references` | ✓ |
-| `textDocument/documentSymbol` | §3.15.20 | `get_document_symbols` | ✓ |
-| `textDocument/codeAction` | §3.15.22 | `get_code_actions` | ✓ |
+| `textDocument/references` | §3.15.8 | `find_references` | ✓ |
+| `textDocument/documentSymbol` | §3.15.20 | `list_symbols` | ✓ |
+| `textDocument/codeAction` | §3.15.22 | `suggest_fixes` | ✓ |
 | `textDocument/formatting` | §3.15.16 | `format_document` | ✓ |
 | `textDocument/rename` | §3.15.19 | `rename_symbol` | ✓ |
 | `textDocument/typeDefinition` | §3.15.3 | `go_to_type_definition` | ✓ |
@@ -38,9 +38,9 @@ Every LSP 3.17 method and its MCP surface. "Protocol only" means the method is c
 | `textDocument/codeLens` | §3.15.21 | — | ✗ not yet implemented |
 | `textDocument/inlayHint` | §3.17.11 | `get_inlay_hints` | ✓ |
 | `textDocument/semanticTokens` | §3.16.12 | `get_semantic_tokens` | ✓ |
-| `textDocument/prepareCallHierarchy` | §3.16.5 | `call_hierarchy` | ✓ |
-| `callHierarchy/incomingCalls` | §3.16.5 | `call_hierarchy` | ✓ |
-| `callHierarchy/outgoingCalls` | §3.16.5 | `call_hierarchy` | ✓ |
+| `textDocument/prepareCallHierarchy` | §3.16.5 | `find_callers` | ✓ |
+| `callHierarchy/incomingCalls` | §3.16.5 | `find_callers` | ✓ |
+| `callHierarchy/outgoingCalls` | §3.16.5 | `find_callers` | ✓ |
 | `textDocument/prepareTypeHierarchy` | §3.17.12 | `type_hierarchy` | ✓ |
 | `typeHierarchy/supertypes` | §3.17.12 | `type_hierarchy` | ✓ |
 | `typeHierarchy/subtypes` | §3.17.12 | `type_hierarchy` | ✓ |
@@ -49,7 +49,7 @@ Every LSP 3.17 method and its MCP surface. "Protocol only" means the method is c
 
 | LSP Method | Spec | MCP Tool | Status |
 |-----------|------|----------|--------|
-| `workspace/symbol` | §3.15.21 | `get_workspace_symbols` | ✓ |
+| `workspace/symbol` | §3.15.21 | `find_symbol` | ✓ |
 | `workspace/configuration` | §3.16.14 | — | ✓ protocol only (server-initiated) |
 | `workspace/executeCommand` | §3.16.13 | `execute_command` | ✓ |
 | `workspace/didChangeWatchedFiles` | §3.16.8 | `did_change_watched_files` (+ auto-watch) | ✓ |

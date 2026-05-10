@@ -43,7 +43,7 @@ func HandleStartLsp(
 			return types.ErrorResult(fmt.Sprintf("passive initialize failed: %s", err)), nil
 		}
 		setClient(client)
-		return appendHint(types.TextResult("Connected to existing language server at "+connectAddr), "Workspace initialized. Use get_document_symbols or get_diagnostics to begin analysis."), nil
+		return appendHint(types.TextResult("Connected to existing language server at "+connectAddr), "Workspace initialized. Use list_symbols or get_diagnostics to begin analysis."), nil
 	}
 
 	// Optional workspace scoping: generate a language-server config file that
@@ -89,7 +89,7 @@ func HandleStartLsp(
 		client.WaitForWorkspaceReadyTimeout(ctx, timeout)
 	}
 
-	return appendHint(types.TextResult("LSP server started successfully"), "Workspace initialized. Use get_document_symbols or get_diagnostics to begin analysis."), nil
+	return appendHint(types.TextResult("LSP server started successfully"), "Workspace initialized. Use list_symbols or get_diagnostics to begin analysis."), nil
 }
 
 // ParseScopePaths extracts scope paths from the args value.

@@ -2,7 +2,7 @@
 name: lsp-simulate
 description: Speculative code editing session — simulate changes in memory before touching disk. Use when planning edits that might break things, exploring refactors across multiple files, or verifying an edit is safe before applying.
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__create_simulation_session mcp__lsp__simulate_edit mcp__lsp__simulate_chain mcp__lsp__evaluate_session mcp__lsp__commit_session mcp__lsp__discard_session mcp__lsp__destroy_session mcp__lsp__simulate_edit_atomic
+allowed-tools: mcp__lsp__start_lsp mcp__lsp__create_simulation_session mcp__lsp__simulate_edit mcp__lsp__simulate_chain mcp__lsp__evaluate_session mcp__lsp__commit_session mcp__lsp__discard_session mcp__lsp__destroy_session mcp__lsp__preview_edit
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata: {}
@@ -30,11 +30,11 @@ Explicit `start_lsp` is only needed when switching workspace roots.
 
 ## Quick Start (single edit)
 
-For a single what-if check, use `simulate_edit_atomic` — it creates a session,
+For a single what-if check, use `preview_edit` — it creates a session,
 applies the edit, evaluates, and destroys the session in one call:
 
 ```
-mcp__lsp__simulate_edit_atomic(
+mcp__lsp__preview_edit(
   workspace_root: "/your/workspace",
   language: "go",
   file_path: "/abs/path/to/file.go",

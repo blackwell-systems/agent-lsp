@@ -126,7 +126,7 @@ type ImportCacheArgs struct {
 func registerWorkspaceTools(d toolDeps) {
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "start_lsp",
-		Description: "Initialize or reinitialize the LSP server with a specific project root directory. Call this before using get_references, get_info_on_location, or get_diagnostics when working in a project different from the one the server was started with. root_dir should be the workspace root (directory containing go.mod, package.json, Cargo.toml, etc.). Optional language_id (e.g. \"go\", \"typescript\", \"rust\") selects a specific configured server in multi-server mode — use this when working in a mixed-language repo to ensure the correct server handles the workspace. If unsure which server is active, call get_server_capabilities first.",
+		Description: "Initialize or reinitialize the LSP server with a specific project root directory. Call this before using find_references, inspect_symbol, or get_diagnostics when working in a project different from the one the server was started with. root_dir should be the workspace root (directory containing go.mod, package.json, Cargo.toml, etc.). Optional language_id (e.g. \"go\", \"typescript\", \"rust\") selects a specific configured server in multi-server mode — use this when working in a mixed-language repo to ensure the correct server handles the workspace. If unsure which server is active, call get_server_capabilities first.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Start LSP Server",
 			ReadOnlyHint:    false,
@@ -232,7 +232,7 @@ func registerWorkspaceTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "add_workspace_folder",
-		Description: "Add a directory to the LSP workspace, enabling cross-repo references, definitions, and diagnostics. Useful when working across a library and its consumers — after adding the consumer repo, get_references on a library function returns call sites in both repos. Requires start_lsp to have been called first. Language servers that support multi-root workspaces (gopls, rust-analyzer, typescript-language-server) will re-index the new folder automatically.",
+		Description: "Add a directory to the LSP workspace, enabling cross-repo references, definitions, and diagnostics. Useful when working across a library and its consumers — after adding the consumer repo, find_references on a library function returns call sites in both repos. Requires start_lsp to have been called first. Language servers that support multi-root workspaces (gopls, rust-analyzer, typescript-language-server) will re-index the new folder automatically.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Add Workspace Folder",
 			ReadOnlyHint:    false,
@@ -458,7 +458,7 @@ func registerWorkspaceTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "execute_command",
-		Description: "Execute a workspace command via LSP. Commands are server-defined identifiers returned by code actions (in the command field of a CodeAction). Use this after get_code_actions to trigger a server-side operation such as applying a refactoring, generating code, or running a server-specific action. Returns the server-defined result or null.",
+		Description: "Execute a workspace command via LSP. Commands are server-defined identifiers returned by code actions (in the command field of a CodeAction). Use this after suggest_fixes to trigger a server-side operation such as applying a refactoring, generating code, or running a server-specific action. Returns the server-defined result or null.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Execute Command",
 			ReadOnlyHint:    false,

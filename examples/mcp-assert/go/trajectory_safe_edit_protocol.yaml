@@ -1,5 +1,5 @@
 # Trajectory assertion: validates the /lsp-safe-edit skill protocol.
-# The skill MUST call simulate_edit_atomic before apply_edit (safety gate).
+# The skill MUST call preview_edit before apply_edit (safety gate).
 # get_diagnostics must appear after apply_edit (error verification).
 # The safe-edit protocol REQUIRES speculative execution before any disk write.
 name: lsp-safe-edit follows skill protocol
@@ -10,7 +10,7 @@ trace:
   - tool: open_document
     args:
       file_path: "fixtures/go/main.go"
-  - tool: simulate_edit_atomic
+  - tool: preview_edit
     args:
       file_path: "fixtures/go/main.go"
       workspace_root: "fixtures/go"
@@ -28,10 +28,10 @@ trace:
       file_path: "fixtures/go/main.go"
 trajectory:
   - type: order
-    tools: ["simulate_edit_atomic", "apply_edit", "get_diagnostics"]
+    tools: ["preview_edit", "apply_edit", "get_diagnostics"]
   - type: presence
-    tools: ["simulate_edit_atomic", "apply_edit"]
+    tools: ["preview_edit", "apply_edit"]
   - type: args_contain
-    tool: simulate_edit_atomic
+    tool: preview_edit
     args:
       file_path: "fixtures/go/main.go"

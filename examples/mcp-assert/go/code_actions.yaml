@@ -1,4 +1,4 @@
-name: get_code_actions returns actions for main.go
+name: suggest_fixes returns actions for main.go
 server:
   command: agent-lsp
   args: ["go:gopls"]
@@ -11,7 +11,7 @@ setup:
       file_path: "{{fixture}}/main.go"
       language_id: go
 assert:
-  tool: get_code_actions
+  tool: suggest_fixes
   args:
     file_path: "{{fixture}}/main.go"
     start_line: 1

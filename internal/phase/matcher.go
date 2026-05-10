@@ -4,7 +4,7 @@ import "strings"
 
 // MatchToolPattern checks whether a tool name matches a glob pattern.
 // Supports trailing wildcard (*) only, which matches the common patterns
-// in skill YAML (e.g., "mcp__lsp__simulate_*" matches "mcp__lsp__simulate_edit_atomic").
+// in skill YAML (e.g., "mcp__lsp__simulate_*" matches "mcp__lsp__simulate_edit").
 //
 // Patterns without wildcards require an exact match.
 func MatchToolPattern(pattern, toolName string) bool {

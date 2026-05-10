@@ -35,7 +35,7 @@ func skillRename() *SkillPhaseConfig {
 				Allowed: []string{
 					"go_to_symbol",
 					"prepare_rename",
-					"get_references",
+					"find_references",
 					"rename_symbol", // dry_run=true only (arg-level enforcement is future work)
 				},
 				Forbidden: []string{
@@ -54,6 +54,7 @@ func skillRename() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"simulate_*",
+					"preview_edit",
 					"run_build",
 				},
 			},
@@ -76,11 +77,12 @@ func skillRefactor() *SkillPhaseConfig {
 				Allowed: []string{
 					"get_change_impact",
 					"go_to_symbol",
-					"get_references",
+					"find_references",
 				},
 				Forbidden: []string{
 					"apply_edit",
 					"simulate_*",
+					"preview_edit",
 					"Edit",
 					"Write",
 				},
@@ -91,7 +93,7 @@ func skillRefactor() *SkillPhaseConfig {
 				Allowed: []string{
 					"open_document",
 					"get_diagnostics",
-					"simulate_edit_atomic",
+					"preview_edit",
 					"simulate_chain",
 				},
 				Forbidden: []string{
@@ -111,6 +113,7 @@ func skillRefactor() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"simulate_*",
+					"preview_edit",
 					"rename_symbol",
 				},
 			},
@@ -170,7 +173,7 @@ func skillSafeEdit() *SkillPhaseConfig {
 				Name:        "speculative_preview",
 				Description: "Simulate the edit in memory before touching disk",
 				Allowed: []string{
-					"simulate_edit_atomic",
+					"preview_edit",
 					"simulate_chain",
 				},
 				Forbidden: []string{
@@ -189,6 +192,7 @@ func skillSafeEdit() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"simulate_*",
+					"preview_edit",
 				},
 			},
 			{
@@ -196,12 +200,13 @@ func skillSafeEdit() *SkillPhaseConfig {
 				Description: "Collect post-edit diagnostics, surface code actions, format",
 				Allowed: []string{
 					"get_diagnostics",
-					"get_code_actions",
+					"suggest_fixes",
 					"apply_edit", // for applying code action fixes
 					"format_document",
 				},
 				Forbidden: []string{
 					"simulate_*",
+					"preview_edit",
 					"run_build",
 					"run_tests",
 				},
@@ -273,13 +278,14 @@ func skillVerify() *SkillPhaseConfig {
 				Name:        "fix_and_format",
 				Description: "Post-verification: apply code action fixes and format",
 				Allowed: []string{
-					"get_code_actions",
+					"suggest_fixes",
 					"apply_edit",
 					"format_document",
 					"get_diagnostics", // re-check after fixes
 				},
 				Forbidden: []string{
 					"simulate_*",
+					"preview_edit",
 					"run_build", // re-run full verify instead
 					"run_tests", // re-run full verify instead
 				},
@@ -287,6 +293,7 @@ func skillVerify() *SkillPhaseConfig {
 		},
 		GlobalForbidden: []string{
 			"simulate_*",    // verify is post-edit, not speculative
+			"preview_edit",  // verify is post-edit, not speculative
 			"rename_symbol", // verify does not make semantic changes
 		},
 	}

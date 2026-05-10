@@ -3,7 +3,7 @@ name: lsp-architecture
 description: Generate a structural architecture overview of a codebase: languages, package map, entry points, dependency graph, and hotspots. One call for the big picture.
 argument-hint: "[workspace-root-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__get_document_symbols mcp__lsp__get_change_impact mcp__lsp__detect_lsp_servers mcp__lsp__get_workspace_symbols
+allowed-tools: mcp__lsp__start_lsp mcp__lsp__list_symbols mcp__lsp__get_change_impact mcp__lsp__detect_lsp_servers mcp__lsp__find_symbol
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -79,12 +79,12 @@ other common dependency or output directories.
 
 ## Step 2 — Package Structure
 
-Use `get_workspace_symbols` with broad queries to discover the package and
+Use `find_symbol` with broad queries to discover the package and
 module hierarchy. Tailor queries by language:
 
 **Go:**
 ```
-mcp__lsp__get_workspace_symbols({
+mcp__lsp__find_symbol({
   "query": "",
   "symbol_kind_filter": "Package"
 })
@@ -93,7 +93,7 @@ mcp__lsp__get_workspace_symbols({
 Also query for top-level types and functions to fill in package-level detail:
 
 ```
-mcp__lsp__get_workspace_symbols({
+mcp__lsp__find_symbol({
   "query": "",
   "symbol_kind_filter": "Function"
 })
@@ -101,7 +101,7 @@ mcp__lsp__get_workspace_symbols({
 
 **Python:**
 ```
-mcp__lsp__get_workspace_symbols({
+mcp__lsp__find_symbol({
   "query": "",
   "symbol_kind_filter": "Class"
 })
@@ -109,7 +109,7 @@ mcp__lsp__get_workspace_symbols({
 
 **TypeScript/JavaScript:**
 ```
-mcp__lsp__get_workspace_symbols({
+mcp__lsp__find_symbol({
   "query": "",
   "symbol_kind_filter": "Function"
 })
@@ -131,10 +131,10 @@ the top 30 by symbol count and note that others were omitted.
 
 ## Step 3 — Entry Points
 
-Use `get_workspace_symbols` to search for common entry point patterns:
+Use `find_symbol` to search for common entry point patterns:
 
 ```
-mcp__lsp__get_workspace_symbols({
+mcp__lsp__find_symbol({
   "query": "main"
 })
 ```
@@ -254,10 +254,10 @@ Step 1 — Language Detection
   → Go: 85 files (~15K lines)
 
 Step 2 — Package Structure
-  get_workspace_symbols: query="", symbol_kind_filter="Package"
+  find_symbol: query="", symbol_kind_filter="Package"
   → 12 packages found
 
-  get_workspace_symbols: query="", symbol_kind_filter="Function"
+  find_symbol: query="", symbol_kind_filter="Function"
   → 240 functions across 12 packages
 
   Package map:
@@ -269,10 +269,10 @@ Step 2 — Package Structure
     skills/              (embedded skill definitions, 5 symbols)
 
 Step 3 — Entry Points
-  get_workspace_symbols: query="main"
+  find_symbol: query="main"
   → cmd/agent-lsp/main.go:55 main()
 
-  get_workspace_symbols: query="Run"
+  find_symbol: query="Run"
   → cmd/agent-lsp/server.go:276 Run()
   → cmd/agent-lsp/daemon.go:40 RunDaemon()
 

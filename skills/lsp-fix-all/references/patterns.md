@@ -2,8 +2,8 @@
 
 ## @@ Position Marker
 
-When calling position-based tools (get_info_on_location, go_to_definition,
-get_references), prefer the position_pattern parameter over line/column:
+When calling position-based tools (inspect_symbol, go_to_definition,
+find_references), prefer the position_pattern parameter over line/column:
 
     "position_pattern": "func (c *LSPClient) Initiali@@ze"
 
@@ -25,7 +25,7 @@ position returned is file-absolute — no adjustment needed.
 
 **When to use:** any time the same token (variable name, method name, keyword)
 appears in multiple places and you know the approximate line the symbol is on.
-Use `get_document_symbols` or `go_to_symbol` first to get the line, then pass
+Use `list_symbols` or `go_to_symbol` first to get the line, then pass
 `line_scope_start: line - 5, line_scope_end: line + 5` as a safe window.
 
 **Omitting the args** (or passing 0 for both) falls back to full-file search —

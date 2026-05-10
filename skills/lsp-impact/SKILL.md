@@ -3,7 +3,7 @@ name: lsp-impact
 description: Blast-radius analysis for a symbol or file — shows all callers, type supertypes/subtypes, and reference count before you change it. Use when refactoring, deleting, or changing the signature of any function, type, or method. Also accepts a file path to surface all exported-symbol impact in one shot.
 argument-hint: "[symbol-name | file-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__call_hierarchy mcp__lsp__type_hierarchy mcp__lsp__get_references mcp__lsp__get_server_capabilities mcp__lsp__get_change_impact
+allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__find_callers mcp__lsp__type_hierarchy mcp__lsp__find_references mcp__lsp__get_server_capabilities mcp__lsp__get_change_impact
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -65,7 +65,7 @@ Skip Steps 1–5 if the file-level summary is sufficient.
 If LSP is not yet initialized, call `mcp__lsp__start_lsp` with the workspace
 root first.
 
-Check what the server supports before proceeding — `call_hierarchy` and
+Check what the server supports before proceeding — `find_callers` and
 `type_hierarchy` are optional LSP features not implemented by all servers:
 
 ```
@@ -100,11 +100,11 @@ every subsequent step.
 
 ## Step 2 — Enumerate all direct references (always available)
 
-Call `get_references` with `include_declaration: false` to find every usage
+Call `find_references` with `include_declaration: false` to find every usage
 site across the workspace:
 
 ```
-mcp__lsp__get_references({
+mcp__lsp__find_references({
   "file_path": "<file from Step 1>",
   "position_pattern": "func @@SymbolName(",   // adjust prefix for symbol kind
   "include_declaration": false
@@ -121,10 +121,10 @@ examples by language and symbol kind.
 
 ## Step 3 — Call hierarchy (callers and callees)
 
-Only if `call_hierarchy` appears in `supported_tools` from Step 0.
+Only if `find_callers` appears in `supported_tools` from Step 0.
 
 ```
-mcp__lsp__call_hierarchy({
+mcp__lsp__find_callers({
   "file_path": "<file from Step 1>",
   "line": <line from Step 1>,
   "column": <column from Step 1>,
@@ -132,7 +132,7 @@ mcp__lsp__call_hierarchy({
 })
 ```
 
-If `call_hierarchy` is **not** in `supported_tools`, skip this step entirely.
+If `find_callers` is **not** in `supported_tools`, skip this step entirely.
 Note `"call hierarchy not supported by this server"` in the Impact Report.
 
 ---
@@ -168,7 +168,7 @@ Include:
 
 - Symbol name, kind, and definition location
 - Reference count and list of files containing references
-- Callers from `call_hierarchy` incoming (or skip note)
+- Callers from `find_callers` incoming (or skip note)
 - Supertypes and subtypes from `type_hierarchy` (or skip note)
 - Blast radius: count of distinct files affected
 
@@ -189,17 +189,17 @@ Then apply the decision guide:
 Goal: assess blast radius of exported function `ParseConfig` in pkg/config
 
 Prerequisites — get_server_capabilities:
-  → supported_tools: [go_to_symbol, get_references, call_hierarchy, ...]
+  → supported_tools: [go_to_symbol, find_references, find_callers, ...]
   → type_hierarchy: not in supported_tools
 
 Step 1 — go_to_symbol: symbol_path="config.ParseConfig"
   → pkg/config/parser.go:42:6
 
-Step 2 — get_references: position_pattern="func @@ParseConfig("
+Step 2 — find_references: position_pattern="func @@ParseConfig("
   → 7 references in 4 files
   → cmd/main.go, internal/app.go, internal/loader.go, pkg/config/parser_test.go
 
-Step 3 — call_hierarchy: direction="incoming"
+Step 3 — find_callers: direction="incoming"
   → callers: cmd.main (cmd/main.go:14), app.Start (internal/app.go:31), ...
 
 Step 4 — type_hierarchy: skipped (function), also not supported by server

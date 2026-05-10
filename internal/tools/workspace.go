@@ -96,7 +96,7 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 
 // renameWithFuzzyFallback retries rename using workspace symbol candidates when the
 // direct position lookup returned an empty WorkspaceEdit. Mirrors the pattern used
-// by go_to_definition and get_references for position-imprecise AI callers.
+// by go_to_definition and find_references for position-imprecise AI callers.
 func renameWithFuzzyFallback(ctx context.Context, client *lsp.LSPClient, fileURI string, line, col int, newName string) any {
 	hoverPos := types.Position{Line: line - 1, Character: col - 1}
 	hoverText, err := client.GetInfoOnLocation(ctx, fileURI, hoverPos)

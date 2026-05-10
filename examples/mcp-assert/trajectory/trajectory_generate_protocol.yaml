@@ -1,7 +1,7 @@
 # Trajectory assertion: validates the /lsp-generate skill protocol.
-# open_document must precede get_code_actions (file must be loaded).
-# get_code_actions surfaces generator options before any execution.
-# execute_command (or apply_edit) must follow get_code_actions — not precede it.
+# open_document must precede suggest_fixes (file must be loaded).
+# suggest_fixes surfaces generator options before any execution.
+# execute_command (or apply_edit) must follow suggest_fixes — not precede it.
 # format_document and get_diagnostics must follow generation to verify output.
 # Multiple execute_command calls must NOT be batched — one at a time only.
 name: lsp-generate follows skill protocol
@@ -10,7 +10,7 @@ trace:
     args:
       file_path: "fixtures/go/main.go"
       language_id: "go"
-  - tool: get_code_actions
+  - tool: suggest_fixes
     args:
       file_path: "fixtures/go/main.go"
       start_line: 6
@@ -29,6 +29,6 @@ trace:
       file_path: "fixtures/go/main.go"
 trajectory:
   - type: order
-    tools: ["open_document", "get_code_actions", "execute_command", "format_document", "get_diagnostics"]
+    tools: ["open_document", "suggest_fixes", "execute_command", "format_document", "get_diagnostics"]
   - type: presence
-    tools: ["open_document", "get_code_actions", "get_diagnostics"]
+    tools: ["open_document", "suggest_fixes", "get_diagnostics"]

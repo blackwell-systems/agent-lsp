@@ -3,7 +3,7 @@
 **Date:** 2026-04-09
 **Auditor:** Inspector Agent (claude-sonnet-4-6)
 **Areas:** `internal/tools`, `internal/lsp`, `internal/session`, `cmd/agent-lsp`
-**LSP status:** gopls started successfully; `mcp__lsp__get_references` returned "no package metadata" for all internal packages during this run (cross-session LSP state conflict). Symbol-level dead-code findings use Grep fallback and are annotated `[LSP unavailable — Grep fallback, reduced confidence]`.
+**LSP status:** gopls started successfully; `mcp__lsp__find_references` returned "no package metadata" for all internal packages during this run (cross-session LSP state conflict). Symbol-level dead-code findings use Grep fallback and are annotated `[LSP unavailable — Grep fallback, reduced confidence]`.
 
 ---
 
@@ -131,7 +131,7 @@ The comment says "Extend the auto-watcher to cover the new folder" but the code 
 **File:** `/path/to/agent-lsp/internal/tools/simulation.go`, lines 329, 335
 **Check:** `silent_failure`
 
-`HandleSimulateEditAtomic` calls `_ = mgr.Discard(ctx, sessionID)` in both the error path (after Evaluate fails) and the success path. `Discard` may itself fail — for example if the context is cancelled or if `OpenDocument` fails during revert. When `Discard` fails, the LSP server retains the in-memory modified document state. Subsequent calls to `get_references`, `get_diagnostics`, etc. then operate on the mutated buffer. The caller receives no indication that LSP state was not reverted.
+`HandleSimulateEditAtomic` calls `_ = mgr.Discard(ctx, sessionID)` in both the error path (after Evaluate fails) and the success path. `Discard` may itself fail — for example if the context is cancelled or if `OpenDocument` fails during revert. When `Discard` fails, the LSP server retains the in-memory modified document state. Subsequent calls to `find_references`, `get_diagnostics`, etc. then operate on the mutated buffer. The caller receives no indication that LSP state was not reverted.
 
 The `defer mgr.Destroy(ctx, sessionID)` does not revert LSP document content (noted in the comment), so the Discard call is the only cleanup path.
 
@@ -334,7 +334,7 @@ A code comment on `applyRangeEdit` says "SYNC: if applyEditsToFile changes its l
 |---------|-------------------|--------|
 | C1      | Structural read   | N/A    |
 | C2      | Structural read   | N/A    |
-| L3      | `mcp__lsp__get_references` on `IsDocumentOpen` | Failed — "no package metadata"; Grep fallback used |
+| L3      | `mcp__lsp__find_references` on `IsDocumentOpen` | Failed — "no package metadata"; Grep fallback used |
 | All others | Structural / Grep | See annotations |
 
-gopls was unable to serve `get_references` for `internal/lsp` or `internal/tools` packages during this session. The MCP LSP server appears to hold a workspace binding from a prior session pointing at a different module. Structural reads and Grep were used for all symbol-level checks with reduced confidence where noted.
+gopls was unable to serve `find_references` for `internal/lsp` or `internal/tools` packages during this session. The MCP LSP server appears to hold a workspace binding from a prior session pointing at a different module. Structural reads and Grep were used for all symbol-level checks with reduced confidence where noted.

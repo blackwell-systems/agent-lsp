@@ -1,6 +1,6 @@
 # Trajectory assertion: validates the /lsp-refactor skill protocol with phase enforcement.
 # activate_skill must come first, deactivate_skill must come last.
-# Blast radius (get_references) must precede simulation, which must precede apply.
+# Blast radius (find_references) must precede simulation, which must precede apply.
 name: lsp-refactor with phase enforcement follows enforced protocol
 trace:
   - tool: activate_skill
@@ -10,7 +10,7 @@ trace:
   - tool: get_change_impact
     args:
       changed_files: ["fixtures/go/main.go"]
-  - tool: simulate_edit_atomic
+  - tool: preview_edit
     args:
       file_path: "fixtures/go/main.go"
       workspace_root: "fixtures/go"
@@ -35,9 +35,9 @@ trace:
   - tool: deactivate_skill
 trajectory:
   - type: order
-    tools: ["activate_skill", "get_change_impact", "simulate_edit_atomic", "apply_edit", "run_build", "run_tests", "deactivate_skill"]
+    tools: ["activate_skill", "get_change_impact", "preview_edit", "apply_edit", "run_build", "run_tests", "deactivate_skill"]
   - type: presence
-    tools: ["activate_skill", "deactivate_skill", "get_change_impact", "simulate_edit_atomic"]
+    tools: ["activate_skill", "deactivate_skill", "get_change_impact", "preview_edit"]
   - type: absence
     tools: ["rename_symbol"]
   - type: args_contain

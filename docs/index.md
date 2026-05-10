@@ -34,7 +34,7 @@ agent-lsp CI runs **30 real language servers** against real fixture codebases on
 
 Simulate changes in memory before writing to disk. No other MCP-LSP implementation has this.
 
-`simulate_edit_atomic` previews the diagnostic impact of any edit. You see exactly what breaks before the file is touched. `simulate_chain` evaluates a sequence of dependent edits and reports which step first introduces an error.
+`preview_edit` previews the diagnostic impact of any edit. You see exactly what breaks before the file is touched. `simulate_chain` evaluates a sequence of dependent edits and reports which step first introduces an error.
 
 Read more in the [speculative execution docs](speculative-execution.md).
 

@@ -3,7 +3,7 @@ name: lsp-dead-code
 description: Enumerate exported symbols in a file and surface those with zero references across the workspace. Use when auditing for dead code, cleaning up APIs, or checking which exports are safe to remove.
 argument-hint: "[file-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__get_document_symbols mcp__lsp__get_references mcp__lsp__open_document mcp__lsp__safe_delete_symbol
+allowed-tools: mcp__lsp__list_symbols mcp__lsp__find_references mcp__lsp__open_document mcp__lsp__safe_delete_symbol
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -15,8 +15,8 @@ metadata:
 # lsp-dead-code
 
 Audit an exported symbol list for zero-reference candidates. Calls
-`get_document_symbols` to enumerate symbols, then checks each exported
-symbol with `get_references` to find callers. Produces a classified report.
+`list_symbols` to enumerate symbols, then checks each exported
+symbol with `find_references` to find callers. Produces a classified report.
 
 ## When to Use
 
@@ -59,10 +59,10 @@ only required when switching workspaces or on a cold session.
 symbols that ARE referenced, producing false dead-code candidates.
 
 Pick one symbol you know is actively used (e.g. the primary constructor,
-a widely-called utility function). Call `get_references` on it:
+a widely-called utility function). Call `find_references` on it:
 
 ```
-mcp__lsp__get_references({
+mcp__lsp__find_references({
   "file_path": "/abs/path/to/file.go",
   "line": <known-active symbol line>,
   "column": <known-active symbol column>,
@@ -82,15 +82,15 @@ Open the file so the language server tracks it, then fetch all symbols:
 ```
 mcp__lsp__open_document({ "file_path": "/abs/path/to/file.go" })
 
-mcp__lsp__get_document_symbols({ "file_path": "/abs/path/to/file.go" })
+mcp__lsp__list_symbols({ "file_path": "/abs/path/to/file.go" })
 ```
 
 Collect the full symbol list. Filter to **exported symbols only** using the
 language-appropriate rule from the table above.
 
-**Coordinate note:** `get_document_symbols` returns 1-based coordinates.
+**Coordinate note:** `list_symbols` returns 1-based coordinates.
 Pass `selectionRange.start.line` and `selectionRange.start.character`
-directly to `get_references` — no conversion needed.
+directly to `find_references` — no conversion needed.
 
 **"no identifier found" error:** This means the column points to whitespace
 or a keyword rather than the identifier name. This happens with methods
@@ -103,16 +103,16 @@ grep -n "MethodName" file.go
 # count characters to find the 1-based column of the name
 ```
 
-Then retry `get_references` with the corrected column.
+Then retry `find_references` with the corrected column.
 
 ## Step 2 — Check references for each exported symbol
 
-For each exported symbol, call `get_references` with
+For each exported symbol, call `find_references` with
 `include_declaration: false` so the definition site itself is excluded
 from the count. A count of 0 means no callers, not no occurrences.
 
 ```
-mcp__lsp__get_references({
+mcp__lsp__find_references({
   "file_path": "/abs/path/to/file.go",
   "line": <selectionRange.start.line>,
   "column": <selectionRange.start.character>,
@@ -129,7 +129,7 @@ Record the result for each symbol:
 batches of 5–10 to avoid overwhelming the LSP server.
 
 **Zero-reference cross-check (required before classifying as dead):**
-When `get_references` returns `[]` for a symbol that looks foundational
+When `find_references` returns `[]` for a symbol that looks foundational
 (a handler, a constructor, a type used as a field), do not trust LSP alone.
 LSP can miss references made through value-passing, interface satisfaction,
 or function registration patterns (e.g. `server.AddResource(HandleFoo)`).
@@ -165,7 +165,7 @@ The following cases produce zero LSP references even though the symbol IS
 used at runtime. Do not delete any zero-reference candidate without
 manual review:
 
-1. **Incomplete indexing.** `get_references` only searches files open or
+1. **Incomplete indexing.** `find_references` only searches files open or
    indexed by the language server. If the workspace is partially indexed,
    results may be incomplete. The Step 0 warm-up check catches this.
 

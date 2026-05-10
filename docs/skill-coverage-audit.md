@@ -16,7 +16,7 @@
 - **Partial coverage:** 7 tools mentioned but not as primary workflow drivers
 - **Uncovered:** ~10 tools (down from 14 at audit time)
 
-**Sprint completed (P0):** `/lsp-cross-repo` shipped, `/lsp-local-symbols` shipped, `/lsp-rename` `prepare_rename` gate added, `/lsp-safe-edit` enhanced with `simulate_edit_atomic` pre-flight + `get_code_actions` on errors + multi-file protocol.
+**Sprint completed (P0):** `/lsp-cross-repo` shipped, `/lsp-local-symbols` shipped, `/lsp-rename` `prepare_rename` gate added, `/lsp-safe-edit` enhanced with `preview_edit` pre-flight + `suggest_fixes` on errors + multi-file protocol.
 
 **Sprint completed (P1):** `/lsp-verify` `get_tests_for_file` pre-step added, `/lsp-test-correlation` skill shipped, `/lsp-format-code` skill shipped, `format_document` folded into `/lsp-safe-edit` (post-edit) and `/lsp-verify` (post-verification).
 
@@ -35,24 +35,24 @@
 | `start_lsp` | `lsp-rename`, `lsp-impact`, `lsp-safe-edit`, `lsp-simulate`, `lsp-implement`, `lsp-docs`, `lsp-edit-export`, `lsp-dead-code`, `lsp-verify` | Session initialization (prerequisite in all skills) |
 | `open_document` | `lsp-safe-edit`, `lsp-dead-code`, `lsp-implement` | File registration |
 | `get_diagnostics` | `lsp-safe-edit`, `lsp-rename`, `lsp-edit-export`, `lsp-verify` | Safety gate, before/after comparison |
-| `get_info_on_location` | `lsp-docs` (Tier 1) | Documentation lookup, hover info |
-| `get_references` | `lsp-rename`, `lsp-impact`, `lsp-dead-code`, `lsp-edit-export` | Caller enumeration, reference count |
+| `inspect_symbol` | `lsp-docs` (Tier 1) | Documentation lookup, hover info |
+| `find_references` | `lsp-rename`, `lsp-impact`, `lsp-dead-code`, `lsp-edit-export` | Caller enumeration, reference count |
 | `go_to_definition` | `lsp-docs` (Tier 3) | Symbol location |
 | `go_to_symbol` | `lsp-rename`, `lsp-impact`, `lsp-edit-export`, `lsp-implement` | Symbol lookup by name |
 | `rename_symbol` | `lsp-rename` | Workspace-wide rename |
 | `apply_edit` | `lsp-rename`, `lsp-edit-symbol`, `lsp-verify` | Edit application |
-| `get_code_actions` | `lsp-verify` | Quick fixes and refactorings |
-| `call_hierarchy` | `lsp-impact` | Caller/callee analysis |
+| `suggest_fixes` | `lsp-verify` | Quick fixes and refactorings |
+| `find_callers` | `lsp-impact` | Caller/callee analysis |
 | `type_hierarchy` | `lsp-impact`, `lsp-implement` | Type inheritance chains |
 | `go_to_implementation` | `lsp-implement` | Interface implementation lookup |
-| `get_document_symbols` | `lsp-edit-symbol`, `lsp-dead-code` | Symbol enumeration in a file |
+| `list_symbols` | `lsp-edit-symbol`, `lsp-dead-code` | Symbol enumeration in a file |
 | `create_simulation_session` | `lsp-simulate` | Session creation |
 | `simulate_edit` | `lsp-simulate` | In-memory edit application |
 | `evaluate_session` | `lsp-simulate` | Diagnostic evaluation |
 | `commit_session` | `lsp-simulate` | Patch application |
 | `discard_session` | `lsp-simulate` | Session revert |
 | `destroy_session` | `lsp-simulate` | Session cleanup |
-| `simulate_edit_atomic` | `lsp-simulate` | One-shot simulation |
+| `preview_edit` | `lsp-simulate` | One-shot simulation |
 | `run_build` | `lsp-verify`, `lsp-edit-export` | Build verification |
 | `run_tests` | `lsp-verify` | Test execution |
 | `get_symbol_source` | `lsp-docs` (Tier 3) | Source text extraction |
@@ -71,7 +71,7 @@
 | Tool | Mentioned in | Context | Gap |
 |------|--------------|---------|-----|
 | `prepare_rename` | ~~(none)~~ → `lsp-rename` **(shipped)** | Safety gate before rename attempt | **Fixed:** `prepare_rename` is now Step 2 in `/lsp-rename`, before reference enumeration — validates position is renameable, catches built-ins and external packages |
-| `get_workspace_symbols` | `lsp-edit-symbol` | Symbol search by name | Mentioned only for Step 1; not the primary skill purpose |
+| `find_symbol` | `lsp-edit-symbol` | Symbol search by name | Mentioned only for Step 1; not the primary skill purpose |
 | ~~`format_document`~~ | ~~(none)~~ → `lsp-format-code`, `lsp-safe-edit`, `lsp-verify` **(shipped)** | Document formatting | **Fixed:** standalone `/lsp-format-code` skill + folded into `/lsp-safe-edit` post-edit and `/lsp-verify` post-verification |
 | ~~`format_range`~~ | ~~(none)~~ → `lsp-format-code` **(shipped)** | Range formatting | **Fixed:** covered by `/lsp-format-code` standalone skill |
 | `get_completions` | (none) | Code completion | No skill drives agent toward this |
@@ -116,7 +116,7 @@
 
 #### `get_document_highlights`
 **Agent workflow?** Yes — "find all references but fast and local-only."  
-**Gap analysis:** `get_document_highlights` returns read/write/text occurrences of a symbol within a single file, and is instant (no cross-file search). This is faster than `get_references` for analyzing local usage. No skill demonstrates when to prefer local analysis. An agent iterating on code in one file might reach for this naturally if primed: *"Show me everywhere this variable is used in this file."*  
+**Gap analysis:** `get_document_highlights` returns read/write/text occurrences of a symbol within a single file, and is instant (no cross-file search). This is faster than `find_references` for analyzing local usage. No skill demonstrates when to prefer local analysis. An agent iterating on code in one file might reach for this naturally if primed: *"Show me everywhere this variable is used in this file."*  
 **Recommendation:** New skill `/lsp-local-symbols` (see New Skill Candidates, below).
 
 #### `go_to_type_definition`
@@ -131,7 +131,7 @@
 
 #### `add_workspace_folder` / `remove_workspace_folder` / `list_workspace_folders`
 **Agent workflow?** Yes — "I need to analyze code across a library and its consumer."  
-**Gap analysis:** `add_workspace_folder` enables cross-repo analysis (library + app), but agents have no skill that sets this up. Typical workflow: start LSP on library, add app folder, then run `get_references` on a library symbol to find all call sites in the app. Currently, no skill orchestrates this.  
+**Gap analysis:** `add_workspace_folder` enables cross-repo analysis (library + app), but agents have no skill that sets this up. Typical workflow: start LSP on library, add app folder, then run `find_references` on a library symbol to find all call sites in the app. Currently, no skill orchestrates this.  
 **Recommendation:** New skill `/lsp-cross-repo` (see New Skill Candidates, below).
 
 #### `did_change_watched_files`
@@ -146,7 +146,7 @@
 
 #### `get_inlay_hints`
 **Agent workflow?** Maybe — "show me all inferred type annotations in this range."  
-**Gap analysis:** Useful for understanding complex code with implicit types, but not a common agent need. Most agents use `get_info_on_location` (hover) on specific symbols. Inlay hints are an IDE feature for visualization, less useful in agent workflows.  
+**Gap analysis:** Useful for understanding complex code with implicit types, but not a common agent need. Most agents use `inspect_symbol` (hover) on specific symbols. Inlay hints are an IDE feature for visualization, less useful in agent workflows.  
 **Recommendation:** Not a strong skill candidate. Could be part of enhanced `/lsp-docs` for "show me all types in this function."
 
 #### `restart_lsp_server`
@@ -156,7 +156,7 @@
 
 #### `execute_command`
 **Agent workflow?** Yes, but narrow.  
-**Gap analysis:** Runs server-side commands returned by `get_code_actions`. `lsp-verify` mentions it for code action application. But `execute_command` is rarely the primary workflow driver — it's always a response to something else (code action).  
+**Gap analysis:** Runs server-side commands returned by `suggest_fixes`. `lsp-verify` mentions it for code action application. But `execute_command` is rarely the primary workflow driver — it's always a response to something else (code action).  
 **Recommendation:** Covered implicitly by `lsp-verify`. No new skill needed. Document as "how to apply code actions" in `lsp-verify` enhancement.
 
 #### `set_log_level`
@@ -175,7 +175,7 @@
 
 ### `/lsp-rename` ✅ SHIPPED
 
-**Current tools:** `go_to_symbol`, `prepare_rename`, `get_references`, `rename_symbol`, `apply_edit`, `get_diagnostics`
+**Current tools:** `go_to_symbol`, `prepare_rename`, `find_references`, `rename_symbol`, `apply_edit`, `get_diagnostics`
 
 **Completed:**
 1. **`prepare_rename` added as Step 2** (after symbol locate, before reference enumeration): validates rename is possible, fails fast with actionable error for built-ins/keywords/external packages.
@@ -195,24 +195,24 @@
 
 ### `/lsp-safe-edit` ✅ SHIPPED
 
-**Current tools:** `start_lsp`, `open_document`, `simulate_edit_atomic`, `get_diagnostics`, `get_code_actions`, `apply_edit`, Edit/Write
+**Current tools:** `start_lsp`, `open_document`, `preview_edit`, `get_diagnostics`, `suggest_fixes`, `apply_edit`, Edit/Write
 
 **Completed:**
-1. **`simulate_edit_atomic` pre-flight (Step 3)** — runs before any disk write; `net_delta > 0` pauses and asks; multi-file: per-file independently, sum deltas; new files (Write) skip.
-2. **`get_code_actions` on introduced errors (Step 7)** — surfaces quick fixes at each error location after a bad edit; `y/n/select` to apply via `apply_edit`, then re-diff.
+1. **`preview_edit` pre-flight (Step 3)** — runs before any disk write; `net_delta > 0` pauses and asks; multi-file: per-file independently, sum deltas; new files (Write) skip.
+2. **`suggest_fixes` on introduced errors (Step 7)** — surfaces quick fixes at each error location after a bad edit; `y/n/select` to apply via `apply_edit`, then re-diff.
 3. **Multi-file workflow section** — explicit protocol: open all, BEFORE for all, simulate each, apply file-by-file (stop on failure), merge AFTER, code actions on any file with new errors.
 
 ---
 
 ### `/lsp-impact`
-**Current tools:** `go_to_symbol`, `call_hierarchy`, `type_hierarchy`, `get_references`, `get_server_capabilities`
+**Current tools:** `go_to_symbol`, `find_callers`, `type_hierarchy`, `find_references`, `get_server_capabilities`
 
 **Enhancements:**
 1. **Add `get_inlay_hints` for type-heavy changes**: When impact report shows type changes, include inlay hints on affected range so agent understands type signature.
 
-2. **Add `get_document_highlights` as quick local scan**: Before running workspace-wide `get_references`, run local highlights to understand how the symbol is used in its definition file. Gives agent early signal of scope.
+2. **Add `get_document_highlights` as quick local scan**: Before running workspace-wide `find_references`, run local highlights to understand how the symbol is used in its definition file. Gives agent early signal of scope.
 
-3. **Document when `call_hierarchy` results differ from `get_references`**: These can produce different results (e.g., `call_hierarchy` shows semantic flow; `get_references` shows syntactic occurrence). Clarify in report.
+3. **Document when `find_callers` results differ from `find_references`**: These can produce different results (e.g., `find_callers` shows semantic flow; `find_references` shows syntactic occurrence). Clarify in report.
 
 **Context improvement:** More complete understanding of symbol usage patterns.
 
@@ -233,26 +233,26 @@
 ---
 
 ### `/lsp-edit-symbol`
-**Current tools:** `get_workspace_symbols`, `go_to_definition`, `get_document_symbols`, `apply_edit`
+**Current tools:** `find_symbol`, `go_to_definition`, `list_symbols`, `apply_edit`
 
 **Enhancements:**
 1. **Add `prepare_rename` workflow**: When editing a symbol's name, check if it can be renamed first.
 
 2. **Add `get_diagnostics` after edit**: Capture baseline before, then verify after. Current skill doesn't guarantee safety.
 
-3. **Include `get_server_capabilities` check**: Verify symbol resolution is supported before attempting `get_document_symbols`.
+3. **Include `get_server_capabilities` check**: Verify symbol resolution is supported before attempting `list_symbols`.
 
 **Safety improvement:** Verify symbol is editable before applying changes.
 
 ---
 
 ### `/lsp-dead-code`
-**Current tools:** `get_document_symbols`, `get_references`, `open_document`
+**Current tools:** `list_symbols`, `find_references`, `open_document`
 
 **Enhancements:**
 1. **Add `get_document_highlights` pre-flight**: For each exported symbol, run highlights in that file to understand local usage before checking workspace references.
 
-2. **Add `call_hierarchy` for functions**: Include incoming callers from `call_hierarchy` alongside `get_references` for more complete picture of usage.
+2. **Add `find_callers` for functions**: Include incoming callers from `find_callers` alongside `find_references` for more complete picture of usage.
 
 3. **Document test-file filtering**: Current skill mentions test-only references but doesn't orchestrate the filtering. Add explicit step to identify `_test.go` / `.test.*` files and exclude from dead-code count.
 
@@ -261,30 +261,30 @@
 ---
 
 ### `/lsp-edit-export`
-**Current tools:** `go_to_symbol`, `open_document`, `get_references`, `get_diagnostics`, `run_build`, Edit/Write
+**Current tools:** `go_to_symbol`, `open_document`, `find_references`, `get_diagnostics`, `run_build`, Edit/Write
 
 **Enhancements:**
 1. **Add `prepare_rename` if renaming**: If the edit is a rename, validate first.
 
-2. **Add `call_hierarchy` for functions**: Get semantic call graph, not just syntactic references.
+2. **Add `find_callers` for functions**: Get semantic call graph, not just syntactic references.
 
 3. **Add `get_server_capabilities` validation**: Check what's supported before attempting high-level operations.
 
-4. **Add `simulate_edit_atomic` option**: For high-risk exports (10+ callers), offer to simulate first.
+4. **Add `preview_edit` option**: For high-risk exports (10+ callers), offer to simulate first.
 
 **Safety improvement:** More conservative approach for high-risk changes.
 
 ---
 
 ### `/lsp-verify`
-**Current tools:** `get_diagnostics`, `run_build`, `run_tests`, `get_code_actions`, `apply_edit`
+**Current tools:** `get_diagnostics`, `run_build`, `run_tests`, `suggest_fixes`, `apply_edit`
 
 **Enhancements:**
 1. **Add `get_tests_for_file` integration**: After running `run_tests`, highlight which tests are for the changed files. Helps prioritize test failures.
 
-2. **Add `simulate_edit_atomic` dry-run**: Before `get_diagnostics`, optionally simulate first to catch errors pre-emptively.
+2. **Add `preview_edit` dry-run**: Before `get_diagnostics`, optionally simulate first to catch errors pre-emptively.
 
-3. **Batch `get_code_actions` application**: When multiple errors exist, group code actions and apply in waves, re-running diagnostics between waves.
+3. **Batch `suggest_fixes` application**: When multiple errors exist, group code actions and apply in waves, re-running diagnostics between waves.
 
 **Efficiency improvement:** Faster error remediation.
 
@@ -294,7 +294,7 @@
 **Current tools:** `start_lsp`, `get_server_capabilities`, `go_to_symbol`, `go_to_implementation`, `type_hierarchy`, `open_document`
 
 **Enhancements:**
-1. **Add `call_hierarchy` on implementations**: For each implementation found, run `call_hierarchy(direction: "incoming")` to show callers. Helps understand ripple effect of interface changes.
+1. **Add `find_callers` on implementations**: For each implementation found, run `find_callers(direction: "incoming")` to show callers. Helps understand ripple effect of interface changes.
 
 2. **Add `get_inlay_hints` on interface definition**: Show parameter/return types inline so agent understands the contract before deciding to change it.
 
@@ -303,7 +303,7 @@
 ---
 
 ### `/lsp-docs`
-**Current tools:** `get_info_on_location`, `get_symbol_documentation`, `go_to_definition`, `get_symbol_source`
+**Current tools:** `inspect_symbol`, `get_symbol_documentation`, `go_to_definition`, `get_symbol_source`
 
 **Enhancements:**
 1. **Add `go_to_type_definition` in Tier 1**: When looking up a symbol, also jump to its type definition. Include type info in hover result.
@@ -325,12 +325,12 @@
 **Trigger scenario:** "Show me all occurrences of this variable/symbol in the current file."
 
 **Tools composed:**
-- `go_to_symbol` or `get_info_on_location` → locate symbol
+- `go_to_symbol` or `inspect_symbol` → locate symbol
 - `get_document_highlights` → all occurrences in file
-- `get_document_symbols` → hierarchical context (is it in a function? class?)
+- `list_symbols` → hierarchical context (is it in a function? class?)
 - `get_signature_help` (optional) → if it's a function call, show signature
 
-**Why an agent wouldn't discover this:** `get_document_highlights` is faster and more precise than `get_references` for local analysis, but no skill surfaces it. Agents default to `get_references` (workspace-wide) when sometimes they just need file-local results.
+**Why an agent wouldn't discover this:** `get_document_highlights` is faster and more precise than `find_references` for local analysis, but no skill surfaces it. Agents default to `find_references` (workspace-wide) when sometimes they just need file-local results.
 
 **Skill description:**
 ```
@@ -352,9 +352,9 @@ Optional: file path (if working in multiple files)
 
 **Tools composed:**
 - `start_lsp` → initialize on library root
-- `get_cross_repo_references` → add consumer repos, wait for indexing, partition results by repo (primary step, replaces manual add_workspace_folder + get_references)
+- `get_cross_repo_references` → add consumer repos, wait for indexing, partition results by repo (primary step, replaces manual add_workspace_folder + find_references)
 - `go_to_implementation` (cross-repo) → find all type implementations in consumer
-- `call_hierarchy` (cross-repo) → show callers in consumer of library functions
+- `find_callers` (cross-repo) → show callers in consumer of library functions
 
 **Why an agent wouldn't discover this:** Multi-root workspace setup requires explicit orchestration. No skill demonstrates how to set up cross-repo analysis. Agents don't naturally know to call `add_workspace_folder` or how to verify indexing.
 
@@ -378,7 +378,7 @@ Arguments: library_root, consumer_root
 **Tools composed:**
 - `start_lsp` → initialize workspace
 - `get_tests_for_file` → find test files for source file
-- `get_workspace_symbols` → enumerate tests in test files
+- `find_symbol` → enumerate tests in test files
 - `run_tests` (optional) → run the correlated tests
 - `get_diagnostics` (optional) → verify no test compilation errors
 
@@ -426,9 +426,9 @@ Arguments: file_path, optional range (start_line, end_line)
 **Trigger scenario:** "What is the type of this variable? Show me the type definition."
 
 **Tools composed:**
-- `get_info_on_location` → hover for immediate type
+- `inspect_symbol` → hover for immediate type
 - `go_to_type_definition` → jump to type definition
-- `get_document_symbols` → find type in definition file
+- `list_symbols` → find type in definition file
 - `get_semantic_tokens` (optional) → classify tokens in type definition
 - `get_inlay_hints` (optional) → show inferred types
 
@@ -452,10 +452,10 @@ Arguments: symbol location (file, line, column) or symbol name
 
 **Tools composed:**
 - `get_signature_help` → function signature and active parameter
-- `get_info_on_location` (optional) → function documentation
+- `inspect_symbol` (optional) → function documentation
 - `get_completions` (optional) → if function is not yet called
 
-**Why an agent wouldn't discover this:** `get_signature_help` is a narrow tool, and no skill frames it as a workflow. Agents might hover with `get_info_on_location` but won't know about dedicated signature help.
+**Why an agent wouldn't discover this:** `get_signature_help` is a narrow tool, and no skill frames it as a workflow. Agents might hover with `inspect_symbol` but won't know about dedicated signature help.
 
 **Skill description:**
 ```
@@ -482,7 +482,7 @@ Arguments: file_path, line, column (cursor inside argument list)
 ---
 
 ### 2. `/lsp-impact`, `/lsp-dead-code`, and `/lsp-implement` share pattern
-**Opportunity:** All use `go_to_symbol` → hierarchical analysis (`call_hierarchy`, `type_hierarchy`, `get_references`). Could abstract to `/lsp-analyze-symbol` (generic symbol analyzer).
+**Opportunity:** All use `go_to_symbol` → hierarchical analysis (`find_callers`, `type_hierarchy`, `find_references`). Could abstract to `/lsp-analyze-symbol` (generic symbol analyzer).
 
 **Downside:** Different outputs and decision gates. Merging loses specificity.
 
@@ -514,23 +514,23 @@ Arguments: file_path, line, column (cursor inside argument list)
 
 ### Workflow Groups
 
-1. **Symbol Introspection** — `get_info_on_location`, `go_to_definition`, `go_to_type_definition`, `get_document_symbols`, `get_workspace_symbols`, `go_to_symbol`, `get_symbol_source`, `get_symbol_documentation`, `call_hierarchy`, `type_hierarchy`, `go_to_implementation`
+1. **Symbol Introspection** — `inspect_symbol`, `go_to_definition`, `go_to_type_definition`, `list_symbols`, `find_symbol`, `go_to_symbol`, `get_symbol_source`, `get_symbol_documentation`, `find_callers`, `type_hierarchy`, `go_to_implementation`
    - Skills: `/lsp-docs`, `/lsp-type-info`, `/lsp-impact`, `/lsp-implement`
-   - Gap: No skill for `go_to_declaration` or pure `get_workspace_symbols` search
+   - Gap: No skill for `go_to_declaration` or pure `find_symbol` search
 
-2. **Safe Editing** — `apply_edit`, `prepare_rename`, `rename_symbol`, `format_document`, `format_range`, `get_code_actions`, `execute_command`
+2. **Safe Editing** — `apply_edit`, `prepare_rename`, `rename_symbol`, `format_document`, `format_range`, `suggest_fixes`, `execute_command`
    - Skills: `/lsp-rename`, `/lsp-edit-symbol`, `/lsp-edit-export`, `/lsp-safe-edit`
    - Gap: No `/lsp-format-code`; no dedicated skill for code actions
 
-3. **Analysis & Verification** — `get_diagnostics`, `run_build`, `run_tests`, `get_code_actions`, `get_server_capabilities`
+3. **Analysis & Verification** — `get_diagnostics`, `run_build`, `run_tests`, `suggest_fixes`, `get_server_capabilities`
    - Skills: `/lsp-verify`, `/lsp-dead-code`
    - Gap: No `/lsp-test-correlation` to connect source→tests
 
-4. **Speculative Execution** — `create_simulation_session`, `simulate_edit`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session`, `commit_session`, `discard_session`, `destroy_session`
+4. **Speculative Execution** — `create_simulation_session`, `simulate_edit`, `preview_edit`, `simulate_chain`, `evaluate_session`, `commit_session`, `discard_session`, `destroy_session`
    - Skills: `/lsp-simulate`
    - Gap: None (fully covered)
 
-5. **Navigation & Reference** — `get_references`, `get_document_highlights`, `open_document`, `close_document`, `get_completions`, `get_signature_help`, `get_inlay_hints`
+5. **Navigation & Reference** — `find_references`, `get_document_highlights`, `open_document`, `close_document`, `get_completions`, `get_signature_help`, `get_inlay_hints`
    - Skills: None dedicated (mentioned in skills but not primary driver)
    - Gap: No `/lsp-local-symbols`, `/lsp-signature-help`
 
@@ -545,14 +545,14 @@ Arguments: file_path, line, column (cursor inside argument list)
 ### Immediate (P0) — ✅ ALL COMPLETE
 
 1. ✅ **Enhance `/lsp-rename`** — `prepare_rename` gate added as Step 2.
-2. ✅ **Create `/lsp-cross-repo` skill** — shipped; orchestrates `add_workspace_folder` → indexing verify → cross-repo `get_references` / `call_hierarchy` / `go_to_implementation`.
-3. ✅ **Create `/lsp-local-symbols` skill** — shipped; `get_document_symbols` → `get_document_highlights` (read/write/text classification) → `get_info_on_location`.
-4. ✅ **Enhance `/lsp-safe-edit`** — `simulate_edit_atomic` pre-flight + `get_code_actions` on errors + multi-file workflow (originally P2, pulled into P0 sprint).
+2. ✅ **Create `/lsp-cross-repo` skill** — shipped; orchestrates `add_workspace_folder` → indexing verify → cross-repo `find_references` / `find_callers` / `go_to_implementation`.
+3. ✅ **Create `/lsp-local-symbols` skill** — shipped; `list_symbols` → `get_document_highlights` (read/write/text classification) → `inspect_symbol`.
+4. ✅ **Enhance `/lsp-safe-edit`** — `preview_edit` pre-flight + `suggest_fixes` on errors + multi-file workflow (originally P2, pulled into P0 sprint).
 
 ### High (P1)
 
 5. ✅ **Enhance `/lsp-verify`** — `get_tests_for_file` pre-step added; correlated/unrelated failure tagging in Layer 3 output.
-6. ✅ **Create `/lsp-test-correlation` skill** — shipped; source→test mapping, `get_workspace_symbols` fallback, multi-file deduplication, scoped `run_tests`.
+6. ✅ **Create `/lsp-test-correlation` skill** — shipped; source→test mapping, `find_symbol` fallback, multi-file deduplication, scoped `run_tests`.
 7. ✅ **Create `/lsp-format-code` skill** — shipped; `format_document` and `format_range` → `apply_edit`; also folded as optional step into `/lsp-safe-edit` (post-edit) and `/lsp-verify` (post-verification).
 
 ### Medium (P2)

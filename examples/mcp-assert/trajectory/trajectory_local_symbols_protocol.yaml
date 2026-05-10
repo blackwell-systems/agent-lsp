@@ -1,7 +1,7 @@
 # Trajectory assertion: validates the /lsp-local-symbols skill protocol.
-# open_document must precede get_document_symbols (file must be loaded).
-# get_document_symbols must precede get_document_highlights (need position from symbols).
-# get_info_on_location is optional — called for type info at a position.
+# open_document must precede list_symbols (file must be loaded).
+# list_symbols must precede get_document_highlights (need position from symbols).
+# inspect_symbol is optional — called for type info at a position.
 # Read-only — apply_edit and rename_symbol must NOT appear.
 name: lsp-local-symbols follows skill protocol
 trace:
@@ -9,7 +9,7 @@ trace:
     args:
       file_path: "fixtures/go/main.go"
       language_id: "go"
-  - tool: get_document_symbols
+  - tool: list_symbols
     args:
       file_path: "fixtures/go/main.go"
   - tool: get_document_highlights
@@ -17,15 +17,15 @@ trace:
       file_path: "fixtures/go/main.go"
       line: 6
       column: 6
-  - tool: get_info_on_location
+  - tool: inspect_symbol
     args:
       file_path: "fixtures/go/main.go"
       line: 6
       column: 6
 trajectory:
   - type: order
-    tools: ["open_document", "get_document_symbols", "get_document_highlights"]
+    tools: ["open_document", "list_symbols", "get_document_highlights"]
   - type: presence
-    tools: ["open_document", "get_document_symbols", "get_document_highlights"]
+    tools: ["open_document", "list_symbols", "get_document_highlights"]
   - type: absence
-    tools: ["apply_edit", "rename_symbol", "get_references"]
+    tools: ["apply_edit", "rename_symbol", "find_references"]

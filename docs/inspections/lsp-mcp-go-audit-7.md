@@ -9,7 +9,7 @@
 ## Summary
 
 - **Audited:** Full codebase — `cmd/agent-lsp/`, `internal/lsp/`, `internal/tools/`, `internal/session/`, `internal/resources/`, `internal/config/`, `internal/logging/`, `internal/extensions/`, `internal/types/`, `internal/uri/`
-- **LSP Tier:** 1B (get_references) — Tier 1A (get_change_impact) was denied by the sandbox. All symbol-level findings verified via `mcp__lsp__get_references` or `mcp__lsp__get_info_on_location`.
+- **LSP Tier:** 1B (find_references) — Tier 1A (get_change_impact) was denied by the sandbox. All symbol-level findings verified via `mcp__lsp__find_references` or `mcp__lsp__inspect_symbol`.
 - **Layer map:**
   ```
   cmd/agent-lsp/        ← MCP server lifecycle, tool registration, signal handling
@@ -277,4 +277,4 @@ All 14 checks from the taxonomy were applied:
 
 ## Not Checked — Tooling Constraints
 
-- `mcp__lsp__get_change_impact` — denied by sandbox. Fell back to Tier 1B (`get_references`) for all `dead_symbol` and `test_coverage` checks. All symbol-level findings include LSP findReferences annotation.
+- `mcp__lsp__get_change_impact` — denied by sandbox. Fell back to Tier 1B (`find_references`) for all `dead_symbol` and `test_coverage` checks. All symbol-level findings include LSP findReferences annotation.

@@ -5,9 +5,13 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking: 7 tools renamed for intent-based naming.** get_info_on_location -> inspect_symbol, get_document_symbols -> list_symbols, get_workspace_symbols -> find_symbol, get_code_actions -> suggest_fixes, get_references -> find_references, call_hierarchy -> find_callers, simulate_edit_atomic -> preview_edit. Function signatures unchanged; only the MCP tool name strings are affected.
+
 ### Added
 
-- **Symbol-level editing tools (4 new tools).** `replace_symbol_body` replaces a function/method/type body by name without needing line/column coordinates. `insert_after_symbol` and `insert_before_symbol` add code adjacent to a named symbol. `safe_delete_symbol` removes a symbol only after confirming zero references via `get_references`. All four resolve symbols internally via `get_document_symbols`. Skills updated: `lsp-edit-symbol` now uses `replace_symbol_body` as the primary edit path, `lsp-dead-code` offers optional cleanup via `safe_delete_symbol`, and `lsp-refactor`/`lsp-edit-export` support `replace_symbol_body` as an alternative to positional edits. Tool count: 56 to 60.
+- **Symbol-level editing tools (4 new tools).** `replace_symbol_body` replaces a function/method/type body by name without needing line/column coordinates. `insert_after_symbol` and `insert_before_symbol` add code adjacent to a named symbol. `safe_delete_symbol` removes a symbol only after confirming zero references via `find_references`. All four resolve symbols internally via `list_symbols`. Skills updated: `lsp-edit-symbol` now uses `replace_symbol_body` as the primary edit path, `lsp-dead-code` offers optional cleanup via `safe_delete_symbol`, and `lsp-refactor`/`lsp-edit-export` support `replace_symbol_body` as an alternative to positional edits. Tool count: 56 to 60.
 
 - **Provider-specific rules files during `init`.** `agent-lsp init` now writes a skill awareness rules file alongside the MCP config, giving every AI provider immediate context about the 22 skills and when to use them. Claude Code gets a managed CLAUDE.md section (between sentinel comments, safe to run repeatedly). Cursor gets `.cursor/rules/agent-lsp.mdc`. Cline gets `.clinerules`. Windsurf gets `~/.windsurfrules`. Gemini CLI gets `GEMINI.md`. All use managed sections to preserve existing user content. Content generated from embedded SKILL.md files at runtime, staying in sync with shipped skills automatically.
 
@@ -23,7 +27,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
-- **Next-step hints in tool responses.** Every tool response now includes a contextual `hint` field suggesting the logical next tool call. For example, `get_references` returns "use get_change_impact to see the full blast radius"; `simulate_edit_atomic` returns "call get_diagnostics to check for remaining issues." Helps agents chain tools correctly without skills and helps less capable models navigate the 56-tool surface.
+- **Next-step hints in tool responses.** Every tool response now includes a contextual `hint` field suggesting the logical next tool call. For example, `find_references` returns "use get_change_impact to see the full blast radius"; `preview_edit` returns "call get_diagnostics to check for remaining issues." Helps agents chain tools correctly without skills and helps less capable models navigate the 56-tool surface.
 
 - **`detect_changes` range parameter.** The `committed` scope now accepts a `range` parameter for arbitrary git ranges: `"v0.7.0..HEAD"`, `"abc123..def456"`, or a single ref like `"main"` (expands to `main~1..main`). Ignored for unstaged/staged scopes. Previously only compared `HEAD~1..HEAD`.
 
@@ -35,7 +39,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 - **`agent-lsp update` subcommand.** Self-update to the latest GitHub Release. Fetches the release API, compares versions, downloads the correct binary for the current OS/arch, and atomically replaces the running binary. Flags: `--check` (compare without downloading), `--force` (update even if already current).
 
-- **`/lsp-architecture` skill (22nd skill).** Project-level architecture overview in one call. Composes `get_document_symbols`, `get_workspace_symbols`, and `get_change_impact` to produce: language distribution, package map (capped at 30), entry points, hotspots (top 10 files by reference count), and dependency flow. SKILL.md only, no Go code.
+- **`/lsp-architecture` skill (22nd skill).** Project-level architecture overview in one call. Composes `list_symbols`, `find_symbol`, and `get_change_impact` to produce: language distribution, package map (capped at 30), entry points, hotspots (top 10 files by reference count), and dependency flow. SKILL.md only, no Go code.
 
 - **Cache artifact export/import.** `export_cache` compresses the SQLite reference cache with `VACUUM INTO` + gzip. `import_cache` decompresses and validates with `PRAGMA integrity_check`. On `start_lsp`, if the local cache is empty and `.agent-lsp/cache.db.gz` exists in the workspace root, it auto-imports the artifact. Enables team-shared cache: commit the artifact, teammates skip the cold start.
 
@@ -72,7 +76,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 - **Workspace scoping via `scope` parameter on `start_lsp`.** Generates a temporary language-server config (`pyrightconfig.json` for Python, `tsconfig.json` for TypeScript) that restricts analysis to specified subdirectories. Enables agent-lsp to work on large monorepos without full-workspace indexing. Accepts a string or array of paths relative to `root_dir`. Config is automatically removed on server shutdown, with backup/restore of any pre-existing config file. No-op for languages with native module boundaries (Go, Rust).
 
-- **Multi-signal warmup gate for `get_references`.** Servers that don't emit `$/progress` tokens (pyright, jedi-language-server) previously caused reference queries to time out because the workspace wasn't confirmed ready. New three-signal readiness detection:
+- **Multi-signal warmup gate for `find_references`.** Servers that don't emit `$/progress` tokens (pyright, jedi-language-server) previously caused reference queries to time out because the workspace wasn't confirmed ready. New three-signal readiness detection:
   1. `$/progress` tokens (existing path, gopls/rust-analyzer/jdtls)
   2. Diagnostic arrival: waits up to 30s for first `publishDiagnostics` notification
   3. Hover canary: issues a hover request to confirm file analysis is complete
@@ -84,11 +88,11 @@ The format is based on Keep a Changelog, Semantic Versioning.
   - The broker owns the language server, listens on a Unix socket, and proxies JSON-RPC
   - Agent-lsp connects to the daemon via socket (no subprocess spawn on subsequent sessions)
   - Daemon auto-exits after 30 minutes of inactivity
-  - `get_references` on daemon clients returns clear "indexing in progress" status if workspace isn't ready
+  - `find_references` on daemon clients returns clear "indexing in progress" status if workspace isn't ready
   - New CLI commands: `agent-lsp daemon-status`, `agent-lsp daemon-stop [--all]`
   - Go, Rust, C, and other languages with fast-indexing servers bypass daemon mode entirely (zero overhead)
 
-  Validated on FastAPI (1,119 Python files, 80K stars): daemon indexes in ~10 seconds, `get_references` on the `FastAPI` class returns 1,214 references across 556 files instantly. Previously timed out at 5 minutes on every attempt.
+  Validated on FastAPI (1,119 Python files, 80K stars): daemon indexes in ~10 seconds, `find_references` on the `FastAPI` class returns 1,214 references across 556 files instantly. Previously timed out at 5 minutes on every attempt.
 
 ### Fixed
 
@@ -181,7 +185,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Added
 
-- **Elixir: 16 verified capabilities** (up from 13). Fixed definition, call_hierarchy, and apply_edit. Symbols (get_document_symbols) now correctly marked as failing due to ElixirLS needing more compile time than the 20s init wait provides.
+- **Elixir: 16 verified capabilities** (up from 13). Fixed definition, find_callers, and apply_edit. Symbols (list_symbols) now correctly marked as failing due to ElixirLS needing more compile time than the 20s init wait provides.
 - **AgentSkills spec conformity** — all 20 skills now include `license` and `compatibility` frontmatter fields per the [AgentSkills specification](https://agentskills.io/specification). Skills work with any conforming agent: Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and 30+ others.
 - **Provider-agnostic skill installer** — `install.sh --dest DIR` installs skills to any agent's skill directory, not just Claude Code. Updates CLAUDE.md, AGENTS.md (Codex), and GEMINI.md instruction files when present.
 - **Architecture documentation** — concurrency model section (goroutine architecture, four channel patterns, crash recovery), speculative execution sequence diagram, error handling section (three-layer propagation), Key Terms glossary, HTTP transport mode details, audit trail section, config file example.
@@ -197,7 +201,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Fixed
 
-- **change-impact-test CI flake** — replaced fixed `time.Sleep` with `ready_timeout_seconds` and warmup probe that polls `get_references` until gopls returns cross-file results. Skips on persistent timeout instead of failing.
+- **change-impact-test CI flake** — replaced fixed `time.Sleep` with `ready_timeout_seconds` and warmup probe that polls `find_references` until gopls returns cross-file results. Skips on persistent timeout instead of failing.
 - **Docker release pipeline** — inlined base layer into all Dockerfiles to eliminate build race; split language/combo/full images into parallel matrix job (10 runners) to avoid 60m GoReleaser timeout; fixed hardcoded `linux-amd64` Go download URL for ARM64 builds.
 - **Completions test** — handles both raw array and CompletionList object response shapes (fixes Gleam and other servers that return the full CompletionList).
 - **apply_edit test** — detects whole-file replacement formatters (Gleam always returns a full-file TextEdit) by comparing edit content against current file content.
@@ -208,8 +212,8 @@ The format is based on Keep a Changelog, Semantic Versioning.
 ### Added
 
 - **`ready_timeout_seconds` on `start_lsp`** — optional parameter that blocks until all `$/progress` workspace-indexing tokens complete before returning, up to the specified timeout. Replaces fixed post-initialize sleeps for servers like jdtls that index asynchronously after `initialize`. Fires as soon as indexing completes rather than always waiting the full timeout. Also exports `WaitForWorkspaceReadyTimeout` on `LSPClient` for callers needing a configurable timeout beyond the default 60s cap.
-- **Error path integration tests** (`test/error_paths_test.go`) — 11 subtests covering deliberately bad input across `go_to_definition`, `get_diagnostics`, `simulate_edit`, `simulate_edit_atomic`, `get_references`, and `rename_symbol`. Asserts well-formed error responses, never nil results or crashes, without asserting specific message text.
-- **Cross-language consistency tests** (`test/consistency_test.go`) — parallel structural shape validation across Go, TypeScript, Python, and Rust for `get_document_symbols`, `go_to_definition`, `get_diagnostics`, and `get_info_on_location`. Verifies response shape contracts hold across all language servers.
+- **Error path integration tests** (`test/error_paths_test.go`) — 11 subtests covering deliberately bad input across `go_to_definition`, `get_diagnostics`, `simulate_edit`, `preview_edit`, `find_references`, and `rename_symbol`. Asserts well-formed error responses, never nil results or crashes, without asserting specific message text.
+- **Cross-language consistency tests** (`test/consistency_test.go`) — parallel structural shape validation across Go, TypeScript, Python, and Rust for `list_symbols`, `go_to_definition`, `get_diagnostics`, and `inspect_symbol`. Verifies response shape contracts hold across all language servers.
 - **Dedicated `multi-lang-java` CI job** — jdtls isolated to its own runner to avoid OOM-induced SIGTERM when sharing memory with other language servers. Runs with `continue-on-error: true`, `-Xmx2G`, and a 15-minute timeout. `multi-lang-core` no longer installs jdtls and drops from 45m to 30m timeout.
 - **ARM64 Docker images** — all 11 Docker image tags now publish as multi-arch manifest lists (`linux/amd64` + `linux/arm64`). Native performance on Apple Silicon and AWS Graviton without Rosetta/QEMU emulation.
 
@@ -255,11 +259,11 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - **`/health` endpoint** — unauthenticated `GET /health` returns `{"status":"ok"}` (200). Bypasses Bearer token auth so container orchestrators and Docker healthchecks can probe liveness without credentials. `docker-compose.yml` wires `HEALTHCHECK` for the `agent-lsp-http` service.
 - **Docker security hardening** — images now run as uid/gid 65532 (`nonroot`); `EXPOSE 8080` added; `HOME` set to `/tmp` (writable by nonroot); `docker-compose.yml` adds `agent-lsp-http` service for HTTP mode with `AGENT_LSP_TOKEN` wiring.
 - **`docker-compose.yml` HTTP service** — `agent-lsp-http` service exposes port `${AGENT_LSP_HTTP_PORT:-8080}:8080` with token read from `AGENT_LSP_TOKEN` env var (not CLI arg).
-- **`/lsp-explore` skill** — composes hover, go_to_implementation, call_hierarchy, and get_references into a single "tell me about this symbol" workflow for navigating unfamiliar code.
+- **`/lsp-explore` skill** — composes hover, go_to_implementation, find_callers, and find_references into a single "tell me about this symbol" workflow for navigating unfamiliar code.
 - **`/lsp-fix-all` skill** — apply available quick-fix code actions for all current diagnostics in a file, one at a time with re-collection after each fix. Enforces a sequential fix loop to handle line number shifts after each apply_edit.
 - **`/lsp-refactor` skill** — end-to-end safe refactor: blast-radius analysis → speculative preview → apply → build verify → targeted tests. Inlines tool sequences from lsp-impact, lsp-safe-edit, lsp-verify, and lsp-test-correlation.
 - **`/lsp-extract-function` skill** — extract a selected code block into a named function. Primary path uses the language server's extract-function code action; manual fallback identifies captured variables and constructs the function signature.
-- **`/lsp-generate` skill** — trigger language server code generation (interface stubs, test skeletons, missing method stubs, mock types) via `get_code_actions` + `execute_command`. Documents per-language generator patterns for Go, TypeScript, Python, and Rust.
+- **`/lsp-generate` skill** — trigger language server code generation (interface stubs, test skeletons, missing method stubs, mock types) via `suggest_fixes` + `execute_command`. Documents per-language generator patterns for Go, TypeScript, Python, and Rust.
 - **`/lsp-understand` skill** — deep-dive exploration of unfamiliar code by symbol name or file path. Synthesizes hover, implementations, call hierarchy (2-level depth limit), references, and source into a structured Code Map. Broader than `/lsp-explore`: operates on files as a unit and surfaces inter-symbol relationships.
 - **`agent-lsp doctor` subcommand** — probes each configured language server, reports version and supported capabilities, exits 1 if any server fails. Useful for CI health checks and debugging setup issues.
 - **LineScope for `position_pattern`** — `line_scope_start` / `line_scope_end` args restrict pattern matching to a line range, eliminating false matches when the same token appears multiple times in a file.
@@ -364,10 +368,10 @@ Tiered Docker image distribution published to `ghcr.io/blackwell-systems/agent-l
 ### Added (2026-04-10) — Three new MCP tools for code-impact analysis
 
 #### `get_change_impact`
-Answers "what breaks if I change this file?" without running tests. Given a list of changed files, it enumerates all exported symbols in those files via `get_document_symbols`, resolves every reference via `get_references`, and partitions the results into test callers (with enclosing test function names extracted) and non-test callers. Supports optional one-level transitive following to surface second-order impact. Useful before any refactor to understand blast radius and which tests will need updating.
+Answers "what breaks if I change this file?" without running tests. Given a list of changed files, it enumerates all exported symbols in those files via `list_symbols`, resolves every reference via `find_references`, and partitions the results into test callers (with enclosing test function names extracted) and non-test callers. Supports optional one-level transitive following to surface second-order impact. Useful before any refactor to understand blast radius and which tests will need updating.
 
 #### `get_cross_repo_references`
-First-class cross-repo caller analysis. Given a symbol (file + position) and a list of consumer repo roots, adds each consumer as a workspace folder and calls `get_references` across all of them. Results are partitioned by repo root prefix so callers in each consumer are reported separately. Designed for library authors who need to know which downstream consumers reference a symbol before changing its signature.
+First-class cross-repo caller analysis. Given a symbol (file + position) and a list of consumer repo roots, adds each consumer as a workspace folder and calls `find_references` across all of them. Results are partitioned by repo root prefix so callers in each consumer are reported separately. Designed for library authors who need to know which downstream consumers reference a symbol before changing its signature.
 
 #### `simulate_chain` — refactor preview framing
 `simulate_chain` is now documented and surfaced as a "refactor preview" tool: apply a rename/signature change speculatively, walk the chain of dependent edits, and read `cumulative_delta` + `safe_to_apply_through_step` before writing a single byte to disk. Added `docs/refactor-preview.md` with four worked examples (safe rename preview, change impact preview, multi-file refactor with checkpoint, key response fields reference). README updated with refactor-preview framing in the tools table.
@@ -421,11 +425,11 @@ First-class cross-repo caller analysis. Given a symbol (file + position) and a l
 - **L5 — Line-splice algorithm duplicated with manual-sync comment** — `applyRangeEdit` in `internal/session/manager.go` and the inline loop in `applyEditsToFile` in `internal/lsp/client.go` implemented the same line-splice logic independently. Extracted to `uri.ApplyRangeEdit` in the new `internal/uri` package; both sites now delegate to the shared implementation.
 
 ### Fixed + Added (2026-04-09) — Speculative session test hardening
-- **`discard_path` bug fix** — test was calling `simulate_edit_atomic` with a `session_id`, but `simulate_edit_atomic` is a self-contained tool (creates its own session internally, requires `workspace_root` + `language`); the call was silently returning `IsError: true` and logging it as "may be expected"; fixed to call `simulate_edit` which is the correct tool for applying edits to an existing session
+- **`discard_path` bug fix** — test was calling `preview_edit` with a `session_id`, but `preview_edit` is a self-contained tool (creates its own session internally, requires `workspace_root` + `language`); the call was silently returning `IsError: true` and logging it as "may be expected"; fixed to call `simulate_edit` which is the correct tool for applying edits to an existing session
 - **`evaluate_session` response assertions** — existing subtests were only logging the response; now parse the JSON and assert `net_delta == 0` for comment-only edits (with `confidence != "low"` guard for CI timing); `simulate_edit` response now asserts `edit_applied == true`
 - **`simulate_chain` response assertions** — parse `ChainResult` JSON; assert `cumulative_delta == 0` for two-comment chain; assert `safe_to_apply_through_step == 2`
 - **`commit_path` improved** — now applies a comment edit via `simulate_edit` before committing, making the test more meaningful than committing a clean session
-- **`simulate_edit_atomic_standalone` subtest** — proper standalone usage of `simulate_edit_atomic` with `workspace_root` + `language` parameters; asserts response is an `EvaluationResult` with `net_delta == 0` for a comment edit
+- **`preview_edit_standalone` subtest** — proper standalone usage of `preview_edit` with `workspace_root` + `language` parameters; asserts response is an `EvaluationResult` with `net_delta == 0` for a comment edit
 - **`error_detection` subtest** — validates the core speculative session value proposition: apply `return 42` in a `func ... string` body (type error), evaluate, assert `net_delta > 0` and `errors_introduced` is non-empty; CI-safe: accepts skip when `confidence == "low"` or `timeout == true` (gopls indexing window)
 
 ### Added (2026-04-09) — Full tool coverage (47/47 at time; total now 50)
@@ -463,15 +467,15 @@ First-class cross-repo caller analysis. Given a symbol (file + position) and a l
 - **`/lsp-format-code` skill** — format a file or selection via the language server's formatter (`gofmt` via gopls, `prettier` via tsserver, `rustfmt` via rust-analyzer, etc.); `format_document` for full file, `format_range` for selection; both return `TextEdit[]` applied via `apply_edit`; optional `get_server_capabilities` pre-check for `documentFormattingProvider`; post-apply `get_diagnostics` guard; multi-file protocol runs format calls in parallel then applies per-file sequentially; language notes table covers Go/TypeScript/Rust/Python/C
 
 ### Added (2026-04-09) — Skills expansion (continued)
-- **`/lsp-test-correlation` skill** — find and run only the tests covering an edited source file; `get_tests_for_file` maps source → test files, `get_workspace_symbols` enumerates specific test functions within those files, `run_tests` executes the scoped set; fallback to workspace symbol search when `get_tests_for_file` returns no mapping; multi-file workflow deduplicates test files across all changed sources; `[correlated / unrelated]` classification guides where to investigate failures first
+- **`/lsp-test-correlation` skill** — find and run only the tests covering an edited source file; `get_tests_for_file` maps source → test files, `find_symbol` enumerates specific test functions within those files, `run_tests` executes the scoped set; fallback to workspace symbol search when `get_tests_for_file` returns no mapping; multi-file workflow deduplicates test files across all changed sources; `[correlated / unrelated]` classification guides where to investigate failures first
 - **`/lsp-verify` `get_tests_for_file` pre-step** — when `changed_files` is known, `get_tests_for_file` runs before the three parallel layers to build a source→test map; Layer 3 failure report now tags each failing test as correlated (covers changed code) or unrelated (collateral failure) to narrow debugging scope
 
 ### Added (2026-04-09) — Skills expansion
-- **`/lsp-cross-repo` skill** — multi-root workspace analysis for library + consumer workflows; orchestrates `add_workspace_folder` → `list_workspace_folders` (verify indexing) → `get_workspace_symbols` → `get_references` / `call_hierarchy` / `go_to_implementation` across both repos; solves the "agent doesn't know to add a second workspace folder" discoverability gap; output separates library-internal from consumer references
-- **`/lsp-local-symbols` skill** — file-scoped symbol analysis without workspace-wide search; composes `get_document_symbols` (symbol tree for the file) → `get_document_highlights` (all usages within the file, classified as read/write/text) → `get_info_on_location` (type signature); faster than `get_references` for local-scope questions; explicit "when NOT to use" guidance prevents misuse as a cross-file search
+- **`/lsp-cross-repo` skill** — multi-root workspace analysis for library + consumer workflows; orchestrates `add_workspace_folder` → `list_workspace_folders` (verify indexing) → `find_symbol` → `find_references` / `find_callers` / `go_to_implementation` across both repos; solves the "agent doesn't know to add a second workspace folder" discoverability gap; output separates library-internal from consumer references
+- **`/lsp-local-symbols` skill** — file-scoped symbol analysis without workspace-wide search; composes `list_symbols` (symbol tree for the file) → `get_document_highlights` (all usages within the file, classified as read/write/text) → `inspect_symbol` (type signature); faster than `find_references` for local-scope questions; explicit "when NOT to use" guidance prevents misuse as a cross-file search
 - **`/lsp-rename` `prepare_rename` safety gate** — `prepare_rename` now runs as Step 2 (after symbol location, before reference enumeration); validates that the language server can rename at the given position before doing any further work; catches built-ins, keywords, and imported external package names that cannot be renamed across module boundaries; fail-fast with actionable error message
-- **`/lsp-safe-edit` `simulate_edit_atomic` pre-flight** — `simulate_edit_atomic` now runs before any disk write (Step 3); returns `net_delta` (errors introduced minus resolved) without touching disk; `net_delta > 0` pauses and asks before proceeding; multi-file: run per-file independently and sum deltas
-- **`/lsp-safe-edit` code actions on introduced errors** — if post-edit diagnostics introduce new errors, `get_code_actions` is called at each error location and available quick fixes are surfaced to the user with `y/n/select`; accepted actions applied via `apply_edit`, then re-diff
+- **`/lsp-safe-edit` `preview_edit` pre-flight** — `preview_edit` now runs before any disk write (Step 3); returns `net_delta` (errors introduced minus resolved) without touching disk; `net_delta > 0` pauses and asks before proceeding; multi-file: run per-file independently and sum deltas
+- **`/lsp-safe-edit` code actions on introduced errors** — if post-edit diagnostics introduce new errors, `suggest_fixes` is called at each error location and available quick fixes are surfaced to the user with `y/n/select`; accepted actions applied via `apply_edit`, then re-diff
 - **`/lsp-safe-edit` multi-file workflow** — explicit protocol for edits spanning multiple files: open all, collect BEFORE for all, simulate each file independently, apply file-by-file (stop on first failure), merge AFTER diagnostics, check code actions on any file with new errors
 
 ### Changed (2026-04-09)
@@ -479,15 +483,15 @@ First-class cross-repo caller analysis. Given a symbol (file + position) and a l
 - **`lsp-dead-code` skill hardened against false positives** — four improvements from dogfooding a full-repo dead-code audit: (1) mandatory Step 0 indexing warm-up — verify a known-active symbol returns ≥1 reference before trusting any results; explicit retry/restart protocol if indexing stalls; (2) `"no identifier found"` recovery note — methods on receivers shift the name column rightward, added grep-for-column technique to recover without blind retrying; (3) zero-reference cross-check — before classifying any handler/constructor/type as dead, grep wiring files (`main.go`, `server.go`, `cmd/`) for the symbol name to catch registration patterns (`server.AddTool(HandleFoo)`) that are invisible to LSP; (4) new caveat #2 documenting why registration-pattern references produce zero LSP hits; Step 3 classification table adds "Zero LSP, found by grep → ACTIVE" as a distinct outcome.
 
 ### Fixed (2026-04-09)
-- **`get_document_symbols` coordinates are now 1-based** — `range` and `selectionRange` positions in the output were previously 0-based (raw LSP passthrough), inconsistent with every other coordinate-accepting tool (`get_references`, `get_info_on_location`, etc.) which all use 1-based input. The handler now shifts all line/character values by +1 before returning, including in nested `children` symbols. The `lsp-dead-code` skill instruction to "add 1 to selectionRange before passing to get_references" is now unnecessary — coordinates flow directly between tools. **Breaking:** any hardcoded line offsets captured from previous `get_document_symbols` output will be off by one.
+- **`list_symbols` coordinates are now 1-based** — `range` and `selectionRange` positions in the output were previously 0-based (raw LSP passthrough), inconsistent with every other coordinate-accepting tool (`find_references`, `inspect_symbol`, etc.) which all use 1-based input. The handler now shifts all line/character values by +1 before returning, including in nested `children` symbols. The `lsp-dead-code` skill instruction to "add 1 to selectionRange before passing to find_references" is now unnecessary — coordinates flow directly between tools. **Breaking:** any hardcoded line offsets captured from previous `list_symbols` output will be off by one.
 
 ### Added (2026-04-09)
 - **`lsp-implement` skill** — find all concrete implementations of an interface or abstract type; composes `go_to_implementation` + `type_hierarchy`; includes capability pre-check, risk assessment table (0 implementors → likely unused, >10 → breaking API change), and language notes for Go/TypeScript/Java/Rust/C#
-- **`lsp-verify` code action fix section** — when Layer 1 diagnostics return errors, call `get_code_actions` at the error location to surface available quick fixes, apply with `apply_edit`, then re-verify; `get_code_actions` and `apply_edit` added to skill `allowed-tools`
-- **`get_document_symbols` `format: "outline"` parameter** — when `format: "outline"`, returns the symbol tree as compact markdown (`name [Kind] :line`, indented for children) instead of JSON; reduces token volume ~5x for large files; useful for quick structural surveys before targeted navigation. Default behavior (JSON) unchanged.
+- **`lsp-verify` code action fix section** — when Layer 1 diagnostics return errors, call `suggest_fixes` at the error location to surface available quick fixes, apply with `apply_edit`, then re-verify; `suggest_fixes` and `apply_edit` added to skill `allowed-tools`
+- **`list_symbols` `format: "outline"` parameter** — when `format: "outline"`, returns the symbol tree as compact markdown (`name [Kind] :line`, indented for children) instead of JSON; reduces token volume ~5x for large files; useful for quick structural surveys before targeted navigation. Default behavior (JSON) unchanged.
 - **`start_lsp` `language_id` parameter** — optional field selects a specific configured server in multi-server mode (e.g. `language_id: "go"` targets gopls, `language_id: "typescript"` targets tsserver); routes via new `ServerManager.StartForLanguage` which matches by `language_id` field or extension set; without `language_id`, behavior is unchanged (StartAll). Fixes an agent usability gap where the wrong language server could be active in a mixed-language repo with no in-session override. Description updated to recommend `get_server_capabilities` for diagnosing active-server mismatches.
 - **`apply_edit` text-match mode** — new `file_path` + `old_text` + `new_text` parameter mode; finds `old_text` in the file (exact byte match first, then whitespace-normalised line match that tolerates indentation differences) and applies the replacement without requiring line/column positions; positional `workspace_edit` mode unchanged
-- **`lsp-edit-symbol` skill** — edit a named symbol without knowing its file or position; composes `get_workspace_symbols` → `get_document_symbols` → `apply_edit` to resolve the symbol name to its definition range and apply the edit; decision guide covers signature-only edits, full-body replacements, and ambiguous symbol disambiguation
+- **`lsp-edit-symbol` skill** — edit a named symbol without knowing its file or position; composes `find_symbol` → `list_symbols` → `apply_edit` to resolve the symbol name to its definition range and apply the edit; decision guide covers signature-only edits, full-body replacements, and ambiguous symbol disambiguation
 - **`get_symbol_source` tool** — returns the source code of the innermost symbol (function, method, struct, class, etc.) whose range contains a given cursor position; composes `textDocument/documentSymbol` + file read; `findInnermostSymbol` walks the symbol tree recursively to find the deepest enclosing symbol; accepts `line`+`character` (1-based) or `position_pattern` (@@-syntax); `character` aliased to `column` for consistency with other tools; CI-verified in `testGetSymbolSource` across all 22 languages
 - **MCP log notifications** — internal log messages (LSP server start, tool dispatch errors, indexing events) now route as `notifications/message` to the connected MCP client via `mcpSessionSender`; wired through `InitializedHandler` in `ServerOptions` so the live `*ServerSession` is captured per-connection; before session init and on send failure, falls back to stderr; level threshold controlled by `set_log_level`
 - **`get_symbol_documentation` tool** — fetch authoritative documentation for a named
@@ -497,7 +501,7 @@ First-class cross-repo caller analysis. Given a symbol (file + position) and a l
   per-language toolchain commands with a 10-second timeout; strips ANSI escape codes;
   returns a structured error (not MCP error) when the toolchain fails so callers can
   fall back to LSP hover.
-- **`lsp-docs` skill** — three-tier documentation lookup: (1) `get_info_on_location`
+- **`lsp-docs` skill** — three-tier documentation lookup: (1) `inspect_symbol`
   (hover, fast, live); (2) `get_symbol_documentation` (offline, authoritative, works on
   unindexed deps); (3) `go_to_definition` + `get_symbol_source` (source fallback). Use
   when hover text is absent or the symbol is in a transitive dependency.
@@ -523,7 +527,7 @@ First-class cross-repo caller analysis. Given a symbol (file + position) and a l
   dispatch: `go build ./...` / `cargo build` / `tsc --noEmit` / `mypy .` (run_build),
   `go test -json ./...` / `cargo test --message-format=json` / `pytest --tb=json` /
   `npm test` (run_tests); test failure `location` fields are LSP-normalized (file URI
-  + zero-based range) — paste directly into `go_to_definition` or `get_references`;
+  + zero-based range) — paste directly into `go_to_definition` or `find_references`;
   `get_tests_for_file` returns test files for a source file via static lookup (no test
   execution); shared runner abstraction in `internal/tools/runner.go`; tool count 42 → 45
 - **Build tool dispatch expanded to 9 languages** — `run_build` and `run_tests` now dispatch for csharp (`dotnet build`/`dotnet test`), swift (`swift build`/`swift test`), zig (`zig build`/`zig build test`), kotlin (`gradle build --quiet`/`gradle test --quiet`) in addition to the original 5 (go, typescript, javascript, python, rust); `get_tests_for_file` updated with patterns for all new languages
@@ -539,15 +543,15 @@ First-class cross-repo caller analysis. Given a symbol (file + position) and a l
 - **Kotlin language support** — `kotlin-language-server` added as 15th CI-verified language; fixture with `Person.kt`, `Greeter.kt`, `main.kt`, `build.gradle.kts`; added to `multi-lang-core` CI job (reuses Java setup); full Tier 1 + Tier 2 coverage
 - **C# language support** — `csharp-ls` added as 14th CI-verified language; fixture with `Person.cs`, `Greeter.cs`, `Program.cs`; full Tier 1 + Tier 2 coverage including hover, definition, references, completions, formatting, rename, highlights
 - **CI workflow split into 4 parallel jobs** — `test` (unit + binary smoke), `multi-lang-core` (Go/TypeScript/Python/Rust/Java), `multi-lang-extended` (C/C++/JS/PHP/Ruby/YAML/JSON/Dockerfile/CSharp), `speculative-test` (gopls + `TestSpeculativeSessions`); unit tests now correctly run `./internal/... ./cmd/...` instead of `-run TestBinary`; `TestSpeculativeSessions` now in CI
-- **Integration test coverage expanded to 26 tools** — multi-language Tier 2 matrix grown from 12 → 26 tools per language: added `testGetDocumentHighlights`, `testGetInlayHints`, `testGetCodeActions`, `testPrepareRename`, `testRenameSymbol`, `testGetServerCapabilities`, `testWorkspaceFolders`, `testGoToTypeDefinition`, `testGoToImplementation`, `testFormatRange`, `testApplyEdit`, `testDetectLspServers`, `testCloseDocument`, `testDidChangeWatchedFiles`; `TestSpeculativeSessions` in `test/speculative_test.go` covers full lifecycle: create, `simulate_edit` (non-atomic), `simulate_edit_atomic`, `simulate_chain`, evaluate, discard, commit, destroy
-- **`rename_symbol` fuzzy position fallback** — when the direct position lookup returns an empty `WorkspaceEdit`, falls back to workspace symbol search by hover name and retries at each candidate position; mirrors the fuzzy fallback already in `go_to_definition` and `get_references`; handles AI position imprecision without correctness regression
+- **Integration test coverage expanded to 26 tools** — multi-language Tier 2 matrix grown from 12 → 26 tools per language: added `testGetDocumentHighlights`, `testGetInlayHints`, `testGetCodeActions`, `testPrepareRename`, `testRenameSymbol`, `testGetServerCapabilities`, `testWorkspaceFolders`, `testGoToTypeDefinition`, `testGoToImplementation`, `testFormatRange`, `testApplyEdit`, `testDetectLspServers`, `testCloseDocument`, `testDidChangeWatchedFiles`; `TestSpeculativeSessions` in `test/speculative_test.go` covers full lifecycle: create, `simulate_edit` (non-atomic), `preview_edit`, `simulate_chain`, evaluate, discard, commit, destroy
+- **`rename_symbol` fuzzy position fallback** — when the direct position lookup returns an empty `WorkspaceEdit`, falls back to workspace symbol search by hover name and retries at each candidate position; mirrors the fuzzy fallback already in `go_to_definition` and `find_references`; handles AI position imprecision without correctness regression
 - **Multi-root workspace support** — `add_workspace_folder`, `remove_workspace_folder`, `list_workspace_folders` tools; `workspace/didChangeWorkspaceFolders` notifications; enables cross-repo references, definitions, and diagnostics across library + consumer repos in one session; workspace folder list persisted on client and initialized from `start_lsp` root
 - **`get_document_highlights`** — file-scoped symbol occurrence search (`textDocument/documentHighlight`); returns ranges with read/write/text kinds; instant, no workspace scan; `DocumentHighlight` and `DocumentHighlightKind` types added to `internal/types`
 - **Auto-watch workspace** — `fsnotify` watcher starts automatically after `start_lsp`; forwards file changes to the LSP server via `workspace/didChangeWatchedFiles`; debounced 150ms; skips `.git/`, `node_modules/`, etc.; `did_change_watched_files` tool no longer required for normal editing workflows
 - **`get_server_capabilities`** — returns server identity (`name`, `version` from `serverInfo`), full LSP capability map, and classified tool lists (`supported_tools` / `unsupported_tools`) based on what the server advertised at initialization; lets AI pre-filter capability-gated tools before calling them; `GetCapabilities()` and `GetServerInfo()` methods added to `LSPClient`; `serverName`/`serverVersion` now captured from initialize response
 - **`get_inlay_hints`** — new MCP tool (`textDocument/inlayHint`); returns inline type annotations and parameter name labels for a range; capability-guarded (returns empty array when server does not support `inlayHintProvider`); `InlayHint`, `InlayHintLabelPart`, `InlayHintKind` types added to `internal/types`
 - **`detect_lsp_servers`** — new MCP tool; scans workspace for source languages (file extensions + root markers, scored by prevalence), checks PATH for corresponding LSP server binaries, returns `suggested_config` entries ready to paste into MCP config; deduplicates shared binaries (c+cpp → one clangd entry)
-- **`get_workspace_symbols` enrichment** — new `detail_level`, `limit`, `offset` params; `detail_level=hover` enriches a paginated window of results with hover info (type signature + docs); `symbols[]` always returns full result set; `enriched[]` + `pagination` returned for the window; mirrors mcp-lsp-bridge's ToC + detail-window pattern
+- **`find_symbol` enrichment** — new `detail_level`, `limit`, `offset` params; `detail_level=hover` enriches a paginated window of results with hover info (type signature + docs); `symbols[]` always returns full result set; `enriched[]` + `pagination` returned for the window; mirrors mcp-lsp-bridge's ToC + detail-window pattern
 - **`type_hierarchy`** — MCP tool for `textDocument/typeHierarchy`; `direction: supertypes/subtypes/both`; `TypeHierarchyItem` type (LSP 3.17); CI-verified for Java (jdtls) and TypeScript
 - **LSP response normalization** — `GetDocumentSymbols`, `GetCompletion`, `GetCodeActions` now return concrete typed Go structs; `NormalizeDocumentSymbols` (two-pass `SymbolInformation[]` → `DocumentSymbol[]` tree reconstruction), `NormalizeCompletion`, `NormalizeCodeActions` in `internal/lsp/normalize.go`
 
@@ -584,14 +588,14 @@ First-class cross-repo caller analysis. Given a symbol (file + position) and a l
 
 
 - `ApplyEditArgs.Edit` type changed from `interface{}` to `map[string]interface{}` — Claude Code's MCP schema validator rejected the empty schema produced by `interface{}` and silently dropped all 34 tools silently; `map[string]interface{}` produces a valid `"type": "object"` schema
-- `simulate_edit_atomic` now calls `Discard` before `Destroy` — without Discard, gopls retained the modified document between atomic calls; the next call's baseline captured stale (modified) diagnostics, producing incorrect `net_delta` values
+- `preview_edit` now calls `Discard` before `Destroy` — without Discard, gopls retained the modified document between atomic calls; the next call's baseline captured stale (modified) diagnostics, producing incorrect `net_delta` values
 - `start_lsp` in multi-server/auto-detect mode now calls `ServerManager.StartAll` — previously only restarted the first detected server (clangd), leaving gopls and other language servers uninitialized; simulation sessions for Go files now correctly use gopls
 - `csResolver` wrapper added to `server.go` so `SessionManager` sees clients set by `start_lsp` at runtime; previously the original resolver held a nil client until `start_lsp` was called, causing "no LSP client available" errors
 - `SessionManager.CreateSession` routes by language extension via `ClientForFile` — in multi-server mode `DefaultClient()` returned clangd; routing by `.go`/`.py`/`.ts` extension now picks the correct language server per session
 - `languageToExtension` helper added to `internal/session/manager.go` — maps language IDs (`go`, `python`, `typescript`, `javascript`, `rust`, `c`, `cpp`, `java`, `ruby`) to file extensions for client routing
 
 ### Added
-- **Speculative code sessions** — simulate edits without committing to disk; create sessions with baseline diagnostics, apply edits in-memory, evaluate diagnostic changes (errors introduced/resolved), and commit or discard atomically; implemented via `internal/session` package with SessionManager (lifecycle), SerializedExecutor (LSP access serialization), and diagnostic differ (baseline vs current comparison); 8 new MCP tools: `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`; tool count 26 → 34; enables safe what-if analysis and multi-step edit planning before execution; useful for AI assistants to verify edits won't introduce errors before applying
+- **Speculative code sessions** — simulate edits without committing to disk; create sessions with baseline diagnostics, apply edits in-memory, evaluate diagnostic changes (errors introduced/resolved), and commit or discard atomically; implemented via `internal/session` package with SessionManager (lifecycle), SerializedExecutor (LSP access serialization), and diagnostic differ (baseline vs current comparison); 8 new MCP tools: `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `preview_edit`; tool count 26 → 34; enables safe what-if analysis and multi-step edit planning before execution; useful for AI assistants to verify edits won't introduce errors before applying
 - Tier 2 language expansion — CI-verified language count 7 → 13: C++ (clangd), JavaScript (typescript-language-server), Ruby (solargraph), YAML (yaml-language-server), JSON (vscode-json-language-server), Dockerfile (dockerfile-language-server-nodejs); C++ and JavaScript reuse existing CI binaries (zero new install cost); Ruby/YAML/JSON/Dockerfile each add one install line
 - Integration test harness updated to 13 langConfig entries with correct fixture positions, cross-file coverage, and per-language capability flags (`supportsFormatting`, `supportsDeclaration`)
 - GitHub Actions `multi-lang-test` job extended with 4 new language server install steps
@@ -602,8 +606,8 @@ First-class cross-repo caller analysis. Given a symbol (file + position) and a l
 
 ### Added
 - Multi-server routing — single `agent-lsp` process manages multiple language servers; routes tool calls to the correct server by file extension. Supports inline arg-pairs (`go:gopls typescript:tsserver,--stdio`) and `--config agent-lsp.json`; backward-compatible with existing single-server invocation
-- `call_hierarchy` tool — single tool with `direction: "incoming" | "outgoing" | "both"` (default: both); hides the two-step LSP prepare/query protocol behind one call; returns typed JSON with `items`, `incoming`, `outgoing`
-- Fuzzy position fallback for `go_to_definition` and `get_references` — when a direct position lookup returns empty, falls back to workspace symbol search by hover name and retries at each candidate; handles AI assistant position imprecision without correctness regression
+- `find_callers` tool — single tool with `direction: "incoming" | "outgoing" | "both"` (default: both); hides the two-step LSP prepare/query protocol behind one call; returns typed JSON with `items`, `incoming`, `outgoing`
+- Fuzzy position fallback for `go_to_definition` and `find_references` — when a direct position lookup returns empty, falls back to workspace symbol search by hover name and retries at each candidate; handles AI assistant position imprecision without correctness regression
 - Path traversal prevention — `ValidateFilePath` in `WithDocument` resolves all `..` components and verifies the result is within the workspace root; stores `rootDir` on `LSPClient` (set during `Initialize`)
 - `types.CallHierarchyItem`, `types.CallHierarchyIncomingCall`, `types.CallHierarchyOutgoingCall` — typed protocol structs for call hierarchy responses
 - `types.TextEdit`, `types.SymbolInformation`, `types.SemanticToken` — typed protocol structs; `FormatDocument`/`FormatRange` and `GetWorkspaceSymbols` migrated from `interface{}` to typed returns
@@ -623,9 +627,9 @@ First-class cross-repo caller analysis. Given a symbol (file + position) and a l
 
 ### Added
 - Multi-language integration test harness — Go port of `multi-lang.test.js` using `mcp.CommandTransport` + `ClientSession.CallTool` from the official Go MCP SDK
-- Tier 1 tests (start_lsp, open_document, get_diagnostics, get_info_on_location) for all 7 languages: TypeScript, Python, Go, Rust, Java, C, PHP
-- Tier 2 tests (get_document_symbols, go_to_definition, get_references, get_completions, get_workspace_symbols, format_document, go_to_declaration) for all 7 languages
-- Test fixtures for all 7 languages with cross-file greeter files for `get_references` coverage
+- Tier 1 tests (start_lsp, open_document, get_diagnostics, inspect_symbol) for all 7 languages: TypeScript, Python, Go, Rust, Java, C, PHP
+- Tier 2 tests (list_symbols, go_to_definition, find_references, get_completions, find_symbol, format_document, go_to_declaration) for all 7 languages
+- Test fixtures for all 7 languages with cross-file greeter files for `find_references` coverage
 - GitHub Actions CI: `test` job (unit tests, every PR) and `multi-lang-test` job (full 7-language matrix)
 - `WaitForDiagnostics` initial-snapshot skip — matches TypeScript `sawInitialSnapshot` behavior; prevents early exit when URIs are already cached
 - `Initialize` now sends `clientInfo`, `workspace.didChangeConfiguration`, and `workspace.didChangeWatchedFiles` capabilities to match TypeScript reference
@@ -635,7 +639,7 @@ First-class cross-repo caller analysis. Given a symbol (file + position) and a l
 - Single binary distribution via `go install github.com/blackwell-systems/agent-lsp/cmd/agent-lsp@latest`
 - Buffer-based LSP message framing with byte-accurate `Content-Length` parsing (no UTF-8/UTF-16 mismatch)
 - `WaitForDiagnostics` with 500ms stabilisation window
-- `WaitForFileIndexed` with 1500ms stability window — lets gopls finish cross-package indexing before issuing `get_references`
+- `WaitForFileIndexed` with 1500ms stability window — lets gopls finish cross-package indexing before issuing `find_references`
 - Extension registry with compile-time factory registration via `init()`
 - `SubscriptionHandlers` and `PromptHandlers` on the `Extension` interface
 - Full 14-method LSP request timeout table matching the TypeScript reference
@@ -650,7 +654,7 @@ First-class cross-repo caller analysis. Given a symbol (file + position) and a l
 - `FormattedLocation` JSON field names match TypeScript response shape (`file`, `line`, `column`, `end_line`, `end_column`)
 - `apply_edit` argument field is `workspace_edit` in both handler and server registration (was `edit` in `ApplyEditArgs` struct, causing every call to fail silently)
 - `execute_command` argument field is `args` (matches TypeScript schema)
-- `get_references` `include_declaration` defaults to `false` (matches TypeScript schema)
+- `find_references` `include_declaration` defaults to `false` (matches TypeScript schema)
 - `GetInfoOnLocation` hover parsing handles all four LSP `MarkupContent` shapes (string, MarkupContent, MarkedString, MarkedString array)
 - `WaitForDiagnostics` timeout 25,000ms (matches TypeScript reference)
 - `applyEditsToFile` sends correct incremented version number in `textDocument/didChange`

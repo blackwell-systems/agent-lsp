@@ -3,7 +3,7 @@ name: lsp-explore
 description: "Tell me about this symbol": hover + implementations + call hierarchy + references in one pass — for navigating unfamiliar code.
 argument-hint: "[symbol-name]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__go_to_symbol mcp__lsp__get_info_on_location mcp__lsp__go_to_implementation mcp__lsp__call_hierarchy mcp__lsp__get_references mcp__lsp__open_document mcp__lsp__get_server_capabilities
+allowed-tools: mcp__lsp__start_lsp mcp__lsp__go_to_symbol mcp__lsp__inspect_symbol mcp__lsp__go_to_implementation mcp__lsp__find_callers mcp__lsp__find_references mcp__lsp__open_document mcp__lsp__get_server_capabilities
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -68,10 +68,10 @@ mcp__lsp__open_document({
 
 ## Phase 2 — Hover (always available)
 
-Call `mcp__lsp__get_info_on_location` at the definition location:
+Call `mcp__lsp__inspect_symbol` at the definition location:
 
 ```
-mcp__lsp__get_info_on_location({
+mcp__lsp__inspect_symbol({
   "file_path": "<file from Phase 1>",
   "line": <line from Phase 1>,
   "column": <column from Phase 1>
@@ -114,10 +114,10 @@ Issue both calls in the same message — they are independent:
 
 ### 4a — Incoming callers
 
-Only if `call_hierarchy` appears in `supported_tools`:
+Only if `find_callers` appears in `supported_tools`:
 
 ```
-mcp__lsp__call_hierarchy({
+mcp__lsp__find_callers({
   "file_path": "<file from Phase 1>",
   "line": <line from Phase 1>,
   "column": <column from Phase 1>,
@@ -126,13 +126,13 @@ mcp__lsp__call_hierarchy({
 → returns: list of caller functions with file and line
 ```
 
-If `call_hierarchy` is **not** in `supported_tools`, note
+If `find_callers` is **not** in `supported_tools`, note
 `"not supported by this server"` — do not stop.
 
 ### 4b — All reference sites
 
 ```
-mcp__lsp__get_references({
+mcp__lsp__find_references({
   "file_path": "<file from Phase 1>",
   "line": <line from Phase 1>,
   "column": <column from Phase 1>,
@@ -187,7 +187,7 @@ Phase 1 — go_to_symbol: symbol_path="config.ParseConfig"
 
 open_document: pkg/config/parser.go
 
-Phase 2 — get_info_on_location: line=42, column=6
+Phase 2 — inspect_symbol: line=42, column=6
   → hover_text: "func ParseConfig(path string) (*Config, error) — reads and
     validates a config file from path"
 
@@ -197,11 +197,11 @@ Phase 3 — get_server_capabilities
   → 0 implementations (ParseConfig is a concrete function, not an interface method)
 
 Phase 4 (parallel):
-  call_hierarchy direction=incoming
+  find_callers direction=incoming
   → 3 callers: cmd.main (cmd/main.go:14), app.Start (internal/app.go:31),
                loader.Load (internal/loader.go:55)
 
-  get_references include_declaration=false
+  find_references include_declaration=false
   → 7 references in 4 files
 
 ## Explore Report: ParseConfig

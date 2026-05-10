@@ -119,10 +119,10 @@ cmd/agent-lsp/
   tools_navigation.go   ← 10 navigation tools: go_to_definition, go_to_type_definition,
                            go_to_implementation, go_to_declaration, go_to_symbol,
                            rename_symbol, prepare_rename, get_document_highlights,
-                           call_hierarchy, type_hierarchy
-  tools_analysis.go     ← 14 analysis tools: get_info_on_location, get_completions,
-                           get_signature_help, get_code_actions, get_document_symbols,
-                           get_workspace_symbols, get_references, get_inlay_hints,
+                           find_callers, type_hierarchy
+  tools_analysis.go     ← 14 analysis tools: inspect_symbol, get_completions,
+                           get_signature_help, suggest_fixes, list_symbols,
+                           find_symbol, find_references, get_inlay_hints,
                            get_semantic_tokens, get_symbol_source, get_symbol_documentation,
                            get_change_impact, get_cross_repo_references, detect_changes
   tools_workspace.go    ← 21 workspace/lifecycle tools: start_lsp, restart_lsp_server,
@@ -133,7 +133,7 @@ cmd/agent-lsp/
                            format_document, format_range, export_cache, import_cache
   tools_session.go      ← 8 simulation/session tools: create_simulation_session, simulate_edit,
                            evaluate_session, simulate_chain, commit_session, discard_session,
-                           destroy_session, simulate_edit_atomic
+                           destroy_session, preview_edit
   tools_phase.go        ← 3 phase enforcement tools: activate_skill, deactivate_skill,
                            get_skill_phase; checkPhasePermission helper
   audit_helpers.go      ← Diagnostic snapshot helpers for audit trail (pre/post edit)
@@ -208,7 +208,7 @@ internal/tools/
                      CheckInitialized
   analysis.go      ← get_diagnostics, hover, completions, signatures, code actions, symbols
   navigation.go    ← definition, references, implementation, declaration, type_definition
-  callhierarchy.go ← call_hierarchy (incoming/outgoing)
+  callhierarchy.go ← find_callers (incoming/outgoing)
   typehierarchy.go ← type_hierarchy (supertypes/subtypes)
   inlayhints.go    ← get_inlay_hints
   highlights.go    ← get_document_highlights
@@ -531,7 +531,7 @@ Tool registration (`cmd/agent-lsp/tools_*.go`) is separate from tool implementat
 
 ### Next-step hints
 
-Every tool response includes a contextual `hint` field that suggests the logical next tool call. For example, after `get_references` the hint says "use get_change_impact to see the full blast radius." Hints are added at the `internal/tools/` handler layer as part of the `ToolResult` payload, so they travel through `makeCallToolResult` and appear in the final MCP response. This guides agents to chain tools correctly without requiring a skill, and helps less capable models navigate the tool surface.
+Every tool response includes a contextual `hint` field that suggests the logical next tool call. For example, after `find_references` the hint says "use get_change_impact to see the full blast radius." Hints are added at the `internal/tools/` handler layer as part of the `ToolResult` payload, so they travel through `makeCallToolResult` and appear in the final MCP response. This guides agents to chain tools correctly without requiring a skill, and helps less capable models navigate the tool surface.
 
 ---
 
@@ -669,7 +669,7 @@ func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
 }
 ```
 
-When `readLoop` dispatches a `$/progress end` notification, it removes the token and calls `progressCond.Broadcast()`. All waiters (potentially multiple concurrent `start_lsp` or `get_references` calls) wake up and re-check.
+When `readLoop` dispatches a `$/progress end` notification, it removes the token and calls `progressCond.Broadcast()`. All waiters (potentially multiple concurrent `start_lsp` or `find_references` calls) wake up and re-check.
 
 ### Concurrency Safety Summary
 
@@ -732,7 +732,7 @@ Each JSONL line is a `Record` with these fields:
 | Field | Type | Description |
 |-------|------|-------------|
 | `timestamp` | string | ISO 8601 timestamp of the tool invocation |
-| `tool` | string | MCP tool name (e.g. `"go_to_definition"`, `"simulate_edit_atomic"`) |
+| `tool` | string | MCP tool name (e.g. `"go_to_definition"`, `"preview_edit"`) |
 | `session_id` | string | Speculative session ID, if applicable |
 | `files` | string[] | File paths involved in the operation |
 | `edit_summary` | object | For mutating tools: mode, file path, old/new text preview, rename details |
@@ -787,7 +787,7 @@ server.go: makeCallToolResult converts to *mcp.CallToolResult
 MCP client receives JSON-RPC response
 ```
 
-Handlers that do not use `WithDocument` (e.g., `get_diagnostics`, `open_document`, `get_workspace_symbols`, `get_server_capabilities`, `detect_lsp_servers`, `run_build`, `get_symbol_documentation`) manage the LSP client directly because they either do not require a file path or have different lifecycle semantics (build tools, toolchain commands).
+Handlers that do not use `WithDocument` (e.g., `get_diagnostics`, `open_document`, `find_symbol`, `get_server_capabilities`, `detect_lsp_servers`, `run_build`, `get_symbol_documentation`) manage the LSP client directly because they either do not require a file path or have different lifecycle semantics (build tools, toolchain commands).
 
 ---
 
@@ -957,7 +957,7 @@ The first `ApplyEdit` call for a given file URI within a session:
 
 ### Atomic variant
 
-`simulate_edit_atomic` (tool: `mcp__lsp__simulate_edit_atomic`) is a convenience wrapper that creates a session, applies one edit, evaluates, discards (to revert LSP state), and destroys, all in a single call. Useful for quick pre-flight checks before applying a real edit.
+`preview_edit` (tool: `mcp__lsp__preview_edit`) is a convenience wrapper that creates a session, applies one edit, evaluates, discards (to revert LSP state), and destroys, all in a single call. Useful for quick pre-flight checks before applying a real edit.
 
 ### Chained edits
 
@@ -1269,7 +1269,7 @@ CREATE TABLE symbol_refs (
 ### Lifecycle
 
 1. **Creation:** `NewSymbolRefCache(workspaceRoot)` is called during `start_lsp`. Returns nil if the database cannot be opened (no-op fallback).
-2. **Population:** `Put(filePath, symbolName, symbolLine, locations)` stores results after each `get_references` query via `get_change_impact`.
+2. **Population:** `Put(filePath, symbolName, symbolLine, locations)` stores results after each `find_references` query via `get_change_impact`.
 3. **Lookup:** `Get(filePath, symbolName, symbolLine)` returns cached locations if the file content hash matches. Returns nil on miss or stale entry.
 4. **Invalidation:** `InvalidateFile(filePath)` evicts all entries for a file. Called by the file watcher when a source file changes on disk.
 5. **Staleness detection:** On `Get`, the stored file hash is compared against the current file hash. If they differ, the entry is evicted and nil is returned.
@@ -1492,7 +1492,7 @@ Converts `(Command | CodeAction)[]` to `[]types.CodeAction`. Discriminates each 
 
 ### Why normalization exists
 
-Before `normalize.go`, handlers received `[]interface{}` from `json.Unmarshal` and had to type-assert their way through arbitrary JSON trees. This was fragile and made the response structure opaque to callers. Concrete types give handlers compile-time safety and make the wire format explicit. The normalization is centralized rather than per-handler because the same polymorphism appears in multiple places (e.g. `get_document_symbols`, `get_symbol_source` both need `DocumentSymbol`).
+Before `normalize.go`, handlers received `[]interface{}` from `json.Unmarshal` and had to type-assert their way through arbitrary JSON trees. This was fragile and made the response structure opaque to callers. Concrete types give handlers compile-time safety and make the wire format explicit. The normalization is centralized rather than per-handler because the same polymorphism appears in multiple places (e.g. `list_symbols`, `get_symbol_source` both need `DocumentSymbol`).
 
 ---
 

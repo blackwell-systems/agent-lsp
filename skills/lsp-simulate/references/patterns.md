@@ -61,15 +61,15 @@ Error/warning objects in `errors_introduced` and `errors_resolved`:
 | message  | string | Diagnostic message text                  |
 | severity | string | "error" or "warning"                     |
 
-## simulate_edit_atomic vs Full Session
+## preview_edit vs Full Session
 
-**Use `simulate_edit_atomic` when:**
+**Use `preview_edit` when:**
 - You have a single what-if edit to check
 - You do not need to inspect the patch before applying
 - You want minimal ceremony (no session management)
 
 ```
-mcp__lsp__simulate_edit_atomic(
+mcp__lsp__preview_edit(
   workspace_root: "/your/workspace",
   language: "go",
   file_path: "/abs/path/to/file.go",
@@ -81,7 +81,7 @@ mcp__lsp__simulate_edit_atomic(
 -- net_delta: 0 means safe to apply. Apply with the Edit or Write tool.
 ```
 
-`simulate_edit_atomic` creates a session, applies the edit, evaluates, and
+`preview_edit` creates a session, applies the edit, evaluates, and
 destroys — all in one call. No cleanup required.
 
 **Use a full session when:**
@@ -112,7 +112,7 @@ All position parameters are **1-indexed** throughout the simulation API:
 - `start_column`, `end_column`: column numbers, 1 = first character on the line
 
 This matches the agent-lsp convention used by all position-based tools
-(`get_references`, `get_info_on_location`, `call_hierarchy`, etc.).
+(`find_references`, `inspect_symbol`, `find_callers`, etc.).
 
 Example: to replace text on line 10, columns 5–15:
 

@@ -3,7 +3,7 @@ name: lsp-fix-all
 description: Apply available quick-fix code actions for all current diagnostics in a file, one at a time with re-collection between each fix. Use to bulk-resolve errors and warnings the language server can fix automatically.
 argument-hint: "[file-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__get_code_actions mcp__lsp__apply_edit mcp__lsp__open_document mcp__lsp__format_document
+allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__suggest_fixes mcp__lsp__apply_edit mcp__lsp__open_document mcp__lsp__format_document
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -60,7 +60,7 @@ Record the initial count of errors and warnings for the summary output.
 
 For EACH diagnostic (process one at a time, not in batch):
 
-1. Call `mcp__lsp__get_code_actions` at the diagnostic's position/range.
+1. Call `mcp__lsp__suggest_fixes` at the diagnostic's position/range.
 2. Filter the returned actions to quick-fix kind only.
 3. Skip any diagnostic for which no applicable quick-fix exists — note it in the summary.
 
@@ -100,7 +100,7 @@ while iteration < max_iterations:
     if diagnostics is empty: break
 
     for each diagnostic in diagnostics:
-        actions = mcp__lsp__get_code_actions(diagnostic.range)
+        actions = mcp__lsp__suggest_fixes(diagnostic.range)
         applicable = filter to quickfix / source.organizeImports kinds (see Step 2)
         if applicable is not empty:
             apply the first applicable action via mcp__lsp__apply_edit

@@ -1,13 +1,13 @@
 # Trajectory assertion: validates the /lsp-cross-repo skill protocol.
 # The skill MUST call start_lsp before get_cross_repo_references.
-# get_workspace_symbols must be used to locate the symbol before the cross-repo call.
+# find_symbol must be used to locate the symbol before the cross-repo call.
 # Read-only — apply_edit and rename_symbol must NOT appear.
 name: lsp-cross-repo follows skill protocol
 trace:
   - tool: start_lsp
     args:
       root_dir: "fixtures/go"
-  - tool: get_workspace_symbols
+  - tool: find_symbol
     args:
       query: "ParseConfig"
   - tool: get_cross_repo_references
@@ -18,8 +18,8 @@ trace:
       consumer_roots: ["fixtures/consumer-a"]
 trajectory:
   - type: order
-    tools: ["start_lsp", "get_workspace_symbols", "get_cross_repo_references"]
+    tools: ["start_lsp", "find_symbol", "get_cross_repo_references"]
   - type: presence
-    tools: ["get_workspace_symbols", "get_cross_repo_references"]
+    tools: ["find_symbol", "get_cross_repo_references"]
   - type: absence
     tools: ["apply_edit", "rename_symbol"]

@@ -1,6 +1,6 @@
 // navigation.go implements MCP tool handlers for code navigation:
 // go_to_definition, go_to_type_definition, go_to_implementation,
-// go_to_declaration, and get_references.
+// go_to_declaration, and find_references.
 //
 // All navigation handlers follow the same pattern: validate args, open the
 // document via WithDocument, call the corresponding LSP method, and format
@@ -85,14 +85,14 @@ func HandleGetReferences(ctx context.Context, client *lsp.LSPClient, args map[st
 		return client.GetReferences(ctx, fURI, pos, includeDecl)
 	})
 	if wErr != nil {
-		return types.ErrorResult(fmt.Sprintf("get_references: %s", wErr)), nil
+		return types.ErrorResult(fmt.Sprintf("find_references: %s", wErr)), nil
 	}
 	if len(locs) == 0 {
 		locs, wErr = fuzzyPositionFallback(ctx, client, fileURI, line, col, func(pos types.Position) ([]types.Location, error) {
 			return client.GetReferences(ctx, fileURI, pos, includeDecl)
 		})
 		if wErr != nil {
-			return types.ErrorResult(fmt.Sprintf("get_references (fuzzy): %s", wErr)), nil
+			return types.ErrorResult(fmt.Sprintf("find_references (fuzzy): %s", wErr)), nil
 		}
 	}
 	res, err := locationsResult(locs)
@@ -146,7 +146,7 @@ func HandleGoToDefinition(ctx context.Context, client *lsp.LSPClient, args map[s
 	if err != nil {
 		return res, err
 	}
-	return appendHint(res, "Use get_info_on_location at the definition for type details and documentation."), nil
+	return appendHint(res, "Use inspect_symbol at the definition for type details and documentation."), nil
 }
 
 // HandleGoToTypeDefinition finds the type definition of the symbol at the given location.
@@ -212,7 +212,7 @@ func HandleGoToImplementation(ctx context.Context, client *lsp.LSPClient, args m
 	if err != nil {
 		return res, err
 	}
-	return appendHint(res, "Use get_references on an implementation to see its callers."), nil
+	return appendHint(res, "Use find_references on an implementation to see its callers."), nil
 }
 
 // HandleGoToDeclaration finds the declaration of the symbol at the given location.

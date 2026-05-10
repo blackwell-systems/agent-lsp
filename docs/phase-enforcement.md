@@ -33,7 +33,7 @@ Agent calls prepare_rename(...)
 
 Agent calls apply_edit(...)
     -> BLOCKED: "apply_edit is forbidden in the preview phase"
-    -> recovery: "Complete the preview phase first. Allowed tools: [go_to_symbol, prepare_rename, get_references, rename_symbol]"
+    -> recovery: "Complete the preview phase first. Allowed tools: [go_to_symbol, prepare_rename, find_references, rename_symbol]"
 
 Agent calls get_diagnostics(...)
     -> auto-advance to phase 3: "execute" (get_diagnostics is in phase 3's allowed list)
@@ -64,7 +64,7 @@ get_skill_phase()
      "phase_index": 1,
      "total_phases": 3,
      "mode": "warn",
-     "allowed_tools": ["go_to_symbol", "prepare_rename", "get_references", "rename_symbol"],
+     "allowed_tools": ["go_to_symbol", "prepare_rename", "find_references", "rename_symbol"],
      "forbidden_tools": ["apply_edit", "Edit", "Write", "format_document", "run_tests"],
      "tool_history": ["start_lsp", "go_to_symbol"]
    }
@@ -94,7 +94,7 @@ In `block` mode, the error response includes structured JSON with the violation 
   "skill": "lsp-rename",
   "current_phase": "preview",
   "reason": "apply_edit is forbidden in the \"preview\" phase",
-  "recovery": "Complete the \"preview\" phase first. Allowed tools: [go_to_symbol, prepare_rename, get_references, rename_symbol]"
+  "recovery": "Complete the \"preview\" phase first. Allowed tools: [go_to_symbol, prepare_rename, find_references, rename_symbol]"
 }
 ```
 
@@ -104,7 +104,7 @@ In `block` mode, the error response includes structured JSON with the violation 
 
 Phases advance automatically. There are no explicit "next phase" calls.
 
-**How it works:** When a tool call matches a later phase's allowed list, the tracker advances to that phase. Tools in the current phase's allowed list stay allowed. Tools not mentioned in any phase (e.g., `get_info_on_location`, `get_completions`) pass through without restriction.
+**How it works:** When a tool call matches a later phase's allowed list, the tracker advances to that phase. Tools in the current phase's allowed list stay allowed. Tools not mentioned in any phase (e.g., `inspect_symbol`, `get_completions`) pass through without restriction.
 
 **Rules:**
 
@@ -129,7 +129,7 @@ prerequisites -> preview -> execute
 | Phase | Allowed | Forbidden | Purpose |
 |-------|---------|-----------|---------|
 | prerequisites | start_lsp | (none) | Initialize LSP if needed |
-| preview | go_to_symbol, prepare_rename, get_references, rename_symbol | apply_edit, Edit, Write | Locate symbol, validate, enumerate references |
+| preview | go_to_symbol, prepare_rename, find_references, rename_symbol | apply_edit, Edit, Write | Locate symbol, validate, enumerate references |
 | execute | get_diagnostics, rename_symbol, apply_edit | simulate_*, run_build | Apply the rename and verify |
 
 **Global forbidden:** format_document, run_tests (rename does not format or test)
@@ -144,8 +144,8 @@ blast_radius -> speculative_preview -> apply -> build_verification -> test_execu
 
 | Phase | Allowed | Forbidden | Purpose |
 |-------|---------|-----------|---------|
-| blast_radius | get_change_impact, go_to_symbol, get_references | apply_edit, simulate_*, Edit, Write | Analyze impact before any edits |
-| speculative_preview | open_document, get_diagnostics, simulate_edit_atomic, simulate_chain | apply_edit, Edit, Write | Simulate edits in memory |
+| blast_radius | get_change_impact, go_to_symbol, find_references | apply_edit, simulate_*, Edit, Write | Analyze impact before any edits |
+| speculative_preview | open_document, get_diagnostics, preview_edit, simulate_chain | apply_edit, Edit, Write | Simulate edits in memory |
 | apply | apply_edit, format_document, Edit, Write | simulate_*, rename_symbol | Write changes to disk |
 | build_verification | get_diagnostics, run_build | apply_edit, Edit, Write | Check the build |
 | test_execution | get_tests_for_file, run_tests | apply_edit, Edit, Write | Run affected tests |
@@ -165,9 +165,9 @@ setup -> speculative_preview -> apply -> verify_and_fix
 | Phase | Allowed | Forbidden | Purpose |
 |-------|---------|-----------|---------|
 | setup | start_lsp, open_document, get_diagnostics | apply_edit, Edit, Write | Capture baseline diagnostics |
-| speculative_preview | simulate_edit_atomic, simulate_chain | apply_edit, Edit, Write | Simulate before touching disk |
+| speculative_preview | preview_edit, simulate_chain | apply_edit, Edit, Write | Simulate before touching disk |
 | apply | apply_edit, Edit, Write | simulate_* | Write the change |
-| verify_and_fix | get_diagnostics, get_code_actions, apply_edit, format_document | simulate_*, run_build, run_tests | Post-edit verification and fixes |
+| verify_and_fix | get_diagnostics, suggest_fixes, apply_edit, format_document | simulate_*, run_build, run_tests | Post-edit verification and fixes |
 
 **Global forbidden:** rename_symbol, get_change_impact
 
@@ -185,7 +185,7 @@ test_correlation -> diagnostics -> build -> tests -> fix_and_format
 | diagnostics | start_lsp, get_diagnostics | apply_edit, Edit, Write | Layer 1: LSP diagnostics |
 | build | run_build | apply_edit, Edit, Write | Layer 2: compiler build |
 | tests | run_tests, Bash | apply_edit, Edit, Write | Layer 3: test suite |
-| fix_and_format | get_code_actions, apply_edit, format_document, get_diagnostics | simulate_*, run_build, run_tests | Apply fixes and format |
+| fix_and_format | suggest_fixes, apply_edit, format_document, get_diagnostics | simulate_*, run_build, run_tests | Apply fixes and format |
 
 **Global forbidden:** simulate_* (verify is post-edit, not speculative), rename_symbol
 

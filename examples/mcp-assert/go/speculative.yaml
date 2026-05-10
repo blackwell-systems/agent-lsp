@@ -14,7 +14,7 @@ setup:
     args:
       file_path: "{{fixture}}/main.go"
 assert:
-  tool: simulate_edit_atomic
+  tool: preview_edit
   args:
     file_path: "{{fixture}}/main.go"
     workspace_root: "{{fixture}}"

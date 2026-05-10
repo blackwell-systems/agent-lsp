@@ -486,7 +486,7 @@ func taskEditSafety(ctx context.Context, root string, client *lsp.LSPClient, tgt
 	grepRoundTrips += 2
 	gr := result{bytes: totalGrepBytes, roundTrips: grepRoundTrips}
 
-	// LSP: references + diagnostics (what simulate_edit_atomic does).
+	// LSP: references + diagnostics (what preview_edit does).
 	uri := fileURI(tgt.refSymbolFile)
 	pos := types.Position{Line: tgt.refSymbolLine, Character: tgt.refSymbolCol}
 	refsJSON := lspReferences(ctx, client, uri, pos)
@@ -541,7 +541,7 @@ func taskSkillRefactor(ctx context.Context, root string, client *lsp.LSPClient, 
 	totalLSPBytes += len(prepRaw)
 	lspRoundTrips++
 
-	// get_references (blast radius)
+	// find_references (blast radius)
 	refsJSON := lspReferences(ctx, client, uri, pos)
 	totalLSPBytes += len(refsJSON)
 	lspRoundTrips++
@@ -698,7 +698,7 @@ func taskSkillRename(ctx context.Context, root string, client *lsp.LSPClient, tg
 // Find exported symbols with zero references (dead code).
 // Grep: for each export in the file, grep the entire codebase. If only the
 // definition matches, it's dead. Agent must read the file + N grep passes.
-// LSP: get_document_symbols + get_references per symbol. Zero-ref symbols are dead.
+// LSP: list_symbols + find_references per symbol. Zero-ref symbols are dead.
 func taskSkillDeadCode(ctx context.Context, root string, client *lsp.LSPClient, tgt targets) taskResult {
 	targetFile := tgt.largestFile
 	uri := fileURI(targetFile)
@@ -860,7 +860,7 @@ func taskSkillUnderstand(ctx context.Context, root string, client *lsp.LSPClient
 // Preview an edit without touching disk: create session, apply edit virtually,
 // evaluate diagnostics, then discard.
 // Grep: must actually edit the file, build, read output, revert.
-// LSP: simulate_edit_atomic returns structured {net_delta, errors_introduced}.
+// LSP: preview_edit returns structured {net_delta, errors_introduced}.
 func taskSkillSafeEdit(ctx context.Context, root string, client *lsp.LSPClient, tgt targets) taskResult {
 	targetFile := tgt.refSymbolFile
 
@@ -891,7 +891,7 @@ func taskSkillSafeEdit(ctx context.Context, root string, client *lsp.LSPClient, 
 	gr := result{bytes: totalGrepBytes, roundTrips: grepRoundTrips, durationMs: grepDuration.Milliseconds()}
 
 	// --- LSP workflow ---
-	// simulate_edit_atomic: create session, apply edit, evaluate, destroy.
+	// preview_edit: create session, apply edit, evaluate, destroy.
 	// The response is a compact JSON: {net_delta, errors_introduced, confidence}.
 	lspStart := time.Now()
 	uri := fileURI(targetFile)
@@ -1003,7 +1003,7 @@ func taskSkillVerify(ctx context.Context, root string, client *lsp.LSPClient, tg
 // --- Task 11: Multi-hop call chain ---
 // "Who calls the functions that call X?" Two levels of incoming call hierarchy.
 // Grep: grep for X, parse enclosing function from each match, grep for each of those.
-// LSP: call_hierarchy incoming, 2 levels deep.
+// LSP: find_callers incoming, 2 levels deep.
 func taskMultiHopCallChain(ctx context.Context, root string, client *lsp.LSPClient, tgt targets) taskResult {
 	pos := types.Position{Line: tgt.refSymbolLine, Character: tgt.refSymbolCol}
 	uri := fileURI(tgt.refSymbolFile)

@@ -9,16 +9,16 @@ the 0-based values the LSP spec requires.
 ## Table of Contents
 
 - [Session tools](#session-tools): `start_lsp`, `restart_lsp_server`, `open_document`, `close_document`, `add_workspace_folder`, `remove_workspace_folder`, `list_workspace_folders`
-- [Analysis tools](#analysis-tools): `get_diagnostics`, `get_info_on_location`, `get_completions`, `get_signature_help`, `get_code_actions`, `get_document_symbols`, `get_workspace_symbols`, `get_change_impact`, `get_cross_repo_references`, `detect_changes`
-- [Navigation tools](#navigation-tools): `get_references`, `go_to_definition`, `go_to_type_definition`, `go_to_implementation`, `go_to_declaration`
+- [Analysis tools](#analysis-tools): `get_diagnostics`, `inspect_symbol`, `get_completions`, `get_signature_help`, `suggest_fixes`, `list_symbols`, `find_symbol`, `get_change_impact`, `get_cross_repo_references`, `detect_changes`
+- [Navigation tools](#navigation-tools): `find_references`, `go_to_definition`, `go_to_type_definition`, `go_to_implementation`, `go_to_declaration`
 - [Refactoring tools](#refactoring-tools): `rename_symbol`, `prepare_rename`, `format_document`, `format_range`, `apply_edit`, `execute_command`
 - [Symbol editing tools](#symbol-editing-tools): `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, `safe_delete_symbol`
 - [Utilities](#utilities): `did_change_watched_files`, `set_log_level`
-- [Code Intelligence tools](#code-intelligence-tools): `call_hierarchy`, `type_hierarchy`, `get_inlay_hints`, `get_semantic_tokens`, `get_document_highlights`
+- [Code Intelligence tools](#code-intelligence-tools): `find_callers`, `type_hierarchy`, `get_inlay_hints`, `get_semantic_tokens`, `get_document_highlights`
 - [Build & Test tools](#build--test-tools): `run_build`, `run_tests`, `get_tests_for_file`
 - [Server Introspection tools](#server-introspection-tools): `get_server_capabilities`, `detect_lsp_servers`
 - [Cache tools](#cache-tools): `export_cache`, `import_cache`
-- [Simulation tools](#simulation-tools): `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`
+- [Simulation tools](#simulation-tools): `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `preview_edit`
 - [Startup and warm-up notes](#startup-and-warm-up-notes)
 - [Symbol lookup tools](#symbol-lookup-tools): `go_to_symbol`, `get_symbol_source`, `get_symbol_documentation`
 - [Phase enforcement tools](#phase-enforcement-tools): `activate_skill`, `deactivate_skill`, `get_skill_phase`
@@ -64,7 +64,7 @@ LSP server initialized with root: /home/user/projects/agent-lsp/test/ts-project
 - Shuts down the existing LSP process before starting the new one, so there is no resource
   leak.
 - After `start_lsp` returns, the underlying language server is initialized but
-  may not have finished indexing the workspace. For `get_references` on large
+  may not have finished indexing the workspace. For `find_references` on large
   projects, the server waits for all `$/progress` end events before returning.
 - Call `open_document` after this before running any per-file analysis.
 
@@ -106,7 +106,7 @@ LSP server restarted successfully
 ### `open_document`
 
 Register a file with the language server for analysis. Most analysis tools
-(`get_info_on_location`, `get_completions`, `get_references`, etc.) call this
+(`inspect_symbol`, `get_completions`, `find_references`, etc.) call this
 internally via the `withDocument` helper, so you typically only need to call
 it explicitly when you want to pre-warm a file or keep it open across multiple
 operations.
@@ -184,7 +184,7 @@ and diagnostics. After adding a folder the language server re-indexes it, so cal
 sites and symbol definitions in both repos become visible to each other.
 
 Useful pattern: `start_lsp` on a library repo, then `add_workspace_folder` for a
-consumer repo. `get_references` on a library function then returns call sites in
+consumer repo. `find_references` on a library function then returns call sites in
 both projects.
 
 **Parameters**
@@ -319,7 +319,7 @@ Severity codes: `1` = error, `2` = warning, `3` = information, `4` = hint.
 
 ---
 
-### `get_info_on_location`
+### `inspect_symbol`
 
 Retrieve hover information for a symbol at a specific position via
 `textDocument/hover`. Returns type signatures, JSDoc/godoc comments, and other
@@ -491,7 +491,7 @@ highlights the active parameter.
 
 ---
 
-### `get_code_actions`
+### `suggest_fixes`
 
 Retrieve code actions (quick fixes, refactorings) available for a text range,
 via `textDocument/codeAction`. The server receives the range and any
@@ -561,7 +561,7 @@ The range start must not be after the range end (validated by the schema).
 
 ---
 
-### `get_document_symbols`
+### `list_symbols`
 
 List all symbols defined in a file (functions, classes, interfaces, variables,
 methods, etc.) via `textDocument/documentSymbol`. Returns a hierarchical
@@ -633,7 +633,7 @@ Symbol `kind` values: `4`=Constructor, `5`=Class, `6`=Method, `7`=Property,
 
 ---
 
-### `get_workspace_symbols`
+### `find_symbol`
 
 Search for symbols across the entire workspace via `workspace/symbol`. Provide
 an empty query to enumerate all indexed symbols, or a substring to filter by
@@ -710,7 +710,7 @@ name. Optionally enrich results with hover documentation for a paginated window.
 - Returns `[]` if the server does not declare `workspaceSymbolProvider`. Some
   servers (e.g., tsserver) require at least one file to be open before workspace
   symbol search is available.
-- Unlike `get_document_symbols`, this tool does not take a `file_path`. It
+- Unlike `list_symbols`, this tool does not take a `file_path`. It
   queries the whole workspace index.
 - Result coordinates are 0-based (LSP native).
 - With `detail_level=hover`, `symbols[]` always contains the full result set.
@@ -778,7 +778,7 @@ understand blast radius.
 
 Find all references to a library symbol across one or more consumer
 repositories. Adds each consumer root as a workspace folder, waits for
-indexing, then calls `get_references` and partitions results by repo root.
+indexing, then calls `find_references` and partitions results by repo root.
 Use before changing a shared library API to find all downstream callers.
 
 **Parameters**
@@ -943,7 +943,7 @@ Cache imported from /home/user/myproject/.agent-lsp/cache.db.gz (1,247 entries)
 
 ## Navigation tools
 
-### `get_references`
+### `find_references`
 
 Find all locations where a symbol is referenced across the workspace, via
 `textDocument/references`.
@@ -1486,7 +1486,7 @@ Workspace edit applied successfully
 ### `execute_command`
 
 Execute a server-defined command via `workspace/executeCommand`. Commands are
-returned in the `command` field of code actions (from `get_code_actions`) and
+returned in the `command` field of code actions (from `suggest_fixes`) and
 may also be listed in the server's `executeCommandProvider.commands` capability.
 
 **Parameters**
@@ -1533,7 +1533,7 @@ Command executed successfully (no result returned)
 
 - Returns `null` if the server does not declare `executeCommandProvider`.
 - The available commands and their argument shapes are server-specific. Use
-  `get_code_actions` to discover commands rather than constructing them manually.
+  `suggest_fixes` to discover commands rather than constructing them manually.
 - Some commands apply changes server-side and push `workspace/applyEdit`
   requests; others return an edit that you must apply with `apply_edit`.
 
@@ -1542,7 +1542,7 @@ Command executed successfully (no result returned)
 ## Symbol editing tools
 
 Four tools for editing, inserting, and deleting symbols by name without needing
-exact line/column coordinates. These resolve symbols via `get_document_symbols`
+exact line/column coordinates. These resolve symbols via `list_symbols`
 internally.
 
 ### `replace_symbol_body`
@@ -1643,7 +1643,7 @@ decorators, or related code above an existing definition.
 ### `safe_delete_symbol`
 
 Delete a symbol only if it has zero references across the workspace. Performs a
-`get_references` check before deletion; refuses to delete if any callers exist.
+`find_references` check before deletion; refuses to delete if any callers exist.
 
 **Parameters**
 
@@ -1675,7 +1675,7 @@ Cannot delete "DeprecatedHelper": 3 references found in 2 files
 
 **Notes**
 
-- Uses `get_references` with `include_declaration: false` to check for callers.
+- Uses `find_references` with `include_declaration: false` to check for callers.
 - Refuses deletion if any reference is found, even in test files.
 - After successful deletion, notifies the language server via `didChange`.
 - Does not remove related imports or test code; use diagnostics to clean up.
@@ -1782,7 +1782,7 @@ Log level set to: warning
 
 ## Code Intelligence tools
 
-### `call_hierarchy`
+### `find_callers`
 
 Resolve the call hierarchy for a symbol at a specific position. Returns the
 symbol's `CallHierarchyItem` plus callers (incoming) and/or callees (outgoing),
@@ -2095,7 +2095,7 @@ do not trigger a workspace-wide reference search.
 **Notes**
 
 - Returns `[]` if the server does not declare `documentHighlightProvider`.
-- Use this instead of `get_references` when you only need occurrences within
+- Use this instead of `find_references` when you only need occurrences within
   the current file. It is faster and requires no workspace indexing.
 - Coordinates in the output are 0-based (LSP native).
 
@@ -2128,18 +2128,18 @@ None. The tool takes no arguments.
   "server_version": "v0.16.2",
   "supported_tools": [
     "apply_edit",
-    "call_hierarchy",
+    "find_callers",
     "did_change_watched_files",
     "format_document",
-    "get_code_actions",
+    "suggest_fixes",
     "get_completions",
     "get_diagnostics",
-    "get_document_symbols",
-    "get_info_on_location",
-    "get_references",
+    "list_symbols",
+    "inspect_symbol",
+    "find_references",
     "get_semantic_tokens",
     "get_signature_help",
-    "get_workspace_symbols",
+    "find_symbol",
     "go_to_definition",
     "go_to_implementation",
     "go_to_type_definition",
@@ -2673,7 +2673,7 @@ Clean up all resources associated with a session. Must be called after committin
 
 ---
 
-### `simulate_edit_atomic`
+### `preview_edit`
 
 One-shot convenience wrapper: applies a single edit, evaluates diagnostics, and discards in one call. The file on disk is never modified.
 
@@ -2740,8 +2740,8 @@ Two modes:
 The tsserver (and some other language servers) perform asynchronous workspace
 indexing after `initialize`. During this period:
 
-- `get_info_on_location` may return empty string.
-- `get_references` may return `[]`.
+- `inspect_symbol` may return empty string.
+- `find_references` may return `[]`.
 - `get_diagnostics` may return empty diagnostic arrays.
 
 The server handles three server-initiated requests that must be responded to
@@ -2752,7 +2752,7 @@ before workspace loading completes:
    config item.
 3. `client/registerCapability`: acknowledged with `null`.
 
-agent-lsp handles all three automatically. For `get_references`, the client
+agent-lsp handles all three automatically. For `find_references`, the client
 additionally waits for all `$/progress` end events before returning. tsserver
 does not emit `$/progress`, so references may require a brief wait and retry
 on first use. Set `set_log_level` to `debug` and look for `Progress end:` log
@@ -2910,7 +2910,7 @@ Dispatches to a per-language toolchain command based on `language_id`:
 - Output is ANSI-stripped, safe for MCP transport.
 - When the toolchain command fails, `source` is `"error"` and `error` contains the
   stderr. This is a structured result, not an MCP error. Callers can detect it and
-  fall back to `get_info_on_location`.
+  fall back to `inspect_symbol`.
 - TypeScript and JavaScript are not supported; returns `source: "error"` with an
   appropriate message.
 - `get_symbol_documentation` is used as Tier 2 in the `lsp-docs` skill. Call it
@@ -2921,7 +2921,7 @@ Dispatches to a per-language toolchain command based on `language_id`:
 ### Position-pattern parameter (`position_pattern`)
 
 Five tools accept an optional `position_pattern` field:
-`get_info_on_location`, `get_references`, `go_to_definition`,
+`inspect_symbol`, `find_references`, `go_to_definition`,
 `rename_symbol`, and `get_symbol_source`. When provided, it replaces the `line`/`column` pair.
 
 **How it works**
@@ -3030,7 +3030,7 @@ checked against the current phase's allowed/forbidden lists before executing.
   "mode": "block",
   "current_phase": "blast_radius",
   "total_phases": 5,
-  "allowed_tools": ["get_change_impact", "go_to_symbol", "get_references"],
+  "allowed_tools": ["get_change_impact", "go_to_symbol", "find_references"],
   "forbidden_tools": ["apply_edit", "simulate_*", "Edit", "Write", "rename_symbol"]
 }
 ```
@@ -3074,7 +3074,7 @@ allowed and forbidden tools, and the full tool call history since activation.
   "phase_index": 1,
   "total_phases": 3,
   "mode": "warn",
-  "allowed_tools": ["go_to_symbol", "prepare_rename", "get_references", "rename_symbol"],
+  "allowed_tools": ["go_to_symbol", "prepare_rename", "find_references", "rename_symbol"],
   "forbidden_tools": ["apply_edit", "Edit", "Write", "format_document", "run_tests"],
   "tool_history": ["start_lsp", "go_to_symbol", "prepare_rename"]
 }
@@ -3098,26 +3098,26 @@ workflows. Install with `cd skills && ./install.sh`.
 
 | Skill | Tools used | Purpose |
 |-------|-----------|---------|
-| `/lsp-safe-edit` | `simulate_edit_atomic`, `get_diagnostics`, `get_code_actions`, `apply_edit` | Speculative preview before disk write (`simulate_edit_atomic`); before/after diagnostic diff; surfaces code actions on introduced errors; handles multi-file edits |
-| `/lsp-edit-export` | `get_references`, `get_info_on_location`, `simulate_edit_atomic` | Safe editing of exported symbols. Finds all callers first, then validates the edit |
-| `/lsp-edit-symbol` | `get_workspace_symbols`, `get_document_symbols`, `apply_edit` | Edit a named symbol without knowing its file or position. Resolves name to definition, retrieves full range, applies edit |
+| `/lsp-safe-edit` | `preview_edit`, `get_diagnostics`, `suggest_fixes`, `apply_edit` | Speculative preview before disk write (`preview_edit`); before/after diagnostic diff; surfaces code actions on introduced errors; handles multi-file edits |
+| `/lsp-edit-export` | `find_references`, `inspect_symbol`, `preview_edit` | Safe editing of exported symbols. Finds all callers first, then validates the edit |
+| `/lsp-edit-symbol` | `find_symbol`, `list_symbols`, `apply_edit` | Edit a named symbol without knowing its file or position. Resolves name to definition, retrieves full range, applies edit |
 | `/lsp-rename` | `prepare_rename`, `rename_symbol` (dry_run), `apply_edit`, `get_diagnostics` | Two-phase rename: `prepare_rename` validates position first, then preview all sites, confirm, apply atomically |
 | `/lsp-verify` | `get_diagnostics`, `run_build`, `run_tests` | Full three-layer check: LSP diagnostics + build + tests, summarizes pass/fail |
-| `/lsp-simulate` | `create_simulation_session`, `simulate_edit_atomic`, `simulate_chain`, `evaluate_session` | Speculative editing: test changes without touching the file; supports single edits, sessions, and chained multi-edit sequences |
-| `/lsp-impact` | `get_references`, `call_hierarchy`, `type_hierarchy` | Blast-radius analysis before renaming or deleting. Maps all callers, implementors, and subtypes |
-| `/lsp-dead-code` | `get_document_symbols`, `get_references` | Detect zero-reference exports and unreachable symbols across a file or workspace |
+| `/lsp-simulate` | `create_simulation_session`, `preview_edit`, `simulate_chain`, `evaluate_session` | Speculative editing: test changes without touching the file; supports single edits, sessions, and chained multi-edit sequences |
+| `/lsp-impact` | `find_references`, `find_callers`, `type_hierarchy` | Blast-radius analysis before renaming or deleting. Maps all callers, implementors, and subtypes |
+| `/lsp-dead-code` | `list_symbols`, `find_references` | Detect zero-reference exports and unreachable symbols across a file or workspace |
 | `/lsp-implement` | `go_to_implementation`, `type_hierarchy` | Find all concrete implementations of an interface or abstract type, with capability pre-check and risk assessment (0 = likely unused, >10 = breaking API change) |
-| `/lsp-docs` | `get_info_on_location`, `get_symbol_documentation`, `go_to_definition`, `get_symbol_source` | Three-tier documentation lookup: hover → offline toolchain doc → source definition |
-| `/lsp-cross-repo` | `add_workspace_folder`, `list_workspace_folders`, `get_references`, `go_to_implementation`, `call_hierarchy` | Multi-root cross-repo analysis. Add a consumer repo and find all callers, references, and implementations of a library symbol across both repos |
-| `/lsp-local-symbols` | `get_document_symbols`, `get_document_highlights`, `get_info_on_location` | File-scoped analysis: list all symbols in a file, find all usages of a symbol within the file (faster than workspace search), get type info |
-| `/lsp-test-correlation` | `get_tests_for_file`, `get_workspace_symbols`, `run_tests` | Find and run only the tests covering an edited file; multi-file deduplication; fallback to workspace symbol search when mapping is absent |
+| `/lsp-docs` | `inspect_symbol`, `get_symbol_documentation`, `go_to_definition`, `get_symbol_source` | Three-tier documentation lookup: hover → offline toolchain doc → source definition |
+| `/lsp-cross-repo` | `add_workspace_folder`, `list_workspace_folders`, `find_references`, `go_to_implementation`, `find_callers` | Multi-root cross-repo analysis. Add a consumer repo and find all callers, references, and implementations of a library symbol across both repos |
+| `/lsp-local-symbols` | `list_symbols`, `get_document_highlights`, `inspect_symbol` | File-scoped analysis: list all symbols in a file, find all usages of a symbol within the file (faster than workspace search), get type info |
+| `/lsp-test-correlation` | `get_tests_for_file`, `find_symbol`, `run_tests` | Find and run only the tests covering an edited file; multi-file deduplication; fallback to workspace symbol search when mapping is absent |
 | `/lsp-format-code` | `format_document`, `format_range`, `apply_edit`, `get_diagnostics` | Format a file or selection via the language server formatter; full-file or range; verifies no diagnostics introduced after applying |
-| `/lsp-explore` | `go_to_symbol`, `get_info_on_location`, `go_to_implementation`, `call_hierarchy`, `get_references` | Symbol exploration: hover + implementations + call hierarchy + references in one pass, for navigating unfamiliar code |
-| `/lsp-understand` | `get_info_on_location`, `go_to_implementation`, `call_hierarchy`, `get_references`, `get_symbol_source`, `get_document_symbols`, `go_to_symbol` | Deep-dive exploration. Builds a Code Map showing type info, implementations, call hierarchy, references, and source |
-| `/lsp-refactor` | `get_change_impact`, `simulate_edit_atomic`, `simulate_chain`, `get_diagnostics`, `run_build`, `run_tests`, `get_tests_for_file`, `apply_edit`, `format_document` | End-to-end safe refactor: blast-radius analysis, speculative preview, apply, verify build, run affected tests |
-| `/lsp-extract-function` | `get_document_symbols`, `get_code_actions`, `execute_command`, `apply_edit`, `get_diagnostics`, `format_document` | Extract a code block into a named function; primary path uses LSP code action, falls back to manual extraction |
-| `/lsp-fix-all` | `get_diagnostics`, `get_code_actions`, `apply_edit`, `format_document` | Bulk-apply quick-fix code actions for all diagnostics in a file |
-| `/lsp-generate` | `get_code_actions`, `execute_command`, `apply_edit`, `format_document`, `get_diagnostics` | Trigger LSP code generation: implement interface stubs, generate test skeletons, add missing methods |
+| `/lsp-explore` | `go_to_symbol`, `inspect_symbol`, `go_to_implementation`, `find_callers`, `find_references` | Symbol exploration: hover + implementations + call hierarchy + references in one pass, for navigating unfamiliar code |
+| `/lsp-understand` | `inspect_symbol`, `go_to_implementation`, `find_callers`, `find_references`, `get_symbol_source`, `list_symbols`, `go_to_symbol` | Deep-dive exploration. Builds a Code Map showing type info, implementations, call hierarchy, references, and source |
+| `/lsp-refactor` | `get_change_impact`, `preview_edit`, `simulate_chain`, `get_diagnostics`, `run_build`, `run_tests`, `get_tests_for_file`, `apply_edit`, `format_document` | End-to-end safe refactor: blast-radius analysis, speculative preview, apply, verify build, run affected tests |
+| `/lsp-extract-function` | `list_symbols`, `suggest_fixes`, `execute_command`, `apply_edit`, `get_diagnostics`, `format_document` | Extract a code block into a named function; primary path uses LSP code action, falls back to manual extraction |
+| `/lsp-fix-all` | `get_diagnostics`, `suggest_fixes`, `apply_edit`, `format_document` | Bulk-apply quick-fix code actions for all diagnostics in a file |
+| `/lsp-generate` | `suggest_fixes`, `execute_command`, `apply_edit`, `format_document`, `get_diagnostics` | Trigger LSP code generation: implement interface stubs, generate test skeletons, add missing methods |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.
 

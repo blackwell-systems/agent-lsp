@@ -222,8 +222,8 @@ func buildSpeculativeLangConfigs(fixtureBase string) []speculativeLangConfig {
 //   - simulate_edit_non_atomic: create → simulate_edit → evaluate → discard
 //   - destroy_session: create → destroy → verify rejected
 //   - simulate_chain: create → simulate_chain → discard
-//   - simulate_edit_atomic_standalone: simulate_edit_atomic one-shot
-//   - error_detection: simulate_edit_atomic with a type-breaking edit
+//   - preview_edit_standalone: preview_edit one-shot
+//   - error_detection: preview_edit with a type-breaking edit
 func TestSpeculativeSessions(t *testing.T) {
 	t.Parallel()
 
@@ -451,8 +451,8 @@ func runSpeculativeLanguageTest(t *testing.T, binaryPath string, lang speculativ
 		}
 	})
 
-	t.Run("simulate_edit_atomic_standalone", func(t *testing.T) {
-		res, err := callTool(ctx, session, "simulate_edit_atomic", map[string]any{
+	t.Run("preview_edit_standalone", func(t *testing.T) {
+		res, err := callTool(ctx, session, "preview_edit", map[string]any{
 			"workspace_root": lang.fixture,
 			"language":       lang.id,
 			"file_path":      safeFile,
@@ -463,22 +463,22 @@ func runSpeculativeLanguageTest(t *testing.T, binaryPath string, lang speculativ
 			"new_text":       lang.safeEditText,
 		})
 		if err != nil {
-			t.Skipf("[%s] simulate_edit_atomic failed: %v", lang.name, err)
+			t.Skipf("[%s] preview_edit failed: %v", lang.name, err)
 			return
 		}
 		if res.IsError {
 			text, _ := textFromResult(res)
-			t.Skipf("[%s] simulate_edit_atomic returned IsError (may not be supported): %s", lang.name, text)
+			t.Skipf("[%s] preview_edit returned IsError (may not be supported): %s", lang.name, text)
 			return
 		}
 		text, _ := textFromResult(res)
 		var evalResult map[string]any
 		if err := json.Unmarshal([]byte(text), &evalResult); err != nil {
-			t.Fatalf("[%s] could not parse simulate_edit_atomic response: %s", lang.name, text)
+			t.Fatalf("[%s] could not parse preview_edit response: %s", lang.name, text)
 		}
 		netDelta, _ := evalResult["net_delta"].(float64)
 		confidence, _ := evalResult["confidence"].(string)
-		t.Logf("[%s] simulate_edit_atomic: net_delta=%.0f confidence=%q", lang.name, netDelta, confidence)
+		t.Logf("[%s] preview_edit: net_delta=%.0f confidence=%q", lang.name, netDelta, confidence)
 		if netDelta > 0 && confidence != "low" {
 			t.Errorf("[%s] comment-only edit must not introduce errors: net_delta=%.0f (confidence=%q)",
 				lang.name, netDelta, confidence)
@@ -490,9 +490,9 @@ func runSpeculativeLanguageTest(t *testing.T, binaryPath string, lang speculativ
 			t.Skipf("[%s] no error edit configured; skipping error_detection", lang.name)
 			return
 		}
-		// Validates the core speculative session value proposition: simulate_edit_atomic
+		// Validates the core speculative session value proposition: preview_edit
 		// reports net_delta > 0 when a type-breaking edit is applied.
-		res, err := callTool(ctx, session, "simulate_edit_atomic", map[string]any{
+		res, err := callTool(ctx, session, "preview_edit", map[string]any{
 			"workspace_root": lang.fixture,
 			"language":       lang.id,
 			"file_path":      lang.file,
@@ -503,12 +503,12 @@ func runSpeculativeLanguageTest(t *testing.T, binaryPath string, lang speculativ
 			"new_text":       lang.errorEditText,
 		})
 		if err != nil {
-			t.Skipf("[%s] simulate_edit_atomic failed: %v", lang.name, err)
+			t.Skipf("[%s] preview_edit failed: %v", lang.name, err)
 			return
 		}
 		if res.IsError {
 			text, _ := textFromResult(res)
-			t.Skipf("[%s] simulate_edit_atomic returned IsError (may not be supported): %s", lang.name, text)
+			t.Skipf("[%s] preview_edit returned IsError (may not be supported): %s", lang.name, text)
 			return
 		}
 		text, _ := textFromResult(res)

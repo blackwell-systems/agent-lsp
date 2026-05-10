@@ -3,7 +3,7 @@ name: lsp-extract-function
 description: Extract a selected code block into a named function. Primary path uses the language server's extract-function code action; falls back to manual extraction when no code action is available. Validates captured variables, scope shadowing, and compilation after extraction.
 argument-hint: "[file-path] [start-line] [end-line] [new-function-name]"
 user-invocable: true
-allowed-tools: mcp__lsp__get_document_symbols mcp__lsp__get_code_actions mcp__lsp__execute_command mcp__lsp__apply_edit mcp__lsp__get_diagnostics mcp__lsp__open_document mcp__lsp__format_document mcp__lsp__get_server_capabilities
+allowed-tools: mcp__lsp__list_symbols mcp__lsp__suggest_fixes mcp__lsp__execute_command mcp__lsp__apply_edit mcp__lsp__get_diagnostics mcp__lsp__open_document mcp__lsp__format_document mcp__lsp__get_server_capabilities
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -38,11 +38,11 @@ start is required when switching workspaces.
 ## Step 1 — Get context (document symbols)
 
 Call `mcp__lsp__open_document` to open the file, then call
-`mcp__lsp__get_document_symbols` to understand the containing function and scope:
+`mcp__lsp__list_symbols` to understand the containing function and scope:
 
 ```
 mcp__lsp__open_document({ "file_path": "<file_path>" })
-mcp__lsp__get_document_symbols({ "file_path": "<file_path>" })
+mcp__lsp__list_symbols({ "file_path": "<file_path>" })
 ```
 
 This establishes:
@@ -74,10 +74,10 @@ primary path (Step 3) is available.
 
 ## Step 3 — Primary path: LSP code action
 
-Call `mcp__lsp__get_code_actions` with the selection range:
+Call `mcp__lsp__suggest_fixes` with the selection range:
 
 ```
-mcp__lsp__get_code_actions({
+mcp__lsp__suggest_fixes({
   "file_path": "<file_path>",
   "start_line": N,
   "start_column": 1,

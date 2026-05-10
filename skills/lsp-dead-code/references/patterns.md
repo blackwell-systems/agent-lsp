@@ -33,19 +33,19 @@ Test-only reference: K
 ```
 
 Fill in:
-- **N** — total count of exported symbols found by `get_document_symbols` after
+- **N** — total count of exported symbols found by `list_symbols` after
   filtering for the language's export rule.
-- **M** — count of symbols where `get_references` returned `[]`.
+- **M** — count of symbols where `find_references` returned `[]`.
 - **K** — count of symbols where every reference location is a test file.
 
 ---
 
 ## Coordinate Conversion
 
-`get_document_symbols` returns **0-based** coordinates (LSP native).
-`get_references` requires **1-based** coordinates.
+`list_symbols` returns **0-based** coordinates (LSP native).
+`find_references` requires **1-based** coordinates.
 
-Always apply this conversion before calling `get_references`:
+Always apply this conversion before calling `find_references`:
 
 ```
 line_for_refs = symbol.selectionRange.start.line + 1
@@ -54,13 +54,13 @@ col_for_refs  = symbol.selectionRange.start.character + 1
 
 Quick reference table:
 
-| get_document_symbols output | get_references input |
+| list_symbols output | find_references input |
 |-----------------------------|----------------------|
 | selectionRange.start.line   | line + 1             |
 | selectionRange.start.character | column + 1        |
 
 Example: a symbol at `selectionRange.start = { line: 41, character: 5 }`
-requires `get_references(line: 42, column: 6)`.
+requires `find_references(line: 42, column: 6)`.
 
 ---
 
@@ -82,7 +82,7 @@ conclusion.
 
 ## False-Positive Categories
 
-These are cases where `get_references` returns `[]` (or a low count) even
+These are cases where `find_references` returns `[]` (or a low count) even
 though the symbol IS used at runtime. Never delete a zero-reference
 candidate without checking these:
 
@@ -100,12 +100,12 @@ candidate without checking these:
 3. **Library public API (external consumers)**
    If the file being audited is part of a published library, callers in
    external modules not present in the workspace will never appear in
-   `get_references` results. A zero count for a library export usually means
+   `find_references` results. A zero count for a library export usually means
    "not called inside this repo", not "not called anywhere".
 
 4. **Interface implementations verified at compile time**
    Go: `var _ io.Reader = (*MyReader)(nil)` — this line is a compile-time
-   check, not a call. The symbol `MyReader` may appear in `get_references`
+   check, not a call. The symbol `MyReader` may appear in `find_references`
    output, but the intent is interface satisfaction, not usage.
 
 5. **CGo exported functions**
@@ -125,8 +125,8 @@ For large files with many exported symbols, process in batches to avoid
 overwhelming the LSP server:
 
 ```
-Batch 1: symbols[0..4]   → call get_references for each
-Batch 2: symbols[5..9]   → call get_references for each
+Batch 1: symbols[0..4]   → call find_references for each
+Batch 2: symbols[5..9]   → call find_references for each
 ...
 ```
 
@@ -135,7 +135,7 @@ well-known public function) returns `[]`, the workspace may still be
 loading. Steps to recover:
 
 1. Wait 2–3 seconds.
-2. Retry `get_references` for that symbol.
+2. Retry `find_references` for that symbol.
 3. If it still returns `[]`, note it as "possibly incomplete — workspace
    indexing may be incomplete" in the report instead of flagging it as
    zero-reference.

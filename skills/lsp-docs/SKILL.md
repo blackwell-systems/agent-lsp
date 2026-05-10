@@ -3,7 +3,7 @@ name: lsp-docs
 description: Three-tier documentation lookup for any symbol — hover → offline toolchain doc → source definition. Use when hover text is absent, insufficient, or the symbol is in an unindexed dependency.
 argument-hint: "[symbol-name]"
 user-invocable: true
-allowed-tools: mcp__lsp__get_info_on_location mcp__lsp__get_symbol_documentation mcp__lsp__go_to_definition mcp__lsp__get_symbol_source
+allowed-tools: mcp__lsp__inspect_symbol mcp__lsp__get_symbol_documentation mcp__lsp__go_to_definition mcp__lsp__get_symbol_source
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -41,10 +41,10 @@ Read-only — does not modify any files.
 
 ## Tier 1 — LSP hover (fast, live, position-based)
 
-Call `get_info_on_location` with the file path and cursor position (1-based).
+Call `inspect_symbol` with the file path and cursor position (1-based).
 
 ```
-mcp__lsp__get_info_on_location({
+mcp__lsp__inspect_symbol({
   "file_path": "/abs/path/to/file.go",
   "line": 42,
   "column": 8
@@ -126,7 +126,7 @@ what the symbol does.
 ```
 Goal: look up documentation for http.ListenAndServe in a Go project
 
-Tier 1 — get_info_on_location: cursor on "ListenAndServe" in main.go:14:6
+Tier 1 — inspect_symbol: cursor on "ListenAndServe" in main.go:14:6
   → contents: "" (empty — server not initialized)
   Proceed to Tier 2.
 

@@ -1,9 +1,9 @@
 ---
 name: lsp-generate
-description: Trigger language server code generation — implement interface stubs, generate test skeletons, add missing methods, generate mock types. Uses get_code_actions to surface generator options and execute_command to run them.
+description: Trigger language server code generation — implement interface stubs, generate test skeletons, add missing methods, generate mock types. Uses suggest_fixes to surface generator options and execute_command to run them.
 argument-hint: "[file-path:line:col] [generation-intent]"
 user-invocable: true
-allowed-tools: mcp__lsp__get_code_actions mcp__lsp__execute_command mcp__lsp__apply_edit mcp__lsp__format_document mcp__lsp__get_diagnostics mcp__lsp__open_document mcp__lsp__get_server_capabilities mcp__lsp__go_to_symbol
+allowed-tools: mcp__lsp__suggest_fixes mcp__lsp__execute_command mcp__lsp__apply_edit mcp__lsp__format_document mcp__lsp__get_diagnostics mcp__lsp__open_document mcp__lsp__get_server_capabilities mcp__lsp__go_to_symbol
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -60,7 +60,7 @@ If using `position_pattern`, use the @@ marker convention from
 ### Step 2 — Get code actions at target position
 
 ```
-mcp__lsp__get_code_actions({
+mcp__lsp__suggest_fixes({
   "file_path": "...",
   "start_line": N,
   "start_column": C,
@@ -120,7 +120,7 @@ server. Surface any unexpected errors.
 
 ## Fallback When No Code Action Is Available
 
-If `get_code_actions` returns no generator actions, the language server at this
+If `suggest_fixes` returns no generator actions, the language server at this
 workspace may not support server-side generation for this intent. Explain this
 to the user and suggest a manual approach specific to the intent:
 

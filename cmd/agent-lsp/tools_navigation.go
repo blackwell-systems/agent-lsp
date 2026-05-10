@@ -1,6 +1,6 @@
 // tools_navigation.go defines MCP tool registrations for code navigation:
 // go_to_definition, go_to_type_definition, go_to_implementation,
-// go_to_declaration, get_references, rename_symbol, prepare_rename,
+// go_to_declaration, find_references, rename_symbol, prepare_rename,
 // go_to_symbol, and get_symbol_source.
 //
 // Navigation tools require an initialized LSP client. They use
@@ -225,7 +225,7 @@ func registerNavigationTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "get_document_highlights",
-		Description: "Find all occurrences of the symbol at a position within the same file via LSP (textDocument/documentHighlight). Returns ranges and kinds: 1=Text, 2=Read, 3=Write. File-scoped and instant — does not trigger a workspace-wide reference search. Use this to find all local usages of a variable, parameter, or field without the overhead of get_references.",
+		Description: "Find all occurrences of the symbol at a position within the same file via LSP (textDocument/documentHighlight). Returns ranges and kinds: 1=Text, 2=Read, 3=Write. File-scoped and instant — does not trigger a workspace-wide reference search. Use this to find all local usages of a variable, parameter, or field without the overhead of find_references.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Get Document Highlights",
 			ReadOnlyHint:    true,
@@ -238,7 +238,7 @@ func registerNavigationTools(d toolDeps) {
 	})
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
-		Name:        "call_hierarchy",
+		Name:        "find_callers",
 		Description: "Show call hierarchy for a symbol at a position. Returns callers (incoming), callees (outgoing), or both depending on the direction parameter. Direction defaults to \"both\". Use this to understand code flow -- which functions call this function and which functions it calls.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Call Hierarchy",

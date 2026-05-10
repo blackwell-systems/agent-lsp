@@ -3,7 +3,7 @@ name: lsp-refactor
 description: End-to-end safe refactor workflow — blast-radius analysis, speculative preview, apply to disk, verify build, run affected tests. Inlines lsp-impact + lsp-safe-edit + lsp-verify + lsp-test-correlation into one coordinated sequence.
 argument-hint: "[symbol-or-file] [intent]"
 user-invocable: true
-allowed-tools: mcp__lsp__get_change_impact mcp__lsp__simulate_edit_atomic mcp__lsp__simulate_chain mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__apply_edit mcp__lsp__replace_symbol_body mcp__lsp__open_document mcp__lsp__format_document Edit Write
+allowed-tools: mcp__lsp__get_change_impact mcp__lsp__preview_edit mcp__lsp__simulate_chain mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__apply_edit mcp__lsp__replace_symbol_body mcp__lsp__open_document mcp__lsp__format_document Edit Write
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -16,7 +16,7 @@ metadata:
         allowed:
           - "mcp__lsp__get_change_impact"
           - "mcp__lsp__go_to_symbol"
-          - "mcp__lsp__get_references"
+          - "mcp__lsp__find_references"
         forbidden:
           - "mcp__lsp__apply_edit"
           - "mcp__lsp__simulate_*"
@@ -27,7 +27,7 @@ metadata:
         allowed:
           - "mcp__lsp__open_document"
           - "mcp__lsp__get_diagnostics"
-          - "mcp__lsp__simulate_edit_atomic"
+          - "mcp__lsp__preview_edit"
           - "mcp__lsp__simulate_chain"
         forbidden:
           - "mcp__lsp__apply_edit"
@@ -147,10 +147,10 @@ Store baseline diagnostics as BEFORE.
 
 ### 2b — Speculative simulation
 
-For a **single-file change**: use `simulate_edit_atomic`:
+For a **single-file change**: use `preview_edit`:
 
 ```
-mcp__lsp__simulate_edit_atomic({
+mcp__lsp__preview_edit({
   "file_path": "/abs/path/to/file",
   "start_line": <N>,
   "start_column": <col>,

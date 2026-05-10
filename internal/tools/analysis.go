@@ -1,14 +1,14 @@
 // analysis.go implements MCP tool handlers for code analysis queries:
-// get_diagnostics, get_info_on_location (hover), get_completions,
-// get_signature_help, get_code_actions, get_document_symbols, and
-// get_workspace_symbols.
+// get_diagnostics, inspect_symbol (hover), get_completions,
+// get_signature_help, suggest_fixes, list_symbols, and
+// find_symbol.
 //
 // get_diagnostics has special behavior: it reopens the document from disk
 // before collecting diagnostics, ensuring results reflect the latest saved
 // state rather than stale LSP cache. It waits up to 25 seconds for
 // diagnostics to settle (cross-package analysis in Go can be slow).
 //
-// get_code_actions filters the returned actions to a concise summary:
+// suggest_fixes filters the returned actions to a concise summary:
 // title, kind, and whether a command or workspace edit is attached.
 // Full workspace edits are not inlined to keep responses compact.
 package tools
@@ -84,7 +84,7 @@ func HandleGetDiagnostics(ctx context.Context, client *lsp.LSPClient, args map[s
 	}
 	hint := "No errors. Safe to proceed."
 	if hasErrors {
-		hint = "Use get_code_actions at each error location for quick fixes."
+		hint = "Use suggest_fixes at each error location for quick fixes."
 	}
 	return appendHint(types.TextResult(string(data)), hint), nil
 }
@@ -115,9 +115,9 @@ func HandleGetInfoOnLocation(ctx context.Context, client *lsp.LSPClient, args ma
 		return client.GetInfoOnLocation(ctx, fileURI, pos)
 	})
 	if wErr != nil {
-		return types.ErrorResult(fmt.Sprintf("get_info_on_location: %s", wErr)), nil
+		return types.ErrorResult(fmt.Sprintf("inspect_symbol: %s", wErr)), nil
 	}
-	return appendHint(types.TextResult(result), "Use get_references to find all usages of this symbol."), nil
+	return appendHint(types.TextResult(result), "Use find_references to find all usages of this symbol."), nil
 }
 
 // HandleGetCompletions retrieves completion suggestions at a source location.
@@ -217,7 +217,7 @@ func HandleGetCodeActions(ctx context.Context, client *lsp.LSPClient, args map[s
 		return client.GetCodeActions(ctx, fileURI, rng)
 	})
 	if wErr != nil {
-		return types.ErrorResult(fmt.Sprintf("get_code_actions: %s", wErr)), nil
+		return types.ErrorResult(fmt.Sprintf("suggest_fixes: %s", wErr)), nil
 	}
 
 	data, mErr := json.Marshal(result)
@@ -249,7 +249,7 @@ func HandleGetDocumentSymbols(ctx context.Context, client *lsp.LSPClient, args m
 		return client.GetDocumentSymbols(ctx, fileURI)
 	})
 	if wErr != nil {
-		return types.ErrorResult(fmt.Sprintf("get_document_symbols: %s", wErr)), nil
+		return types.ErrorResult(fmt.Sprintf("list_symbols: %s", wErr)), nil
 	}
 
 	shifted := make([]types.DocumentSymbol, len(result))
@@ -275,7 +275,7 @@ type workspaceSymbolEnriched struct {
 	Hover string `json:"hover,omitempty"`
 }
 
-// workspaceSymbolsResponse is the structured response for get_workspace_symbols.
+// workspaceSymbolsResponse is the structured response for find_symbol.
 // symbols contains all matches (name/kind/location only). enriched contains
 // the hover-enriched window defined by offset and limit. pagination describes
 // the current window position.
@@ -320,10 +320,10 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 
 	symbols, err := client.GetWorkspaceSymbols(ctx, query)
 	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("get_workspace_symbols: %s", err)), nil
+		return types.ErrorResult(fmt.Sprintf("find_symbol: %s", err)), nil
 	}
 
-	wsSymHint := "Use get_info_on_location on a symbol for type details."
+	wsSymHint := "Use inspect_symbol on a symbol for type details."
 	if detailLevel == "basic" || detailLevel == "" {
 		data, mErr := json.Marshal(symbols)
 		if mErr != nil {

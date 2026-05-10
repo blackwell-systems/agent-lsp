@@ -292,7 +292,7 @@ func generateRulesContent() string {
 	b.WriteString("agent-lsp provides 56 code intelligence tools and 22 workflow skills.\n")
 	b.WriteString("Prefer LSP tools over Grep/Glob/Read for code navigation.\n\n")
 	b.WriteString("**Before editing code:** call `get_change_impact` for blast-radius analysis.\n")
-	b.WriteString("**Before applying edits:** call `simulate_edit_atomic` to preview the diagnostic delta.\n")
+	b.WriteString("**Before applying edits:** call `preview_edit` to preview the diagnostic delta.\n")
 	b.WriteString("**After any change:** call `get_diagnostics`, then `run_build` and `run_tests`.\n\n")
 	b.WriteString("| Skill | Description |\n")
 	b.WriteString("|-------|-------------|\n")

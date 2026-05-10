@@ -1,7 +1,7 @@
 # Speculative Execution for Code
 
 **Status:** Shipped. All 8 tools implemented and CI-tested across 8 languages (`TestSpeculativeSessions` in `test/speculative_test.go`: Go, TypeScript, Python, Rust, C++, C#, Dart, Java)
-**Tools:** `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `simulate_edit_atomic`
+**Tools:** `create_simulation_session`, `simulate_edit`, `evaluate_session`, `simulate_chain`, `commit_session`, `discard_session`, `destroy_session`, `preview_edit`
 
 ---
 
@@ -25,12 +25,12 @@ All `start_line`, `start_column`, `end_line`, and `end_column` parameters are **
 
 ## Quick start
 
-The simplest path: use `simulate_edit_atomic` for a single speculative edit. It handles the full session lifecycle internally. No session ID to track, file on disk is never modified.
+The simplest path: use `preview_edit` for a single speculative edit. It handles the full session lifecycle internally. No session ID to track, file on disk is never modified.
 
 ```
 start_lsp(root_dir="/your/workspace")
 
-simulate_edit_atomic(
+preview_edit(
   workspace_root="/your/workspace",
   language="go",
   file_path="/your/workspace/pkg/handler.go",
@@ -222,7 +222,7 @@ Observes current session state. Calls `WaitForDiagnostics`, diffs against baseli
 
 A caller may call `simulate_edit` multiple times before calling `evaluate_session`. The evaluation reflects the cumulative state.
 
-**Atomic convenience wrapper:** `simulate_edit_atomic` supports two modes. **Standalone** (`session_id` omitted): creates a temporary session, applies the edit, evaluates, then destroys. Pass `workspace_root` + `language`. **Existing session** (`session_id` provided): applies the edit into an existing session and evaluates without destroying it. Returns an `EvaluationResult` directly. Useful for single-edit what-if checks without managing session IDs.
+**Atomic convenience wrapper:** `preview_edit` supports two modes. **Standalone** (`session_id` omitted): creates a temporary session, applies the edit, evaluates, then destroys. Pass `workspace_root` + `language`. **Existing session** (`session_id` provided): applies the edit into an existing session and evaluates without destroying it. Returns an `EvaluationResult` directly. Useful for single-edit what-if checks without managing session IDs.
 
 ---
 
@@ -331,7 +331,7 @@ destroy_session(session_id) → ok
 
 ### Convenience alias
 
-`simulate_edit_atomic` is a thin wrapper, not a separate API, just a helper for callers that don't need session persistence:
+`preview_edit` is a thin wrapper, not a separate API, just a helper for callers that don't need session persistence:
 
 ```go
 func SimulateEditAtomic(ctx, mgr, args) (ToolResult, error) {

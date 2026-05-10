@@ -4,8 +4,8 @@ description: "Edit a named symbol without knowing its file or position. Use when
 argument-hint: "[symbol-name] [new-body-or-signature]"
 user-invocable: true
 allowed-tools:
-  - mcp__lsp__get_workspace_symbols
-  - mcp__lsp__get_document_symbols
+  - mcp__lsp__find_symbol
+  - mcp__lsp__list_symbols
   - mcp__lsp__apply_edit
   - mcp__lsp__replace_symbol_body
 license: MIT
@@ -18,7 +18,7 @@ metadata:
 
 Edit a named symbol (function, type, variable) without needing its exact file path
 or line/column. Primary path uses `replace_symbol_body` for direct symbol replacement.
-Falls back to `get_workspace_symbols` + `get_document_symbols` + `apply_edit` when
+Falls back to `find_symbol` + `list_symbols` + `apply_edit` when
 the server does not support document symbols well.
 
 ## Workflow
@@ -26,7 +26,7 @@ the server does not support document symbols well.
 ### Step 1 — Locate the file
 
 ```json
-{ "tool": "get_workspace_symbols", "query": "MyFunc" }
+{ "tool": "find_symbol", "query": "MyFunc" }
 ```
 
 Returns a list of matching symbols with file URI and position. Pick the definition
@@ -60,7 +60,7 @@ for this file), fall back to the manual path below.
 
 ```json
 {
-  "tool": "get_document_symbols",
+  "tool": "list_symbols",
   "file_path": "/path/to/file.go",
   "language_id": "go"
 }
@@ -102,7 +102,7 @@ Option B (positional, when you have the exact range):
 |-----------|----------|
 | Replacing full body | `replace_symbol_body` (primary path) |
 | Changing signature only | Step 1 + apply_edit with one-line old_text |
-| Symbol name ambiguous | Use `get_workspace_symbols` query + container name filter |
+| Symbol name ambiguous | Use `find_symbol` query + container name filter |
 | Server lacks document symbols | Fallback path (Step 2b + 3b) |
 | After edit | Run `get_diagnostics` to verify no errors introduced |
 
@@ -110,9 +110,9 @@ Option B (positional, when you have the exact range):
 
 - `replace_symbol_body` is the preferred path for full-body replacements. It handles
   symbol resolution and range calculation internally.
-- `get_workspace_symbols` returns declaration sites, not all references. The
+- `find_symbol` returns declaration sites, not all references. The
   first non-test result is usually the definition.
-- Positions in `get_document_symbols` are **1-based** (shifted from LSP convention).
+- Positions in `list_symbols` are **1-based** (shifted from LSP convention).
   `apply_edit` `workspace_edit` expects **0-based**; subtract 1 when using positional
   mode (Option B). Text-match mode (Option A) requires no position math.
 - For renames (not edits), use `/lsp-rename` instead; it updates all call sites.

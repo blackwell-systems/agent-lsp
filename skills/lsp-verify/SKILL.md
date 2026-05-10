@@ -2,7 +2,7 @@
 name: lsp-verify
 description: Full three-layer verification after any change — LSP diagnostics + compiler build + test suite, ranked by severity. Use after completing any edit, refactor, or feature to confirm nothing is broken before committing.
 user-invocable: true
-allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__get_code_actions mcp__lsp__format_document mcp__lsp__apply_edit
+allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__suggest_fixes mcp__lsp__format_document mcp__lsp__apply_edit
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -46,7 +46,7 @@ metadata:
       fix_and_format:
         description: "Post-verification: apply code action fixes and format"
         allowed:
-          - "mcp__lsp__get_code_actions"
+          - "mcp__lsp__suggest_fixes"
           - "mcp__lsp__apply_edit"
           - "mcp__lsp__format_document"
           - "mcp__lsp__get_diagnostics"    # re-check after fixes
@@ -226,10 +226,10 @@ changed file. Skip if the user did not request formatting.
 ## When Errors Are Found: Applying Code Actions
 
 If Layer 1 returns errors, the LSP may offer quick fixes. For each error
-location, call `get_code_actions` to surface available fixes:
+location, call `suggest_fixes` to surface available fixes:
 
 ```
-mcp__lsp__get_code_actions({
+mcp__lsp__suggest_fixes({
   "file_path": "<file>",
   "line": <error line>,
   "column": <error column>
