@@ -194,9 +194,10 @@ type LSPClient struct {
 
 	// auto-watcher: watches the workspace root and notifies the server
 	// of file changes automatically, keeping the LSP index fresh.
-	watcherMu   sync.Mutex // guards watcherStop (C2: prevents data race)
-	watcherStop chan struct{}
-	watcher     *fsnotify.Watcher  // C1: held so addWatcherRoot can Add() new dirs
+	watcherMu      sync.Mutex // guards watcherStop, fileChangeCbs (C2: prevents data race)
+	watcherStop    chan struct{}
+	watcher        *fsnotify.Watcher  // C1: held so addWatcherRoot can Add() new dirs
+	fileChangeCbs  []func([]types.FileChangeEvent) // proactive notification callbacks
 }
 
 // NewLSPClient creates a new, unstarted LSP client.
@@ -2450,6 +2451,14 @@ func (c *LSPClient) startWatcher(rootDir string) {
 			pending = make(map[string]fsnotify.Op)
 			if err := c.DidChangeWatchedFiles(changes); err != nil {
 				logging.Log(logging.LevelDebug, "auto-watcher: didChangeWatchedFiles error: "+err.Error())
+			}
+			// Notify proactive file-change subscribers.
+			c.watcherMu.Lock()
+			cbs := make([]func([]types.FileChangeEvent), len(c.fileChangeCbs))
+			copy(cbs, c.fileChangeCbs)
+			c.watcherMu.Unlock()
+			for _, cb := range cbs {
+				cb(changes)
 			}
 			// Invalidate cached references for changed files.
 			if c.refCache != nil {
