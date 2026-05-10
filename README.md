@@ -22,13 +22,15 @@ agent-lsp is a **stateful runtime** over real language servers. It indexes your 
 
 ### What agents say
 
-We asked AI agents to evaluate agent-lsp across 10 coding tasks (find callers, rename safely, preview edits, detect dead code) and write an honest assessment. Three different models, three independent evaluations, same conclusion:
+We asked AI agents to evaluate agent-lsp across 10 coding tasks (find callers, rename safely, preview edits, detect dead code) and write an honest assessment. Four different models, four independent evaluations, same conclusion:
 
 > **Claude (Opus 4.6):** "I would recommend agent-lsp for any workflow involving refactoring, impact analysis, or safe editing. The standout tools are `get_change_impact` (blast radius in one call, with test/non-test partitioning that would take 5-10 grep commands to replicate), `go_to_implementation` (type-checked interface satisfaction that grep simply cannot do), and the simulation session workflow (speculative type-checking without touching disk, which has no grep/read equivalent at all)."
 
 > **Cursor (auto):** "I would recommend agent-lsp for heavy refactors and code navigation because the rename, references, implementations, call hierarchy, and simulation tools remove a lot of brittle grep/manual-edit work and make changes safer."
 
 > **GPT-5.5 (via Codex):** "I would recommend agent-lsp for symbol-aware work: references, implementations, rename previews, diagnostics, and large-file structure are materially faster and less error-prone than grep/read loops."
+
+> **Gemini 2.5 Pro (via Gemini CLI):** "I would highly recommend agent-lsp because it provides a level of semantic awareness that standard text-searching tools simply cannot match. The ability to perform high-confidence renames, find interface implementations, and preview the diagnostic impact of edits without writing to disk significantly reduces the risk of introducing regressions."
 
 **How the pieces fit together:** [LSP](https://microsoft.github.io/language-server-protocol/) (Language Server Protocol) is how editors get code intelligence: completions, diagnostics, go-to-definition. [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) is the standard way AI tools like Claude Code discover and call external tools. agent-lsp bridges the two: language server intelligence, accessible to AI agents.
 
