@@ -147,7 +147,7 @@ Layer 1 (`Instructions`) is the missing piece. Implementation: set `ServerOption
 | Feature | Status | Description |
 |---------|--------|-------------|
 | **`Instructions` on initialize** | **Shipped** | `ServerOptions.Instructions` set with condensed skill overview: tool count, key workflows (blast radius before edit, simulate before apply, verify after change), pointer to `prompts/get` for full details. Under 200 tokens. Every MCP client receives it automatically on connect. |
-| **`agent-lsp init` rules files** | Planned | When init targets Cursor, also write `.cursorrules`. Windsurf gets `.windsurfrules`. Claude Code gets CLAUDE.md skill section. Same content adapted to each provider's format. Supplements Layer 1 for clients that support persistent rules. |
+| **`agent-lsp init` rules files** | **Shipped** | `init` writes a skill awareness rules file alongside the MCP config. Claude Code gets a managed CLAUDE.md section (sentinel comments). Cursor gets `.cursor/rules/agent-lsp.mdc`. Cline gets `.clinerules`. Windsurf gets `~/.windsurfrules`. Gemini CLI gets `GEMINI.md`. All use managed sections for idempotent updates. Content generated from embedded SKILL.md files at runtime. |
 
 **Per-platform rules file mapping:**
 
