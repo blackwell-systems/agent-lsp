@@ -840,6 +840,7 @@ call that answers "what did I break?" without manually listing changed files.
 |------|------|----------|-------------|
 | `workspace_root` | string | no | Workspace root directory; defaults to the LSP root if omitted |
 | `scope` | string | no | Git diff scope: `"unstaged"` (default), `"staged"`, or `"committed"` |
+| `range` | string | no | Git range for `"committed"` scope (e.g., `"v0.7.0..HEAD"`, `"abc123..def456"`, or a single ref like `"main"` which expands to `main~1..main`). Ignored for unstaged/staged scopes. |
 
 **Example call**
 
