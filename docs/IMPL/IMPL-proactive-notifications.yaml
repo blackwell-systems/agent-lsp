@@ -547,7 +547,7 @@ waves:
           files:
             - internal/lsp/client_notify.go
             - internal/lsp/client_notify_test.go
-      base_commit: b5f8006c9152466c340a3c012544520ef181e90d
+      base_commit: cfcb6f1248984250c46bcf0764fba4fa82210c9e
     - number: 2
       agents:
         - id: E
@@ -822,4 +822,3 @@ critic_report:
     reviewed_at: "2026-05-10T06:41:46Z"
     issue_count: 0
 state: REVIEWED
-original_branch: main
