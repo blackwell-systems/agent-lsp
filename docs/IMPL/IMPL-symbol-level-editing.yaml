@@ -416,6 +416,7 @@ waves:
             - Follow the exact import pattern of tools_navigation.go.
           files:
             - cmd/agent-lsp/tools_symbol_edit.go
+      base_commit: 89305629deace848d96062b2c4f52c79c0baa7a1
 quality_gates:
     level: standard
     gates:
@@ -460,5 +461,4 @@ pre_mortem:
           mitigation: |
             CheckInitialized guard at the top of all Handle* functions catches nil
             client before any LSP calls. The resolver itself also checks client != nil.
-state: "REVIEWED"
-original_branch: main
+state: REVIEWED
