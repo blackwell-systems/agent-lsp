@@ -131,6 +131,24 @@ The gap between what clangd provides and what the broader toolchain offers is la
 | **Skills as MCP prompts** | **Shipped** | Expose all 22 skills via `prompts/list` and `prompts/get` so any MCP client (Cursor, Windsurf, etc.) can discover and invoke them, not just Claude Code. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`. Skills continue to work as Claude Code slash commands in parallel. |
 | **Proactive server notifications** | **Shipped** (Wave 1) | Server-initiated MCP notifications across four channels: (1) diagnostic changes (2s debounce), (2) workspace ready (one-shot on indexing complete), (3) process health (crash/recovery), (4) stale references (3s debounce on file changes). Infrastructure in `internal/notify/` with Hub coordinator, per-channel subscribers, and LSPClient hooks (`client_notify.go`). Wave 2 (MCP server wiring) in progress. |
 
+### Provider-agnostic skill awareness
+
+AI agents using agent-lsp need to know about the 22 skills and when to use them. The current approach (SKILL.md files in `~/.claude/skills/`) only works for Claude Code. The solution is a four-layer reinforcement architecture where skill awareness is seeded at connect time and reinforced on every interaction, regardless of which AI provider or client is used.
+
+| Layer | Mechanism | Status | Scope | Durability |
+|-------|-----------|--------|-------|------------|
+| **1. Connect-time instructions** | `ServerOptions.Instructions` in MCP `initialize` response | Planned | Every MCP client automatically | Decays over long conversations |
+| **2. Per-response hints** | Content[1] "Next step:" in every tool response | **Shipped** (v0.8.1) | Every MCP client | Renewed on every tool call |
+| **3. On-demand workflows** | `prompts/get("lsp-refactor")` returns full skill workflow | **Shipped** (v0.7.0) | Any client that calls prompts/list | Loaded when needed |
+| **4. Phase enforcement** | Error messages with recovery guidance when agent skips steps | **Shipped** (v0.5.0) | Every MCP client | Fires on violations |
+
+Layer 1 (`Instructions`) is the missing piece. Implementation: set `ServerOptions.Instructions` in `cmd/agent-lsp/server.go` with a condensed string that seeds skill awareness and points to `prompts/get` for full workflows. The string should be short enough to survive context pressure (under 200 tokens). Combined with layers 2-4, the agent receives continuous reinforcement without any provider-specific configuration.
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **`Instructions` on initialize** | Planned | Set `ServerOptions.Instructions` with condensed skill overview: tool count, key workflows (blast radius before edit, simulate before apply), pointer to `prompts/get` for full details. Under 200 tokens. Every MCP client receives it automatically. |
+| **`agent-lsp init` rules files** | Planned | When init targets Cursor, also write `.cursorrules`. Windsurf gets `.windsurfrules`. Claude Code gets CLAUDE.md skill section. Same content adapted to each provider's format. Supplements Layer 1 for clients that support persistent rules. |
+
 ## Skills
 
 22 skills shipped. See [skills.md](skills.md) for the full catalog.
