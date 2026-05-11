@@ -85,10 +85,10 @@ func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr 
 		"workspace_root": workspaceRoot,
 		"language":       language,
 		"file_path":      filePath,
-		"start_line":     startLine,
-		"start_column":   startCol,
-		"end_line":       endLine,
-		"end_column":     endCol,
+		"start_line":     startLine + 1, // convert 0-based to 1-based
+		"start_column":   startCol + 1,
+		"end_line":       endLine + 1,
+		"end_column":     endCol + 1,
 		"new_text":       newText,
 	}
 
