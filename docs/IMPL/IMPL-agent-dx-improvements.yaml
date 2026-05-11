@@ -514,6 +514,7 @@ waves:
           files:
             - cmd/agent-lsp/tools_aliases.go
             - cmd/agent-lsp/tools_analysis.go
+      base_commit: 84f177036fc8db61d8e06e22a813107fba4f0acf
     - number: 2
       type: integration
       agents:
@@ -596,6 +597,5 @@ critic_report:
     summary: Re-run after fixing Agent B symbol names. GetInfoOnLocation and ResolvePositionPattern both verified to exist with correct names. All agent briefs accurate against codebase.
     reviewed_at: "2026-05-11T02:41:10Z"
     issue_count: 0
-state: "REVIEWED"
-original_branch: main
+state: REVIEWED
 injection_method: hook
