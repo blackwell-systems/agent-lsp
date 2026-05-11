@@ -181,3 +181,55 @@ func TestCollectAllSymbols(t *testing.T) {
 		t.Errorf("expected ExportedFunc, got %s", exported[0].Name)
 	}
 }
+
+func TestBuildSyncGuardedSet(t *testing.T) {
+	// Struct with sync.Mutex field should be guarded
+	symbols := []types.DocumentSymbol{
+		{
+			Name: "Hub",
+			Kind: 23, // struct
+			Children: []types.DocumentSymbol{
+				{Name: "mu", Kind: 8, Detail: "sync.RWMutex"},
+				{Name: "sender", Kind: 8, Detail: "NotificationSender"},
+			},
+		},
+		{
+			Name: "PureType",
+			Kind: 23,
+			Children: []types.DocumentSymbol{
+				{Name: "name", Kind: 8, Detail: "string"},
+			},
+		},
+	}
+
+	guarded := buildSyncGuardedSet(symbols)
+
+	if !guarded["Hub"] {
+		t.Error("expected Hub to be sync-guarded (has RWMutex)")
+	}
+	if guarded["PureType"] {
+		t.Error("expected PureType to NOT be sync-guarded")
+	}
+}
+
+func TestIsSyncGuardedSymbol(t *testing.T) {
+	guardedTypes := map[string]bool{"Hub": true}
+
+	tests := []struct {
+		name     string
+		expected bool
+	}{
+		{"Hub", true},
+		{"(*Hub).SetSender", true},
+		{"(Hub).Send", true},
+		{"PureFunc", false},
+		{"(*Other).Method", false},
+	}
+
+	for _, tt := range tests {
+		got := isSyncGuardedSymbol(tt.name, guardedTypes)
+		if got != tt.expected {
+			t.Errorf("isSyncGuardedSymbol(%q) = %v, want %v", tt.name, got, tt.expected)
+		}
+	}
+}

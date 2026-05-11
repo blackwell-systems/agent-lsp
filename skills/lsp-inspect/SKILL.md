@@ -1,6 +1,6 @@
 ---
 name: lsp-inspect
-description: Full code quality audit for a file, package, or directory. Supports batch mode (directory walk with --top ranking), comparison mode (--diff for branch-only issues), severity calibration by blast radius, fix suggestions, and confidence tiers. Applies a check taxonomy (dead symbols, silent failures, error wrapping, coverage gaps, test coverage, doc drift, unrecovered panics, context propagation) using LSP-first strategies. Produces a severity-tiered findings report. Language-agnostic.
+description: Full code quality audit for a file, package, or directory. Supports batch mode (directory walk with --top ranking), comparison mode (--diff for branch-only issues), severity calibration by blast radius, fix suggestions, and confidence tiers. Applies a check taxonomy (dead symbols, silent failures, error wrapping, coverage gaps, test coverage, doc drift, unrecovered panics, context propagation, concurrency safety) using LSP-first strategies. Concurrency checks cover 25 languages across 4 families (goroutine, thread, async, actor). Produces a severity-tiered findings report. Language-agnostic.
 argument-hint: "<file-or-directory> [--checks <type1>,<type2>] [--json] [--top N] [--diff]"
 user-invocable: true
 allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_change_impact mcp__lsp__find_references mcp__lsp__list_symbols mcp__lsp__inspect_symbol mcp__lsp__get_diagnostics mcp__lsp__find_callers mcp__lsp__go_to_definition mcp__lsp__get_server_capabilities mcp__lsp__get_cross_repo_references Bash
@@ -62,6 +62,9 @@ severity then blast radius."
 | `doc_drift` | Docstring/comment that doesn't match the actual signature | Compare `inspect_symbol` hover text against source |
 | `panic_not_recovered` | Unhandled crash in a goroutine or async context | Read code, identify `go func()` without recover, unguarded `.unwrap()` |
 | `context_propagation` | Function receives context but creates a fresh root for callees | Read code, identify `context.Background()` in functions with `ctx` parameter |
+| `unrecovered_concurrent_entry` | Concurrent entry point without recovery | Read code, identify goroutines/threads/tasks without try-catch or recover |
+| `unchecked_shared_state` | Type assertion or cast on concurrent data structure without safety check | Read code, identify bare `.(*Type)` on sync.Map, unchecked casts on ConcurrentHashMap |
+| `channel_never_closed` | Channel or queue created but never closed in the same package | Read code + grep, find creation sites without matching close/shutdown |
 
 ## Execution
 
@@ -144,6 +147,34 @@ Apply the following checks by reading and reasoning about the code:
 
 **context_propagation:** Look for:
 - Functions that accept `ctx context.Context` but call `context.Background()` or `context.TODO()` internally
+
+**unrecovered_concurrent_entry:** Detect concurrent entry points without recovery.
+Language-specific patterns (check by language family):
+- Go: `go func() { ... }()` where the function body has no `defer func() { if r := recover()` pattern. Weight: library transport code (error severity), application code with middleware protection (info).
+- Java/Kotlin/Scala: `new Thread(...)` or `ExecutorService.submit(...)` without try-catch wrapping the Runnable body, and no `UncaughtExceptionHandler` set on the thread.
+- C#: `Task.Run(...)` or `new Thread(...)` without try-catch in the delegate body.
+- C/C++: `pthread_create` or `std::thread` without exception handling in the thread function.
+- Rust: `std::thread::spawn` without `catch_unwind` in the closure. Also flag `.unwrap()` inside spawned threads (panics kill only that thread but lose the error).
+- Swift: `DispatchQueue.async` or `Task { }` without do-catch.
+- Python: `threading.Thread(target=...)` without try-except in the target function. `asyncio.create_task()` without error handling on the awaited result.
+- TypeScript/JavaScript: `new Worker()` without `onerror` or `error` event handler. `Promise` constructor without `.catch()` on the chain.
+- Zig: `try std.Thread.spawn` without error handling on the spawned function.
+- Elixir/Erlang/Gleam: Skip (actor model with supervisors; unrecovered processes are by design).
+- Lua/Bash/SQL: Skip (no concurrency primitives).
+
+**unchecked_shared_state:** Detect unsafe type operations on concurrent data structures:
+- Go: `sync.Map` `.Load()`, `.LoadOrStore()`, or `.LoadAndDelete()` followed by a bare type assertion `actual.(*Type)` without the `, ok` pattern. The safe pattern is `v, ok := actual.(*Type)`.
+- Java: `ConcurrentHashMap.get()` with unchecked cast and no `instanceof` guard.
+- C#: `ConcurrentDictionary` value retrieval with unchecked cast.
+- Other languages: skip (dynamic typing or type system prevents this class of bug).
+
+**channel_never_closed:** Detect channels or queues that are created but never closed:
+- Go: `make(chan T)` or `make(chan T, N)` where `close(channelName)` does not appear in the same package. May indicate goroutine leaks (receivers block on `range` forever).
+- Python: `queue.Queue()` creation without a sentinel value pattern (`queue.put(None)` + `if item is None: break`).
+- Rust: `mpsc::channel()` where the sender is never dropped or explicitly closed.
+- TypeScript: `new MessageChannel()` or `new BroadcastChannel()` without `.close()`.
+- Java: `BlockingQueue` creation without a poison pill or shutdown pattern.
+- Other languages: skip if no channel/queue primitives.
 
 ### Step 3: Cross-check and classify
 

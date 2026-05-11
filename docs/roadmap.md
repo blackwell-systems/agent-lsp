@@ -236,29 +236,39 @@ The inspector skill is agent-lsp's most powerful quality tool: it found a nil se
 
 ### Concurrency analysis
 
-Proven by finding unrecovered goroutines in mark3labs/mcp-go (#860). These checks detect real crash-path bugs that tests miss because they require specific timing or nil states to trigger.
+Proven by finding unrecovered goroutines in mark3labs/mcp-go (#860). These checks detect real crash-path bugs that tests miss because they require specific timing or nil states to trigger. Language-agnostic: the check taxonomy is universal, with per-language heuristics selected by `language_id`.
+
+**Language family mapping (covers 25 of 30 supported languages):**
+
+| Family | Languages | Concurrent entry pattern | Sync primitive | Recovery |
+|--------|-----------|------------------------|----------------|----------|
+| Goroutine | Go | `go func()` | `sync.Mutex`, `sync.Map` | `recover()` |
+| Thread | Java, Kotlin, C#, Scala, C, C++, Rust, Swift, Zig, Ruby, Groovy | `Thread`, `spawn`, `Task.Run`, `pthread_create` | `synchronized`, `Mutex`, `lock`, `pthread_mutex` | `catch`, `catch_unwind`, `UncaughtExceptionHandler` |
+| Async | Python, TypeScript, JavaScript, Dart, Kotlin (coroutines) | `asyncio.create_task`, `Promise`, `new Worker()` | N/A (single-threaded event loop; `Worker` uses message passing) | `try/except`, `.catch()`, `error` event handler |
+| Actor | Elixir, Erlang, Gleam | `spawn`, `Task.async` | Message passing (no shared state) | Supervisors (let-it-crash; skip checks) |
+| None | Lua, Bash, SQL, HTML/CSS, Markdown | N/A (skip) | N/A | N/A |
 
 **Inspector check type (`concurrency`):**
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Goroutine without recover** | Planned | Detect `go func()` blocks without `defer func() { if r := recover()... }()`. Weight by whether the goroutine is in library transport code (error) vs user-facing handler with middleware protection (info). Heuristic: scan for `go func()` then check if the function body contains `recover()`. |
-| **Unchecked type assertion on sync.Map** | Planned | Detect `.Load()` or `.LoadOrStore()` followed by a bare type assertion `actual.(*Type)` without `, ok` pattern. These panic if the map is corrupted or stores an unexpected type. |
-| **Channel never closed** | Planned | Detect channels created with `make(chan T)` that are never passed to `close()` in the same package. May indicate goroutine leaks (receivers block forever). Heuristic: grep for `make(chan` and verify `close(chName)` exists. |
-| **Shared field without mutex** | Planned | Detect struct fields accessed from multiple goroutines (via call hierarchy through `go func()` boundaries) that lack synchronization. Heuristic: if a function modifies a struct field AND is reachable from a `go func()` call site, flag unless the struct also has a `sync.Mutex` or `sync.RWMutex` field. |
+| **Unrecovered concurrent entry** | **Shipped** | Detect concurrent entry points without recovery across 4 language families. Go: `go func()` without `recover()`. Thread family: `new Thread()/spawn` without try-catch or `UncaughtExceptionHandler`. Async family: `new Worker()` without `error` event handler. Weight by library vs application code. Proven on mcp-go (#860). |
+| **Unchecked type assertion on shared state** | **Shipped** | Detect bare type assertions on concurrent data structures. Go: `sync.Map` with `.(*Type)` without `, ok`. Java: `ConcurrentHashMap` with unchecked cast. Rust: N/A (type system prevents this). TypeScript: N/A (dynamic typing). |
+| **Channel/queue never closed** | **Shipped** | Detect channels or queues created but never closed across 5 languages. Go: `make(chan T)` without `close()`. Python: `queue.Queue` without sentinel. TypeScript: `MessageChannel` without `close()`. Rust: `mpsc::channel` without drop. Java: `BlockingQueue` without poison pill. |
+| **Shared field without sync** | Planned | Detect fields accessed from multiple concurrent contexts without synchronization. Uses `find_callers` to trace call paths through concurrent entry points (goroutines, thread spawns, async tasks). Flags fields in types that lack a sync primitive (mutex, lock, synchronized) in the same type. Language-agnostic: the caller tracing is LSP-based; only the "what counts as a sync primitive" varies per language family. Requires cross-concurrent-boundary caller tracing (below). |
 
 **Tool-level support:**
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Mutex-guarded metadata in get_change_impact** | Planned | If a symbol accesses a field in a struct that also has a `sync.Mutex` or `sync.RWMutex` field, include `"mutex_guarded": true` in the symbol metadata. Changing mutex-guarded code has different blast radius than changing pure functions. |
-| **Cross-goroutine caller tracing** | Planned | Extend `find_callers` or add a parameter to trace call paths that cross `go func()` boundaries. Currently call hierarchy stops at the goroutine launch site. A `--cross-goroutine` flag would follow the call chain into the goroutine body, enabling "who calls this function from a separate goroutine?" queries. |
+| **Sync-guarded metadata in get_change_impact** | **Shipped** | If a symbol is a method on a type that contains a synchronization primitive (Go: `sync.Mutex`/`sync.RWMutex`, Java: `ReentrantLock`, Rust: `Mutex<T>`, Python: `Lock`, C/C++: `pthread_mutex`/`std::mutex`), include `"sync_guarded": true` in the affected_symbols output. Uses document symbols already fetched during Phase 1; zero additional LSP queries. |
+| **Cross-concurrent-boundary caller tracing** | Planned | Extend `find_callers` to trace call paths that cross concurrent entry boundaries (Go: `go func()`, Java: `Thread.start()`, Python: `create_task()`). A `--cross-concurrent` flag follows the call chain into the concurrent body. Language-agnostic: uses `find_callers` for the trace, pattern-matches the concurrent entry point per language family. |
 
 **Skill candidate:**
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **`/lsp-concurrency-audit`** | Planned | Given a type, map all its fields, identify which are accessed from multiple goroutines (by tracing callers through `go func()` boundaries), and flag fields that lack synchronization. Produces a field-level concurrency safety report. |
+| **`/lsp-concurrency-audit`** | Planned | Given a type, map all its fields, identify which are accessed from multiple concurrent contexts (by tracing callers through concurrent entry boundaries), and flag fields that lack synchronization. Language-agnostic: works with any language that has concurrent entry patterns (goroutines, threads, async tasks). Produces a field-level concurrency safety report. |
 
 ## Skills
 

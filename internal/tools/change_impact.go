@@ -120,6 +120,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 	// Struct fields are excluded: they aren't independently callable and their
 	// references are noise that inflates the symbol count.
 	var allExports []exportedSymbol
+	var allDocSymbols []types.DocumentSymbol // retained for sync-guarded detection
 	var warnings []string
 
 	for _, file := range changedFiles {
@@ -131,6 +132,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 			warnings = append(warnings, fmt.Sprintf("warning: could not get symbols for %s: %s", file, err))
 			continue
 		}
+		allDocSymbols = append(allDocSymbols, symbols...)
 		if scope == "all" {
 			collectAllSymbols(symbols, file, langID, &allExports, true)
 		} else {
@@ -187,8 +189,15 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 		symbolRef
 		TestCallers    []symbolRef `json:"test_callers"`
 		NonTestCallers []symbolRef `json:"non_test_callers"`
+		SyncGuarded    bool        `json:"sync_guarded,omitempty"`
 	}
 	var symbolsWithCallers []symbolWithCallers
+
+	// Build a set of sync-guarded struct types by scanning the document symbols
+	// already fetched in Phase 1. A struct is sync-guarded if it contains a
+	// field whose type name includes "Mutex", "RWMutex", "Lock", "synchronized",
+	// "Atomic", or "sync.". This is a heuristic across language families.
+	syncGuardedTypes := buildSyncGuardedSet(allDocSymbols)
 
 	for _, ref := range refResults {
 		entry := symbolWithCallers{
@@ -197,6 +206,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 				File: ref.Symbol.File,
 				Line: ref.Symbol.Line,
 			},
+			SyncGuarded: isSyncGuardedSymbol(ref.Symbol.Name, syncGuardedTypes),
 		}
 
 		if ref.Warning != "" {
@@ -516,4 +526,69 @@ func findEnclosingSymbol(syms []types.DocumentSymbol, lineNum int) *types.Docume
 		}
 	}
 	return best
+}
+
+// syncFieldPatterns contains substrings that indicate a field provides
+// synchronization. Language-agnostic: covers Go (sync.Mutex, sync.RWMutex),
+// Java/Kotlin (ReentrantLock, synchronized), Rust (Mutex), Python (Lock),
+// C/C++ (pthread_mutex, std::mutex), and atomic types.
+var syncFieldPatterns = []string{
+	"Mutex", "RWMutex", "Lock", "Semaphore",
+	"atomic", "Atomic",
+	"sync.", "pthread_mutex", "std::mutex",
+}
+
+// buildSyncGuardedSet scans document symbols and returns a set of type names
+// (structs, classes) that contain at least one synchronization field.
+func buildSyncGuardedSet(symbols []types.DocumentSymbol) map[string]bool {
+	guarded := make(map[string]bool)
+	for _, sym := range symbols {
+		// Check structs/classes (kind 23=struct, 5=class)
+		if sym.Kind == 23 || sym.Kind == 5 {
+			for _, child := range sym.Children {
+				// Check fields (kind 8=field, 7=variable)
+				if child.Kind == 8 || child.Kind == 7 {
+					for _, pattern := range syncFieldPatterns {
+						if strings.Contains(child.Name, pattern) || strings.Contains(child.Detail, pattern) {
+							guarded[sym.Name] = true
+							break
+						}
+					}
+				}
+				if guarded[sym.Name] {
+					break
+				}
+			}
+		}
+		// Recurse into children (nested types)
+		for k, v := range buildSyncGuardedSet(sym.Children) {
+			if v {
+				guarded[k] = true
+			}
+		}
+	}
+	return guarded
+}
+
+// isSyncGuardedSymbol checks if a symbol name refers to a method on a
+// sync-guarded type. Go methods from gopls include the receiver prefix
+// (e.g., "(*Hub).SetSender"); this extracts the type name and checks
+// against the guarded set.
+func isSyncGuardedSymbol(name string, guardedTypes map[string]bool) bool {
+	// Direct match (the symbol IS a guarded type)
+	if guardedTypes[name] {
+		return true
+	}
+	// Method receiver: "(*TypeName).Method" or "TypeName.Method"
+	if dotIdx := strings.LastIndex(name, "."); dotIdx >= 0 {
+		receiver := name[:dotIdx]
+		// Strip pointer receiver syntax: "(*TypeName)" -> "TypeName"
+		receiver = strings.TrimPrefix(receiver, "(*")
+		receiver = strings.TrimPrefix(receiver, "(")
+		receiver = strings.TrimSuffix(receiver, ")")
+		if guardedTypes[receiver] {
+			return true
+		}
+	}
+	return false
 }
