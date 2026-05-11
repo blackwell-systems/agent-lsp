@@ -135,9 +135,9 @@ The gap between what clangd provides and what the broader toolchain offers is la
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **`get_editing_context` (composite tool)** | Planned | Single "give me everything I need before editing this file" call. Returns: all symbols with signatures, callers (test/non-test partitioned), callees, imports. Composes existing `list_symbols` + `get_change_impact` data into one response. Eliminates the 3-5 tool call sequence agents currently use to gather pre-edit context. |
-| **Token savings in responses** | Planned | Include token count metadata in tool responses: "returned 847 tokens (vs ~12,400 for full file read)." Makes the efficiency story visible on every call without requiring a dashboard. |
-| **ETag/conditional responses** | Planned | Support `If-None-Match` style caching on tool responses. If the file hasn't changed since the last query, return a "not modified" stub instead of re-computing. Reduces redundant work on repeat queries (common in agent loops that re-check diagnostics or references). |
+| **`get_editing_context` (composite tool)** | **Shipped** | Single "give me everything I need before editing this file" call. Returns: all symbols with signatures, callers (test/non-test partitioned), callees, imports. Supports `if_none_match` for conditional responses. Shipped as tool #61 in v0.10.0. |
+| **Token savings in responses** | **Shipped** | `list_symbols`, `get_symbol_source`, and `get_editing_context` include `_meta.token_savings` showing tokens returned vs full file size. Shipped in v0.10.0. |
+| **ETag/conditional responses** | **Shipped** | File-scoped tools accept `if_none_match` parameter. When content hash matches, returns `not_modified` instead of recomputing. Shipped in v0.10.0. |
 | **Untested symbol filter** | Planned | `filter: "untested"` parameter on `get_change_impact`. Returns only exported symbols where `non_test_callers > 0 AND test_callers == 0` (active in production code but no test coverage). The data is already in the response; this surfaces it as a dedicated query. Complements `/lsp-dead-code` (zero references) with a coverage gap view (has callers, no tests). |
 
 ### Symbol-level editing tools
