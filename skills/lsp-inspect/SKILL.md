@@ -65,6 +65,7 @@ severity then blast radius."
 | `unrecovered_concurrent_entry` | Concurrent entry point without recovery | Read code, identify goroutines/threads/tasks without try-catch or recover |
 | `unchecked_shared_state` | Type assertion or cast on concurrent data structure without safety check | Read code, identify bare `.(*Type)` on sync.Map, unchecked casts on ConcurrentHashMap |
 | `channel_never_closed` | Channel or queue created but never closed in the same package | Read code + grep, find creation sites without matching close/shutdown |
+| `shared_field_without_sync` | Field accessed from concurrent contexts without synchronization | `get_change_impact` (sync_guarded) + `find_callers` (cross_concurrent) |
 
 ## Execution
 
@@ -175,6 +176,27 @@ Language-specific patterns (check by language family):
 - TypeScript: `new MessageChannel()` or `new BroadcastChannel()` without `.close()`.
 - Java: `BlockingQueue` creation without a poison pill or shutdown pattern.
 - Other languages: skip if no channel/queue primitives.
+
+**shared_field_without_sync:** Detect struct/class fields accessed from multiple
+concurrent contexts without synchronization. This check composes two tools:
+
+1. Call `get_change_impact` on the target file. For each symbol where
+   `sync_guarded: false` (or absent), the symbol's type lacks sync primitives.
+2. For each such symbol, call `find_callers` with `cross_concurrent: true`.
+   If `concurrent_callers` is non-empty, the symbol is called from a concurrent
+   context (goroutine, thread, async task) without synchronization.
+3. Flag any symbol where: (a) it modifies state (writes to fields, not a pure
+   read-only function), AND (b) it has concurrent callers, AND (c) its parent
+   type is not sync-guarded.
+
+Language-agnostic: `get_change_impact` provides `sync_guarded`, `find_callers`
+provides `concurrent_callers`. The check logic is identical regardless of
+whether the concurrent boundary is a goroutine, thread, or async task.
+
+Severity:
+- error: field written from 2+ concurrent contexts with no sync (data race)
+- warning: field written from 1 concurrent context (potential race under load)
+- info: field read-only from concurrent contexts (likely safe, but flag for review)
 
 ### Step 3: Cross-check and classify
 

@@ -255,7 +255,7 @@ Proven by finding unrecovered goroutines in mark3labs/mcp-go (#860). These check
 | **Unrecovered concurrent entry** | **Shipped** | Detect concurrent entry points without recovery across 4 language families. Go: `go func()` without `recover()`. Thread family: `new Thread()/spawn` without try-catch or `UncaughtExceptionHandler`. Async family: `new Worker()` without `error` event handler. Weight by library vs application code. Proven on mcp-go (#860). |
 | **Unchecked type assertion on shared state** | **Shipped** | Detect bare type assertions on concurrent data structures. Go: `sync.Map` with `.(*Type)` without `, ok`. Java: `ConcurrentHashMap` with unchecked cast. Rust: N/A (type system prevents this). TypeScript: N/A (dynamic typing). |
 | **Channel/queue never closed** | **Shipped** | Detect channels or queues created but never closed across 5 languages. Go: `make(chan T)` without `close()`. Python: `queue.Queue` without sentinel. TypeScript: `MessageChannel` without `close()`. Rust: `mpsc::channel` without drop. Java: `BlockingQueue` without poison pill. |
-| **Shared field without sync** | Planned | Detect fields accessed from multiple concurrent contexts without synchronization. Uses `find_callers` to trace call paths through concurrent entry points (goroutines, thread spawns, async tasks). Flags fields in types that lack a sync primitive (mutex, lock, synchronized) in the same type. Language-agnostic: the caller tracing is LSP-based; only the "what counts as a sync primitive" varies per language family. Requires cross-concurrent-boundary caller tracing (below). |
+| **Shared field without sync** | **Shipped** | Detect fields accessed from multiple concurrent contexts without synchronization. Composes `get_change_impact` (sync_guarded) + `find_callers` (cross_concurrent) to identify symbols called from concurrent contexts on types without sync primitives. Language-agnostic: LSP provides the data, heuristics classify by write/read pattern. |
 
 **Tool-level support:**
 
@@ -268,7 +268,7 @@ Proven by finding unrecovered goroutines in mark3labs/mcp-go (#860). These check
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **`/lsp-concurrency-audit`** | Planned | Given a type, map all its fields, identify which are accessed from multiple concurrent contexts (by tracing callers through concurrent entry boundaries), and flag fields that lack synchronization. Language-agnostic: works with any language that has concurrent entry patterns (goroutines, threads, async tasks). Produces a field-level concurrency safety report. |
+| **`/lsp-concurrency-audit`** | **Shipped** | 24th skill. Given a type, map all its fields, trace which are accessed from concurrent contexts via `find_callers(cross_concurrent=true)` + `get_change_impact(sync_guarded)`, and flag fields without synchronization. Produces a field-level safety report with SAFE/UNSAFE/WRITE-CONCURRENT/READ-ONLY classifications. Language-agnostic across 4 concurrency families. |
 
 ## Skills
 
