@@ -15,15 +15,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// SafeApplyEditArgs defines the arguments for the safe_edit alias.
-type SafeApplyEditArgs struct {
-	FilePath    string `json:"file_path" jsonschema:"Absolute path to the file to edit"`
-	StartLine   int    `json:"start_line" jsonschema:"1-indexed start line of the range to replace"`
-	StartColumn int    `json:"start_column" jsonschema:"1-indexed start column of the range to replace"`
-	EndLine     int    `json:"end_line" jsonschema:"1-indexed end line of the range to replace"`
-	EndColumn   int    `json:"end_column" jsonschema:"1-indexed end column of the range to replace"`
-	NewText     string `json:"new_text" jsonschema:"Replacement text for the specified range"`
-}
+// SafeApplyEditArgs is defined in tools_safe_edit.go (Agent C).
 
 func registerAliasTools(d toolDeps) {
 	// blast_radius: same handler as get_change_impact.
