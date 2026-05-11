@@ -427,14 +427,24 @@ doc drift, coverage gaps, panics, context propagation).
 /lsp-inspect internal/handlers/     # Audit an entire package
 /lsp-inspect pkg/auth.go --checks dead_symbol,error_wrapping
 /lsp-inspect src/ --json            # Structured output
+/lsp-inspect src/ --top 20          # Batch mode: walk all packages, rank top 20 findings
+/lsp-inspect src/ --diff            # Comparison mode: only findings from PR diff
 ```
 
 Composes: `get_change_impact` (batch), `find_references` (fallback),
 `list_symbols`, `inspect_symbol`, `get_diagnostics`,
-`find_callers`, source reading with heuristic pattern matching.
+`find_callers`, `go_to_definition`, `get_server_capabilities`,
+source reading with heuristic pattern matching.
 
 Output: severity-tiered findings report (errors, warnings, info) with
-per-finding confidence levels (high/medium/low) and LSP tier annotation.
+per-finding confidence tiers: "verified" (LSP confirmed, act immediately),
+"suspected" (pattern match, investigate first), "advisory" (style suggestion,
+optional). Each finding includes exact fix text (e.g., "remove lines 42-58"
+for dead code). Findings are weighted by blast radius via caller count.
+
+Results are persisted to `.agent-lsp/last-inspection.json` and accessible
+via the `inspect://last` MCP resource for programmatic re-reads without
+re-running the full analysis.
 
 Unlike the external inspector agent, this skill runs inline (no background
 agent, no permission gates, no warmup flag files). It uses the already-warm
