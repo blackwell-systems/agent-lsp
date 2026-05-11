@@ -139,7 +139,7 @@ See [docs/skills.md](./docs/skills.md) for full descriptions and usage guidance.
 | Skill | Purpose |
 |-------|---------|
 | `/lsp-refactor` | End-to-end refactor: blast-radius → preview → apply → verify → test |
-| `/lsp-inspect` | Full code quality audit: dead symbols, test coverage, error handling, doc drift |
+| `/lsp-inspect` | Full code quality audit (11 checks): dead symbols, test coverage, error handling, doc drift, concurrency safety |
 
 ## Docker
 

@@ -760,7 +760,7 @@ understand blast radius.
     { "name": "TestGetReferences", "file": "internal/lsp/client_test.go", "line": 42 }
   ],
   "non_test_callers": [
-    { "name": "LSPClient", "file": "internal/tools/analysis.go", "line": 67 }
+    { "name": "LSPClient", "file": "internal/tools/analysis.go", "line": 67, "sync_guarded": true }
   ],
   "summary": "Found 1 changed symbols with 1 test references across 1 test files.",
   "warnings": []
@@ -774,6 +774,7 @@ understand blast radius.
 - `test_functions` contains the enclosing test function name for each test file reference.
 - `test_files` is the deduplicated set of test files that reference any changed symbol.
 - `non_test_callers` is the blast radius for production code.
+- `sync_guarded`: present and `true` on symbols that are methods on types containing synchronization primitives (Mutex, RWMutex, Lock, atomic). Covers Go, Java, Rust, Python, C/C++ primitives. Helps agents distinguish mutex-guarded code from pure functions when assessing risk.
 - `warnings` contains messages for any `GetReferences` calls that failed (non-fatal).
 
 ---
