@@ -5,28 +5,42 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [0.11.0] - 2026-05-10
 
+### Breaking
+
+- **`get_change_impact` renamed to `blast_radius`.** Same handler, same parameters, new name. Update any scripts, CLAUDE.md rules, or agent memory that references the old name.
+
 ### Added
 
-- **`get_change_impact`: new `scope` parameter.** Pass `scope: "all"` to include unexported symbols for dead code detection. Default remains `"exported"` for backward compatibility.
-- **`/lsp-inspect`: batch mode with `--top N` flag.** Accept a directory and walk all packages, producing a ranked report sorted by severity and blast radius.
-- **`/lsp-inspect`: comparison mode with `--diff` flag.** Run on a PR diff to surface new dead code, silent failures, or coverage gaps introduced by a change.
-- **`/lsp-inspect`: fix suggestions with exact fix text.** Every finding includes the specific fix (e.g., "remove lines 42-58" for dead code). Agents can generate a PR directly from inspector output.
-- **`/lsp-inspect`: confidence tiers.** Findings now use actionable labels: "verified" (LSP confirmed, act immediately), "suspected" (pattern match, investigate first), "advisory" (style suggestion, optional).
-- **`/lsp-inspect`: blast-radius severity calibration.** Findings are weighted by caller count via `get_change_impact`. A silent failure with 50 callers ranks higher than one with 2.
-- **`/lsp-inspect`: results persisted to `.agent-lsp/last-inspection.json`.** Inspector output saved after each run for programmatic access.
-- **MCP resource `inspect://last`.** Serves the last inspection results as JSON. Agents can re-read findings without re-running the full analysis.
-- **`explore_symbol` composite tool (tool #62).** Single call returns type info, source code, callers (top 10), references (count + top 5 files), and test caller count. Replaces the 4-5 tool sequence agents previously used to understand a symbol before editing.
-- **`safe_apply_edit` tool (tool #63).** Combines `preview_edit` + `apply_edit` into one call. Previews the edit speculatively; applies to disk only if `net_delta == 0`. Returns `applied: false` with preview diagnostics when the edit would introduce errors.
-- **Intent aliases (4 new tools: `blast_radius`, `callers`, `explore`, `safe_edit`).** Shorter, intent-oriented names for common operations. `blast_radius` maps to `get_change_impact`; `callers` maps to `find_callers` with direction forced to incoming; `explore` and `safe_edit` map to the new composite handlers. Tool count: 61 to 66.
-- **Indexed indicator in tool responses.** `get_change_impact`, `find_references`, and `find_symbol` responses now include an `indexed: true/false` boolean via `AppendIndexedField`, indicating whether the workspace was fully indexed when results were computed. Agents can decide whether to retry after indexing completes.
-- **Auto-diagnostics after symbol edits.** `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, and `safe_delete_symbol` responses now include `errors_after` and `warnings_after` fields with post-edit diagnostic counts. Agents see immediately whether an edit introduced problems without a separate `get_diagnostics` call.
-- **Proactive diagnostic regression notifications.** `DiagChangeTracker` monitors diagnostic state across edits and pushes notifications when error/warning counts increase. Agents are alerted to regressions without polling.
-- **`/lsp-inspect`: concurrency safety checks (3 new check types).** `unrecovered_concurrent_entry` detects goroutines, threads, and async tasks without recovery across 10 languages. `unchecked_shared_state` detects bare type assertions on sync.Map and ConcurrentHashMap. `channel_never_closed` detects channels/queues created but never closed. Language-agnostic heuristics covering 4 concurrency families (goroutine, thread, async, actor). Inspector now has 11 check types total.
-- **`get_change_impact`: sync-guarded metadata.** Symbols that are methods on types containing synchronization primitives (Mutex, RWMutex, Lock, atomic) now include `"sync_guarded": true` in the `affected_symbols` output. Changing mutex-guarded code has different blast radius than changing pure functions. Covers Go, Java, Rust, Python, C/C++ sync primitives.
-- **`find_callers`: cross-concurrent boundary tracing.** New `cross_concurrent: true` parameter annotates incoming callers that cross concurrent boundaries (goroutines, threads, async tasks). Returns `concurrent_callers` with detected pattern and source location. Enables "who calls this function from a separate goroutine/thread?" queries.
-- **`/lsp-inspect`: shared_field_without_sync check (12th check type).** Composes `get_change_impact(sync_guarded)` + `find_callers(cross_concurrent)` to detect fields accessed from concurrent contexts without synchronization. Classifies as UNSAFE (write-concurrent), WARNING (read-only concurrent), or SAFE (sync-guarded).
-- **`/lsp-concurrency-audit` skill (24th skill).** Dedicated concurrency safety audit for a type or file. Maps all fields, traces concurrent access patterns, produces field-level safety report with SAFE/UNSAFE/WRITE-CONCURRENT/READ-ONLY classifications. Language-agnostic across 4 concurrency families (goroutine, thread, async, actor).
-- **`get_change_impact`: untested symbol filter.** New `filter: "untested"` parameter returns only symbols with production callers but zero test callers. Surfaces coverage gaps without requiring a separate tool.
+- **Inspector evolution (8 improvements to `/lsp-inspect`):**
+  - Batch mode (`--top N`): directory-level inspection with ranked output
+  - Comparison mode (`--diff`): branch-only issue detection
+  - Fix suggestions: exact fix text for every finding
+  - Confidence tiers: verified/suspected/advisory
+  - Blast-radius severity calibration using caller counts
+  - Results persisted to `.agent-lsp/last-inspection.json`
+  - MCP resource `inspect://last` for programmatic access
+  - Inspector now has 12 check types (was 8)
+
+- **Concurrency analysis (language-agnostic, 25 languages):**
+  - 4 new inspector checks: `unrecovered_concurrent_entry`, `unchecked_shared_state`, `channel_never_closed`, `shared_field_without_sync`
+  - `blast_radius`: `sync_guarded` metadata on mutex-protected types
+  - `find_callers`: `cross_concurrent` flag traces through goroutine/thread boundaries
+  - `/lsp-concurrency-audit` skill (24th skill): field-level safety report
+
+- **Agent DX improvements:**
+  - `explore_symbol`: type info + source + callers + refs in one call
+  - `safe_apply_edit`: preview + auto-apply when net_delta == 0
+  - Auto-diagnostics: `errors_after`/`warnings_after` in symbol edit responses
+  - Indexed indicator: `indexed: true/false` in blast_radius/find_references/find_symbol
+  - Proactive diagnostic regression notifications via DiagChangeTracker
+  - Intent aliases: `callers`, `explore`, `safe_edit`
+
+- **`blast_radius`: `scope: "all"` for unexported dead code detection**
+- **`blast_radius`: `filter: "untested"` for coverage gap queries**
+
+### Summary
+
+24 skills. 65 tools. 12 inspector check types. 30 CI-verified languages.
 
 ## [0.10.0] - 2026-05-10
 
