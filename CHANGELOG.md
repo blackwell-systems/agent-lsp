@@ -15,6 +15,12 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - **`/lsp-inspect`: blast-radius severity calibration.** Findings are weighted by caller count via `get_change_impact`. A silent failure with 50 callers ranks higher than one with 2.
 - **`/lsp-inspect`: results persisted to `.agent-lsp/last-inspection.json`.** Inspector output saved after each run for programmatic access.
 - **MCP resource `inspect://last`.** Serves the last inspection results as JSON. Agents can re-read findings without re-running the full analysis.
+- **`explore_symbol` composite tool (tool #62).** Single call returns type info, source code, callers (top 10), references (count + top 5 files), and test caller count. Replaces the 4-5 tool sequence agents previously used to understand a symbol before editing.
+- **`safe_apply_edit` tool (tool #63).** Combines `preview_edit` + `apply_edit` into one call. Previews the edit speculatively; applies to disk only if `net_delta == 0`. Returns `applied: false` with preview diagnostics when the edit would introduce errors.
+- **Intent aliases (4 new tools: `blast_radius`, `callers`, `explore`, `safe_edit`).** Shorter, intent-oriented names for common operations. `blast_radius` maps to `get_change_impact`; `callers` maps to `find_callers` with direction forced to incoming; `explore` and `safe_edit` map to the new composite handlers. Tool count: 61 to 66.
+- **Indexed indicator in tool responses.** `get_change_impact`, `find_references`, and `find_symbol` responses now include an `indexed: true/false` boolean via `AppendIndexedField`, indicating whether the workspace was fully indexed when results were computed. Agents can decide whether to retry after indexing completes.
+- **Auto-diagnostics after symbol edits.** `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, and `safe_delete_symbol` responses now include `errors_after` and `warnings_after` fields with post-edit diagnostic counts. Agents see immediately whether an edit introduced problems without a separate `get_diagnostics` call.
+- **Proactive diagnostic regression notifications.** `DiagChangeTracker` monitors diagnostic state across edits and pushes notifications when error/warning counts increase. Agents are alerted to regressions without polling.
 
 ## [0.10.0] - 2026-05-10
 
