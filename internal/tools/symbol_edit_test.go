@@ -214,6 +214,15 @@ func TestHandleSafeDeleteSymbol_NilClient(t *testing.T) {
 	}
 }
 
+// --- getDiagnosticsForFile tests ---
+
+func TestGetDiagnosticsForFile_NilClient(t *testing.T) {
+	errors, warnings := getDiagnosticsForFile(context.Background(), nil, "/tmp/test.go")
+	if errors != 0 || warnings != 0 {
+		t.Errorf("expected (0, 0) for nil client, got (%d, %d)", errors, warnings)
+	}
+}
+
 // --- Missing args tests ---
 
 func TestHandleReplaceSymbolBody_MissingArgs(t *testing.T) {

@@ -12,6 +12,35 @@ import (
 	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
+// getDiagnosticsForFile refreshes diagnostics for a file and returns the count
+// of errors (severity==1) and warnings (severity==2). Returns (0, 0) if the
+// client is nil or diagnostics cannot be retrieved.
+func getDiagnosticsForFile(ctx context.Context, client *lsp.LSPClient, filePath string) (errors int, warnings int) {
+	if client == nil {
+		return 0, 0
+	}
+
+	fileURI := CreateFileURI(filePath)
+
+	// Reopen the document to trigger fresh diagnostics from the server.
+	_ = client.ReopenDocument(ctx, fileURI)
+
+	// Wait briefly for diagnostics to settle.
+	_ = lsp.WaitForDiagnostics(ctx, client, []string{fileURI}, 5000)
+
+	// Collect diagnostics and count by severity.
+	diags := client.GetDiagnostics(fileURI)
+	for _, d := range diags {
+		switch d.Severity {
+		case 1:
+			errors++
+		case 2:
+			warnings++
+		}
+	}
+	return errors, warnings
+}
+
 // SymbolLocation holds the resolved position of a symbol.
 type SymbolLocation struct {
 	FilePath       string      // absolute file path
@@ -199,7 +228,8 @@ func HandleReplaceSymbolBody(ctx context.Context, client *lsp.LSPClient, args ma
 		return types.ErrorResult(fmt.Sprintf("apply edit: %s", err)), nil
 	}
 
-	hint := "Use get_diagnostics to verify the edit didn't introduce errors."
+	errCount, warnCount := getDiagnosticsForFile(ctx, client, loc.FilePath)
+	hint := fmt.Sprintf("errors_after: %d, warnings_after: %d. Run get_diagnostics for details.", errCount, warnCount)
 	return appendHint(types.TextResult(fmt.Sprintf("Replaced body of %q in %s", symbolPath, loc.FilePath)), hint), nil
 }
 
@@ -246,7 +276,8 @@ func HandleInsertAfterSymbol(ctx context.Context, client *lsp.LSPClient, args ma
 		return types.ErrorResult(fmt.Sprintf("apply edit: %s", err)), nil
 	}
 
-	hint := "Use get_diagnostics to verify the insertion didn't introduce errors."
+	errCount, warnCount := getDiagnosticsForFile(ctx, client, loc.FilePath)
+	hint := fmt.Sprintf("errors_after: %d, warnings_after: %d. Run get_diagnostics for details.", errCount, warnCount)
 	return appendHint(types.TextResult(fmt.Sprintf("Inserted code after %q in %s", symbolPath, loc.FilePath)), hint), nil
 }
 
@@ -293,7 +324,8 @@ func HandleInsertBeforeSymbol(ctx context.Context, client *lsp.LSPClient, args m
 		return types.ErrorResult(fmt.Sprintf("apply edit: %s", err)), nil
 	}
 
-	hint := "Use get_diagnostics to verify the insertion didn't introduce errors."
+	errCount, warnCount := getDiagnosticsForFile(ctx, client, loc.FilePath)
+	hint := fmt.Sprintf("errors_after: %d, warnings_after: %d. Run get_diagnostics for details.", errCount, warnCount)
 	return appendHint(types.TextResult(fmt.Sprintf("Inserted code before %q in %s", symbolPath, loc.FilePath)), hint), nil
 }
 
@@ -364,5 +396,7 @@ func HandleSafeDeleteSymbol(ctx context.Context, client *lsp.LSPClient, args map
 		return types.ErrorResult(fmt.Sprintf("apply edit: %s", err)), nil
 	}
 
-	return types.TextResult(fmt.Sprintf("Deleted symbol %q from %s", symbolPath, loc.FilePath)), nil
+	errCount, warnCount := getDiagnosticsForFile(ctx, client, loc.FilePath)
+	hint := fmt.Sprintf("errors_after: %d, warnings_after: %d. Run get_diagnostics for details.", errCount, warnCount)
+	return appendHint(types.TextResult(fmt.Sprintf("Deleted symbol %q from %s", symbolPath, loc.FilePath)), hint), nil
 }
