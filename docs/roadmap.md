@@ -262,7 +262,7 @@ Proven by finding unrecovered goroutines in mark3labs/mcp-go (#860). These check
 | Feature | Status | Description |
 |---------|--------|-------------|
 | **Sync-guarded metadata in get_change_impact** | **Shipped** | If a symbol is a method on a type that contains a synchronization primitive (Go: `sync.Mutex`/`sync.RWMutex`, Java: `ReentrantLock`, Rust: `Mutex<T>`, Python: `Lock`, C/C++: `pthread_mutex`/`std::mutex`), include `"sync_guarded": true` in the affected_symbols output. Uses document symbols already fetched during Phase 1; zero additional LSP queries. |
-| **Cross-concurrent-boundary caller tracing** | Planned | Extend `find_callers` to trace call paths that cross concurrent entry boundaries (Go: `go func()`, Java: `Thread.start()`, Python: `create_task()`). A `--cross-concurrent` flag follows the call chain into the concurrent body. Language-agnostic: uses `find_callers` for the trace, pattern-matches the concurrent entry point per language family. |
+| **Cross-concurrent-boundary caller tracing** | **Shipped** | `find_callers` now accepts `cross_concurrent: true`. Annotates incoming callers that cross concurrent boundaries (goroutines, threads, async tasks). Returns `concurrent_callers` array with the detected pattern and source location. Scans a 5-line window above each call site for concurrent entry patterns across all language families. |
 
 **Skill candidate:**
 

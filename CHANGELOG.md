@@ -23,6 +23,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - **Proactive diagnostic regression notifications.** `DiagChangeTracker` monitors diagnostic state across edits and pushes notifications when error/warning counts increase. Agents are alerted to regressions without polling.
 - **`/lsp-inspect`: concurrency safety checks (3 new check types).** `unrecovered_concurrent_entry` detects goroutines, threads, and async tasks without recovery across 10 languages. `unchecked_shared_state` detects bare type assertions on sync.Map and ConcurrentHashMap. `channel_never_closed` detects channels/queues created but never closed. Language-agnostic heuristics covering 4 concurrency families (goroutine, thread, async, actor). Inspector now has 11 check types total.
 - **`get_change_impact`: sync-guarded metadata.** Symbols that are methods on types containing synchronization primitives (Mutex, RWMutex, Lock, atomic) now include `"sync_guarded": true` in the `affected_symbols` output. Changing mutex-guarded code has different blast radius than changing pure functions. Covers Go, Java, Rust, Python, C/C++ sync primitives.
+- **`find_callers`: cross-concurrent boundary tracing.** New `cross_concurrent: true` parameter annotates incoming callers that cross concurrent boundaries (goroutines, threads, async tasks). Returns `concurrent_callers` with detected pattern and source location. Enables "who calls this function from a separate goroutine/thread?" queries.
 
 ## [0.10.0] - 2026-05-10
 

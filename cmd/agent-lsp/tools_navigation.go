@@ -80,11 +80,12 @@ type GetDocumentHighlightsArgs struct {
 }
 
 type CallHierarchyArgs struct {
-	FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
-	LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
-	Line       int    `json:"line" jsonschema:"1-indexed line number in the file"`
-	Column     int    `json:"column" jsonschema:"1-indexed column (character offset) in the line"`
-	Direction  string `json:"direction,omitempty" jsonschema:"Direction: incoming\\, outgoing\\, or both (default: both)"`
+	FilePath        string `json:"file_path" jsonschema:"Absolute path to the source file"`
+	LanguageID      string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
+	Line            int    `json:"line" jsonschema:"1-indexed line number in the file"`
+	Column          int    `json:"column" jsonschema:"1-indexed column (character offset) in the line"`
+	Direction       string `json:"direction,omitempty" jsonschema:"Direction: incoming\\, outgoing\\, or both (default: both)"`
+	CrossConcurrent bool   `json:"cross_concurrent,omitempty" jsonschema:"If true\\, annotate callers that cross concurrent boundaries (goroutines\\, threads\\, async tasks). Returns concurrent_callers with the detected pattern."`
 }
 
 type TypeHierarchyArgs struct {
