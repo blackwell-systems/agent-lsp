@@ -115,6 +115,11 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 		scope = v
 	}
 
+	filter := ""
+	if v, ok := args["filter"].(string); ok && v != "" {
+		filter = v
+	}
+
 	// Phase 1: Collect all exported symbols from all changed files.
 	// Only collects top-level exports (functions, types, variables, constants).
 	// Struct fields are excluded: they aren't independently callable and their
@@ -254,6 +259,15 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 			File: ref.Symbol.File,
 			Line: ref.Symbol.Line,
 		})
+
+		// Apply filter: "untested" keeps only symbols with non-test callers
+		// but zero test callers (active in production, no test coverage).
+		if filter == "untested" {
+			if len(entry.NonTestCallers) == 0 || len(entry.TestCallers) > 0 {
+				continue
+			}
+		}
+
 		symbolsWithCallers = append(symbolsWithCallers, entry)
 	}
 

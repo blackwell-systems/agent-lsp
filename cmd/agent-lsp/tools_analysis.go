@@ -108,6 +108,7 @@ type GetChangeImpactArgs struct {
 	ChangedFiles      []string `json:"changed_files" jsonschema:"List of absolute file paths to analyze for exported symbol impact"`
 	IncludeTransitive bool     `json:"include_transitive,omitempty" jsonschema:"If true, include second-order callers (callers of callers) in the results"`
 	Scope             string   `json:"scope,omitempty" jsonschema:"Symbol scope: 'exported' (default) or 'all' (includes unexported symbols for dead code detection)"`
+	Filter            string   `json:"filter,omitempty" jsonschema:"Filter results: 'untested' returns only symbols with production callers but zero test callers"`
 }
 
 type DetectChangesArgs struct {
