@@ -248,11 +248,11 @@ waves:
             Implementation approach:
             - Call LSP client methods directly. Reuse existing helpers:
               - `WithDocument` to open the file once
-              - `client.GetHoverInfo` for type_info
+              - `client.GetInfoOnLocation` for type_info (hover)
               - `client.PrepareCallHierarchy` + `client.GetIncomingCalls` for callers
               - `client.GetDocumentSymbols` + `findInnermostSymbol` for source
               - `client.GetReferences` for references
-            - Position resolution: use `ResolvePosition` from position_pattern.go
+            - Position resolution: use `ResolvePositionPattern` from position_pattern.go
             - Limit callers to top 10, references top 5 file paths
             - Count test callers separately using `isTestFile` from change_impact.go
             - Use `URIToFilePath` to convert reference location URIs to file paths
