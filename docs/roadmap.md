@@ -128,7 +128,7 @@ The gap between what clangd provides and what the broader toolchain offers is la
 | **`agent-lsp uninstall`** | **Shipped** | Clean removal of MCP configs, skill installations, CLAUDE.md managed sections, and cache directories. Supports `--dry-run`. |
 | **Config file format** | Planned | `~/.agent-lsp.json` or `agent-lsp.json` project file for complex setups with per-server options |
 | **Continue.dev config support** | Planned | `agent-lsp init` currently skips Continue.dev; it uses a different config format than `mcpServers` |
-| **Skills as MCP prompts** | **Shipped** | Expose all 23 skills via `prompts/list` and `prompts/get` so any MCP client (Cursor, Windsurf, etc.) can discover and invoke them, not just Claude Code. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`. Skills continue to work as Claude Code slash commands in parallel. |
+| **Skills as MCP prompts** | **Shipped** | Expose all 24 skills via `prompts/list` and `prompts/get` so any MCP client (Cursor, Windsurf, etc.) can discover and invoke them, not just Claude Code. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`. Skills continue to work as Claude Code slash commands in parallel. |
 | **Proactive server notifications** | **Shipped** | Server-initiated MCP notifications across four channels: (1) diagnostic changes (2s debounce), (2) workspace ready (one-shot on indexing complete), (3) process health (crash/recovery), (4) stale references (3s debounce on file changes). Hub coordinator in `internal/notify/`, MCP wiring in `cmd/agent-lsp/notifications.go`. All channels wired automatically on `start_lsp`. |
 
 ### Context and efficiency
@@ -165,7 +165,7 @@ Structured knowledge persistence across sessions. Agents accumulate understandin
 
 ### Provider-agnostic skill awareness
 
-AI agents using agent-lsp need to know about the 23 skills and when to use them. The current approach (SKILL.md files in `~/.claude/skills/`) only works for Claude Code. The solution is a four-layer reinforcement architecture where skill awareness is seeded at connect time and reinforced on every interaction, regardless of which AI provider or client is used.
+AI agents using agent-lsp need to know about the 24 skills and when to use them. The current approach (SKILL.md files in `~/.claude/skills/`) only works for Claude Code. The solution is a four-layer reinforcement architecture where skill awareness is seeded at connect time and reinforced on every interaction, regardless of which AI provider or client is used.
 
 | Layer | Mechanism | Status | Scope | Durability |
 |-------|-----------|--------|-------|------------|
@@ -272,7 +272,7 @@ Proven by finding unrecovered goroutines in mark3labs/mcp-go (#860). These check
 
 ## Skills
 
-23 skills shipped. See [skills.md](skills.md) for the full catalog.
+24 skills shipped. See [skills.md](skills.md) for the full catalog.
 
 ### Creation skills
 
@@ -343,9 +343,9 @@ Skills that target the "Strong" tier should avoid hard dependencies on `callHier
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **`required-capabilities` metadata** | **Shipped** | Space-separated list of LSP server capability keys in SKILL.md frontmatter `metadata` field. All 23 skills declare required and optional capabilities. |
+| **`required-capabilities` metadata** | **Shipped** | Space-separated list of LSP server capability keys in SKILL.md frontmatter `metadata` field. All 24 skills declare required and optional capabilities. |
 | **`optional-capabilities` metadata** | **Shipped** | Same format. Steps using these capabilities skip cleanly when unavailable. No warning on activation. |
-| **Capability check tool** | **Shipped** | Integrated into `get_server_capabilities`: `skills` array classifies all 23 skills as supported/partial/unsupported based on the current server's capabilities. |
+| **Capability check tool** | **Shipped** | Integrated into `get_server_capabilities`: `skills` array classifies all 24 skills as supported/partial/unsupported based on the current server's capabilities. |
 | **Degraded-mode skill variants** | Planned | For high-value skills like `/lsp-impact`, define a degraded path in the skill body that uses only `find_references` when call/type hierarchy are unavailable. Explicit in the prose, not a separate skill file. |
 
 ### Fits the AgentSkills spec
@@ -481,7 +481,7 @@ The agent-local pipeline (blast-radius → simulate → apply → verify → tes
 
 ### Shipped: deterministic trajectory assertions (skill protocol CI)
 
-All 23 skills now have deterministic trajectory assertions in `examples/mcp-assert/trajectory/`. These run in the `mcp-assert-trajectory` CI job on every push and PR: 23 inline-trace assertions, no server needed, 0ms each, under 60 seconds total. They validate `presence`, `absence`, `order`, and `args_contain` rules for each skill's required tool call sequence. This is the deterministic subset of Layer 2 skill workflow testing — not LLM-driven, but covering the structural protocol requirements that can be verified without a running agent. The LLM-driven pass@k/pass^k regression suite (below) remains planned.
+All 24 skills now have deterministic trajectory assertions in `examples/mcp-assert/trajectory/`. These run in the `mcp-assert-trajectory` CI job on every push and PR: 24 inline-trace assertions, no server needed, 0ms each, under 60 seconds total. They validate `presence`, `absence`, `order`, and `args_contain` rules for each skill's required tool call sequence. This is the deterministic subset of Layer 2 skill workflow testing — not LLM-driven, but covering the structural protocol requirements that can be verified without a running agent. The LLM-driven pass@k/pass^k regression suite (below) remains planned.
 
 ### Why existing eval frameworks don't fit
 

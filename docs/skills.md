@@ -1,15 +1,15 @@
 # Skills Reference
 
-agent-lsp ships 23 skills, named workflows that encode correct tool sequences so
+agent-lsp ships 24 skills, named workflows that encode correct tool sequences so
 multi-step operations happen reliably. This doc is a developer reference: what each
 skill does, when to reach for it, and what it does that raw tool calls miss.
 
-All 23 skills conform to the [Agent Skills](https://agentskills.io/) open standard, the cross-agent skill format adopted by Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and [30+ other tools](https://agentskills.io/clients). Each `SKILL.md` includes the required `name` and `description` frontmatter fields, plus `license`, `compatibility`, and `allowed-tools`.
+All 24 skills conform to the [Agent Skills](https://agentskills.io/) open standard, the cross-agent skill format adopted by Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and [30+ other tools](https://agentskills.io/clients). Each `SKILL.md` includes the required `name` and `description` frontmatter fields, plus `license`, `compatibility`, and `allowed-tools`.
 
 **agent-lsp skills are not locked to any single AI provider.** Because they follow the AgentSkills open standard, they work with any conforming agent: Claude, Copilot, Cursor, Gemini, Codex, Roo Code, OpenHands, and the rest. The MCP server handles the LSP runtime; the skills are portable workflow definitions that any agent can load and execute.
 
 **Two discovery paths:**
-- **MCP prompts:** Any MCP client discovers all 23 skills via `prompts/list` and retrieves full workflow instructions via `prompts/get`. No installation step required; skill definitions are embedded in the binary.
+- **MCP prompts:** Any MCP client discovers all 24 skills via `prompts/list` and retrieves full workflow instructions via `prompts/get`. No installation step required; skill definitions are embedded in the binary.
 - **AgentSkills install:** `./skills/install.sh` copies SKILL.md files to your AI tool's skill directory for slash command access.
 
 See the [Setup guide](getting-started/quickstart.md) for installation instructions. For the individual tools that skills compose, see [docs/tools.md](./tools.md). For the full AgentSkills specification, see [agentskills.io/specification](https://agentskills.io/specification).
@@ -480,6 +480,21 @@ error with recovery guidance). Default is `warn`.
 
 See [docs/phase-enforcement.md](./phase-enforcement.md) for the full design, all
 phase tables, and architecture details.
+
+---
+
+### `/lsp-concurrency-audit`
+
+Field-level concurrency safety audit for a type. Maps all fields, traces which are
+accessed from concurrent contexts, and flags fields without synchronization.
+
+**When to reach for it:**
+- You are reviewing a type that is shared across goroutines, threads, or async tasks and want to know which fields are safe.
+- Before adding a new field to a type used concurrently: check whether existing fields already lack synchronization.
+- Auditing a codebase for data race risks that tests miss because they require specific timing to trigger.
+
+**What it does that raw tools miss:**
+Composes `find_callers(cross_concurrent=true)` with `get_change_impact(sync_guarded)` to build a per-field safety map. Each field is classified as SAFE (sync-guarded type), UNSAFE (written from concurrent contexts without sync), WRITE-CONCURRENT (concurrent writes detected), or READ-ONLY (concurrent reads only, no writes). Language-agnostic across 4 concurrency families (goroutine, thread, async, actor). Produces a structured report, not a list of grep hits.
 
 ---
 

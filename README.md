@@ -14,7 +14,7 @@
   <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
 </p>
 
-**The most complete MCP server for language intelligence.** 66 tools, 30 CI-verified languages, 23 agent workflows. Single Go binary.
+**The most complete MCP server for language intelligence.** 66 tools, 30 CI-verified languages, 24 agent workflows. Single Go binary.
 
 AI agents make incorrect code changes because they can't see the full picture: who calls this function, what breaks if I rename it, does the build still pass. Language servers have the answers, but existing MCP bridges either cold-start on every request or expose raw tools that agents use incorrectly.
 
@@ -139,7 +139,8 @@ See [docs/skills.md](./docs/skills.md) for full descriptions and usage guidance.
 | Skill | Purpose |
 |-------|---------|
 | `/lsp-refactor` | End-to-end refactor: blast-radius → preview → apply → verify → test |
-| `/lsp-inspect` | Full code quality audit (11 checks): dead symbols, test coverage, error handling, doc drift, concurrency safety |
+| `/lsp-inspect` | Full code quality audit (12 checks): dead symbols, test coverage, error handling, doc drift, concurrency safety |
+| `/lsp-concurrency-audit` | Field-level concurrency safety audit for a type: traces concurrent access, flags unsynced fields |
 
 ## Docker
 
@@ -310,7 +311,7 @@ This is what the agent does, not something you type. Then use any of the 66 tool
 |------------|---------|
 | Tools | **66** |
 | Languages (CI-verified) | **30**, end-to-end integration tests on every push |
-| Agent workflows (skills) | **23**, named multi-step procedures, discoverable via MCP `prompts/list` |
+| Agent workflows (skills) | **24**, named multi-step procedures, discoverable via MCP `prompts/list` |
 | Speculative execution | **8 tools**, simulate changes before writing to disk |
 | Phase enforcement | **4 skills**, runtime blocks out-of-order tool calls with recovery guidance |
 | Connection model | **persistent**, warm index across files and projects |
