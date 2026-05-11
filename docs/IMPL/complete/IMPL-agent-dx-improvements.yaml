@@ -1,3 +1,4 @@
+completion_date: "2026-05-10"
 title: 'Agent DX Improvements: Six Changes for LSP Tool Adoption'
 feature_slug: agent-dx-improvements
 verdict: SUITABLE
@@ -544,6 +545,7 @@ waves:
             - B
             - C
             - E
+          context_source: prepared-brief
 quality_gates:
     level: standard
     gates:
@@ -557,7 +559,103 @@ quality_gates:
           command: go test ./internal/... ./cmd/...
           required: true
 post_merge_checklist:
-    groups: []
+    groups:
+        - title: Background Service Initialization
+          items:
+            - description: Verify if explore_test.go needs initialization in Server constructor
+            - description: Verify if safe_edit_test.go needs initialization in Server constructor
+completion_reports:
+    A:
+        status: complete
+        branch: saw/agent-dx-improvements/wave1-agent-A
+        commit: 3e4b923
+        files_changed:
+            - internal/tools/indexed.go
+            - internal/tools/indexed_test.go
+            - internal/tools/symbol_edit.go
+            - internal/tools/symbol_edit_test.go
+        files_created:
+            - internal/tools/indexed.go
+            - internal/tools/indexed_test.go
+        tests_added:
+            - TestAppendIndexedField_NilClient
+            - TestAppendIndexedField_ErrorResult
+            - TestAppendIndexedField_AddsFalse
+            - TestAppendIndexedField_AddsTrue
+            - TestAppendIndexedField_NonJSON
+            - TestGetDiagnosticsForFile_NilClient
+        verification: PASS
+        notes: 'Both parts complete. AppendIndexedField helper and getDiagnosticsForFile with auto-diagnostics in all 4 symbol edit handlers. Out-of-scope: internal/lsp needs exported MarkWorkspaceLoadedForTest() for full indexed=true test coverage.'
+    B:
+        status: complete
+        branch: saw/agent-dx-improvements/wave1-agent-B
+        commit: 43818a4
+        files_changed:
+            - internal/tools/explore.go
+            - internal/tools/explore_test.go
+            - cmd/agent-lsp/tools_explore.go
+        files_created:
+            - internal/tools/explore.go
+            - internal/tools/explore_test.go
+            - cmd/agent-lsp/tools_explore.go
+        tests_added:
+            - TestHandleExploreSymbol_NilClient
+            - TestHandleExploreSymbol_MissingFilePath
+            - TestHandleExploreSymbol_MissingPosition
+            - TestTopNFiles
+            - TestTopNFiles_Empty
+            - TestTopNFiles_LessThanN
+        verification: PASS
+        notes: 'All files created and passing. Out-of-scope dep: registerExploreTools(deps) must be wired into cmd/agent-lsp/server.go by integration agent.'
+    C:
+        status: complete
+        branch: saw/agent-dx-improvements/wave1-agent-C
+        commit: 9cc123d
+        files_changed:
+            - internal/tools/safe_edit.go
+            - internal/tools/safe_edit_test.go
+            - cmd/agent-lsp/tools_safe_edit.go
+        files_created:
+            - internal/tools/safe_edit.go
+            - internal/tools/safe_edit_test.go
+            - cmd/agent-lsp/tools_safe_edit.go
+        tests_added:
+            - TestHandleSafeApplyEdit_NilClient
+            - TestHandleSafeApplyEdit_MissingFilePath
+            - TestHandleSafeApplyEdit_MissingOldText
+            - TestHandleSafeApplyEdit_MissingNewText
+        verification: PASS
+        notes: Handler validates args before client init for better DX. Registration function defined but not wired into server.go (out of scope). Integration agent must add registerSafeEditTools(deps) call in server.go after line 364.
+    D:
+        status: complete
+        branch: saw/agent-dx-improvements/wave1-agent-D
+        commit: ab8ef0c
+        files_changed:
+            - internal/notify/diag_change.go
+            - internal/notify/diag_change_test.go
+            - cmd/agent-lsp/notifications.go
+        files_created:
+            - internal/notify/diag_change.go
+            - internal/notify/diag_change_test.go
+        tests_added:
+            - TestDiagChangeNotifier_FiresOnIncrease
+            - TestDiagChangeNotifier_SilentOnDecrease
+            - TestDiagChangeNotifier_SilentOnSame
+            - TestDiagChangeNotifier_Debounces
+            - TestSubscribeDiagnosticChanges
+        verification: PASS
+        notes: DiagChangeTracker with 500ms debounce. All 5 tests passing. Wired into wireNotificationsToClient after SubscribeDiagnostics.
+    E:
+        status: complete
+        branch: saw/agent-dx-improvements/wave1-agent-E
+        commit: 75c4248
+        files_changed:
+            - cmd/agent-lsp/tools_aliases.go
+            - cmd/agent-lsp/tools_analysis.go
+        files_created:
+            - cmd/agent-lsp/tools_aliases.go
+        verification: PASS
+        notes: 'All postconditions pass. Build errors are expected cross-agent deps: tools.HandleExploreSymbol (Agent B), tools.HandleSafeApplyEdit (Agent C), tools.AppendIndexedField (Agent A). Will compile after merge.'
 pre_mortem:
     overall_risk: low
     rows:
@@ -597,5 +695,5 @@ critic_report:
     summary: Re-run after fixing Agent B symbol names. GetInfoOnLocation and ResolvePositionPattern both verified to exist with correct names. All agent briefs accurate against codebase.
     reviewed_at: "2026-05-11T02:41:10Z"
     issue_count: 0
-state: REVIEWED
+state: COMPLETE
 injection_method: hook
