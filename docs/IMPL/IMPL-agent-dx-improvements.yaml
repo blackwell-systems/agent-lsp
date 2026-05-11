@@ -573,25 +573,14 @@ pre_mortem:
           impact: low
           mitigation: Straightforward strings.Index + newline counting. Well-understood algorithm.
 critic_report:
-    verdict: ISSUES
+    verdict: PASS
     agent_reviews:
         A:
             agent_id: A
             verdict: PASS
         B:
             agent_id: B
-            verdict: ISSUES
-            issues:
-                - check: symbol_accuracy
-                  severity: error
-                  description: Brief references client.GetHoverInfo but the actual method on *lsp.LSPClient is GetInfoOnLocation (internal/lsp/client.go:1504)
-                  file: internal/tools/explore.go
-                  symbol: GetHoverInfo
-                - check: symbol_accuracy
-                  severity: error
-                  description: Brief references ResolvePosition from position_pattern.go but the actual function is ResolvePositionPattern (internal/tools/position_pattern.go:47)
-                  file: internal/tools/explore.go
-                  symbol: ResolvePosition
+            verdict: PASS
         C:
             agent_id: C
             verdict: PASS
@@ -604,8 +593,8 @@ critic_report:
         F:
             agent_id: F
             verdict: PASS
-    summary: 'All file existence checks pass (modify files exist, new files do not). Agent D, C, E, F briefs are accurate. Agent A brief is accurate. Agent B brief contains two symbol accuracy errors: references client.GetHoverInfo (actual: client.GetInfoOnLocation) and ResolvePosition (actual: ResolvePositionPattern). These are guidance symbols the agent will attempt to call; using wrong names will cause compilation failures.'
-    reviewed_at: "2026-05-11T02:39:47Z"
-    issue_count: 2
+    summary: Re-run after fixing Agent B symbol names. GetInfoOnLocation and ResolvePositionPattern both verified to exist with correct names. All agent briefs accurate against codebase.
+    reviewed_at: "2026-05-11T02:41:10Z"
+    issue_count: 0
 state: SCOUT_PENDING
 injection_method: hook
