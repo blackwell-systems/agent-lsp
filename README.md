@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-66%2F66-brightgreen.svg" alt="CI Coverage"></a>
+  <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-65%2F65-brightgreen.svg" alt="CI Coverage"></a>
   <a href="#multi-language-support"><img src="https://img.shields.io/badge/languages-30_CI--verified-brightgreen.svg" alt="Languages"></a>
   <a href="https://github.com/blackwell-systems/mcp-assert"><img src="https://raw.githubusercontent.com/blackwell-systems/mcp-assert/main/assets/badge-passing.svg?v=3" alt="mcp-assert: passing" height="20"></a>
   <a href="https://agentskills.io"><img src="assets/badge-agentskills.svg" alt="Agent Skills"></a>
@@ -14,7 +14,7 @@
   <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
 </p>
 
-**The most complete MCP server for language intelligence.** 66 tools, 30 CI-verified languages, 24 agent workflows. Single Go binary.
+**The most complete MCP server for language intelligence.** 65 tools, 30 CI-verified languages, 24 agent workflows. Single Go binary.
 
 AI agents make incorrect code changes because they can't see the full picture: who calls this function, what breaks if I rename it, does the build still pass. Language servers have the answers, but existing MCP bridges either cold-start on every request or expose raw tools that agents use incorrectly.
 
@@ -67,6 +67,23 @@ Skills tell agents the correct order of operations. Phase enforcement makes the 
 When an agent activates a skill, every tool call is checked against the current phase's permissions. Calling `apply_edit` during blast-radius analysis doesn't silently proceed; it returns an error with specific recovery guidance ("complete the blast_radius phase first, allowed tools: [blast_radius, find_references]"). Phases advance automatically as the agent calls tools from later phases.
 
 No other MCP tool provider enforces workflow ordering at runtime. See [docs/phase-enforcement.md](./docs/phase-enforcement.md).
+
+### Concurrency analysis
+
+The inspector includes 4 concurrency checks that work across 25 languages in 4 concurrency families (goroutine, thread, async, actor):
+
+- **Unrecovered concurrent entry**: goroutines/threads/tasks without recovery
+- **Unchecked shared state**: bare type assertions on sync.Map, ConcurrentHashMap
+- **Channel never closed**: channels/queues created but never closed (goroutine leaks)
+- **Shared field without sync**: fields accessed from concurrent contexts without synchronization
+
+`blast_radius` annotates symbols with `sync_guarded: true` when the parent type has a mutex. `find_callers` with `cross_concurrent: true` traces call chains through goroutine/thread boundaries. The `/lsp-concurrency-audit` skill produces a field-level safety report for any type.
+
+### Auto-diagnostics
+
+Symbol edit tools (`replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, `safe_delete_symbol`) automatically return `errors_after` and `warnings_after` counts. Agents know immediately whether an edit broke something without a separate `get_diagnostics` call.
+
+`safe_apply_edit` combines preview + apply in one call: previews speculatively, applies to disk only if `net_delta == 0` (no new errors). One tool call instead of three.
 
 ### Works with
 
@@ -280,7 +297,7 @@ Skills are also available as **MCP prompts**: any MCP client can discover them v
 
 ### Step 6: Allow tool permissions (Claude Code)
 
-For Claude Code, add `mcp__lsp__*` to your permissions allow list so all 66 tools are available without per-tool approval prompts:
+For Claude Code, add `mcp__lsp__*` to your permissions allow list so all 65 tools are available without per-tool approval prompts:
 
 ```json
 // ~/.claude/settings.json
@@ -295,7 +312,7 @@ Without this, Claude Code will prompt for permission on each tool call. Other MC
 
 Skills are multi-tool workflows that encode reliable procedures: blast-radius check before edit, speculative preview before write, test run after change. See [docs/skills.md](./docs/skills.md) for the full list.
 
-### Step 6: Start working
+### Step 7: Start working
 
 Your AI agent calls tools automatically. The first call initializes the workspace:
 
@@ -303,13 +320,13 @@ Your AI agent calls tools automatically. The first call initializes the workspac
 start_lsp(root_dir="/your/project")
 ```
 
-This is what the agent does, not something you type. Then use any of the 66 tools. The session stays warm; no restart needed when switching files.
+This is what the agent does, not something you type. Then use any of the 65 tools. The session stays warm; no restart needed when switching files.
 
 ## What's unique about agent-lsp
 
 | Capability | Details |
 |------------|---------|
-| Tools | **66** |
+| Tools | **65** |
 | Languages (CI-verified) | **30**, end-to-end integration tests on every push |
 | Agent workflows (skills) | **24**, named multi-step procedures, discoverable via MCP `prompts/list` |
 | Speculative execution | **8 tools**, simulate changes before writing to disk |
@@ -341,7 +358,7 @@ See [docs/language-support.md](./docs/language-support.md) for the full coverage
 
 ## Tools
 
-66 tools covering navigation, analysis, refactoring, symbol editing, composite exploration, safe editing, speculative execution, and session lifecycle. All CI-verified.
+65 tools covering navigation, analysis, refactoring, symbol editing, composite exploration, safe editing, speculative execution, and session lifecycle. All CI-verified.
 
 See [docs/tools.md](./docs/tools.md) for the full reference with parameters and examples.
 
