@@ -51,6 +51,10 @@ func wireNotificationsToClient(hub *notify.Hub, client *lsp.LSPClient) {
 	stopDiag := notify.SubscribeDiagnostics(hub, client)
 	hub.AddStopFunc(stopDiag)
 
+	// Diagnostic regression detection (fires when new errors appear).
+	stopDiagChange := notify.SubscribeDiagnosticChanges(hub, client)
+	hub.AddStopFunc(stopDiagChange)
+
 	// Workspace ready notification (polls until indexed).
 	stopReady := notify.SubscribeWorkspaceReady(hub, client, 2*time.Second)
 	hub.AddStopFunc(stopReady)
