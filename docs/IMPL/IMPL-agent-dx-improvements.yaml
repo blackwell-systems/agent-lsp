@@ -1,0 +1,611 @@
+title: 'Agent DX Improvements: Six Changes for LSP Tool Adoption'
+feature_slug: agent-dx-improvements
+verdict: SUITABLE
+suitability_assessment: |
+    File decomposition: 6 distinct changes map cleanly to 5 agents across disjoint files.
+    Changes (1) indexed indicator, (2) explore_symbol, (3) safe_apply_edit, (4) auto-diagnostics
+    in symbol edit responses, (5) proactive diagnostic push on file change, and (6) intent aliases
+    all touch different files with clear boundaries.
+
+    Investigation-first items: None. All changes build on well-understood existing patterns.
+
+    Interface discoverability: All cross-agent interfaces are defined by existing function
+    signatures (IsWorkspaceLoaded, HandleGetDiagnostics, HandleSimulateEditAtomic, etc.).
+    New code composes existing handlers.
+
+    Pre-implementation status: All 6 items are net-new functionality. No partial
+    implementations found in the codebase.
+
+    Parallelization value: High. 5 agents with 2-4 files each, independent in Wave 1.
+    Build/test cycle is >30s (go test ./internal/... ./cmd/...). Single wave maximizes
+    parallelism.
+
+    Estimated times:
+    - Scout phase: ~8 min
+    - Agent execution: ~8 min (5 agents in parallel, ~8 min each)
+    - Merge and verification: ~3 min
+    Total SAW time: ~19 min
+
+    Sequential baseline: ~40 min (5 agents x 8 min avg)
+    Time savings: ~21 min (53% faster)
+
+    Recommendation: Clear speedup. Proceed.
+test_command: go test ./internal/... ./cmd/...
+lint_command: go vet ./...
+file_ownership:
+    - file: internal/tools/indexed.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/tools/indexed_test.go
+      agent: A
+      wave: 1
+      action: new
+    - file: internal/tools/symbol_edit.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: internal/tools/symbol_edit_test.go
+      agent: A
+      wave: 1
+      action: modify
+    - file: internal/tools/explore.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/tools/explore_test.go
+      agent: B
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/tools_explore.go
+      agent: B
+      wave: 1
+      action: new
+    - file: internal/tools/safe_edit.go
+      agent: C
+      wave: 1
+      action: new
+    - file: internal/tools/safe_edit_test.go
+      agent: C
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/tools_safe_edit.go
+      agent: C
+      wave: 1
+      action: new
+    - file: internal/notify/diag_change.go
+      agent: D
+      wave: 1
+      action: new
+    - file: internal/notify/diag_change_test.go
+      agent: D
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/notifications.go
+      agent: D
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/tools_aliases.go
+      agent: E
+      wave: 1
+      action: new
+    - file: cmd/agent-lsp/tools_analysis.go
+      agent: E
+      wave: 1
+      action: modify
+    - file: cmd/agent-lsp/server.go
+      agent: F
+      wave: 2
+      action: modify
+interface_contracts:
+    - name: AppendIndexedField
+      description: |
+        Helper function that appends an "indexed" boolean field to tool response JSON.
+        Queries the LSP client's IsWorkspaceLoaded() and injects the field into the
+        response content's JSON object.
+      definition: |
+        func AppendIndexedField(result types.ToolResult, client *lsp.LSPClient) types.ToolResult
+      location: internal/tools/indexed.go
+    - name: HandleExploreSymbol
+      description: |
+        Composite handler combining inspect_symbol + find_callers + get_symbol_source +
+        find_references into one call. Returns structured JSON with sections: type_info,
+        source, callers, references, test_callers.
+      definition: |
+        func HandleExploreSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
+      location: internal/tools/explore.go
+    - name: HandleSafeApplyEdit
+      description: |
+        Combines preview_edit + apply_edit when net_delta == 0. Returns applied=true on
+        success or applied=false with preview diagnostics when net_delta > 0.
+      definition: |
+        func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr *session.SessionManager, args map[string]any) (types.ToolResult, error)
+      location: internal/tools/safe_edit.go
+    - name: getDiagnosticsForFile
+      description: |
+        Internal helper that retrieves diagnostics for a file and returns error/warning
+        counts. Used by symbol_edit handlers to auto-append diagnostic counts after edits.
+      definition: |
+        func getDiagnosticsForFile(ctx context.Context, client *lsp.LSPClient, filePath string) (errors int, warnings int)
+      location: internal/tools/symbol_edit.go
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Agent A: Indexed Indicator + Auto-Diagnostics in Symbol Edit Responses
+
+            ### What to Implement
+
+            **Part 1: Indexed indicator helper (internal/tools/indexed.go)**
+
+            Create `internal/tools/indexed.go` with a helper function `AppendIndexedField` that:
+            1. Takes a `types.ToolResult` and an `*lsp.LSPClient`
+            2. If client is nil or result is error, returns unchanged
+            3. Parses the first content item's text as JSON
+            4. Adds `"indexed": true/false` based on `client.IsWorkspaceLoaded()`
+            5. Re-serializes and returns the modified result
+
+            ```go
+            func AppendIndexedField(result types.ToolResult, client *lsp.LSPClient) types.ToolResult
+            ```
+
+            **Part 2: Auto-diagnostics after symbol edits (internal/tools/symbol_edit.go)**
+
+            Add an internal helper `getDiagnosticsForFile` that:
+            1. Calls `client.ReopenDocument(ctx, fileURI)` to refresh
+            2. Waits briefly for diagnostics (use `lsp.WaitForDiagnostics` with 5000ms timeout)
+            3. Collects diagnostics and counts errors (severity==1) and warnings (severity==2)
+            4. Returns (errorCount int, warningCount int)
+
+            Then modify the four symbol edit handlers to call this after successful edits:
+            - `HandleReplaceSymbolBody`: after the `ApplyWorkspaceEdit` succeeds
+            - `HandleInsertAfterSymbol`: after the `ApplyWorkspaceEdit` succeeds
+            - `HandleInsertBeforeSymbol`: after the `ApplyWorkspaceEdit` succeeds
+            - `HandleSafeDeleteSymbol`: after the delete edit succeeds
+
+            Append `errors_after` and `warnings_after` counts to the response text.
+            Change the existing hint from "Use get_diagnostics to verify..." to include
+            the counts, e.g.: "errors_after: 0, warnings_after: 1. Run get_diagnostics for details."
+
+            ### Interface Contracts
+
+            ```go
+            // internal/tools/indexed.go
+            func AppendIndexedField(result types.ToolResult, client *lsp.LSPClient) types.ToolResult
+
+            // internal/tools/symbol_edit.go (unexported)
+            func getDiagnosticsForFile(ctx context.Context, client *lsp.LSPClient, filePath string) (errors int, warnings int)
+            ```
+
+            ### Tests
+
+            **internal/tools/indexed_test.go:**
+            - TestAppendIndexedField_NilClient: returns result unchanged
+            - TestAppendIndexedField_ErrorResult: returns result unchanged
+            - TestAppendIndexedField_AddsTrue: mock client with IsWorkspaceLoaded() = true
+            - TestAppendIndexedField_AddsFalse: mock client with IsWorkspaceLoaded() = false
+            - TestAppendIndexedField_NonJSON: returns result unchanged when content is not JSON
+
+            **internal/tools/symbol_edit_test.go (add to existing):**
+            - TestGetDiagnosticsForFile_NilClient: returns 0, 0
+
+            ### Verification Gate
+
+            ```bash
+            go build ./internal/tools/...
+            go test ./internal/tools/ -run "TestAppendIndexed|TestGetDiagnosticsForFile" -v
+            go vet ./internal/tools/
+            ```
+
+            Postconditions:
+            ```bash
+            grep -c "func AppendIndexedField" internal/tools/indexed.go
+            # Expected: 1
+            grep -c "func getDiagnosticsForFile" internal/tools/symbol_edit.go
+            # Expected: 1
+            grep -c "getDiagnosticsForFile" internal/tools/symbol_edit.go
+            # Expected: >= 4
+            ```
+
+            ### Constraints
+            - Do NOT modify cmd/agent-lsp/tools_analysis.go (owned by Agent E)
+            - Do NOT modify cmd/agent-lsp/tools_symbol_edit.go (registration file only)
+            - Do NOT modify files outside your ownership list
+          files:
+            - internal/tools/indexed.go
+            - internal/tools/indexed_test.go
+            - internal/tools/symbol_edit.go
+            - internal/tools/symbol_edit_test.go
+        - id: B
+          task: |
+            ## Agent B: explore_symbol Composite Tool
+
+            ### What to Implement
+
+            **Handler: internal/tools/explore.go**
+
+            Create `HandleExploreSymbol` that orchestrates 4 existing LSP client methods in one call:
+            1. Hover info (type_info)
+            2. Call hierarchy incoming (callers)
+            3. Document symbols + innermost symbol (source)
+            4. References (count + top files)
+
+            Input args: same as `inspect_symbol` (file_path, line, column, position_pattern, language_id).
+
+            Output structure (JSON):
+            ```json
+            {
+              "type_info": "<hover text>",
+              "source": { "symbol_name": "...", "start_line": N, "end_line": N, "source": "..." },
+              "callers": [ {"name": "...", "file": "...", "line": N} ],
+              "callers_count": N,
+              "references": { "count": N, "top_files": ["file1", "file2", ...] },
+              "test_callers_count": N
+            }
+            ```
+
+            Implementation approach:
+            - Call LSP client methods directly. Reuse existing helpers:
+              - `WithDocument` to open the file once
+              - `client.GetHoverInfo` for type_info
+              - `client.PrepareCallHierarchy` + `client.GetIncomingCalls` for callers
+              - `client.GetDocumentSymbols` + `findInnermostSymbol` for source
+              - `client.GetReferences` for references
+            - Position resolution: use `ResolvePosition` from position_pattern.go
+            - Limit callers to top 10, references top 5 file paths
+            - Count test callers separately using `isTestFile` from change_impact.go
+            - Use `URIToFilePath` to convert reference location URIs to file paths
+
+            **Registration: cmd/agent-lsp/tools_explore.go**
+
+            Create registration file with:
+            - Args struct `ExploreSymbolArgs` (same fields as GetInfoOnLocationArgs)
+            - `registerExploreTools(d toolDeps)` function
+            - Register tool "explore_symbol"
+            - Description: "Deep-dive into a symbol: type info, source code, callers (top 10), references (count + top 5 files), and test caller count in one call. Use when you need full context about a symbol before editing. Accepts file_path + line/column or position_pattern."
+            - ReadOnlyHint: true
+
+            ### Interface Contracts
+
+            ```go
+            func HandleExploreSymbol(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error)
+            ```
+
+            ### Tests
+
+            **internal/tools/explore_test.go:**
+            - TestHandleExploreSymbol_NilClient: returns "LSP client not initialized" error
+            - TestHandleExploreSymbol_MissingFilePath: returns "file_path is required" error
+            - TestHandleExploreSymbol_MissingPosition: returns error about line/column required
+
+            ### Verification Gate
+
+            ```bash
+            go build ./internal/tools/... ./cmd/agent-lsp/...
+            go test ./internal/tools/ -run "TestHandleExploreSymbol" -v
+            go vet ./internal/tools/ ./cmd/agent-lsp/
+            ```
+
+            Postconditions:
+            ```bash
+            grep -c "func HandleExploreSymbol" internal/tools/explore.go
+            # Expected: 1
+            grep -c "explore_symbol" cmd/agent-lsp/tools_explore.go
+            # Expected: >= 1
+            ```
+
+            ### Constraints
+            - Do NOT modify existing files in internal/tools/ (only create new ones)
+            - Do NOT duplicate handler logic; call LSP client methods directly or reuse helpers
+            - Do NOT modify files outside your ownership list
+          files:
+            - internal/tools/explore.go
+            - internal/tools/explore_test.go
+            - cmd/agent-lsp/tools_explore.go
+        - id: C
+          task: |
+            ## Agent C: safe_apply_edit Tool
+
+            ### What to Implement
+
+            **Handler: internal/tools/safe_edit.go**
+
+            Create `HandleSafeApplyEdit` that combines preview_edit + apply_edit:
+
+            1. Accept args: file_path, old_text, new_text
+            2. Read the file content, locate `old_text` using strings.Index
+            3. Compute the positional range (start_line, start_column, end_line, end_column)
+            4. Call `HandleSimulateEditAtomic` with computed positional args plus workspace_root from `client.RootDir()` and language from `lsp.LanguageIDFromPath(filePath)`
+            5. Parse the preview result JSON to extract `net_delta`
+            6. If net_delta == 0: call `HandleApplyEdit` with {file_path, old_text, new_text}, return with `"applied": true`
+            7. If net_delta > 0: return the preview result with `"applied": false`
+
+            **Registration: cmd/agent-lsp/tools_safe_edit.go**
+
+            - `registerSafeEditTools(d toolDeps)` function
+            - Tool name: "safe_apply_edit"
+            - Description: "Preview an edit and apply it only if safe (net_delta == 0). Combines preview_edit + apply_edit into one call. If the edit would introduce errors (net_delta > 0), returns the preview result with applied=false so you can decide."
+            - ReadOnlyHint: false, DestructiveHint: true
+            - Handler: `tools.HandleSafeApplyEdit(ctx, d.clientForFileWithAutoInit(args.FilePath), d.sessionMgr, toolArgsToMap(args))`
+
+            ### Interface Contracts
+
+            ```go
+            func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr *session.SessionManager, args map[string]any) (types.ToolResult, error)
+            ```
+
+            ### Tests
+
+            **internal/tools/safe_edit_test.go:**
+            - TestHandleSafeApplyEdit_NilClient: returns init error
+            - TestHandleSafeApplyEdit_MissingFilePath: returns error
+            - TestHandleSafeApplyEdit_MissingOldText: returns error
+            - TestHandleSafeApplyEdit_MissingNewText: returns error
+
+            ### Verification Gate
+
+            ```bash
+            go build ./internal/tools/... ./cmd/agent-lsp/...
+            go test ./internal/tools/ -run "TestHandleSafeApplyEdit" -v
+            go vet ./internal/tools/ ./cmd/agent-lsp/
+            ```
+
+            Postconditions:
+            ```bash
+            grep -c "func HandleSafeApplyEdit" internal/tools/safe_edit.go
+            # Expected: 1
+            grep -c "safe_apply_edit" cmd/agent-lsp/tools_safe_edit.go
+            # Expected: >= 1
+            ```
+
+            ### Constraints
+            - Do NOT modify internal/tools/simulation.go or internal/tools/workspace.go
+            - Do NOT modify files outside your ownership list
+          files:
+            - internal/tools/safe_edit.go
+            - internal/tools/safe_edit_test.go
+            - cmd/agent-lsp/tools_safe_edit.go
+        - id: D
+          task: |
+            ## Agent D: Proactive Diagnostic Push on File Change
+
+            ### What to Implement
+
+            **Notification channel: internal/notify/diag_change.go**
+
+            Create a `DiagnosticChangeNotifier` that:
+            1. Subscribes to diagnostic updates via `DiagnosticSubscriber.SubscribeToDiagnostics`
+            2. Tracks previous error counts per URI
+            3. When error count INCREASES for a URI, emits a proactive notification
+            4. Uses debouncing (500ms) to avoid noise
+            5. Only fires when errors increase (not decrease or same)
+
+            Notification payload:
+            ```json
+            {
+              "type": "diagnostic_regression",
+              "file": "/path/to/file.go",
+              "errors": 3,
+              "delta": 2,
+              "message": "2 new errors in /path/to/file.go"
+            }
+            ```
+
+            API:
+            ```go
+            func SubscribeDiagnosticChanges(hub *Hub, subscriber DiagnosticSubscriber) func()
+            ```
+
+            Follow the pattern in internal/notify/diagnostics.go closely.
+
+            **Wire into notifications.go (cmd/agent-lsp/notifications.go)**
+
+            Insert after this exact text:
+            ```go
+            	// Diagnostic notifications (debounced).
+            	stopDiag := notify.SubscribeDiagnostics(hub, client)
+            	hub.AddStopFunc(stopDiag)
+            ```
+
+            Add:
+            ```go
+            	// Diagnostic regression detection (fires when new errors appear).
+            	stopDiagChange := notify.SubscribeDiagnosticChanges(hub, client)
+            	hub.AddStopFunc(stopDiagChange)
+            ```
+
+            ### Interface Contracts
+
+            ```go
+            func SubscribeDiagnosticChanges(hub *Hub, subscriber DiagnosticSubscriber) func()
+            ```
+
+            ### Tests
+
+            **internal/notify/diag_change_test.go:**
+            - TestDiagChangeNotifier_FiresOnIncrease: error count goes 0->2, notification sent
+            - TestDiagChangeNotifier_SilentOnDecrease: error count goes 3->1, no notification
+            - TestDiagChangeNotifier_SilentOnSame: error count stays at 2, no notification
+            - TestDiagChangeNotifier_Debounces: rapid updates coalesce into one notification
+
+            ### Verification Gate
+
+            ```bash
+            go build ./internal/notify/... ./cmd/agent-lsp/...
+            go test ./internal/notify/ -run "TestDiagChange" -v
+            go vet ./internal/notify/ ./cmd/agent-lsp/
+            ```
+
+            Postconditions:
+            ```bash
+            grep -c "func SubscribeDiagnosticChanges" internal/notify/diag_change.go
+            # Expected: 1
+            grep -c "SubscribeDiagnosticChanges" cmd/agent-lsp/notifications.go
+            # Expected: 1
+            ```
+
+            ### Constraints
+            - Do NOT modify internal/notify/diagnostics.go
+            - Do NOT modify internal/notify/hub.go
+            - Do NOT modify files outside your ownership list
+          files:
+            - internal/notify/diag_change.go
+            - internal/notify/diag_change_test.go
+            - cmd/agent-lsp/notifications.go
+        - id: E
+          task: |
+            ## Agent E: Intent Aliases + Indexed Field in Analysis Responses
+
+            ### What to Implement
+
+            **Part 1: Intent aliases (cmd/agent-lsp/tools_aliases.go)**
+
+            Create a new file registering alias tool names. Use `addToolWithPhaseCheck`.
+
+            Aliases:
+            - `blast_radius` -> same handler as `get_change_impact` (GetChangeImpactArgs)
+            - `callers` -> wraps find_callers, forces direction="incoming"
+            - `explore` -> calls `tools.HandleExploreSymbol` (GetInfoOnLocationArgs)
+            - `safe_edit` -> calls `tools.HandleSafeApplyEdit` (SafeApplyEditArgs)
+
+            Define `registerAliasTools(d toolDeps)`.
+
+            Note: `tools.HandleExploreSymbol` and `tools.HandleSafeApplyEdit` are created by
+            Agents B and C. Code compiles only after merge. Write correct references.
+
+            **Part 2: Add indexed field to analysis responses (cmd/agent-lsp/tools_analysis.go)**
+
+            Modify 3 tool handler wrappers to call `tools.AppendIndexedField`:
+            - `get_change_impact`
+            - `find_references`
+            - `find_symbol`
+
+            Change pattern:
+            ```go
+            r, err := tools.HandleGetChangeImpact(ctx, d.cs.get(), toolArgsToMap(args))
+            r = tools.AppendIndexedField(r, d.cs.get())
+            return makeCallToolResult(r), nil, err
+            ```
+
+            Note: `tools.AppendIndexedField` is created by Agent A. Compiles after merge.
+
+            ### Verification Gate
+
+            ```bash
+            go vet ./cmd/agent-lsp/ 2>&1 || true
+            ```
+
+            Postconditions:
+            ```bash
+            grep -c "blast_radius\|\"callers\"\|\"explore\"\|\"safe_edit\"" cmd/agent-lsp/tools_aliases.go
+            # Expected: >= 4
+            grep -c "AppendIndexedField" cmd/agent-lsp/tools_analysis.go
+            # Expected: >= 3
+            grep -c "func registerAliasTools" cmd/agent-lsp/tools_aliases.go
+            # Expected: 1
+            ```
+
+            ### Constraints
+            - Do NOT modify cmd/agent-lsp/tools_navigation.go
+            - Do NOT modify internal/tools/ files
+            - Do NOT modify cmd/agent-lsp/server.go (Wave 2)
+            - Do NOT modify files outside your ownership list
+          files:
+            - cmd/agent-lsp/tools_aliases.go
+            - cmd/agent-lsp/tools_analysis.go
+    - number: 2
+      type: integration
+      agents:
+        - id: F
+          task: |
+            ## Agent F: Wire New Registrations into Server
+
+            Add calls to `registerExploreTools(deps)`, `registerSafeEditTools(deps)`, and
+            `registerAliasTools(deps)` in `Run` in `cmd/agent-lsp/server.go`.
+
+            Insert after this exact text:
+            ```go
+            	registerPhaseTools(deps)
+            ```
+
+            Add:
+            ```go
+            	registerExploreTools(deps)
+            	registerSafeEditTools(deps)
+            	registerAliasTools(deps)
+            ```
+
+            Verify: `go build ./cmd/agent-lsp/... && go vet ./cmd/agent-lsp/`
+          files:
+            - cmd/agent-lsp/server.go
+          dependencies:
+            - B
+            - C
+            - E
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: go build ./...
+          required: true
+        - type: lint
+          command: go vet ./...
+          required: true
+        - type: test
+          command: go test ./internal/... ./cmd/...
+          required: true
+post_merge_checklist:
+    groups: []
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: Agent E references tools.AppendIndexedField and tools.HandleExploreSymbol which are created by other agents in the same wave
+          likelihood: high
+          impact: medium
+          mitigation: Agent E's build will fail in isolation. Post-merge build verifies correctness. Agent E writes correct references knowing function signatures from interface contracts.
+        - scenario: Agent A's AppendIndexedField tests need a mock LSPClient with IsWorkspaceLoaded
+          likelihood: medium
+          impact: low
+          mitigation: Use NewLSPClient + workspaceLoaded.Store(true) pattern from client_notify_test.go, or define a minimal interface.
+        - scenario: Agent C's safe_apply_edit needs to compute positional range from text match
+          likelihood: low
+          impact: low
+          mitigation: Straightforward strings.Index + newline counting. Well-understood algorithm.
+critic_report:
+    verdict: ISSUES
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: ISSUES
+            issues:
+                - check: symbol_accuracy
+                  severity: error
+                  description: Brief references client.GetHoverInfo but the actual method on *lsp.LSPClient is GetInfoOnLocation (internal/lsp/client.go:1504)
+                  file: internal/tools/explore.go
+                  symbol: GetHoverInfo
+                - check: symbol_accuracy
+                  severity: error
+                  description: Brief references ResolvePosition from position_pattern.go but the actual function is ResolvePositionPattern (internal/tools/position_pattern.go:47)
+                  file: internal/tools/explore.go
+                  symbol: ResolvePosition
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+        E:
+            agent_id: E
+            verdict: PASS
+        F:
+            agent_id: F
+            verdict: PASS
+    summary: 'All file existence checks pass (modify files exist, new files do not). Agent D, C, E, F briefs are accurate. Agent A brief is accurate. Agent B brief contains two symbol accuracy errors: references client.GetHoverInfo (actual: client.GetInfoOnLocation) and ResolvePosition (actual: ResolvePositionPattern). These are guidance symbols the agent will attempt to call; using wrong names will cause compilation failures.'
+    reviewed_at: "2026-05-11T02:39:47Z"
+    issue_count: 2
+state: SCOUT_PENDING
+injection_method: hook
