@@ -26,6 +26,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 - **`find_callers`: cross-concurrent boundary tracing.** New `cross_concurrent: true` parameter annotates incoming callers that cross concurrent boundaries (goroutines, threads, async tasks). Returns `concurrent_callers` with detected pattern and source location. Enables "who calls this function from a separate goroutine/thread?" queries.
 - **`/lsp-inspect`: shared_field_without_sync check (12th check type).** Composes `get_change_impact(sync_guarded)` + `find_callers(cross_concurrent)` to detect fields accessed from concurrent contexts without synchronization. Classifies as UNSAFE (write-concurrent), WARNING (read-only concurrent), or SAFE (sync-guarded).
 - **`/lsp-concurrency-audit` skill (24th skill).** Dedicated concurrency safety audit for a type or file. Maps all fields, traces concurrent access patterns, produces field-level safety report with SAFE/UNSAFE/WRITE-CONCURRENT/READ-ONLY classifications. Language-agnostic across 4 concurrency families (goroutine, thread, async, actor).
+- **`get_change_impact`: untested symbol filter.** New `filter: "untested"` parameter returns only symbols with production callers but zero test callers. Surfaces coverage gaps without requiring a separate tool.
 
 ## [0.10.0] - 2026-05-10
 
