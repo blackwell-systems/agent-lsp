@@ -202,13 +202,56 @@ func TestBuildSyncGuardedSet(t *testing.T) {
 		},
 	}
 
-	guarded := buildSyncGuardedSet(symbols)
+	guarded := buildSyncGuardedSet(symbols, nil)
 
 	if !guarded["Hub"] {
-		t.Error("expected Hub to be sync-guarded (has RWMutex)")
+		t.Error("expected Hub to be sync-guarded (has RWMutex in children)")
 	}
 	if guarded["PureType"] {
 		t.Error("expected PureType to NOT be sync-guarded")
+	}
+}
+
+func TestBuildSyncGuardedSet_SourceFallback(t *testing.T) {
+	// When gopls doesn't provide children (Go structs), the fallback reads
+	// the source lines of the struct range to find sync patterns.
+	dir := t.TempDir()
+	src := filepath.Join(dir, "hub.go")
+	content := "package notify\n\ntype Hub struct {\n\tmu     sync.RWMutex\n\tsender NotificationSender\n}\n\ntype Plain struct {\n\tname string\n}\n"
+	os.WriteFile(src, []byte(content), 0644)
+
+	symbols := []types.DocumentSymbol{
+		{
+			Name: "Hub",
+			Kind: 23,
+			Range: types.Range{
+				Start: types.Position{Line: 2},
+				End:   types.Position{Line: 5},
+			},
+			// No children (gopls behavior for Go structs)
+		},
+		{
+			Name: "Plain",
+			Kind: 23,
+			Range: types.Range{
+				Start: types.Position{Line: 7},
+				End:   types.Position{Line: 9},
+			},
+		},
+	}
+
+	filesBySymbol := map[string]string{
+		"Hub":   src,
+		"Plain": src,
+	}
+
+	guarded := buildSyncGuardedSet(symbols, filesBySymbol)
+
+	if !guarded["Hub"] {
+		t.Error("expected Hub to be sync-guarded via source fallback (has sync.RWMutex in source)")
+	}
+	if guarded["Plain"] {
+		t.Error("expected Plain to NOT be sync-guarded")
 	}
 }
 

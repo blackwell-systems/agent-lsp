@@ -120,7 +120,8 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 	// Struct fields are excluded: they aren't independently callable and their
 	// references are noise that inflates the symbol count.
 	var allExports []exportedSymbol
-	var allDocSymbols []types.DocumentSymbol // retained for sync-guarded detection
+	var allDocSymbols []types.DocumentSymbol   // retained for sync-guarded detection
+	filesBySymbol := make(map[string]string)   // symbol name -> file path
 	var warnings []string
 
 	for _, file := range changedFiles {
@@ -133,6 +134,9 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 			continue
 		}
 		allDocSymbols = append(allDocSymbols, symbols...)
+		for _, sym := range symbols {
+			filesBySymbol[sym.Name] = file
+		}
 		if scope == "all" {
 			collectAllSymbols(symbols, file, langID, &allExports, true)
 		} else {
@@ -197,7 +201,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 	// already fetched in Phase 1. A struct is sync-guarded if it contains a
 	// field whose type name includes "Mutex", "RWMutex", "Lock", "synchronized",
 	// "Atomic", or "sync.". This is a heuristic across language families.
-	syncGuardedTypes := buildSyncGuardedSet(allDocSymbols)
+	syncGuardedTypes := buildSyncGuardedSet(allDocSymbols, filesBySymbol)
 
 	for _, ref := range refResults {
 		entry := symbolWithCallers{
@@ -540,13 +544,16 @@ var syncFieldPatterns = []string{
 
 // buildSyncGuardedSet scans document symbols and returns a set of type names
 // (structs, classes) that contain at least one synchronization field.
-func buildSyncGuardedSet(symbols []types.DocumentSymbol) map[string]bool {
+// Uses two strategies: (1) check document symbol children if the LSP provides
+// them (TypeScript, Java), (2) read the struct's source lines and pattern-match
+// for sync primitives (Go/gopls doesn't nest fields as children).
+func buildSyncGuardedSet(symbols []types.DocumentSymbol, filesBySymbol map[string]string) map[string]bool {
 	guarded := make(map[string]bool)
 	for _, sym := range symbols {
 		// Check structs/classes (kind 23=struct, 5=class)
 		if sym.Kind == 23 || sym.Kind == 5 {
+			// Strategy 1: check children (works for TSServer, jdtls, etc.)
 			for _, child := range sym.Children {
-				// Check fields (kind 8=field, 7=variable)
 				if child.Kind == 8 || child.Kind == 7 {
 					for _, pattern := range syncFieldPatterns {
 						if strings.Contains(child.Name, pattern) || strings.Contains(child.Detail, pattern) {
@@ -559,9 +566,35 @@ func buildSyncGuardedSet(symbols []types.DocumentSymbol) map[string]bool {
 					break
 				}
 			}
+
+			// Strategy 2: read source lines of the struct (for gopls which
+			// doesn't nest fields as children).
+			if !guarded[sym.Name] {
+				if filePath, ok := filesBySymbol[sym.Name]; ok {
+					if data, err := os.ReadFile(filePath); err == nil {
+						lines := strings.Split(string(data), "\n")
+						start := sym.Range.Start.Line
+						end := sym.Range.End.Line
+						if end >= len(lines) {
+							end = len(lines) - 1
+						}
+						for i := start; i <= end; i++ {
+							for _, pattern := range syncFieldPatterns {
+								if strings.Contains(lines[i], pattern) {
+									guarded[sym.Name] = true
+									break
+								}
+							}
+							if guarded[sym.Name] {
+								break
+							}
+						}
+					}
+				}
+			}
 		}
 		// Recurse into children (nested types)
-		for k, v := range buildSyncGuardedSet(sym.Children) {
+		for k, v := range buildSyncGuardedSet(sym.Children, filesBySymbol) {
 			if v {
 				guarded[k] = true
 			}
