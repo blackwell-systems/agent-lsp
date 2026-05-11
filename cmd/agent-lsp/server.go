@@ -314,7 +314,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Name:    "agent-lsp",
 		Version: Version,
 	}, &mcp.ServerOptions{
-		Instructions: "This server provides 61 code intelligence tools and 23 multi-step workflow skills across 30 languages. " +
+		Instructions: "This server provides 66 code intelligence tools and 23 multi-step workflow skills across 30 languages. " +
 			"IMPORTANT: call get_change_impact before editing any file. It returns all exported symbols with their callers partitioned into test vs non-test in one call. This replaces manual loops over find_references. Pass scope='all' to include unexported symbols for dead code detection. " +
 			"Task-to-tool mapping: " +
 			"all callers of all exports in a file -> get_change_impact (one call); " +
@@ -326,7 +326,9 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 			"preview edit impact -> preview_edit; " +
 			"replace a function body -> replace_symbol_body; " +
 			"delete unused code -> safe_delete_symbol; " +
-			"available quick fixes -> suggest_fixes. " +
+			"available quick fixes -> suggest_fixes; " +
+			"full context on a symbol -> explore_symbol (one call); " +
+			"safe edit (preview + apply) -> safe_apply_edit. " +
 			"Workflow: get_change_impact before editing, preview_edit before applying, get_diagnostics after changes. " +
 			"Prefer these tools over text search for code intelligence tasks. " +
 			"Call prompts/get with a skill name (e.g. lsp-refactor, lsp-inspect, lsp-verify) for full workflow instructions.",

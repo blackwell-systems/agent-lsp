@@ -1,7 +1,7 @@
 <!-- agent-lsp:rules:start -->
 ## agent-lsp Skills
 
-agent-lsp provides 61 code intelligence tools and 23 workflow skills.
+agent-lsp provides 66 code intelligence tools and 23 workflow skills.
 Prefer these tools over text search for code intelligence tasks.
 
 **Before editing code:** call `get_change_impact` for blast-radius analysis.
@@ -19,6 +19,8 @@ Prefer these tools over text search for code intelligence tasks.
 | What calls this function | `find_callers` | `Grep` for the name |
 | Replace a function body | `replace_symbol_body` | `Edit` with text matching |
 | Delete unused symbol | `safe_delete_symbol` | `Edit` to remove lines |
+| Full context on a symbol | `explore_symbol` | Multiple tool calls |
+| Edit safely (preview + apply) | `safe_apply_edit` | Manual preview then apply |
 
 | Skill | Description |
 |-------|-------------|

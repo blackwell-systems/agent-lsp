@@ -73,7 +73,7 @@ Passive mode is activated by passing `connect: "localhost:9999"` to `start_lsp`.
 
 **What agent-lsp does:**
 
-1. Speaks MCP to the AI agent, exposing 61 tools the agent can call.
+1. Speaks MCP to the AI agent, exposing 66 tools the agent can call.
 2. Translates each tool call into one or more LSP JSON-RPC requests, sent over stdin/stdout pipes to the appropriate language server subprocess.
 3. Maintains a persistent session: the language server index stays warm across all tool calls, all files, all packages. There is no cold-start on each request.
 4. Adds a speculative execution layer on top: edits can be applied in-memory to the live LSP state, evaluated for diagnostic impact, then committed to disk or discarded, without ever touching the file system until explicitly requested.

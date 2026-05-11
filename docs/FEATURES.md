@@ -1,10 +1,10 @@
 # agent-lsp Features Dump
 
-Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. All 61 tools have `ToolAnnotations` (Title, ReadOnlyHint, DestructiveHint, IdempotentHint, OpenWorldHint) and 171+ `jsonschema` struct tags providing parameter semantics in the schema itself.
+Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. All 66 tools have `ToolAnnotations` (Title, ReadOnlyHint, DestructiveHint, IdempotentHint, OpenWorldHint) and 171+ `jsonschema` struct tags providing parameter semantics in the schema itself.
 
 ---
 
-## Tools (61 total, 61 CI-verified)
+## Tools (66 total, 66 CI-verified)
 
 ### Session & Lifecycle (8 tools)
 
@@ -145,6 +145,42 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Waits for `$/progress end` before sending on gopls (via `waitForWorkspaceReady`)
 - `include_declaration: false` excludes definition site from count
 
+### Composite Exploration (1 tool)
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `explore_symbol` | Deep-dive into a symbol: type info, source, callers (top 10), references (count + top 5 files), test caller count in one call | `file_path` (string, req), `line` (int, opt), `column` (int, opt), `position_pattern` (string, opt), `language_id` (string, opt) |
+
+**`explore_symbol` notes:**
+- Composite tool combining hover, get_symbol_source, find_callers, find_references into a single response
+- Replaces the 4-5 tool sequence agents previously used to understand a symbol before editing
+- Accepts position_pattern as alternative to line/column
+
+### Safe Editing (1 tool)
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `safe_apply_edit` | Preview + apply in one call; applies only if net_delta == 0 | `file_path` (string, req), `old_text` (string, req), `new_text` (string, req) |
+
+**`safe_apply_edit` notes:**
+- Internally calls `preview_edit` then `apply_edit` when safe
+- Returns `applied: true` on success, `applied: false` with preview diagnostics when the edit would introduce errors
+- Agents skip the manual preview-then-apply two-step
+
+### Intent Aliases (4 tools)
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `blast_radius` | Alias for `get_change_impact` | Same as `get_change_impact` |
+| `callers` | Find incoming callers (shortcut for `find_callers` with direction=incoming) | Same as `find_callers` |
+| `explore` | Composite symbol exploration (same handler as `explore_symbol`) | Same as `explore_symbol` |
+| `safe_edit` | Preview + apply when safe (same handler as `safe_apply_edit`) | Same as `safe_apply_edit` |
+
+**Intent alias notes:**
+- Shorter, intent-oriented names for common operations
+- Same handlers and parameters as the underlying tools
+- Registered as separate MCP tools so agents can discover them by intent
+
 ### Workspace & Diagnostics (8 tools)
 
 | Tool | Description | Parameters |
@@ -258,16 +294,19 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Returns success with `status: "already_destroyed"` instead of an error when the session does not exist or was already cleaned up
 - Agents calling `destroy_session` after `preview_edit` (which auto-cleans up) no longer see a confusing error
 
-**Total: 61 tools** (58 core + 3 phase enforcement)
-- **CI-verified: 61** (including `set_log_level` verified separately across all 30 languages, and 3 phase enforcement tools verified via mcp-assert)
-- **ToolAnnotations:** All 61 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
+**Total: 66 tools** (63 core + 3 phase enforcement)
+- **CI-verified: 66** (including `set_log_level` verified separately across all 30 languages, and 3 phase enforcement tools verified via mcp-assert)
+- **ToolAnnotations:** All 66 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
 - **jsonschema struct tags:** 171+ tags across all Args structs; 100% parameter description coverage
 - **1-indexed coordinates:** All line/column parameters are 1-based (editor convention)
 - **0-based conversion:** `extractRange` helper converts to 0-based for LSP protocol internally
-- **Next-step hints:** Every tool response includes a contextual `hint` field suggesting the logical next tool call. For example, `find_references` hints "use get_change_impact to see the full blast radius"; `detect_changes` hints "use get_change_impact on specific files for detailed analysis." Helps agents chain tools correctly without skills, and helps less capable models navigate the 61-tool surface. Zero-cost addition: one extra field in the JSON response.
+- **Next-step hints:** Every tool response includes a contextual `hint` field suggesting the logical next tool call. For example, `find_references` hints "use get_change_impact to see the full blast radius"; `detect_changes` hints "use get_change_impact on specific files for detailed analysis." Helps agents chain tools correctly without skills, and helps less capable models navigate the 66-tool surface. Zero-cost addition: one extra field in the JSON response.
 - **Token savings metadata:** `list_symbols`, `get_symbol_source`, and `get_editing_context` include `_meta.token_savings` in responses, showing tokens returned vs full file size. Makes the efficiency story visible on every call.
 - **ETag/conditional responses:** `get_editing_context`, `list_symbols`, and `get_symbol_source` accept an `if_none_match` parameter. When the file's content hash matches, returns `not_modified` instead of recomputing. Eliminates redundant computation for unchanged files.
 - **Position pattern without line/column:** `find_references` and `inspect_symbol` accept `position_pattern` without requiring `line`/`column` (fields are `*int` pointers, omittable). Agents can locate symbols by text pattern alone.
+- **Indexed indicator:** `get_change_impact`, `find_references`, and `find_symbol` responses include `indexed: true/false` via `AppendIndexedField`, indicating whether the workspace was fully indexed when results were computed. Agents can decide whether to retry after indexing completes.
+- **Auto-diagnostics after symbol edits:** `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, and `safe_delete_symbol` responses include `errors_after` and `warnings_after` fields with post-edit diagnostic counts. Agents see whether an edit introduced problems without a separate `get_diagnostics` call.
+- **Proactive diagnostic regression notifications:** `DiagChangeTracker` monitors diagnostic state across edits and pushes notifications when error/warning counts increase. Agents are alerted to regressions without polling.
 
 ---
 

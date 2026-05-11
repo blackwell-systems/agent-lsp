@@ -1,6 +1,6 @@
 # agent-lsp Tool Reference
 
-All 61 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
+All 66 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
 both `line` and `column` in every tool call; the server converts internally to
 the 0-based values the LSP spec requires.
 
@@ -11,6 +11,9 @@ the 0-based values the LSP spec requires.
 - [Session tools](#session-tools): `start_lsp`, `restart_lsp_server`, `open_document`, `close_document`, `add_workspace_folder`, `remove_workspace_folder`, `list_workspace_folders`
 - [Analysis tools](#analysis-tools): `get_diagnostics`, `inspect_symbol`, `get_completions`, `get_signature_help`, `suggest_fixes`, `list_symbols`, `find_symbol`, `get_change_impact`, `get_cross_repo_references`, `detect_changes`
 - [Context tools](#context-tools): `get_editing_context`
+- [Composite exploration tools](#composite-exploration-tools): `explore_symbol`
+- [Safe editing tools](#safe-editing-tools): `safe_apply_edit`
+- [Intent aliases](#intent-aliases): `blast_radius`, `callers`, `explore`, `safe_edit`
 - [Navigation tools](#navigation-tools): `find_references`, `go_to_definition`, `go_to_type_definition`, `go_to_implementation`, `go_to_declaration`
 - [Refactoring tools](#refactoring-tools): `rename_symbol`, `prepare_rename`, `format_document`, `format_range`, `apply_edit`, `execute_command`
 - [Symbol editing tools](#symbol-editing-tools): `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, `safe_delete_symbol`
@@ -983,6 +986,102 @@ Cache imported from /home/user/myproject/.agent-lsp/cache.db.gz (1,247 entries)
 - The existing cache is closed and replaced atomically.
 - If the artifact fails integrity check, the import is rejected and the existing cache remains unchanged.
 - Both `export_cache` and `import_cache` require an active LSP session.
+
+---
+
+## Composite exploration tools
+
+### `explore_symbol`
+
+Deep-dive into a symbol: combines type info, source code, callers (top 10),
+references (count + top 5 files), and test caller count in one call. Use when
+you need full context about a symbol before editing.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | Absolute path to the source file |
+| `line` | number | no | 1-indexed line number. Optional when `position_pattern` is provided. |
+| `column` | number | no | 1-indexed column. Optional when `position_pattern` is provided. |
+| `position_pattern` | string | no | Alternative to line/column: use `@@pattern@@` syntax to match text near the target position |
+| `language_id` | string | no | Language identifier (e.g. `"go"`, `"typescript"`). Auto-detected from file extension. |
+
+**Example call**
+
+```json
+{
+  "file_path": "/home/user/project/pkg/hub.go",
+  "line": 42,
+  "column": 6
+}
+```
+
+**Notes**
+
+- Composite tool: internally calls hover, get_symbol_source, find_callers, find_references
+- Replaces the 4-5 tool sequence agents previously used to understand a symbol
+- The `explore` alias provides the same functionality with a shorter name
+
+---
+
+## Safe editing tools
+
+### `safe_apply_edit`
+
+Preview an edit and apply it only if safe (net diagnostic delta == 0). Combines
+`preview_edit` + `apply_edit` into one call. If the edit would introduce errors,
+returns the preview result with `applied: false` so you can decide.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | Absolute path to the file to edit |
+| `old_text` | string | yes | Exact text to find and replace |
+| `new_text` | string | yes | Replacement text |
+
+**Example call**
+
+```json
+{
+  "file_path": "/home/user/project/pkg/hub.go",
+  "old_text": "func Send(msg string)",
+  "new_text": "func Send(ctx context.Context, msg string)"
+}
+```
+
+**Notes**
+
+- Returns `applied: true` on success, `applied: false` with preview diagnostics when the edit would introduce errors
+- Agents skip the manual preview-then-apply two-step
+- The `safe_edit` alias provides the same functionality with a shorter name
+
+---
+
+## Intent aliases
+
+Shorter, intent-oriented tool names for common operations. Same handlers and
+parameters as the underlying tools.
+
+### `blast_radius`
+
+Alias for `get_change_impact`. Same parameters and behavior.
+
+### `callers`
+
+Find all incoming callers of a function or method. Wraps `find_callers` with
+`direction` forced to `"incoming"`. Same parameters as `find_callers`.
+
+### `explore`
+
+Composite symbol exploration (same handler as `explore_symbol`). Same parameters
+as `explore_symbol`.
+
+### `safe_edit`
+
+Preview + apply when safe (same handler as `safe_apply_edit`). Same parameters
+as `safe_apply_edit`.
 
 ---
 
