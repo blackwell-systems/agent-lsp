@@ -319,8 +319,8 @@ func TestRefactorSkill_ApplyBlockedInBlastRadius(t *testing.T) {
 	// preview_edit forbidden in blast_radius.
 	assertForbidden(t, tracker, "preview_edit")
 
-	// get_change_impact allowed.
-	assertAllowed(t, tracker, "get_change_impact")
+	// blast_radius allowed.
+	assertAllowed(t, tracker, "blast_radius")
 
 	tracker.DeactivateSkill()
 }

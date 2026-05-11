@@ -1694,7 +1694,7 @@ func (c *LSPClient) GetReferences(ctx context.Context, uri string, pos types.Pos
 // GetReferencesRaw returns all references without waiting for file indexing.
 // The caller is responsible for ensuring the workspace is warm (e.g. by
 // calling GetReferences once first to absorb the cold-start cost). Use this
-// in batch operations like get_change_impact where the warmup is done once
+// in batch operations like blast_radius where the warmup is done once
 // and per-file waits would multiply the latency by the number of symbols.
 func (c *LSPClient) GetReferencesRaw(ctx context.Context, uri string, pos types.Position, includeDecl bool) ([]types.Location, error) {
 	if !c.hasCapability("referencesProvider") {

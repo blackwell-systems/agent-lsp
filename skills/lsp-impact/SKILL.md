@@ -3,7 +3,7 @@ name: lsp-impact
 description: Blast-radius analysis for a symbol or file — shows all callers, type supertypes/subtypes, and reference count before you change it. Use when refactoring, deleting, or changing the signature of any function, type, or method. Also accepts a file path to surface all exported-symbol impact in one shot.
 argument-hint: "[symbol-name | file-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__find_callers mcp__lsp__type_hierarchy mcp__lsp__find_references mcp__lsp__get_server_capabilities mcp__lsp__get_change_impact
+allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__find_callers mcp__lsp__type_hierarchy mcp__lsp__find_references mcp__lsp__get_server_capabilities mcp__lsp__blast_radius
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -31,12 +31,12 @@ widespread the change is; lsp-edit-export tells you how to execute the change sa
 ## Step 0 — File-level entry (when user provides a file path)
 
 Use this shortcut when the user is changing or auditing an entire file rather
-than a single symbol. `get_change_impact` enumerates all exported symbols in
+than a single symbol. `blast_radius` enumerates all exported symbols in
 the file, resolves their references, and returns test callers (with enclosing
 test function names) and non-test callers in a single call.
 
 ```
-mcp__lsp__get_change_impact({
+mcp__lsp__blast_radius({
   "changed_files": ["/abs/path/to/file.go"],
   "include_transitive": false   // set true to surface second-order callers
 })

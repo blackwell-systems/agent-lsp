@@ -83,7 +83,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `get_semantic_tokens` | Token type classification | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req) |
 | `get_symbol_source` | Extract source text for symbol | `file_path` (string, req), `line` (int, req), `column` (int, opt), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
 | `get_symbol_documentation` | Toolchain docs (go doc, pydoc, cargo doc) | `symbol` (string, req), `language_id` (string, req), `format` (string, opt) |
-| `get_change_impact` | Blast-radius analysis | `changed_files` (array, req), `include_transitive` (bool, opt) |
+| `blast_radius` | Blast-radius analysis | `changed_files` (array, req), `include_transitive` (bool, opt) |
 | `get_cross_repo_references` | Find usages across consumer repos | `symbol_file` (string, req), `line` (int, req), `column` (int, req), `consumer_roots` (array, req), `language_id` (string, opt) |
 | `detect_changes` | Git diff + impact analysis + risk classification | `workspace_root` (string, opt), `scope` (string, opt: "unstaged", "staged", "committed"), `range` (string, opt) |
 | `get_editing_context` | Complete pre-edit context in one call | `file_path` (string, req), `language_id` (string, opt), `if_none_match` (string, opt) |
@@ -92,7 +92,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Runs `git diff --name-only` for the specified scope (default: unstaged)
 - `range` parameter (for "committed" scope only): accepts arbitrary git ranges like `"v0.7.0..HEAD"`, `"abc123..def456"`, or a single ref like `"main"` (expands to `main~1..main`). Ignored for unstaged/staged scopes.
 - Filters to recognized source files (skips plaintext, deleted files)
-- Feeds filtered files to `get_change_impact` for symbol-level analysis
+- Feeds filtered files to `blast_radius` for symbol-level analysis
 - Enriches each symbol with risk classification: "high" (callers across multiple packages), "medium" (same-package callers only), "low" (zero non-test callers)
 - Returns `changed_files`, `affected_symbols` (with risk), and `scope`
 
@@ -117,7 +117,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - TypeScript/JavaScript: explicitly unsupported (use LSP hover instead)
 - Strips ANSI escape codes; extracts `Signature` from first matching declaration line
 
-**`get_change_impact` notes:**
+**`blast_radius` notes:**
 - Enumerates all exported symbols in `changed_files` via `list_symbols`
 - Includes exported methods (receiver prefix fix): methods like `(*Hub).SetSender` are now detected correctly; the method name after the last dot is checked for uppercase, not the full name starting with `(`
 - Recurses into type children to find methods on types (e.g., `(*Hub).Send`), while filtering out struct fields
@@ -172,7 +172,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `blast_radius` | Alias for `get_change_impact` | Same as `get_change_impact` |
+| `blast_radius` | Alias for `blast_radius` | Same as `blast_radius` |
 | `callers` | Find incoming callers (shortcut for `find_callers` with direction=incoming) | Same as `find_callers` |
 | `explore` | Composite symbol exploration (same handler as `explore_symbol`) | Same as `explore_symbol` |
 | `safe_edit` | Preview + apply when safe (same handler as `safe_apply_edit`) | Same as `safe_apply_edit` |
@@ -301,11 +301,11 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - **jsonschema struct tags:** 171+ tags across all Args structs; 100% parameter description coverage
 - **1-indexed coordinates:** All line/column parameters are 1-based (editor convention)
 - **0-based conversion:** `extractRange` helper converts to 0-based for LSP protocol internally
-- **Next-step hints:** Every tool response includes a contextual `hint` field suggesting the logical next tool call. For example, `find_references` hints "use get_change_impact to see the full blast radius"; `detect_changes` hints "use get_change_impact on specific files for detailed analysis." Helps agents chain tools correctly without skills, and helps less capable models navigate the 66-tool surface. Zero-cost addition: one extra field in the JSON response.
+- **Next-step hints:** Every tool response includes a contextual `hint` field suggesting the logical next tool call. For example, `find_references` hints "use blast_radius to see the full blast radius"; `detect_changes` hints "use blast_radius on specific files for detailed analysis." Helps agents chain tools correctly without skills, and helps less capable models navigate the 66-tool surface. Zero-cost addition: one extra field in the JSON response.
 - **Token savings metadata:** `list_symbols`, `get_symbol_source`, and `get_editing_context` include `_meta.token_savings` in responses, showing tokens returned vs full file size. Makes the efficiency story visible on every call.
 - **ETag/conditional responses:** `get_editing_context`, `list_symbols`, and `get_symbol_source` accept an `if_none_match` parameter. When the file's content hash matches, returns `not_modified` instead of recomputing. Eliminates redundant computation for unchanged files.
 - **Position pattern without line/column:** `find_references` and `inspect_symbol` accept `position_pattern` without requiring `line`/`column` (fields are `*int` pointers, omittable). Agents can locate symbols by text pattern alone.
-- **Indexed indicator:** `get_change_impact`, `find_references`, and `find_symbol` responses include `indexed: true/false` via `AppendIndexedField`, indicating whether the workspace was fully indexed when results were computed. Agents can decide whether to retry after indexing completes.
+- **Indexed indicator:** `blast_radius`, `find_references`, and `find_symbol` responses include `indexed: true/false` via `AppendIndexedField`, indicating whether the workspace was fully indexed when results were computed. Agents can decide whether to retry after indexing completes.
 - **Auto-diagnostics after symbol edits:** `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, and `safe_delete_symbol` responses include `errors_after` and `warnings_after` fields with post-edit diagnostic counts. Agents see whether an edit introduced problems without a separate `get_diagnostics` call.
 - **Proactive diagnostic regression notifications:** `DiagChangeTracker` monitors diagnostic state across edits and pushes notifications when error/warning counts increase. Agents are alerted to regressions without polling.
 
@@ -318,7 +318,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `/lsp-rename` | `[old-name] [new-name]` | go_to_symbol, prepare_rename, find_references, rename_symbol, apply_edit, get_diagnostics | Two-phase safe rename: prepare_rename safety gate → preview all sites → hard stop for user confirmation → apply atomically |
 | `/lsp-safe-edit` | target file(s) + intent | start_lsp, open_document, get_diagnostics, preview_edit, simulate_chain, suggest_fixes, format_document, apply_edit, Edit, Write, Bash | Speculative before/after diagnostic comparison; surfaces code actions on errors; multi-file aware; Step 3b uses simulate_chain for refactor preview |
 | `/lsp-simulate` | workspace + intent | start_lsp, create_simulation_session, simulate_edit, simulate_chain, evaluate_session, commit_session, discard_session, destroy_session, preview_edit | Full session lifecycle management; decision guide on net_delta; cleanup rule enforced |
-| `/lsp-impact` | `[symbol-name | file-path]` | go_to_symbol, find_callers, type_hierarchy, find_references, get_server_capabilities, get_change_impact | Blast-radius analysis; file-level shortcut via get_change_impact; symbol-level via Steps 1–5 |
+| `/lsp-impact` | `[symbol-name | file-path]` | go_to_symbol, find_callers, type_hierarchy, find_references, get_server_capabilities, blast_radius | Blast-radius analysis; file-level shortcut via blast_radius; symbol-level via Steps 1–5 |
 | `/lsp-verify` | workspace_dir + changed_files | get_diagnostics, run_build, run_tests, get_tests_for_file, suggest_fixes, format_document, apply_edit | Three-layer verification: LSP diagnostics + build + tests; test correlation pre-step; code actions on errors |
 | `/lsp-dead-code` | `[file-path]` | list_symbols, find_references, open_document, safe_delete_symbol | Enumerate exported symbols, check each for zero references; Step 0 warm-up sanity check required; cross-check with grep for registration patterns; optional cleanup via safe_delete_symbol |
 | `/lsp-implement` | interface name | go_to_symbol, go_to_implementation, find_references | Find all concrete implementations of an interface before changing it |
@@ -331,14 +331,14 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `/lsp-test-correlation` | `[source-file]` | get_tests_for_file, run_tests | Find and run only tests covering an edited file |
 | `/lsp-format-code` | `[file-path]` | format_document, format_range, apply_edit | Format file or selection via language server formatter; applies edits to disk |
 | `/lsp-fix-all` | `[file-path]` | get_diagnostics, suggest_fixes, apply_edit, open_document, format_document | Sequential quick-fix loop: collect diagnostics → apply one fix → re-collect; quick-fix kind only; never batches |
-| `/lsp-refactor` | `[symbol-or-file] [intent]` | get_change_impact, preview_edit, simulate_chain, get_diagnostics, run_build, run_tests, get_tests_for_file, apply_edit, replace_symbol_body, format_document | End-to-end refactor: blast-radius, speculative preview, apply, build verify, affected tests; supports replace_symbol_body for full-body edits |
+| `/lsp-refactor` | `[symbol-or-file] [intent]` | blast_radius, preview_edit, simulate_chain, get_diagnostics, run_build, run_tests, get_tests_for_file, apply_edit, replace_symbol_body, format_document | End-to-end refactor: blast-radius, speculative preview, apply, build verify, affected tests; supports replace_symbol_body for full-body edits |
 | `/lsp-extract-function` | `[file-path] [start-line] [end-line] [name]` | list_symbols, suggest_fixes, execute_command, apply_edit, get_diagnostics, format_document | Extract code block into named function; LSP code action primary, manual fallback with captured-variable analysis |
 | `/lsp-generate` | `[file-path:line:col] [intent]` | suggest_fixes, execute_command, apply_edit, format_document, get_diagnostics, go_to_symbol | Language server code generation: interface stubs, test skeletons, missing methods, mocks |
 | `/lsp-understand` | `[symbol-name \| file-path]` | inspect_symbol, go_to_implementation, find_callers, find_references, get_symbol_source, list_symbols, go_to_symbol | Deep Code Map: type info + implementations + call hierarchy (2-level) + references + source; synthesizes cross-symbol relationships |
-| `/lsp-inspect` | `<file-or-directory> [--checks <types>] [--json] [--top N] [--diff]` | get_change_impact, find_references, list_symbols, inspect_symbol, get_diagnostics, find_callers, go_to_definition, get_server_capabilities | Full code quality audit (12 check types): dead symbols, test coverage, silent failures, error wrapping, doc drift, panics, context propagation, unrecovered concurrent entry, unchecked shared state, channel never closed, shared field without sync; batch mode with --top ranking; comparison mode with --diff; blast-radius severity calibration; fix suggestions; confidence tiers (verified/suspected/advisory); result persistence via inspect://last resource |
-| `/lsp-architecture` | `[workspace-root-path]` | start_lsp, list_symbols, get_change_impact, detect_lsp_servers, find_symbol | Project-level architecture overview: language distribution, package map (capped at 30), entry points, hotspots (top 10 by reference count), dependency flow. Read-only. |
-| `/lsp-onboard` | `[workspace-root-path]` | start_lsp, detect_lsp_servers, list_symbols, find_symbol, get_change_impact, run_build, run_tests, get_diagnostics, get_editing_context | First-session project onboarding: detect languages, build system, entry points, package map, hotspots, diagnostics baseline. Produces a structured project profile. |
-| `/lsp-concurrency-audit` | `[type-name]` | find_callers, get_change_impact, list_symbols, inspect_symbol, find_references | Field-level concurrency safety audit: maps all fields on a type, traces concurrent access via find_callers(cross_concurrent) + get_change_impact(sync_guarded), classifies each field as SAFE/UNSAFE/WRITE-CONCURRENT/READ-ONLY. Language-agnostic across 4 concurrency families. |
+| `/lsp-inspect` | `<file-or-directory> [--checks <types>] [--json] [--top N] [--diff]` | blast_radius, find_references, list_symbols, inspect_symbol, get_diagnostics, find_callers, go_to_definition, get_server_capabilities | Full code quality audit (12 check types): dead symbols, test coverage, silent failures, error wrapping, doc drift, panics, context propagation, unrecovered concurrent entry, unchecked shared state, channel never closed, shared field without sync; batch mode with --top ranking; comparison mode with --diff; blast-radius severity calibration; fix suggestions; confidence tiers (verified/suspected/advisory); result persistence via inspect://last resource |
+| `/lsp-architecture` | `[workspace-root-path]` | start_lsp, list_symbols, blast_radius, detect_lsp_servers, find_symbol | Project-level architecture overview: language distribution, package map (capped at 30), entry points, hotspots (top 10 by reference count), dependency flow. Read-only. |
+| `/lsp-onboard` | `[workspace-root-path]` | start_lsp, detect_lsp_servers, list_symbols, find_symbol, blast_radius, run_build, run_tests, get_diagnostics, get_editing_context | First-session project onboarding: detect languages, build system, entry points, package map, hotspots, diagnostics baseline. Produces a structured project profile. |
+| `/lsp-concurrency-audit` | `[type-name]` | find_callers, blast_radius, list_symbols, inspect_symbol, find_references | Field-level concurrency safety audit: maps all fields on a type, traces concurrent access via find_callers(cross_concurrent) + blast_radius(sync_guarded), classifies each field as SAFE/UNSAFE/WRITE-CONCURRENT/READ-ONLY. Language-agnostic across 4 concurrency families. |
 
 **User-facing reference:** `docs/skills.md` (one-page skill catalog with usage examples and trigger conditions)
 
@@ -393,7 +393,7 @@ metadata:
 
 **Write mutex separation:** `writeRaw` uses a dedicated `writeMu` instead of the shared `c.mu`. Prevents stdin pipe backpressure from deadlocking the client when concurrent reference queries fill the OS pipe buffer (64KB on macOS).
 
-**Per-symbol timeout:** `get_change_impact` caps each reference query at 15 seconds. Prevents one slow symbol from blocking the entire batch. Timed-out symbols are skipped with a warning.
+**Per-symbol timeout:** `blast_radius` caps each reference query at 15 seconds. Prevents one slow symbol from blocking the entire batch. Timed-out symbols are skipped with a warning.
 
 **Diagnostic logging:** Every tool call logs latency via the central `addToolWithPhaseCheck` wrapper. Calls exceeding 5 seconds log at WARNING level. Process start/exit events log PID and uptime.
 
@@ -439,7 +439,7 @@ metadata:
 - Fix: grep wiring files for zero-reference symbols before classifying dead
 
 **`/lsp-impact` file-level entry (Step 0):**
-- Accepts file path → `get_change_impact` → `affected_symbols`, `test_callers`, `non_test_callers`
+- Accepts file path → `blast_radius` → `affected_symbols`, `test_callers`, `non_test_callers`
 - Decision: 0 non-test callers = low risk; many callers = staged rollout consideration
 
 **`/lsp-explore` phases:**
@@ -459,16 +459,16 @@ warnings: [roots that failed indexing]
 **`/lsp-inspect` capabilities (12 check types):**
 - **Batch mode:** Directory-level inspection with `--top N` ranked output. Walks all `.go`, `.ts`, `.py` files recursively and produces findings sorted by severity then blast radius.
 - **Comparison mode:** `--diff` flag for branch-only issue detection. Filters findings to lines within git diff ranges against main. Output prefixed with "New issues introduced by this branch."
-- **Unexported dead code detection:** Pass `scope='all'` to `get_change_impact` to include unexported/lowercase symbols in dead code analysis, not just exported symbols.
+- **Unexported dead code detection:** Pass `scope='all'` to `blast_radius` to include unexported/lowercase symbols in dead code analysis, not just exported symbols.
 - **MCP resource `inspect://last`:** Programmatic access to the last inspection result. Results persisted to `.agent-lsp/last-inspection.json` in workspace root.
 - **Confidence tiers:** `verified` (LSP-confirmed, act immediately), `suspected` (pattern match, investigate first), `advisory` (style, optional). Replaces the previous high/medium/low labels.
 - **Fix suggestions:** Every finding includes exact fix text (e.g., "Remove lines N-M", "Change `return err` to `return fmt.Errorf(...)`").
-- **Blast-radius severity calibration:** Severity escalates based on `non_test_callers` count from `get_change_impact`. Functions with 10+ callers have findings escalated by one tier (info->warning, warning->error).
+- **Blast-radius severity calibration:** Severity escalates based on `non_test_callers` count from `blast_radius`. Functions with 10+ callers have findings escalated by one tier (info->warning, warning->error).
 - **Concurrency safety checks (4 check types):**
   - `unrecovered_concurrent_entry`: detects goroutines, threads, and async tasks without recovery across 10 languages. Covers 4 concurrency families (goroutine, thread, async, actor).
   - `unchecked_shared_state`: detects bare type assertions on sync.Map, ConcurrentHashMap, and similar concurrent collections.
   - `channel_never_closed`: detects channels or queues created but never closed within the same scope.
-  - `shared_field_without_sync`: detects fields accessed from multiple concurrent contexts without synchronization. Composes `get_change_impact(sync_guarded)` + `find_callers(cross_concurrent)` to identify unprotected shared state.
+  - `shared_field_without_sync`: detects fields accessed from multiple concurrent contexts without synchronization. Composes `blast_radius(sync_guarded)` + `find_callers(cross_concurrent)` to identify unprotected shared state.
 
 ---
 
@@ -868,7 +868,7 @@ Server-initiated MCP notifications that inform the agent about state changes wit
 - Diagnostic changes: the agent knows "the file I just edited now has 3 errors" immediately, without calling `get_diagnostics`.
 - Workspace ready: replaces the current poll/block pattern for indexing completion.
 - Process health: the agent learns about a language server crash immediately, instead of discovering it on the next tool call.
-- Stale references: signals that cached `get_change_impact` / `find_references` results may be outdated after external edits.
+- Stale references: signals that cached `blast_radius` / `find_references` results may be outdated after external edits.
 
 ### Status
 
@@ -909,7 +909,7 @@ Features that actively guide agents toward using the correct MCP tools instead o
 | **Disallowed reasoning patterns** | Claude Code init rules include a "use this, not that" table (e.g., "find all usages: use `find_references`, not Grep"). Provider-agnostic Instructions use softer "prefer these tools" language. |
 | **Task-to-tool mapping table** | 10-entry task-to-tool mapping in the MCP Instructions string. Claude Code rules files include a full comparison table with "Not this" column. |
 | **Recovery-oriented error messages** | Symbol resolution errors suggest `list_symbols`. `safe_delete_symbol` with references suggests `find_references` to see callers. `CheckInitialized` suggests `start_lsp`. |
-| **Cross-referencing in tool descriptions** | Tools suggest related tools where applicable. `apply_edit` recommends `replace_symbol_body` for full function replacements and `preview_edit` before applying. `find_references` recommends `safe_delete_symbol` for zero-reference symbols and `get_change_impact` for blast-radius analysis. `suggest_fixes` points to `/lsp-fix-all` skill. `rename_symbol` recommends `find_references` before renaming exports. |
+| **Cross-referencing in tool descriptions** | Tools suggest related tools where applicable. `apply_edit` recommends `replace_symbol_body` for full function replacements and `preview_edit` before applying. `find_references` recommends `safe_delete_symbol` for zero-reference symbols and `blast_radius` for blast-radius analysis. `suggest_fixes` points to `/lsp-fix-all` skill. `rename_symbol` recommends `find_references` before renaming exports. |
 | **"No verification needed" assertions** | `preview_edit` description states: "If net_delta is 0, the edit is safe to apply without further verification." Reduces unnecessary follow-up tool calls after clean previews. |
 
 ---
@@ -1463,7 +1463,7 @@ Four independent AI agents evaluated agent-lsp across 10 coding tasks (find call
 
 | Model | Verdict | Top-rated tools |
 |-------|---------|----------------|
-| Claude (Opus 4.6) | Recommend | `get_change_impact`, `go_to_implementation`, simulation sessions |
+| Claude (Opus 4.6) | Recommend | `blast_radius`, `go_to_implementation`, simulation sessions |
 | Cursor (auto) | Recommend | rename, references, implementations, simulation |
 | GPT-5.5 (Codex) | Recommend | references, implementations, rename previews, diagnostics |
 | Gemini 2.5 Pro | Highly recommend | rename, implementations, diagnostic preview |

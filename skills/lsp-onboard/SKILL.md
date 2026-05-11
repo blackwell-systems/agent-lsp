@@ -3,7 +3,7 @@ name: lsp-onboard
 description: First-session project onboarding. Explores the project structure, detects build system, test runner, entry points, and key architecture patterns. Produces a structured project profile the agent can reference throughout the session.
 argument-hint: "[workspace-root-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__detect_lsp_servers mcp__lsp__list_symbols mcp__lsp__find_symbol mcp__lsp__get_change_impact mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_diagnostics mcp__lsp__get_editing_context
+allowed-tools: mcp__lsp__start_lsp mcp__lsp__detect_lsp_servers mcp__lsp__list_symbols mcp__lsp__find_symbol mcp__lsp__blast_radius mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_diagnostics mcp__lsp__get_editing_context
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -90,7 +90,7 @@ Pick the 3-5 files that appear most central (entry points, shared types,
 core logic). For each:
 
 ```
-mcp__lsp__get_change_impact({ "changed_files": ["<file>"] })
+mcp__lsp__blast_radius({ "changed_files": ["<file>"] })
 ```
 
 Files with the most non-test callers are the architectural hotspots.
@@ -153,7 +153,7 @@ need to be saved to disk; it lives in the conversation context.
 
 - Cap exploration at 10 packages and 5 hotspot files to keep the
   onboarding under 2 minutes
-- If `get_change_impact` is slow (large files), skip the hotspot step
+- If `blast_radius` is slow (large files), skip the hotspot step
   and note "hotspot analysis skipped (large codebase)"
 - The profile is advisory; update it mentally as you learn more during
   the session

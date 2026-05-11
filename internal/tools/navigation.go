@@ -102,7 +102,7 @@ func HandleGetReferences(ctx context.Context, client *lsp.LSPClient, args map[st
 	if len(locs) == 0 {
 		return appendHint(res, "This symbol may be dead code. Use /lsp-dead-code to verify."), nil
 	}
-	return appendHint(res, "Use get_change_impact for blast radius with test/non-test partitioning."), nil
+	return appendHint(res, "Use blast_radius for blast radius with test/non-test partitioning."), nil
 }
 
 // HandleGoToDefinition finds the definition of the symbol at the given location.

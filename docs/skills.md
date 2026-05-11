@@ -40,7 +40,7 @@ Blast-radius analysis for a symbol or file. Finds all direct references, callers
 - You want to know whether a change is low-risk (1–5 files) or high-risk (> 20 files) before committing to it.
 
 **What it does that raw tools miss:**
-Raw `find_references` tells you reference count. lsp-impact runs references, call hierarchy, and type hierarchy together, then classifies the result with a risk level, so you get a decision recommendation, not just numbers. The file-level mode (`get_change_impact`) surfaces all exported symbols at once without a symbol-by-symbol loop.
+Raw `find_references` tells you reference count. lsp-impact runs references, call hierarchy, and type hierarchy together, then classifies the result with a risk level, so you get a decision recommendation, not just numbers. The file-level mode (`blast_radius`) surfaces all exported symbols at once without a symbol-by-symbol loop.
 
 ---
 
@@ -170,7 +170,7 @@ Produces a structured project profile for the agent's reference throughout the s
 - When the agent seems confused about project conventions.
 
 **What it does that raw tools miss:**
-Composes `detect_lsp_servers`, `find_symbol`, `list_symbols`, `get_change_impact`,
+Composes `detect_lsp_servers`, `find_symbol`, `list_symbols`, `blast_radius`,
 `run_build`, `run_tests`, and `get_diagnostics` into a single cohesive workflow
 that produces a structured project profile (languages, entry points, package map,
 hotspots, diagnostic baseline) in under 2 minutes. Without this skill, agents
@@ -419,7 +419,7 @@ to gate the edit on diagnostic impact.
 
 Full code quality audit for a file, package, or directory. Combines LSP batch
 analysis with LLM-driven heuristic checks. The broadest composition skill:
-uses `get_change_impact` for mechanical checks (dead symbols, test coverage),
+uses `blast_radius` for mechanical checks (dead symbols, test coverage),
 then reads source code for reasoning checks (silent failures, error wrapping,
 doc drift, coverage gaps, panics, context propagation).
 
@@ -431,7 +431,7 @@ doc drift, coverage gaps, panics, context propagation).
 /lsp-inspect src/ --diff            # Comparison mode: only findings from PR diff
 ```
 
-Composes: `get_change_impact` (batch), `find_references` (fallback),
+Composes: `blast_radius` (batch), `find_references` (fallback),
 `list_symbols`, `inspect_symbol`, `get_diagnostics`,
 `find_callers`, `go_to_definition`, `get_server_capabilities`,
 source reading with heuristic pattern matching.
@@ -494,7 +494,7 @@ accessed from concurrent contexts, and flags fields without synchronization.
 - Auditing a codebase for data race risks that tests miss because they require specific timing to trigger.
 
 **What it does that raw tools miss:**
-Composes `find_callers(cross_concurrent=true)` with `get_change_impact(sync_guarded)` to build a per-field safety map. Each field is classified as SAFE (sync-guarded type), UNSAFE (written from concurrent contexts without sync), WRITE-CONCURRENT (concurrent writes detected), or READ-ONLY (concurrent reads only, no writes). Language-agnostic across 4 concurrency families (goroutine, thread, async, actor). Produces a structured report, not a list of grep hits.
+Composes `find_callers(cross_concurrent=true)` with `blast_radius(sync_guarded)` to build a per-field safety map. Each field is classified as SAFE (sync-guarded type), UNSAFE (written from concurrent contexts without sync), WRITE-CONCURRENT (concurrent writes detected), or READ-ONLY (concurrent reads only, no writes). Language-agnostic across 4 concurrency families (goroutine, thread, async, actor). Produces a structured report, not a list of grep hits.
 
 ---
 
@@ -510,7 +510,7 @@ files ranked by blast radius.
 - Documenting a project's structure for a design review or handoff.
 
 **What it does that raw tools miss:**
-Composes `detect_lsp_servers`, `find_symbol`, `list_symbols`, and `get_change_impact` into a single structured overview. Discovers languages automatically, builds a package map (capped at 30 packages), identifies entry points by convention (`main`, `Run`, `Handler`), and ranks hotspot files by non-test caller count. The persistent reference cache makes repeated hotspot queries instant. Enforces depth limits to prevent runaway analysis on massive codebases.
+Composes `detect_lsp_servers`, `find_symbol`, `list_symbols`, and `blast_radius` into a single structured overview. Discovers languages automatically, builds a package map (capped at 30 packages), identifies entry points by convention (`main`, `Run`, `Handler`), and ranks hotspot files by non-test caller count. The persistent reference cache makes repeated hotspot queries instant. Enforces depth limits to prevent runaway analysis on massive codebases.
 
 ---
 

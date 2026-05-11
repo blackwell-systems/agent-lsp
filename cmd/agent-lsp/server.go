@@ -315,9 +315,9 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		Version: Version,
 	}, &mcp.ServerOptions{
 		Instructions: "This server provides 66 code intelligence tools and 24 multi-step workflow skills across 30 languages. " +
-			"IMPORTANT: call get_change_impact before editing any file. It returns all exported symbols with their callers partitioned into test vs non-test in one call. This replaces manual loops over find_references. Pass scope='all' to include unexported symbols for dead code detection. " +
+			"IMPORTANT: call blast_radius before editing any file. It returns all exported symbols with their callers partitioned into test vs non-test in one call. This replaces manual loops over find_references. Pass scope='all' to include unexported symbols for dead code detection. " +
 			"Task-to-tool mapping: " +
-			"all callers of all exports in a file -> get_change_impact (one call); " +
+			"all callers of all exports in a file -> blast_radius (one call); " +
 			"see file structure -> list_symbols; " +
 			"find symbol by name -> find_symbol; " +
 			"find usages of one symbol -> find_references; " +
@@ -329,7 +329,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 			"available quick fixes -> suggest_fixes; " +
 			"full context on a symbol -> explore_symbol (one call); " +
 			"safe edit (preview + apply) -> safe_apply_edit. " +
-			"Workflow: get_change_impact before editing, preview_edit before applying, get_diagnostics after changes. " +
+			"Workflow: blast_radius before editing, preview_edit before applying, get_diagnostics after changes. " +
 			"Prefer these tools over text search for code intelligence tasks. " +
 			"Call prompts/get with a skill name (e.g. lsp-refactor, lsp-inspect, lsp-verify) for full workflow instructions.",
 		// Wire MCP log notifications once the client session initializes.

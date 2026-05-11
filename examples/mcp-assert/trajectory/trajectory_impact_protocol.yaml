@@ -1,7 +1,7 @@
 # Trajectory assertion: validates the /lsp-impact skill protocol.
 # For symbol-level: go_to_symbol must precede find_references (locate before querying).
 # get_server_capabilities must be called to gate find_callers and type_hierarchy.
-# For file-level: get_change_impact is the entry point (single-call shortcut).
+# For file-level: blast_radius is the entry point (single-call shortcut).
 # Read-only — apply_edit and rename_symbol must NOT appear.
 name: lsp-impact follows skill protocol
 trace:

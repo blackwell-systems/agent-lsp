@@ -144,7 +144,7 @@ blast_radius -> speculative_preview -> apply -> build_verification -> test_execu
 
 | Phase | Allowed | Forbidden | Purpose |
 |-------|---------|-----------|---------|
-| blast_radius | get_change_impact, go_to_symbol, find_references | apply_edit, simulate_*, Edit, Write | Analyze impact before any edits |
+| blast_radius | blast_radius, go_to_symbol, find_references | apply_edit, simulate_*, Edit, Write | Analyze impact before any edits |
 | speculative_preview | open_document, get_diagnostics, preview_edit, simulate_chain | apply_edit, Edit, Write | Simulate edits in memory |
 | apply | apply_edit, format_document, Edit, Write | simulate_*, rename_symbol | Write changes to disk |
 | build_verification | get_diagnostics, run_build | apply_edit, Edit, Write | Check the build |
@@ -169,7 +169,7 @@ setup -> speculative_preview -> apply -> verify_and_fix
 | apply | apply_edit, Edit, Write | simulate_* | Write the change |
 | verify_and_fix | get_diagnostics, suggest_fixes, apply_edit, format_document | simulate_*, run_build, run_tests | Post-edit verification and fixes |
 
-**Global forbidden:** rename_symbol, get_change_impact
+**Global forbidden:** rename_symbol, blast_radius
 
 ---
 

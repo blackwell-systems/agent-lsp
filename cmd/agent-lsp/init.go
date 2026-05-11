@@ -294,7 +294,7 @@ func generateRulesContent(isClaudeCode ...bool) string {
 	b.WriteString("## agent-lsp Skills\n\n")
 	b.WriteString("agent-lsp provides 66 code intelligence tools and 23 workflow skills.\n")
 	b.WriteString("Prefer these tools over text search for code intelligence tasks.\n\n")
-	b.WriteString("**Before editing code:** call `get_change_impact` for blast-radius analysis.\n")
+	b.WriteString("**Before editing code:** call `blast_radius` for blast-radius analysis.\n")
 	b.WriteString("**Before applying edits:** call `preview_edit` to preview the diagnostic delta.\n")
 	b.WriteString("**After any change:** call `get_diagnostics`, then `run_build` and `run_tests`.\n\n")
 	if claude {

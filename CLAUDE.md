@@ -4,7 +4,7 @@
 agent-lsp provides 66 code intelligence tools and 24 workflow skills.
 Prefer these tools over text search for code intelligence tasks.
 
-**Before editing code:** call `get_change_impact` for blast-radius analysis.
+**Before editing code:** call `blast_radius` for blast-radius analysis.
 **Before applying edits:** call `preview_edit` to preview the diagnostic delta.
 **After any change:** call `get_diagnostics`, then `run_build` and `run_tests`.
 
@@ -38,7 +38,7 @@ Prefer these tools over text search for code intelligence tasks.
 | `/lsp-impact` | Blast-radius analysis for a symbol or file — shows all callers, type supertypes/subtypes, and reference count befor... |
 | `/lsp-implement` | Find all concrete implementations of an interface or abstract type. Use when you need to know what types satisfy an i... |
 | `/lsp-inspect` | Full code quality audit (12 checks) for a file or package. Applies a check taxonomy (dead symbols, silent failures, error wrapping, concurrency safety... |
-| `/lsp-concurrency-audit` | Field-level concurrency safety audit for a type: traces concurrent access via find_callers(cross_concurrent) + get_change_impact(sync_guarded), flags unsynced fields... |
+| `/lsp-concurrency-audit` | Field-level concurrency safety audit for a type: traces concurrent access via find_callers(cross_concurrent) + blast_radius(sync_guarded), flags unsynced fields... |
 | `/lsp-local-symbols` | Fast file-scoped symbol analysis — find all usages of a symbol within the current file, list all symbols defined in... |
 | `/lsp-onboard` | First-session project onboarding. Explores the project structure, detects build system, test runner, entry points, an... |
 | `/lsp-refactor` | End-to-end safe refactor workflow — blast-radius analysis, speculative preview, apply to disk, verify build, run af... |

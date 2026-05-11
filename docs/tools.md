@@ -9,7 +9,7 @@ the 0-based values the LSP spec requires.
 ## Table of Contents
 
 - [Session tools](#session-tools): `start_lsp`, `restart_lsp_server`, `open_document`, `close_document`, `add_workspace_folder`, `remove_workspace_folder`, `list_workspace_folders`
-- [Analysis tools](#analysis-tools): `get_diagnostics`, `inspect_symbol`, `get_completions`, `get_signature_help`, `suggest_fixes`, `list_symbols`, `find_symbol`, `get_change_impact`, `get_cross_repo_references`, `detect_changes`
+- [Analysis tools](#analysis-tools): `get_diagnostics`, `inspect_symbol`, `get_completions`, `get_signature_help`, `suggest_fixes`, `list_symbols`, `find_symbol`, `blast_radius`, `get_cross_repo_references`, `detect_changes`
 - [Context tools](#context-tools): `get_editing_context`
 - [Composite exploration tools](#composite-exploration-tools): `explore_symbol`
 - [Safe editing tools](#safe-editing-tools): `safe_apply_edit`
@@ -723,7 +723,7 @@ name. Optionally enrich results with hover documentation for a paginated window.
 
 ---
 
-### `get_change_impact`
+### `blast_radius`
 
 Enumerate all exported symbols in one or more files, resolve their references
 across the workspace, and partition callers into test vs non-test. Returns
@@ -838,7 +838,7 @@ Use before changing a shared library API to find all downstream callers.
 ### `detect_changes`
 
 Run `git diff` to identify changed files, analyze their impact via
-`get_change_impact`, and classify each affected symbol by risk level. A single
+`blast_radius`, and classify each affected symbol by risk level. A single
 call that answers "what did I break?" without manually listing changed files.
 
 **Parameters**
@@ -877,7 +877,7 @@ call that answers "what did I break?" without manually listing changed files.
 
 - Risk classification: `"high"` (callers from multiple packages), `"medium"` (callers from the same package only), `"low"` (zero non-test callers).
 - Filters out non-source files (plaintext, deleted) before analysis.
-- Delegates to `get_change_impact` internally, so results benefit from the persistent reference cache.
+- Delegates to `blast_radius` internally, so results benefit from the persistent reference cache.
 
 ---
 
@@ -1067,7 +1067,7 @@ parameters as the underlying tools.
 
 ### `blast_radius`
 
-Alias for `get_change_impact`. Same parameters and behavior.
+Alias for `blast_radius`. Same parameters and behavior.
 
 ### `callers`
 
@@ -3175,7 +3175,7 @@ checked against the current phase's allowed/forbidden lists before executing.
   "mode": "block",
   "current_phase": "blast_radius",
   "total_phases": 5,
-  "allowed_tools": ["get_change_impact", "go_to_symbol", "find_references"],
+  "allowed_tools": ["blast_radius", "go_to_symbol", "find_references"],
   "forbidden_tools": ["apply_edit", "simulate_*", "Edit", "Write", "rename_symbol"]
 }
 ```
@@ -3259,7 +3259,7 @@ workflows. Install with `cd skills && ./install.sh`.
 | `/lsp-format-code` | `format_document`, `format_range`, `apply_edit`, `get_diagnostics` | Format a file or selection via the language server formatter; full-file or range; verifies no diagnostics introduced after applying |
 | `/lsp-explore` | `go_to_symbol`, `inspect_symbol`, `go_to_implementation`, `find_callers`, `find_references` | Symbol exploration: hover + implementations + call hierarchy + references in one pass, for navigating unfamiliar code |
 | `/lsp-understand` | `inspect_symbol`, `go_to_implementation`, `find_callers`, `find_references`, `get_symbol_source`, `list_symbols`, `go_to_symbol` | Deep-dive exploration. Builds a Code Map showing type info, implementations, call hierarchy, references, and source |
-| `/lsp-refactor` | `get_change_impact`, `preview_edit`, `simulate_chain`, `get_diagnostics`, `run_build`, `run_tests`, `get_tests_for_file`, `apply_edit`, `format_document` | End-to-end safe refactor: blast-radius analysis, speculative preview, apply, verify build, run affected tests |
+| `/lsp-refactor` | `blast_radius`, `preview_edit`, `simulate_chain`, `get_diagnostics`, `run_build`, `run_tests`, `get_tests_for_file`, `apply_edit`, `format_document` | End-to-end safe refactor: blast-radius analysis, speculative preview, apply, verify build, run affected tests |
 | `/lsp-extract-function` | `list_symbols`, `suggest_fixes`, `execute_command`, `apply_edit`, `get_diagnostics`, `format_document` | Extract a code block into a named function; primary path uses LSP code action, falls back to manual extraction |
 | `/lsp-fix-all` | `get_diagnostics`, `suggest_fixes`, `apply_edit`, `format_document` | Bulk-apply quick-fix code actions for all diagnostics in a file |
 | `/lsp-generate` | `suggest_fixes`, `execute_command`, `apply_edit`, `format_document`, `get_diagnostics` | Trigger LSP code generation: implement interface stubs, generate test skeletons, add missing methods |

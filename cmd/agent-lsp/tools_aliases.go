@@ -2,7 +2,6 @@
 // existing handlers with preset arguments or composite workflows.
 //
 // Aliases provide shorter, intent-oriented names for common operations:
-//   - blast_radius -> get_change_impact (same handler, same args)
 //   - callers -> find_callers with direction forced to "incoming"
 //   - explore -> composite symbol exploration (type + callers + refs + source)
 //   - safe_edit -> preview + apply when safe (net_delta == 0)
@@ -18,21 +17,6 @@ import (
 // SafeApplyEditArgs is defined in tools_safe_edit.go (Agent C).
 
 func registerAliasTools(d toolDeps) {
-	// blast_radius: same handler as get_change_impact.
-	addToolWithPhaseCheck(d, &mcp.Tool{
-		Name:        "blast_radius",
-		Description: "Alias for get_change_impact. Enumerate all exported symbols in the specified files, resolve their references across the workspace, and partition callers into test vs non-test. Use before editing a file to understand blast radius.",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Blast Radius",
-			ReadOnlyHint:    true,
-			DestructiveHint: boolPtr(false),
-			OpenWorldHint:   boolPtr(false),
-		},
-	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetChangeImpactArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGetChangeImpact(ctx, d.cs.get(), toolArgsToMap(args))
-		return makeCallToolResult(r), nil, err
-	})
-
 	// callers: wraps find_callers with direction forced to "incoming".
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "callers",

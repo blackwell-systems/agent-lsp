@@ -49,7 +49,7 @@ metadata:
           - "mcp__lsp__run_tests"
     global_forbidden:
       - "mcp__lsp__rename_symbol"          # safe-edit uses direct edits
-      - "mcp__lsp__get_change_impact"      # blast radius is lsp-impact's job
+      - "mcp__lsp__blast_radius"      # blast radius is lsp-impact's job
 ---
 
 > Requires the agent-lsp MCP server.

@@ -1,4 +1,4 @@
-// change_impact.go implements the get_change_impact MCP tool for blast-radius
+// change_impact.go implements the blast_radius MCP tool for blast-radius
 // analysis. Given a list of changed files, it:
 //
 //  1. Opens each file and retrieves its exported symbols (GetDocumentSymbols).
@@ -75,7 +75,7 @@ const maxConcurrentRefs = 16
 // GetDocumentSymbols, calls GetReferencesRaw in parallel for each symbol,
 // partitions results into test files vs non-test callers, and extracts
 // enclosing test function names for test references.
-// changeImpactTimeout caps the entire get_change_impact operation. Prevents
+// changeImpactTimeout caps the entire blast_radius operation. Prevents
 // indefinite blocking when gopls is slow to index a new workspace.
 const changeImpactTimeout = 90 * time.Second
 

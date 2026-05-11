@@ -369,7 +369,7 @@ func HandleGetDocumentSymbols(ctx context.Context, client *lsp.LSPClient, args m
 		shifted[i] = shiftDocumentSymbol(s)
 	}
 
-	docSymbolHint := "Use get_change_impact with this file to analyze blast radius."
+	docSymbolHint := "Use blast_radius with this file to analyze blast radius."
 	if format == "outline" {
 		return AppendTokenMeta(appendHint(types.TextResult(renderOutline(shifted, 0)), docSymbolHint), filePath), nil
 	}

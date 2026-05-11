@@ -1,6 +1,6 @@
 # Trajectory assertion: validates the /lsp-refactor skill protocol.
 # The refactor skill requires blast radius analysis BEFORE any edits.
-# find_references (or get_change_impact) must come before preview_edit.
+# find_references (or blast_radius) must come before preview_edit.
 # The protocol must NOT proceed directly to apply_edit without simulation.
 name: lsp-refactor performs blast radius analysis before editing
 trace:

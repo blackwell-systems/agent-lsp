@@ -124,7 +124,7 @@ cmd/agent-lsp/
                            get_signature_help, suggest_fixes, list_symbols,
                            find_symbol, find_references, get_inlay_hints,
                            get_semantic_tokens, get_symbol_source, get_symbol_documentation,
-                           get_change_impact, get_cross_repo_references, detect_changes
+                           blast_radius, get_cross_repo_references, detect_changes
   tools_context.go      ← 1 composite context tool: get_editing_context
                            (file symbols + callers + callees + imports in one call;
                            supports if_none_match ETag and token savings metadata)
@@ -226,13 +226,13 @@ internal/tools/
   symbol_path.go   ← go_to_symbol (fuzzy workspace symbol → definition)
   simulation.go    ← Tool handlers for the speculative execution layer
   build.go         ← run_build, run_tests, get_tests_for_file
-  change_impact.go ← get_change_impact (enumerate exported symbols, resolve references, partition test/non-test callers)
+  change_impact.go ← blast_radius (enumerate exported symbols, resolve references, partition test/non-test callers)
   context_meta.go  ← HandleGetEditingContextWithMeta: wraps get_editing_context handler with
                      AppendTokenMeta for token savings metadata
   token_savings.go ← EstimateTokenSavings, AppendTokenMeta: token savings metadata helpers;
                      appends _meta.token_savings to list_symbols, get_symbol_source, get_editing_context
   cross_repo.go    ← get_cross_repo_references (add consumer repos as workspace folders, partition references by repo)
-  detect_changes.go ← detect_changes (git diff + filter to recognized languages + get_change_impact + per-symbol risk classification)
+  detect_changes.go ← detect_changes (git diff + filter to recognized languages + blast_radius + per-symbol risk classification)
   cache_artifact.go ← export_cache and import_cache tool handlers (delegate to SymbolRefCache.ExportArtifact/ImportArtifact)
   workspace.go     ← workspace folder management (add/remove/list)
   workspace_folders.go ← add_workspace_folder, remove_workspace_folder, list_workspace_folders
@@ -545,7 +545,7 @@ Tool registration (`cmd/agent-lsp/tools_*.go`) is separate from tool implementat
 
 ### Next-step hints
 
-Every tool response includes a contextual `hint` field that suggests the logical next tool call. For example, after `find_references` the hint says "use get_change_impact to see the full blast radius." Hints are added at the `internal/tools/` handler layer as part of the `ToolResult` payload, so they travel through `makeCallToolResult` and appear in the final MCP response. This guides agents to chain tools correctly without requiring a skill, and helps less capable models navigate the tool surface.
+Every tool response includes a contextual `hint` field that suggests the logical next tool call. For example, after `find_references` the hint says "use blast_radius to see the full blast radius." Hints are added at the `internal/tools/` handler layer as part of the `ToolResult` payload, so they travel through `makeCallToolResult` and appear in the final MCP response. This guides agents to chain tools correctly without requiring a skill, and helps less capable models navigate the tool surface.
 
 ---
 
@@ -1234,7 +1234,7 @@ The installer scans for `SKILL.md` files up to two levels deep, creates `~/.clau
 | `lsp-verify` | Three-layer verification: diagnostics + build + tests |
 | `lsp-safe-edit` | Edit with before/after diagnostic diff; `simulate_chain` refactor preview before disk write |
 | `lsp-simulate` | Speculative edit session (create/apply/evaluate/commit/discard) |
-| `lsp-impact` | Blast-radius: file-level `get_change_impact` entry + references + call hierarchy + type hierarchy |
+| `lsp-impact` | Blast-radius: file-level `blast_radius` entry + references + call hierarchy + type hierarchy |
 | `lsp-implement` | Find all concrete implementations of an interface |
 | `lsp-rename` | Two-phase rename: preview all sites, then apply atomically |
 | `lsp-edit-symbol` | Edit a symbol by name without knowing its file/position |
@@ -1283,7 +1283,7 @@ CREATE TABLE symbol_refs (
 ### Lifecycle
 
 1. **Creation:** `NewSymbolRefCache(workspaceRoot)` is called during `start_lsp`. Returns nil if the database cannot be opened (no-op fallback).
-2. **Population:** `Put(filePath, symbolName, symbolLine, locations)` stores results after each `find_references` query via `get_change_impact`.
+2. **Population:** `Put(filePath, symbolName, symbolLine, locations)` stores results after each `find_references` query via `blast_radius`.
 3. **Lookup:** `Get(filePath, symbolName, symbolLine)` returns cached locations if the file content hash matches. Returns nil on miss or stale entry.
 4. **Invalidation:** `InvalidateFile(filePath)` evicts all entries for a file. Called by the file watcher when a source file changes on disk.
 5. **Staleness detection:** On `Get`, the stored file hash is compared against the current file hash. If they differ, the entry is evicted and nil is returned.

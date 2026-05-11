@@ -1,5 +1,5 @@
 // detect_changes.go implements the detect_changes MCP tool. It runs git diff
-// to identify changed files, feeds them to the existing get_change_impact
+// to identify changed files, feeds them to the existing blast_radius
 // logic, and returns affected symbols with risk classification.
 package tools
 
@@ -125,7 +125,7 @@ func HandleDetectChanges(ctx context.Context, client *lsp.LSPClient, args map[st
 		return types.TextResult(`{"changed_files":[],"affected_symbols":[],"summary":"No recognized source files among changed files."}`), nil
 	}
 
-	// Delegate to get_change_impact.
+	// Delegate to blast_radius.
 	impactArgs := map[string]any{
 		"changed_files": toAnySlice(filtered),
 	}
@@ -157,7 +157,7 @@ func HandleDetectChanges(ctx context.Context, client *lsp.LSPClient, args map[st
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling response: %s", err)), nil
 	}
-	return appendHint(types.TextResult(string(data)), "Review high-risk symbols before committing. Use get_change_impact on specific files for detailed analysis."), nil
+	return appendHint(types.TextResult(string(data)), "Review high-risk symbols before committing. Use blast_radius on specific files for detailed analysis."), nil
 }
 
 // enrichSymbols adds a "risk" field to each entry in changed_symbols based on

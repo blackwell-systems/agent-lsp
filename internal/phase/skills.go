@@ -75,7 +75,7 @@ func skillRefactor() *SkillPhaseConfig {
 				Name:        "blast_radius",
 				Description: "Phase 1: analyze impact before any edits",
 				Allowed: []string{
-					"get_change_impact",
+					"blast_radius",
 					"go_to_symbol",
 					"find_references",
 				},
@@ -214,7 +214,7 @@ func skillSafeEdit() *SkillPhaseConfig {
 		},
 		GlobalForbidden: []string{
 			"rename_symbol",     // safe-edit uses direct edits
-			"get_change_impact", // blast radius is lsp-impact's job
+			"blast_radius", // blast radius is lsp-impact's job
 		},
 	}
 }

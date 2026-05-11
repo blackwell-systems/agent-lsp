@@ -1,4 +1,4 @@
-name: get_change_impact analyzes exported symbols in main.go
+name: blast_radius analyzes exported symbols in main.go
 server:
   command: agent-lsp
   args: ["go:gopls"]
@@ -21,7 +21,7 @@ setup:
     args:
       file_path: "{{fixture}}/greeter.go"
 assert:
-  tool: get_change_impact
+  tool: blast_radius
   args:
     changed_files:
       - "{{fixture}}/main.go"

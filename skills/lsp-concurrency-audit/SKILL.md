@@ -3,7 +3,7 @@ name: lsp-concurrency-audit
 description: Concurrency safety audit for a type or file. Maps all fields, traces which are accessed from concurrent contexts (goroutines, threads, async tasks), and flags fields that lack synchronization. Produces a field-level safety report. Language-agnostic across 4 concurrency families.
 argument-hint: "<file-path> [--type <TypeName>]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_change_impact mcp__lsp__find_callers mcp__lsp__list_symbols mcp__lsp__get_symbol_source mcp__lsp__find_references
+allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__blast_radius mcp__lsp__find_callers mcp__lsp__list_symbols mcp__lsp__get_symbol_source mcp__lsp__find_references
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -54,10 +54,10 @@ If `--type` was specified, filter to that type only.
 
 ## Step 2: Blast radius and sync-guarded status
 
-Call `get_change_impact` on the file:
+Call `blast_radius` on the file:
 
 ```
-mcp__lsp__get_change_impact({
+mcp__lsp__blast_radius({
   "changed_files": ["<target>"],
   "scope": "all"
 })

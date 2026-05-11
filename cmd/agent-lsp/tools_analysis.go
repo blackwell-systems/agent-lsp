@@ -2,7 +2,7 @@
 // inspect_symbol (hover), get_completions, get_signature_help,
 // suggest_fixes, list_symbols, find_symbol,
 // get_document_highlights, get_inlay_hints, get_semantic_tokens,
-// find_callers, type_hierarchy, get_change_impact, and
+// find_callers, type_hierarchy, blast_radius, and
 // get_cross_repo_references.
 //
 // Analysis tools are read-only: they query the language server for
@@ -213,7 +213,7 @@ func registerAnalysisTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "find_references",
-		Description: "Find all usages of a symbol across the codebase. Use before renaming, deleting, or changing any symbol to understand who calls it. Zero references means the symbol may be dead code; use safe_delete_symbol to remove it safely. For blast-radius analysis with test/non-test partitioning, use get_change_impact instead.",
+		Description: "Find all usages of a symbol across the codebase. Use before renaming, deleting, or changing any symbol to understand who calls it. Zero references means the symbol may be dead code; use safe_delete_symbol to remove it safely. For blast-radius analysis with test/non-test partitioning, use blast_radius instead.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Find References",
 			ReadOnlyHint:    true,
@@ -283,10 +283,10 @@ func registerAnalysisTools(d toolDeps) {
 	})
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
-		Name:        "get_change_impact",
+		Name:        "blast_radius",
 		Description: "Enumerate all exported symbols in the specified files, resolve their references across the workspace, and partition callers into test vs non-test. Returns affected_symbols (name, file, line), test_callers (with enclosing test function names), and non_test_callers. Use before editing a file to understand blast radius. Set include_transitive=true to surface second-order callers (callers of callers). Set scope='all' to include unexported symbols for comprehensive dead code detection.",
 		Annotations: &mcp.ToolAnnotations{
-			Title:           "Get Change Impact",
+			Title:           "Blast Radius",
 			ReadOnlyHint:    true,
 			DestructiveHint: boolPtr(false),
 			OpenWorldHint:   boolPtr(false),
@@ -313,7 +313,7 @@ func registerAnalysisTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "detect_changes",
-		Description: "Run git diff to identify changed files, analyze their exported symbols via get_change_impact, and return affected symbols with risk classification. Risk levels: 'high' (callers from multiple packages), 'medium' (callers from same package only), 'low' (zero non-test callers). Use before committing to understand the blast radius of uncommitted or recently committed changes.",
+		Description: "Run git diff to identify changed files, analyze their exported symbols via blast_radius, and return affected symbols with risk classification. Risk levels: 'high' (callers from multiple packages), 'medium' (callers from same package only), 'low' (zero non-test callers). Use before committing to understand the blast radius of uncommitted or recently committed changes.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Detect Changes",
 			ReadOnlyHint:    true,

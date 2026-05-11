@@ -142,7 +142,7 @@ func HandleCallHierarchy(ctx context.Context, client *lsp.LSPClient, args map[st
 	if mErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling call hierarchy result: %s", mErr)), nil
 	}
-	hint := "Use get_change_impact for a full blast-radius analysis."
+	hint := "Use blast_radius for a full blast-radius analysis."
 	if crossConcurrent && len(result.ConcurrentCallers) > 0 {
 		hint = fmt.Sprintf("%d caller(s) cross concurrent boundaries. These callers run in separate goroutines/threads. %s", len(result.ConcurrentCallers), hint)
 	}

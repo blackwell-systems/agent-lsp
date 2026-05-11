@@ -24,7 +24,7 @@ agent-lsp is a **stateful runtime** over real language servers. It indexes your 
 
 We asked AI agents to evaluate agent-lsp across 10 coding tasks (find callers, rename safely, preview edits, detect dead code) and write an honest assessment. Four different models, four independent evaluations, same conclusion:
 
-> **Claude (Opus 4.6):** "I would recommend agent-lsp for any workflow involving refactoring, impact analysis, or safe editing. The standout tools are `get_change_impact` (blast radius in one call, with test/non-test partitioning that would take 5-10 grep commands to replicate), `go_to_implementation` (type-checked interface satisfaction that grep simply cannot do), and the simulation session workflow (speculative type-checking without touching disk, which has no grep/read equivalent at all)."
+> **Claude (Opus 4.6):** "I would recommend agent-lsp for any workflow involving refactoring, impact analysis, or safe editing. The standout tools are `blast_radius` (blast radius in one call, with test/non-test partitioning that would take 5-10 grep commands to replicate), `go_to_implementation` (type-checked interface satisfaction that grep simply cannot do), and the simulation session workflow (speculative type-checking without touching disk, which has no grep/read equivalent at all)."
 
 > **Cursor (auto):** "I would recommend agent-lsp for heavy refactors and code navigation because the rename, references, implementations, call hierarchy, and simulation tools remove a lot of brittle grep/manual-edit work and make changes safer."
 
@@ -64,7 +64,7 @@ Python and TypeScript projects need minutes of background indexing before `find_
 
 Skills tell agents the correct order of operations. Phase enforcement makes the runtime *block* violations instead of trusting the agent to follow instructions.
 
-When an agent activates a skill, every tool call is checked against the current phase's permissions. Calling `apply_edit` during blast-radius analysis doesn't silently proceed; it returns an error with specific recovery guidance ("complete the blast_radius phase first, allowed tools: [get_change_impact, find_references]"). Phases advance automatically as the agent calls tools from later phases.
+When an agent activates a skill, every tool call is checked against the current phase's permissions. Calling `apply_edit` during blast-radius analysis doesn't silently proceed; it returns an error with specific recovery guidance ("complete the blast_radius phase first, allowed tools: [blast_radius, find_references]"). Phases advance automatically as the agent calls tools from later phases.
 
 No other MCP tool provider enforces workflow ordering at runtime. See [docs/phase-enforcement.md](./docs/phase-enforcement.md).
 

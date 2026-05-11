@@ -3,7 +3,7 @@ name: lsp-refactor
 description: End-to-end safe refactor workflow — blast-radius analysis, speculative preview, apply to disk, verify build, run affected tests. Inlines lsp-impact + lsp-safe-edit + lsp-verify + lsp-test-correlation into one coordinated sequence.
 argument-hint: "[symbol-or-file] [intent]"
 user-invocable: true
-allowed-tools: mcp__lsp__get_change_impact mcp__lsp__preview_edit mcp__lsp__simulate_chain mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__apply_edit mcp__lsp__replace_symbol_body mcp__lsp__open_document mcp__lsp__format_document Edit Write
+allowed-tools: mcp__lsp__blast_radius mcp__lsp__preview_edit mcp__lsp__simulate_chain mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__apply_edit mcp__lsp__replace_symbol_body mcp__lsp__open_document mcp__lsp__format_document Edit Write
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -14,7 +14,7 @@ metadata:
       blast_radius:
         description: "Phase 1: analyze impact before any edits"
         allowed:
-          - "mcp__lsp__get_change_impact"
+          - "mcp__lsp__blast_radius"
           - "mcp__lsp__go_to_symbol"
           - "mcp__lsp__find_references"
         forbidden:
@@ -98,13 +98,13 @@ coordinated pass.
 
 **This phase is mandatory. Do not skip it, even for "small" refactors.**
 
-Call `mcp__lsp__get_change_impact` with `changed_files` set to the file
+Call `mcp__lsp__blast_radius` with `changed_files` set to the file
 containing the target symbol. If the user provided a file path directly, use it.
 If the user provided a symbol name, resolve the file first (e.g. via
 `mcp__lsp__go_to_symbol`).
 
 ```
-mcp__lsp__get_change_impact({
+mcp__lsp__blast_radius({
   "changed_files": ["/abs/path/to/file"],
   "include_transitive": false
 })
@@ -337,7 +337,7 @@ Errors:
 Goal: rename exported function ParseConfig → ParseConfigV2 in pkg/config
 
 Phase 1 — Blast Radius
-  get_change_impact(changed_files=["pkg/config/parser.go"])
+  blast_radius(changed_files=["pkg/config/parser.go"])
   → affected_symbols: 1 (ParseConfig)
   → non_test_callers: 3 (cmd/main.go, internal/app.go, internal/loader.go)
   → test_callers: 1 (pkg/config/parser_test.go — TestParseConfig)

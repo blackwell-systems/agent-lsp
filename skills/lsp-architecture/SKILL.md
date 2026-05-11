@@ -3,7 +3,7 @@ name: lsp-architecture
 description: Generate a structural architecture overview of a codebase: languages, package map, entry points, dependency graph, and hotspots. One call for the big picture.
 argument-hint: "[workspace-root-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__list_symbols mcp__lsp__get_change_impact mcp__lsp__detect_lsp_servers mcp__lsp__find_symbol
+allowed-tools: mcp__lsp__start_lsp mcp__lsp__list_symbols mcp__lsp__blast_radius mcp__lsp__detect_lsp_servers mcp__lsp__find_symbol
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -163,10 +163,10 @@ Select the **top 10 files** by exported symbol count.
 
 ### 4b — Measure blast radius
 
-For each candidate file, call `get_change_impact`:
+For each candidate file, call `blast_radius`:
 
 ```
-mcp__lsp__get_change_impact({
+mcp__lsp__blast_radius({
   "changed_files": ["<absolute-path-to-file>"],
   "include_transitive": false
 })
@@ -287,7 +287,7 @@ Step 4 — Hotspot Analysis
     2. internal/tools/helpers.go (18 exported symbols)
     3. internal/protocol/types.go (15 exported symbols)
 
-  get_change_impact on each:
+  blast_radius on each:
     internal/lsp/client.go → 150 non-test callers across 30 files
     internal/tools/helpers.go → 80 non-test callers across 20 files
     internal/protocol/types.go → 60 non-test callers across 15 files

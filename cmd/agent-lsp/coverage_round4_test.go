@@ -245,7 +245,7 @@ func TestGenerateRulesContent_NonEmpty(t *testing.T) {
 	if !strings.Contains(content, "agent-lsp") {
 		t.Error("rules content should mention agent-lsp")
 	}
-	if !strings.Contains(content, "get_change_impact") {
-		t.Error("rules content should mention get_change_impact")
+	if !strings.Contains(content, "blast_radius") {
+		t.Error("rules content should mention blast_radius")
 	}
 }

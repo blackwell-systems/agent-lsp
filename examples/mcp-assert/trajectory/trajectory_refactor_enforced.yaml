@@ -7,7 +7,7 @@ trace:
     args:
       skill_name: lsp-refactor
       mode: block
-  - tool: get_change_impact
+  - tool: blast_radius
     args:
       changed_files: ["fixtures/go/main.go"]
   - tool: preview_edit
@@ -35,9 +35,9 @@ trace:
   - tool: deactivate_skill
 trajectory:
   - type: order
-    tools: ["activate_skill", "get_change_impact", "preview_edit", "apply_edit", "run_build", "run_tests", "deactivate_skill"]
+    tools: ["activate_skill", "blast_radius", "preview_edit", "apply_edit", "run_build", "run_tests", "deactivate_skill"]
   - type: presence
-    tools: ["activate_skill", "deactivate_skill", "get_change_impact", "preview_edit"]
+    tools: ["activate_skill", "deactivate_skill", "blast_radius", "preview_edit"]
   - type: absence
     tools: ["rename_symbol"]
   - type: args_contain

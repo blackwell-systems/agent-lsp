@@ -6,5 +6,5 @@
 // workspace lifecycle (start_lsp, open/close documents, formatting),
 // session simulation (simulate_edit, evaluate_session, simulate_chain),
 // build/test dispatch (run_build, run_tests, get_tests_for_file), and
-// cross-repo analysis (get_change_impact, get_cross_repo_references).
+// cross-repo analysis (blast_radius, get_cross_repo_references).
 package tools

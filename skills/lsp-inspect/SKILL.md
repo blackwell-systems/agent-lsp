@@ -3,7 +3,7 @@ name: lsp-inspect
 description: Full code quality audit for a file, package, or directory. Supports batch mode (directory walk with --top ranking), comparison mode (--diff for branch-only issues), severity calibration by blast radius, fix suggestions, and confidence tiers. Applies a check taxonomy (dead symbols, silent failures, error wrapping, coverage gaps, test coverage, doc drift, unrecovered panics, context propagation, concurrency safety) using LSP-first strategies. Concurrency checks cover 25 languages across 4 families (goroutine, thread, async, actor). Produces a severity-tiered findings report. Language-agnostic.
 argument-hint: "<file-or-directory> [--checks <type1>,<type2>] [--json] [--top N] [--diff]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_change_impact mcp__lsp__find_references mcp__lsp__list_symbols mcp__lsp__inspect_symbol mcp__lsp__get_diagnostics mcp__lsp__find_callers mcp__lsp__go_to_definition mcp__lsp__get_server_capabilities mcp__lsp__get_cross_repo_references Bash
+allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__blast_radius mcp__lsp__find_references mcp__lsp__list_symbols mcp__lsp__inspect_symbol mcp__lsp__get_diagnostics mcp__lsp__find_callers mcp__lsp__go_to_definition mcp__lsp__get_server_capabilities mcp__lsp__get_cross_repo_references Bash
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -16,7 +16,7 @@ metadata:
 # lsp-inspect
 
 Full code quality audit for a file, package, or directory. Combines LSP batch
-analysis (`get_change_impact`) with targeted per-symbol checks and LLM-driven
+analysis (`blast_radius`) with targeted per-symbol checks and LLM-driven
 heuristic analysis. Produces a severity-tiered findings report with confidence
 tiers and fix suggestions.
 
@@ -54,8 +54,8 @@ severity then blast radius."
 
 | Check | What it finds | LSP strategy |
 |-------|--------------|--------------|
-| `dead_symbol` | Exported symbol with zero references | Tier 1A: `get_change_impact` batch; Tier 1B: `find_references` per-symbol |
-| `test_coverage` | Exported symbol with no test callers | Tier 1A: `get_change_impact` test_callers field |
+| `dead_symbol` | Exported symbol with zero references | Tier 1A: `blast_radius` batch; Tier 1B: `find_references` per-symbol |
+| `test_coverage` | Exported symbol with no test callers | Tier 1A: `blast_radius` test_callers field |
 | `silent_failure` | Error/exception suppressed without re-raise or logging | Read code, identify bare `except:`, empty `if err != nil {}`, swallowed returns |
 | `error_wrapping` | Error returned/raised without context | Read code, identify `return err` without `fmt.Errorf` wrapping or `raise` without `from` |
 | `coverage_gap` | Unhandled input, error path, or code branch | Read code, identify switch/match without default, unchecked type assertions |
@@ -65,7 +65,7 @@ severity then blast radius."
 | `unrecovered_concurrent_entry` | Concurrent entry point without recovery | Read code, identify goroutines/threads/tasks without try-catch or recover |
 | `unchecked_shared_state` | Type assertion or cast on concurrent data structure without safety check | Read code, identify bare `.(*Type)` on sync.Map, unchecked casts on ConcurrentHashMap |
 | `channel_never_closed` | Channel or queue created but never closed in the same package | Read code + grep, find creation sites without matching close/shutdown |
-| `shared_field_without_sync` | Field accessed from concurrent contexts without synchronization | `get_change_impact` (sync_guarded) + `find_callers` (cross_concurrent) |
+| `shared_field_without_sync` | Field accessed from concurrent contexts without synchronization | `blast_radius` (sync_guarded) + `find_callers` (cross_concurrent) |
 
 ## Execution
 
@@ -97,10 +97,10 @@ When `--diff` is set:
 
 ### Step 1: Batch analysis (Tier 1A)
 
-Call `get_change_impact` once per file in the target:
+Call `blast_radius` once per file in the target:
 
 ```
-mcp__lsp__get_change_impact(changed_files=["/abs/path/file.go"], include_transitive=false)
+mcp__lsp__blast_radius(changed_files=["/abs/path/file.go"], include_transitive=false)
 ```
 
 This returns all exported symbols with:
@@ -112,7 +112,7 @@ Classify immediately:
 - `non_test_callers == 0 AND test_callers > 0` -> test-only (may be dead, confidence: suspected)
 - `non_test_callers > 0 AND test_callers == 0` -> untested export (confidence: verified)
 
-If `get_change_impact` fails or is unavailable, fall back to Tier 1B
+If `blast_radius` fails or is unavailable, fall back to Tier 1B
 (`find_references` per-symbol) for `dead_symbol` checks.
 
 ### Step 2: Heuristic checks (LLM-driven)
@@ -180,7 +180,7 @@ Language-specific patterns (check by language family):
 **shared_field_without_sync:** Detect struct/class fields accessed from multiple
 concurrent contexts without synchronization. This check composes two tools:
 
-1. Call `get_change_impact` on the target file. For each symbol where
+1. Call `blast_radius` on the target file. For each symbol where
    `sync_guarded: false` (or absent), the symbol's type lacks sync primitives.
 2. For each such symbol, call `find_callers` with `cross_concurrent: true`.
    If `concurrent_callers` is non-empty, the symbol is called from a concurrent
@@ -189,7 +189,7 @@ concurrent contexts without synchronization. This check composes two tools:
    read-only function), AND (b) it has concurrent callers, AND (c) its parent
    type is not sync-guarded.
 
-Language-agnostic: `get_change_impact` provides `sync_guarded`, `find_callers`
+Language-agnostic: `blast_radius` provides `sync_guarded`, `find_callers`
 provides `concurrent_callers`. The check logic is identical regardless of
 whether the concurrent boundary is a goroutine, thread, or async task.
 
@@ -207,12 +207,12 @@ For each finding, assign:
 - `warning`: May cause confusion, maintenance burden, or subtle bugs, OR findings where `non_test_callers` is 3-9
 - `info`: Style issue or improvement opportunity, OR `non_test_callers <= 2`
 
-Use the `non_test_callers` count from Step 1's `get_change_impact` result as a
+Use the `non_test_callers` count from Step 1's `blast_radius` result as a
 severity multiplier. A silent failure in a function with 50 callers is
 error-severity; the same pattern with 2 callers is info.
 
 **Cross-file impact scoring:** For every finding, look up the symbol's
-`non_test_callers` count from Step 1's get_change_impact result. Use this as a
+`non_test_callers` count from Step 1's blast_radius result. Use this as a
 severity multiplier: if non_test_callers >= 10, escalate severity by one tier
 (info->warning, warning->error). Document the caller count in the finding.
 
