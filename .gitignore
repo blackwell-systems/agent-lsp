@@ -38,3 +38,5 @@ saw.config.json
 
 # mkdocs build output
 /site/
+.serena/
+.spec-workflow/
