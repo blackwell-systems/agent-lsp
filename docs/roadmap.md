@@ -210,6 +210,7 @@ Agents default to built-in tools (Read, Grep, Edit) over MCP tools even when the
 | **Claude Code auto-approval** | **Resolved** | Documented in README Step 6: add `"mcp__lsp__*"` to `permissions.allow` in `~/.claude/settings.json`. Other MCP clients (Cursor, Cline, Windsurf, Gemini CLI) already auto-approve or have one-time allow flows. No hook needed. |
 | **Per-client tool description overrides** | Planned | Tune tool descriptions based on which client is connected. In Claude Code, `list_symbols` description says "use this instead of Read for file structure." In Cursor, skip that guidance since Cursor has its own LSP. Requires detecting the client from the MCP initialize handshake. |
 | **Cross-referencing in tool descriptions** | **Shipped** | Tools suggest related tools where applicable. `apply_edit` recommends `replace_symbol_body` for full function replacements and `preview_edit` before applying. `find_references` recommends `safe_delete_symbol` for zero-reference symbols and `get_change_impact` for blast-radius analysis. `suggest_fixes` points to `/lsp-fix-all` skill. `rename_symbol` recommends `find_references` before renaming exports. |
+| **Onboarding nudge on first use** | Planned | On first `get_change_impact` or `find_references` call in a session, if `/lsp-onboard` has not been run (no `.agent-lsp/onboard-complete` marker), append a hint: "hint: run /lsp-onboard for project context (build system, entry points, test runner)." Non-blocking: the tool still returns results. The hint disappears after onboarding completes or after 3 calls (whichever comes first). Inspired by Serena's enforced onboarding flow but non-intrusive. |
 
 ### Inspector evolution (`/lsp-inspect`)
 
@@ -232,6 +233,32 @@ The inspector skill is agent-lsp's most powerful quality tool: it found a nil se
 | **Confidence tiers** | **Shipped** | Replace "high/medium/low" with actionable labels: "verified" (LSP confirmed, act immediately), "suspected" (pattern match, investigate first), "advisory" (style suggestion, optional). Applied to the inspector output format and the check taxonomy in the SKILL.md. |
 | **Unexported dead code detection** | **Shipped** | Extend `get_change_impact` with a new `scope` parameter (`scope: "all"`) to check unexported symbols in addition to exported ones. Uses `collectAllSymbols` to walk all document symbols and check references for each. |
 | **Inspector result as MCP resource** | **Shipped** | Expose the last inspector run as an MCP resource at `inspect://last`. Results persisted to `.agent-lsp/last-inspection.json`. Agents can re-read findings without re-running the full analysis. Useful for iterative fix-verify cycles. |
+
+### Concurrency analysis
+
+Proven by finding unrecovered goroutines in mark3labs/mcp-go (#860). These checks detect real crash-path bugs that tests miss because they require specific timing or nil states to trigger.
+
+**Inspector check type (`concurrency`):**
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Goroutine without recover** | Planned | Detect `go func()` blocks without `defer func() { if r := recover()... }()`. Weight by whether the goroutine is in library transport code (error) vs user-facing handler with middleware protection (info). Heuristic: scan for `go func()` then check if the function body contains `recover()`. |
+| **Unchecked type assertion on sync.Map** | Planned | Detect `.Load()` or `.LoadOrStore()` followed by a bare type assertion `actual.(*Type)` without `, ok` pattern. These panic if the map is corrupted or stores an unexpected type. |
+| **Channel never closed** | Planned | Detect channels created with `make(chan T)` that are never passed to `close()` in the same package. May indicate goroutine leaks (receivers block forever). Heuristic: grep for `make(chan` and verify `close(chName)` exists. |
+| **Shared field without mutex** | Planned | Detect struct fields accessed from multiple goroutines (via call hierarchy through `go func()` boundaries) that lack synchronization. Heuristic: if a function modifies a struct field AND is reachable from a `go func()` call site, flag unless the struct also has a `sync.Mutex` or `sync.RWMutex` field. |
+
+**Tool-level support:**
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Mutex-guarded metadata in get_change_impact** | Planned | If a symbol accesses a field in a struct that also has a `sync.Mutex` or `sync.RWMutex` field, include `"mutex_guarded": true` in the symbol metadata. Changing mutex-guarded code has different blast radius than changing pure functions. |
+| **Cross-goroutine caller tracing** | Planned | Extend `find_callers` or add a parameter to trace call paths that cross `go func()` boundaries. Currently call hierarchy stops at the goroutine launch site. A `--cross-goroutine` flag would follow the call chain into the goroutine body, enabling "who calls this function from a separate goroutine?" queries. |
+
+**Skill candidate:**
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **`/lsp-concurrency-audit`** | Planned | Given a type, map all its fields, identify which are accessed from multiple goroutines (by tracing callers through `go func()` boundaries), and flag fields that lack synchronization. Produces a field-level concurrency safety report. |
 
 ## Skills
 
