@@ -596,6 +596,6 @@ critic_report:
     summary: Re-run after fixing Agent B symbol names. GetInfoOnLocation and ResolvePositionPattern both verified to exist with correct names. All agent briefs accurate against codebase.
     reviewed_at: "2026-05-11T02:41:10Z"
     issue_count: 0
-state: SCOUT_PENDING
+state: "REVIEWED"
 original_branch: main
 injection_method: hook
