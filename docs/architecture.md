@@ -500,7 +500,7 @@ For HTTP mode, the HTTP server calls `Shutdown` with a 5-second deadline, draini
 
 ## Tool Registration Model
 
-61 MCP tools are exposed to the AI agent. In MCP, a "tool" is a named function with a JSON Schema for its arguments that the AI can invoke via a JSON-RPC `tools/call` request. Tools are defined in seven files under `cmd/agent-lsp/` and dispatched through a shared pattern.
+66 MCP tools are exposed to the AI agent. In MCP, a "tool" is a named function with a JSON Schema for its arguments that the AI can invoke via a JSON-RPC `tools/call` request. Tools are defined in ten files under `cmd/agent-lsp/` and dispatched through a shared pattern.
 
 ### How a tool is defined
 
@@ -1181,7 +1181,7 @@ Skills are structured workflow definitions that tell agents how to orchestrate M
 ```
 Go binary (agent-lsp)                     skills/ directory
 ─────────────────────                     ──────────────────
-Exposes 61 MCP tools                      Source SKILL.md definitions
+Exposes 66 MCP tools                      Source SKILL.md definitions
 Serves skills via prompts/list + get      Installed to ~/.claude/skills/ for slash commands
 Embeds skill definitions at build time    Used by AgentSkills clients directly
 ```
