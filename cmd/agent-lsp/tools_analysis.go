@@ -206,6 +206,7 @@ func registerAnalysisTools(d toolDeps) {
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetWorkspaceSymbolsArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleGetWorkspaceSymbols(ctx, d.cs.get(), toolArgsToMap(args))
+		r = tools.AppendIndexedField(r, d.cs.get())
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -220,6 +221,7 @@ func registerAnalysisTools(d toolDeps) {
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetReferencesArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleGetReferences(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
+		r = tools.AppendIndexedField(r, d.cs.get())
 		return makeCallToolResult(r), nil, err
 	})
 
@@ -290,6 +292,7 @@ func registerAnalysisTools(d toolDeps) {
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetChangeImpactArgs) (*mcp.CallToolResult, any, error) {
 		r, err := tools.HandleGetChangeImpact(ctx, d.cs.get(), toolArgsToMap(args))
+		r = tools.AppendIndexedField(r, d.cs.get())
 		return makeCallToolResult(r), nil, err
 	})
 
