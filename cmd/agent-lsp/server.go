@@ -362,6 +362,9 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	registerAnalysisTools(deps)
 	registerSessionTools(deps)
 	registerPhaseTools(deps)
+	registerExploreTools(deps)
+	registerSafeEditTools(deps)
+	registerAliasTools(deps)
 
 	// ------- Register prompts (skills as MCP prompts) -------
 	registerPrompts(server)
