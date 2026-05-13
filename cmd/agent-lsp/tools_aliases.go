@@ -38,7 +38,7 @@ func registerAliasTools(d toolDeps) {
 		Name:        "explore",
 		Description: "Deep exploration of a symbol: combines type info, source, callers, references, and test callers in one call. Use when navigating unfamiliar code and you need the full picture of what a symbol is and how it is used.",
 		Annotations: &mcp.ToolAnnotations{
-			Title:           "Explore Symbol",
+			Title:           "Explore",
 			ReadOnlyHint:    true,
 			DestructiveHint: boolPtr(false),
 			OpenWorldHint:   boolPtr(false),
