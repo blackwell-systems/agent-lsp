@@ -40,3 +40,4 @@ saw.config.json
 /site/
 .serena/
 .spec-workflow/
+.claude/scheduled_tasks.lock

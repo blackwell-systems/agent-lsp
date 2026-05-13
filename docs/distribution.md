@@ -176,14 +176,18 @@ Docker images are built inside the `release` job by GoReleaser (`dockers:` secti
 | punkpeye/awesome-mcp-servers | 86K | **Listed** | Already on the list |
 | ComposioHQ/awesome-claude-skills | 59K | **PR #793 open** | Development & Code Tools |
 | hesreallyhim/awesome-claude-code | 43K | Needs manual issue form | Tooling |
+| VoltAgent/awesome-claude-code-subagents | 19.6K | **PR #251 open** | Development Experience |
 | travisvn/awesome-claude-skills | 12K | **PR #703 open** | Collections & Libraries |
+| BehiSecc/awesome-claude-skills | 9K | **PR #295 open** | Development & Code Tools |
 | appcypher/awesome-mcp-servers | 5.5K | Branch pushed, needs PR from browser | Development Tools |
 | wong2/awesome-mcp-servers | 4K | Needs mcpservers.org/submit | Community Servers |
 | ai-for-developers/awesome-ai-coding-tools | 1.7K | **PR #308 open** | MCP Servers and Directories |
-| rohitg00/awesome-devops-mcp-servers | 980 | **PR #200 open** | Coding Agents |
+| rohitg00/awesome-claude-code-toolkit | 1.6K | **PR #393 open** | Skills |
+| rohitg00/awesome-devops-mcp-servers | 980 | **Listed** | Coding Agents |
+| devtoolsd/awesome-devtools | 662 | **PR #221 open** | AI Coding Tools |
 | TensorBlock/awesome-mcp-servers | 656 | Not submitted | Code Analysis & Quality |
 | ai-boost/awesome-harness-engineering | 705 | Not submitted | Skills & MCP |
-| bradAGI/awesome-cli-coding-agents | 308 | **PR #75 open** | Agent infrastructure |
+| bradAGI/awesome-cli-coding-agents | 308 | **PR #75 closed** (no merge, repo appears unmaintained) | Agent infrastructure |
 | Hexlet/awesome-lsp-servers | 62 | **PR #16 open** | Multi-language & Bridges |
 | avelino/awesome-go | 172K | **Blocked until Sep 2026** (5-month history req) | Go Tools |
 
