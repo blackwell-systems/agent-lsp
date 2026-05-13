@@ -73,9 +73,9 @@ func TestWriteOrMergeConfig_NewFile(t *testing.T) {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
 
-	entry, ok := cfg.MCPServers["lsp"]
+	entry, ok := cfg.MCPServers["agent-lsp"]
 	if !ok {
-		t.Fatal("MCPServers[\"lsp\"] not found")
+		t.Fatal("MCPServers[\"agent-lsp\"] not found")
 	}
 	if entry.Type != "stdio" {
 		t.Errorf("Type=%q, want \"stdio\"", entry.Type)
@@ -112,8 +112,8 @@ func TestWriteOrMergeConfig_ExistingFile(t *testing.T) {
 	if _, ok := cfg.MCPServers["other-tool"]; !ok {
 		t.Error("\"other-tool\" key was lost after merge")
 	}
-	if _, ok := cfg.MCPServers["lsp"]; !ok {
-		t.Error("\"lsp\" key not present after merge")
+	if _, ok := cfg.MCPServers["agent-lsp"]; !ok {
+		t.Error("\"agent-lsp\" key not present after merge")
 	}
 }
 

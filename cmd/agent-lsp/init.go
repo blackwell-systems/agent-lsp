@@ -210,7 +210,7 @@ func buildLspArgs(entries []config.ServerEntry) []string {
 }
 
 // writeOrMergeConfig reads an existing config at path (if any), sets/overwrites
-// the "lsp" key in mcpServers, and writes the result back.
+// the "agent-lsp" key in mcpServers, and writes the result back.
 func writeOrMergeConfig(path string, lspArgs []string) error {
 	var cfg mcpConfig
 
@@ -232,7 +232,7 @@ func writeOrMergeConfig(path string, lspArgs []string) error {
 		}
 	}
 
-	cfg.MCPServers["lsp"] = mcpServerEntry{
+	cfg.MCPServers["agent-lsp"] = mcpServerEntry{
 		Type:    "stdio",
 		Command: "agent-lsp",
 		Args:    lspArgs,

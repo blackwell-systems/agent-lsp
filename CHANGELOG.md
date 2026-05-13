@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Fixed
 - Duplicate "Explore Symbol" title in tool lists: renamed `explore` alias title to "Explore" to distinguish it from canonical `explore_symbol` tool
+- MCP server key changed from `"lsp"` to `"agent-lsp"` in init config: fixes display showing `lsp:lsp-*` instead of `agent-lsp:lsp-*` in Claude Code skill listings
 
 ## [0.11.0] - 2026-05-10
 
