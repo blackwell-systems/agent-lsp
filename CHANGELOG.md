@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+- Duplicate "Explore Symbol" title in tool lists: renamed `explore` alias title to "Explore" to distinguish it from canonical `explore_symbol` tool
+
 ## [0.11.0] - 2026-05-10
 
 ### Breaking
