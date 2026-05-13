@@ -3,11 +3,14 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.11.1] - 2026-05-13
 
 ### Fixed
-- Duplicate "Explore Symbol" title in tool lists: renamed `explore` alias title to "Explore" to distinguish it from canonical `explore_symbol` tool
-- MCP server key changed from `"lsp"` to `"agent-lsp"` in init config: fixes display showing `lsp:lsp-*` instead of `agent-lsp:lsp-*` in Claude Code skill listings
+- **MCP server key renamed from `"lsp"` to `"agent-lsp"` in init config.** Skills now display as `agent-lsp:lsp-*` instead of the redundant `lsp:lsp-*` in Claude Code and other MCP hosts. Running `agent-lsp init` auto-removes the legacy `"lsp"` key from existing configs.
+- Duplicate "Explore Symbol" title in tool lists: the `explore` alias now shows as "Explore" to distinguish it from the canonical `explore_symbol` tool.
+
+### Removed
+- `.serena/` and `.spec-workflow/` directories removed from repository (workflow scaffolding that didn't belong in the tool repo).
 
 ## [0.11.0] - 2026-05-10
 
