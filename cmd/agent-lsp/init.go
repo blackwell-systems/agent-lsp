@@ -232,6 +232,9 @@ func writeOrMergeConfig(path string, lspArgs []string) error {
 		}
 	}
 
+	// Remove legacy "lsp" key if present (renamed to "agent-lsp" in v0.12.0)
+	delete(cfg.MCPServers, "lsp")
+
 	cfg.MCPServers["agent-lsp"] = mcpServerEntry{
 		Type:    "stdio",
 		Command: "agent-lsp",
