@@ -10,6 +10,12 @@ title: Roadmap
 |---------|--------|-------------|
 | **Nix flake** | Planned | `nix run github:blackwell-systems/agent-lsp` |
 
+## Library Extraction
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **go-lsp-client** | Planned (post-v1.0) | Extract `pkg/lsp` + `internal/lsp` into a standalone Go module (`github.com/blackwell-systems/go-lsp-client`). Pure Go LSP client library: subprocess management, initialize/shutdown handshake, multi-server routing, typed methods for all LSP 3.17 requests. No equivalent exists in the Go ecosystem (existing libraries are server frameworks or type definitions only). Blocked on API stabilization: the internal LSP client is still seeing breaking changes (tool renames, new features, lifecycle fixes). Extract when the public surface is stable for 2-3 releases. |
+
 ## Extensions
 
 Extensions add language-specific tools beyond what LSP exposes. The core 60 tools cover 26 of the most agent-relevant LSP 3.17 methods (navigation, analysis, refactoring, diagnostics, formatting) plus 31 tools that go beyond the LSP spec (speculative execution, build/test, change impact analysis, cross-repo references, cache management, git-based change detection, symbol-level editing, audit). Three low-value LSP methods are intentionally omitted: `selectionRange`, `foldingRange`, and `codeLens`. Extensions run arbitrary toolchain logic for a specific language.
