@@ -547,6 +547,26 @@ func (c *LSPClient) dispatch(raw []byte) {
 			c.sendResponse(msg.ID, result)
 		}
 	case "client/registerCapability":
+		// Dynamic capability registration (LSP §3.7.2). Servers like jdtls
+		// register document-level providers (documentSymbol, definition,
+		// references, hover) lazily after workspace import completes.
+		var reg struct {
+			Registrations []struct {
+				Method string `json:"method"`
+			} `json:"registrations"`
+		}
+		if err := json.Unmarshal(msg.Params, &reg); err == nil {
+			c.capsMu.Lock()
+			for _, r := range reg.Registrations {
+				// Map LSP method to capability key (e.g. "textDocument/documentSymbol" → "documentSymbolProvider")
+				capKey := methodToCapabilityKey(r.Method)
+				if capKey != "" {
+					c.capabilities[capKey] = true
+					logging.Log(logging.LevelDebug, fmt.Sprintf("dynamic capability registered: %s → %s", r.Method, capKey))
+				}
+			}
+			c.capsMu.Unlock()
+		}
 		if msg.ID != nil {
 			c.sendResponse(msg.ID, nil)
 		}
@@ -1027,6 +1047,15 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 			if c.isJDTLS() {
 				if b, e := json.Marshal(initResult.Capabilities); e == nil {
 					logging.Log(logging.LevelInfo, fmt.Sprintf("jdtls capabilities: %s", string(b)))
+				}
+				// jdtls enables document-level providers (documentSymbol, definition,
+				// references, hover) only after successful classpath resolution. If
+				// these are missing, the Gradle/Maven import completed but compilation
+				// failed (e.g. unresolved dependencies, annotation processor errors).
+				for _, key := range []string{"documentSymbolProvider", "definitionProvider", "referencesProvider", "hoverProvider"} {
+					if _, ok := initResult.Capabilities[key]; !ok {
+						logging.Log(logging.LevelInfo, fmt.Sprintf("jdtls: %s not advertised; classpath resolution may have failed", key))
+					}
 				}
 			}
 		}
@@ -2284,6 +2313,36 @@ func (c *LSPClient) applyEditsToFile(ctx context.Context, uri string, edits []te
 }
 
 // ---- Capability Helpers ----
+
+// methodToCapabilityKey maps an LSP method name to its server capability key.
+var lspMethodToCapability = map[string]string{
+	"textDocument/documentSymbol":    "documentSymbolProvider",
+	"textDocument/definition":        "definitionProvider",
+	"textDocument/references":        "referencesProvider",
+	"textDocument/implementation":    "implementationProvider",
+	"textDocument/typeDefinition":    "typeDefinitionProvider",
+	"textDocument/hover":             "hoverProvider",
+	"textDocument/completion":        "completionProvider",
+	"textDocument/signatureHelp":     "signatureHelpProvider",
+	"textDocument/rename":            "renameProvider",
+	"textDocument/formatting":        "documentFormattingProvider",
+	"textDocument/rangeFormatting":   "documentRangeFormattingProvider",
+	"textDocument/codeAction":        "codeActionProvider",
+	"textDocument/codeLens":          "codeLensProvider",
+	"textDocument/documentHighlight": "documentHighlightProvider",
+	"textDocument/declaration":       "declarationProvider",
+	"textDocument/semanticTokens":    "semanticTokensProvider",
+	"textDocument/inlayHint":         "inlayHintProvider",
+	"callHierarchy/incomingCalls":    "callHierarchyProvider",
+	"callHierarchy/outgoingCalls":    "callHierarchyProvider",
+	"typeHierarchy/supertypes":       "typeHierarchyProvider",
+	"typeHierarchy/subtypes":         "typeHierarchyProvider",
+	"workspace/symbol":               "workspaceSymbolProvider",
+}
+
+func methodToCapabilityKey(method string) string {
+	return lspMethodToCapability[method]
+}
 
 func (c *LSPClient) hasCapability(key string) bool {
 	c.capsMu.RLock()
