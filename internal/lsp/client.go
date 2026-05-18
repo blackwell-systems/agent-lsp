@@ -959,20 +959,36 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	// and emit $/progress tokens during workspace indexing. Without these,
 	// jdtls starts but silently skips project import and never indexes.
 	if c.isJDTLS() {
+		runtimes := detectJavaRuntimes()
+		gradleSettings := map[string]any{
+			"enabled": true,
+		}
+		// Pass detected JDK paths to Gradle's toolchain resolver. The Gradle
+		// daemon runs as a separate process and doesn't read jdtls settings,
+		// so we set org.gradle.java.installations.paths via import arguments.
+		if len(runtimes) > 0 {
+			var paths []string
+			for _, r := range runtimes {
+				if p, ok := r["path"].(string); ok {
+					paths = append(paths, p)
+				}
+			}
+			if len(paths) > 0 {
+				gradleSettings["arguments"] = []string{
+					"-Dorg.gradle.java.installations.paths=" + strings.Join(paths, ","),
+				}
+			}
+		}
 		javaSettings := map[string]any{
 			"import": map[string]any{
-				"maven": map[string]any{
-					"enabled": true,
-				},
-				"gradle": map[string]any{
-					"enabled": true,
-				},
+				"maven":  map[string]any{"enabled": true},
+				"gradle": gradleSettings,
 			},
 			"autobuild": map[string]any{
 				"enabled": true,
 			},
 		}
-		if runtimes := detectJavaRuntimes(); len(runtimes) > 0 {
+		if len(runtimes) > 0 {
 			javaSettings["configuration"] = map[string]any{
 				"runtimes": runtimes,
 			}
