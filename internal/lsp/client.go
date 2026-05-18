@@ -481,6 +481,15 @@ func (c *LSPClient) dispatch(raw []byte) {
 		if msg.ID != nil {
 			c.sendResponse(msg.ID, nil)
 		}
+	case "window/logMessage":
+		var p struct {
+			Type    int    `json:"type"`
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err == nil && p.Type <= 2 {
+			// Type 1 = Error, 2 = Warning. Log these so import failures are visible.
+			logging.Log(logging.LevelInfo, fmt.Sprintf("LSP server [%s]: %s", c.serverPath, p.Message))
+		}
 	case "workspace/configuration":
 		// Respond with an array of empty objects (one per requested item).
 		// Using {} instead of null is critical for servers like jdtls that
@@ -950,21 +959,27 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	// and emit $/progress tokens during workspace indexing. Without these,
 	// jdtls starts but silently skips project import and never indexes.
 	if c.isJDTLS() {
+		javaSettings := map[string]any{
+			"import": map[string]any{
+				"maven": map[string]any{
+					"enabled": true,
+				},
+				"gradle": map[string]any{
+					"enabled": true,
+				},
+			},
+			"autobuild": map[string]any{
+				"enabled": true,
+			},
+		}
+		if runtimes := detectJavaRuntimes(); len(runtimes) > 0 {
+			javaSettings["configuration"] = map[string]any{
+				"runtimes": runtimes,
+			}
+		}
 		initParams["initializationOptions"] = map[string]any{
 			"settings": map[string]any{
-				"java": map[string]any{
-					"import": map[string]any{
-						"maven": map[string]any{
-							"enabled": true,
-						},
-						"gradle": map[string]any{
-							"enabled": true,
-						},
-					},
-					"autobuild": map[string]any{
-						"enabled": true,
-					},
-				},
+				"java": javaSettings,
 			},
 			"extendedClientCapabilities": map[string]any{
 				"progressReportProvider":               true,

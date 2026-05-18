@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+- **jdtls (Java) initialization**: set `cmd.Dir` to project root so jdtls computes the correct workspace data directory; send `workspace/didChangeConfiguration` after `initialized` to trigger Gradle/Maven import; auto-detect installed JDK runtimes (`java.configuration.runtimes`) so Gradle can find the correct toolchain version
+- **`window/logMessage` handling**: log warning/error messages from language servers so failures (like Gradle import errors) are visible instead of silent
+
 ## [0.11.1] - 2026-05-13
 
 ### Fixed
