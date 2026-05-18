@@ -1024,6 +1024,11 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 		c.capsMu.Lock()
 		if initResult.Capabilities != nil {
 			c.capabilities = initResult.Capabilities
+			if c.isJDTLS() {
+				if b, e := json.Marshal(initResult.Capabilities); e == nil {
+					logging.Log(logging.LevelInfo, fmt.Sprintf("jdtls capabilities: %s", string(b)))
+				}
+			}
 		}
 		if initResult.ServerInfo != nil {
 			c.serverName = initResult.ServerInfo.Name
@@ -1785,6 +1790,9 @@ func (c *LSPClient) GetDocumentSymbols(ctx context.Context, uri string) ([]types
 	})
 	if err != nil {
 		return nil, err
+	}
+	if c.isJDTLS() && (result == nil || string(result) == "null" || string(result) == "[]") {
+		logging.Log(logging.LevelInfo, fmt.Sprintf("jdtls documentSymbol returned empty for %s (raw: %s)", uri, string(result)))
 	}
 	return NormalizeDocumentSymbols(result)
 }
