@@ -3,10 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.11.2] - 2026-05-18
 
 ### Fixed
-- **jdtls (Java) initialization**: set `cmd.Dir` to project root so jdtls computes the correct workspace data directory; send `workspace/didChangeConfiguration` after `initialized` to trigger Gradle/Maven import; auto-detect installed JDK runtimes (`java.configuration.runtimes`) so Gradle can find the correct toolchain version
+- **jdtls (Java) full initialization chain**: set `cmd.Dir` to project root (workspace data directory hashing), send `workspace/didChangeConfiguration` after `initialized` (triggers Gradle/Maven import), auto-detect installed JDK runtimes, decouple jdtls JDK from Gradle JDK via `--java-executable` (jdtls runs on JDK 21, Gradle sees JDK 17 via `JAVA_HOME`), fix JDK 17/18/19 detection bug (`HasPrefix("1")` incorrectly skipped versions starting with 1), reopen documents after import completes
+- **Dynamic capability registration** (`client/registerCapability`): servers like jdtls register document-level providers (documentSymbol, definition, references, hover) dynamically after workspace import, not in the initialize response. Previously these registrations were acknowledged but discarded, causing all queries to return empty results.
+- **`hierarchicalDocumentSymbolSupport`**: declare in client capabilities so servers return `DocumentSymbol[]` instead of flat `SymbolInformation[]`
 - **`window/logMessage` handling**: log warning/error messages from language servers so failures (like Gradle import errors) are visible instead of silent
 
 ## [0.11.1] - 2026-05-13
