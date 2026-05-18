@@ -964,8 +964,10 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 			"enabled": true,
 		}
 		// Pass detected JDK paths to Gradle's toolchain resolver. The Gradle
-		// daemon runs as a separate process and doesn't read jdtls settings,
-		// so we set org.gradle.java.installations.paths via import arguments.
+		// daemon runs as a separate process via Buildship's Tooling API.
+		// gradle.arguments doesn't work (Buildship doesn't pass them through).
+		// jvmArguments sets JVM system properties on the Gradle daemon process,
+		// which the toolchain resolver reads.
 		if len(runtimes) > 0 {
 			var paths []string
 			for _, r := range runtimes {
@@ -974,7 +976,7 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 				}
 			}
 			if len(paths) > 0 {
-				gradleSettings["arguments"] = []string{
+				gradleSettings["jvmArguments"] = []string{
 					"-Dorg.gradle.java.installations.paths=" + strings.Join(paths, ","),
 				}
 			}
