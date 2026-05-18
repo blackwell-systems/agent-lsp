@@ -336,6 +336,13 @@ func (c *LSPClient) start() error {
 	// which is almost never the workspace being analyzed here. Removing it lets
 	// gopls discover the correct go.work naturally by walking up from root_dir.
 	cmd.Env = removeEnv(os.Environ(), "GOWORK")
+	// Set the working directory to the project root. This is critical for jdtls,
+	// which hashes os.getcwd() to compute its workspace data directory. Without
+	// this, the data directory is keyed to the wrong path and the Gradle/Maven
+	// import never starts.
+	if c.rootDir != "" {
+		cmd.Dir = c.rootDir
+	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("stdin pipe: %w", err)
@@ -799,11 +806,10 @@ func (c *LSPClient) isJDTLS() bool {
 
 // Initialize starts the LSP process and performs the LSP handshake.
 func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
+	c.rootDir = rootDir
 	if err := c.start(); err != nil {
 		return err
 	}
-
-	c.rootDir = rootDir
 	c.refCache = NewSymbolRefCache(rootDir)
 
 	// Auto-import: if the cache is empty and a team-shared artifact exists
@@ -1040,7 +1046,21 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	// without requiring manual did_change_watched_files calls.
 	c.startWatcher(rootDir)
 
-	return c.sendNotification("initialized", map[string]any{})
+	if err := c.sendNotification("initialized", map[string]any{}); err != nil {
+		return err
+	}
+
+	// jdtls requires workspace/didChangeConfiguration after initialized to
+	// trigger the Gradle/Maven project import. VS Code sends this automatically.
+	if c.isJDTLS() {
+		_ = c.sendNotification("workspace/didChangeConfiguration", map[string]any{
+			"settings": map[string]any{
+				"java": map[string]any{},
+			},
+		})
+	}
+
+	return nil
 }
 
 // Shutdown gracefully shuts down the LSP server.
