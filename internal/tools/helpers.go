@@ -14,7 +14,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,12 +84,17 @@ func WithDocument[T any](
 }
 
 // CreateFileURI converts an absolute file path to a file:// URI.
+//
+// Delegates to lsp.PathToFileURI — the canonical helper that handles
+// both POSIX and Windows correctly. The previous implementation here
+// did `url.URL{Scheme: "file", Path: filePath}.String()` which on
+// Windows produced `file://S:/Source/...` (drive letter promoted to
+// the URI authority) instead of the RFC 8089 form `file:///S:/...`.
+// Downstream LSP servers then either failed to resolve the URI at all
+// or returned references under a totally different normalization,
+// silently dropping cross-file callers in find_references and similar.
 func CreateFileURI(filePath string) string {
-	u := url.URL{
-		Scheme: "file",
-		Path:   filePath,
-	}
-	return u.String()
+	return lsp.PathToFileURI(filePath)
 }
 
 // URIToFilePath converts a file:// URI to an absolute path.
