@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
@@ -161,17 +160,20 @@ func CleanupStaleDaemons() {
 	}
 }
 
-// StopDaemon sends SIGTERM to a running daemon.
+// StopDaemon asks the platform's process-termination mechanism to stop
+// the daemon broker — SIGTERM on POSIX, TerminateProcess on Windows.
+// The previous implementation always sent syscall.SIGTERM which Go's
+// Windows runtime rejects ("not supported by windows"), making the
+// `agent-lsp daemon-stop` CLI a no-op on Windows.
 func StopDaemon(rootDir, languageID string) error {
 	info, err := FindRunningDaemon(rootDir, languageID)
 	if err != nil || info == nil {
 		return fmt.Errorf("no running daemon found for %s at %s", languageID, rootDir)
 	}
-	proc, err := os.FindProcess(info.PID)
-	if err != nil {
-		return fmt.Errorf("sending SIGTERM to daemon PID %d: %w", info.PID, err)
+	if err := terminateProcess(info.PID); err != nil {
+		return fmt.Errorf("terminating daemon PID %d: %w", info.PID, err)
 	}
-	return proc.Signal(syscall.SIGTERM)
+	return nil
 }
 
 // ListDaemons returns info about all currently running daemons.

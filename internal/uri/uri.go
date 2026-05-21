@@ -49,6 +49,13 @@ func URIToPath(uri string) string {
 	}
 
 	if p == "" {
+		// Edge case: well-formed URI with no path component (e.g.
+		// bare "file://"). Fall back to prefix-stripping to match the
+		// historical contract (the pre-patch implementation returned
+		// "" for this case).
+		if strings.HasPrefix(uri, "file://") {
+			return uri[len("file://"):]
+		}
 		return uri
 	}
 

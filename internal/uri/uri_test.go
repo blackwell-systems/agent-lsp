@@ -43,9 +43,22 @@ func TestURIToPath(t *testing.T) {
 			want: "",
 		},
 		{
+			// RFC 8089 canonical Windows form. Pre-patch returned
+			// `/C:/...` (slash before the drive) which is not a
+			// valid Windows path. Now correctly strips the leading
+			// slash so the path is rooted at the drive letter.
 			name: "windows-style file URI",
 			uri:  "file:///C:/Users/user/project/main.go",
-			want: "/C:/Users/user/project/main.go",
+			want: "C:/Users/user/project/main.go",
+		},
+		{
+			// agent-lsp 0.11.2's own malformed Windows output where
+			// the drive letter landed under the URI authority
+			// (`file://S:\foo` instead of `file:///S:/foo`). The
+			// patched implementation recovers a usable path.
+			name: "windows malformed file URI (drive under authority)",
+			uri:  `file://S:\Source\Personal\PlotPackets\main.py`,
+			want: `S:\Source\Personal\PlotPackets\main.py`,
 		},
 	}
 
