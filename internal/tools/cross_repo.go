@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
@@ -21,13 +23,34 @@ type crossRepoRef struct {
 
 // repoForFile returns the first consumer root that is a prefix of filePath.
 // Returns "primary" when no root matches.
+//
+// Windows: compare case-insensitively AND after normalizing path
+// separators. NTFS is case-insensitive and Windows tools mix `/` and
+// `\` freely — without normalization the same logical path written
+// two different ways (`S:/Source/foo` vs `s:\source\foo`) fails the
+// prefix check and the cross-repo partition mis-attributes the result
+// to "primary" instead of the matching consumer root.
 func repoForFile(filePath string, consumerRoots []string) string {
+	normFile := normalizePathForCompare(filePath)
 	for _, root := range consumerRoots {
-		if strings.HasPrefix(filePath, root) {
+		if strings.HasPrefix(normFile, normalizePathForCompare(root)) {
 			return root
 		}
 	}
 	return "primary"
+}
+
+// normalizePathForCompare lowercases on Windows and converts all
+// separators to forward slashes. No-op stylistically on POSIX (still
+// runs ToLower / ToSlash but both are idempotent in the case-sensitive
+// world). Centralised here rather than inline so future call sites can
+// reuse it.
+func normalizePathForCompare(p string) string {
+	p = filepath.ToSlash(p)
+	if runtime.GOOS == "windows" {
+		p = strings.ToLower(p)
+	}
+	return p
 }
 
 // HandleGetCrossRepoReferences handles the get_cross_repo_references MCP tool.
