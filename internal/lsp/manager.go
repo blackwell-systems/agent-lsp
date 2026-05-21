@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,24 @@ import (
 	"github.com/blackwell-systems/agent-lsp/internal/config"
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
 )
+
+// brokerStartTimeout returns how long startOrConnectDaemon waits for a
+// freshly spawned broker to register itself in the daemon registry.
+//
+// Reads AGENT_LSP_BROKER_TIMEOUT_MS from the environment when set (must
+// be a positive integer in milliseconds). Defaults to 30s — the original
+// 10s was too tight on Windows when agent-lsp is launched through a
+// `.cmd` shim from an MCP host (cmd.exe startup latency alone can eat
+// several seconds before the Go process even begins broker handshake).
+func brokerStartTimeout() time.Duration {
+	const defaultMs = 30000
+	if raw := os.Getenv("AGENT_LSP_BROKER_TIMEOUT_MS"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			return time.Duration(v) * time.Millisecond
+		}
+	}
+	return time.Duration(defaultMs) * time.Millisecond
+}
 
 // managedEntry holds one language server along with its routing metadata.
 type managedEntry struct {
@@ -240,17 +259,22 @@ func (m *ServerManager) startOrConnectDaemon(ctx context.Context, rootDir, langu
 		return nil, fmt.Errorf("daemon: failed to spawn broker: %w", err)
 	}
 
-	// Wait briefly for the daemon to start and create its socket.
+	// Wait for the daemon to start and create its socket. The timeout
+	// is configurable via AGENT_LSP_BROKER_TIMEOUT_MS — see
+	// brokerStartTimeout. Poll every 500ms (compromise between
+	// responsiveness and CPU).
+	const pollInterval = 500 * time.Millisecond
+	deadline := time.Now().Add(brokerStartTimeout())
 	var daemonInfo *DaemonInfo
-	for i := 0; i < 20; i++ { // up to 10 seconds
-		time.Sleep(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		time.Sleep(pollInterval)
 		daemonInfo, _ = FindRunningDaemon(rootDir, languageID)
 		if daemonInfo != nil {
 			break
 		}
 	}
 	if daemonInfo == nil {
-		return nil, fmt.Errorf("daemon: broker did not start within 10 seconds")
+		return nil, fmt.Errorf("daemon: broker did not start within %s (override via AGENT_LSP_BROKER_TIMEOUT_MS)", brokerStartTimeout())
 	}
 
 	client, err := NewDaemonClient(daemonInfo)
@@ -277,8 +301,22 @@ func spawnDaemonProcess(rootDir, languageID string, command []string) error {
 	}
 
 	cmd := exec.Command(self, args...)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	// Capture stderr to disk so spawn failures are diagnosable. The
+	// daemon broker is detached and writes nothing meaningful to
+	// stdout, but it logs info/warnings to stderr — without capture
+	// the parent saw silent failures.
+	home, _ := os.UserHomeDir()
+	logDir := filepath.Join(home, ".cache", "agent-lsp", "spawn-logs")
+	_ = os.MkdirAll(logDir, 0755)
+	logPath := filepath.Join(logDir, fmt.Sprintf("%s.log", strings.ReplaceAll(languageID, string(os.PathSeparator), "_")))
+	if logFile, ferr := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); ferr == nil {
+		fmt.Fprintf(logFile, "\n=== spawn %s for %s @ %s ===\n", languageID, rootDir, time.Now().Format(time.RFC3339))
+		cmd.Stderr = logFile
+		cmd.Stdout = logFile
+	} else {
+		cmd.Stdout = nil
+		cmd.Stderr = nil
+	}
 	// Detach: don't let the subprocess die with us.
 	setSysProcAttr(cmd)
 

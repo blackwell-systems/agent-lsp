@@ -78,7 +78,7 @@ func HandleDiagnosticsResource(ctx context.Context, client *lsp.LSPClient, uri s
 	}
 
 	// Specific file path.
-	fileURI := (&url.URL{Scheme: "file", Path: path}).String()
+	fileURI := lsp.PathToFileURI(path)
 	if err := client.ReopenDocument(ctx, fileURI); err != nil {
 		return ResourceResult{}, fmt.Errorf("reopen document %q: %w", fileURI, err)
 	}
@@ -150,7 +150,7 @@ func HandleHoverResource(ctx context.Context, client *lsp.LSPClient, uri string)
 		return ResourceResult{}, fmt.Errorf("read file %q: %w", filePath, err)
 	}
 
-	fileURI := (&url.URL{Scheme: "file", Path: filePath}).String()
+	fileURI := lsp.PathToFileURI(filePath)
 	if err := client.OpenDocument(ctx, fileURI, string(fileContent), languageID); err != nil {
 		return ResourceResult{}, fmt.Errorf("open document %q: %w", fileURI, err)
 	}
@@ -180,7 +180,7 @@ func HandleCompletionsResource(ctx context.Context, client *lsp.LSPClient, uri s
 		return ResourceResult{}, fmt.Errorf("read file %q: %w", filePath, err)
 	}
 
-	fileURI := (&url.URL{Scheme: "file", Path: filePath}).String()
+	fileURI := lsp.PathToFileURI(filePath)
 	if err := client.OpenDocument(ctx, fileURI, string(fileContent), languageID); err != nil {
 		return ResourceResult{}, fmt.Errorf("open document %q: %w", fileURI, err)
 	}

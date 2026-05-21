@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -871,7 +870,7 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 		}
 	}
 
-	rootURI := (&url.URL{Scheme: "file", Path: rootDir}).String()
+	rootURI := PathToFileURI(rootDir)
 	c.capsMu.Lock()
 	c.workspaceFolders = []workspaceFolder{{URI: rootURI, Name: rootDir}}
 	c.capsMu.Unlock()
@@ -2402,7 +2401,7 @@ func (c *LSPClient) GetWorkspaceFolders() []workspaceFolder {
 // workspace/didChangeWorkspaceFolders. The LSP server re-indexes the new root
 // and cross-folder references become available immediately.
 func (c *LSPClient) AddWorkspaceFolder(ctx context.Context, path string) error {
-	folderURI := (&url.URL{Scheme: "file", Path: path}).String()
+	folderURI := PathToFileURI(path)
 	folder := workspaceFolder{URI: folderURI, Name: path}
 
 	c.capsMu.Lock()
@@ -2434,7 +2433,7 @@ func (c *LSPClient) AddWorkspaceFolder(ctx context.Context, path string) error {
 // RemoveWorkspaceFolder removes a directory from the workspace via
 // workspace/didChangeWorkspaceFolders.
 func (c *LSPClient) RemoveWorkspaceFolder(ctx context.Context, path string) error {
-	folderURI := (&url.URL{Scheme: "file", Path: path}).String()
+	folderURI := PathToFileURI(path)
 	folder := workspaceFolder{URI: folderURI, Name: path}
 
 	c.capsMu.Lock()

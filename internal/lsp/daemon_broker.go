@@ -25,6 +25,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -64,7 +65,16 @@ func RunBroker(cfg BrokerConfig) error {
 		return fmt.Errorf("daemon: failed to write PID file: %w", err)
 	}
 
-	// Write initial daemon info.
+	// Build the in-memory info but DO NOT persist it yet.
+	//
+	// Race-condition note: writing daemon.json here (the original
+	// behaviour) is unsafe. The parent's FindRunningDaemon dials the
+	// socket to verify aliveness and wipes the registry on failure;
+	// while we're still inside client.Initialize (which can take
+	// 30-60+s for Python projects) the socket isn't yet bound, the
+	// dial fails, and the parent kills our daemon.json out from under
+	// us. We move the WriteDaemonInfo call to AFTER the listener
+	// binds so the registry only appears once it's connectable.
 	info := &DaemonInfo{
 		RootDir:      cfg.RootDir,
 		LanguageID:   cfg.LanguageID,
@@ -76,19 +86,42 @@ func RunBroker(cfg BrokerConfig) error {
 		LastActivity: time.Now(),
 	}
 	var infoMu sync.Mutex // protects writes to info fields
-	if err := WriteDaemonInfo(info); err != nil {
-		return fmt.Errorf("daemon: failed to write info: %w", err)
-	}
 
 	// Start language server.
+	logging.Log(logging.LevelInfo, fmt.Sprintf("daemon: NewLSPClient cmd=%v", cfg.Command))
 	client := NewLSPClient(cfg.Command[0], cfg.Command[1:])
 	ctx := context.Background()
+	logging.Log(logging.LevelInfo, fmt.Sprintf("daemon: calling client.Initialize rootDir=%q", cfg.RootDir))
 	if err := client.Initialize(ctx, cfg.RootDir); err != nil {
+		logging.Log(logging.LevelInfo, fmt.Sprintf("daemon: Initialize FAILED: %v", err))
 		cleanup(dir)
 		return fmt.Errorf("daemon: LSP initialize failed: %w", err)
 	}
+	logging.Log(logging.LevelInfo, "daemon: client.Initialize returned ok")
 
-	// Start warmup in background.
+	// Listen on Unix socket BEFORE publishing daemon.json so the
+	// registry is only visible once we can actually be connected to.
+	logging.Log(logging.LevelInfo, fmt.Sprintf("daemon: net.Listen unix socket=%q", socketPath))
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		logging.Log(logging.LevelInfo, fmt.Sprintf("daemon: net.Listen FAILED: %v", err))
+		_ = client.Shutdown(ctx)
+		cleanup(dir)
+		return fmt.Errorf("daemon: failed to listen on socket: %w", err)
+	}
+	logging.Log(logging.LevelInfo, "daemon: net.Listen ok, defer Close set")
+	defer listener.Close()
+
+	// Publish daemon.json now that the socket is bound.
+	logging.Log(logging.LevelInfo, "daemon: WriteDaemonInfo")
+	if err := WriteDaemonInfo(info); err != nil {
+		_ = listener.Close()
+		cleanup(dir)
+		return fmt.Errorf("daemon: failed to write info: %w", err)
+	}
+
+	// Start warmup in background. Updates daemon.json with ready=true
+	// once the workspace has finished indexing.
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -109,15 +142,6 @@ func RunBroker(cfg BrokerConfig) error {
 		infoMu.Unlock()
 		logging.Log(logging.LevelDebug, "daemon: workspace indexed, marked ready")
 	}()
-
-	// Listen on Unix socket.
-	listener, err := net.Listen("unix", socketPath)
-	if err != nil {
-		_ = client.Shutdown(ctx)
-		cleanup(dir)
-		return fmt.Errorf("daemon: failed to listen on socket: %w", err)
-	}
-	defer listener.Close()
 
 	// Track active connections.
 	var (
@@ -310,6 +334,31 @@ func writeFramedMessage(w io.Writer, msg []byte) error {
 	return err
 }
 
+// cleanup removes the daemon state directory, but ONLY if the daemon.pid
+// inside refers to the current process. This guards against a freshly
+// spawned broker that fails to bind its listener (because an existing
+// broker already owns the socket) from wiping the OTHER broker's
+// registry — a race that previously left the older broker running with
+// no registry entry, then the parent timed out waiting for a daemon it
+// could no longer find. If we don't own this dir, leave it alone.
 func cleanup(dir string) {
+	pidPath := filepath.Join(dir, "daemon.pid")
+	pidData, err := os.ReadFile(pidPath)
+	if err != nil {
+		// No PID file at all — safe to wipe.
+		os.RemoveAll(dir)
+		return
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
+	if err != nil {
+		// PID file unreadable — safe to wipe.
+		os.RemoveAll(dir)
+		return
+	}
+	if pid != os.Getpid() {
+		// Not ours — another broker owns this registry. Don't touch it.
+		logging.Log(logging.LevelDebug, fmt.Sprintf("daemon: cleanup skipped — dir %s belongs to PID %d, not us (%d)", dir, pid, os.Getpid()))
+		return
+	}
 	os.RemoveAll(dir)
 }

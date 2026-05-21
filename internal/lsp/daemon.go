@@ -80,18 +80,28 @@ func FindRunningDaemon(rootDir, languageID string) (*DaemonInfo, error) {
 		return nil, nil // corrupt state, treat as no daemon
 	}
 
-	// Verify the process is still alive.
+	// Verify the process is still alive. Only this check warrants
+	// wiping the registry — a dead PID can never come back, so cleanup
+	// is safe. CleanupStaleDaemons performs the same check periodically.
 	if !processAlive(info.PID) {
 		logging.Log(logging.LevelDebug, fmt.Sprintf("daemon: stale PID %d for %s, cleaning up", info.PID, languageID))
 		cleanupDaemonDir(dir)
 		return nil, nil
 	}
 
-	// Verify socket is reachable.
+	// Verify socket is reachable. A failure here can mean two things:
+	//   (1) the broker is alive but its socket file is on a Windows
+	//       filesystem path that AF_UNIX dial can't reach across the
+	//       detached process group, or
+	//   (2) the broker is actually wedged.
+	// Either way, do NOT cleanup the registry — wiping daemon.json on
+	// a still-alive broker leaks the broker process AND triggers a
+	// fresh spawn that conflicts with the existing socket bind. If
+	// (2) is the real cause, CleanupStaleDaemons (which only checks
+	// processAlive) will catch it once the broker actually exits.
 	conn, err := net.DialTimeout("unix", info.SocketPath, 2*time.Second)
 	if err != nil {
-		logging.Log(logging.LevelDebug, fmt.Sprintf("daemon: socket unreachable for PID %d, cleaning up", info.PID))
-		cleanupDaemonDir(dir)
+		logging.Log(logging.LevelDebug, fmt.Sprintf("daemon: socket unreachable for live PID %d (%v); keeping registry, returning nil for now", info.PID, err))
 		return nil, nil
 	}
 	conn.Close()
@@ -194,14 +204,10 @@ func ListDaemons() []*DaemonInfo {
 }
 
 // processAlive checks if a process with the given PID exists.
-func processAlive(pid int) bool {
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	// Signal 0 tests process existence without actually sending a signal.
-	return proc.Signal(syscall.Signal(0)) == nil
-}
+// processAlive is split into platform-specific files. The signal(0)
+// idiom works on POSIX but is rejected on Windows ("not supported by
+// windows"), which made every poll falsely conclude the daemon was
+// dead and wipe its registry. See process_alive_*.go.
 
 func cleanupDaemonDir(dir string) {
 	os.RemoveAll(dir)
