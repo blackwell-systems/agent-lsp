@@ -1,7 +1,7 @@
 <!-- agent-lsp:rules:start -->
 ## agent-lsp Skills
 
-agent-lsp provides 66 code intelligence tools and 24 workflow skills.
+agent-lsp provides 66 code intelligence tools and 23 workflow skills.
 Prefer these tools over text search for code intelligence tasks.
 
 **Before editing code:** call `blast_radius` for blast-radius analysis.
@@ -19,12 +19,11 @@ Prefer these tools over text search for code intelligence tasks.
 | What calls this function | `find_callers` | `Grep` for the name |
 | Replace a function body | `replace_symbol_body` | `Edit` with text matching |
 | Delete unused symbol | `safe_delete_symbol` | `Edit` to remove lines |
-| Full context on a symbol | `explore_symbol` | Multiple tool calls |
-| Edit safely (preview + apply) | `safe_apply_edit` | Manual preview then apply |
 
 | Skill | Description |
 |-------|-------------|
 | `/lsp-architecture` | Generate a structural architecture overview of a codebase: languages, package map, entry points, dependency graph, an... |
+| `/lsp-concurrency-audit` | Concurrency safety audit for a type or file. Maps all fields, traces which are accessed from concurrent contexts (gor... |
 | `/lsp-cross-repo` | Cross-repository analysis — find all callers of a library symbol in one or more consumer repos. Use when refactorin... |
 | `/lsp-dead-code` | Enumerate exported symbols in a file and surface those with zero references across the workspace. Use when auditing f... |
 | `/lsp-docs` | Three-tier documentation lookup for any symbol — hover → offline toolchain doc → source definition. Use when ho... |
@@ -37,8 +36,7 @@ Prefer these tools over text search for code intelligence tasks.
 | `/lsp-generate` | Trigger language server code generation — implement interface stubs, generate test skeletons, add missing methods, ... |
 | `/lsp-impact` | Blast-radius analysis for a symbol or file — shows all callers, type supertypes/subtypes, and reference count befor... |
 | `/lsp-implement` | Find all concrete implementations of an interface or abstract type. Use when you need to know what types satisfy an i... |
-| `/lsp-inspect` | Full code quality audit (12 checks) for a file or package. Applies a check taxonomy (dead symbols, silent failures, error wrapping, concurrency safety... |
-| `/lsp-concurrency-audit` | Field-level concurrency safety audit for a type: traces concurrent access via find_callers(cross_concurrent) + blast_radius(sync_guarded), flags unsynced fields... |
+| `/lsp-inspect` | Full code quality audit for a file, package, or directory. Supports batch mode (directory walk with --top ranking), c... |
 | `/lsp-local-symbols` | Fast file-scoped symbol analysis — find all usages of a symbol within the current file, list all symbols defined in... |
 | `/lsp-onboard` | First-session project onboarding. Explores the project structure, detects build system, test runner, entry points, an... |
 | `/lsp-refactor` | End-to-end safe refactor workflow — blast-radius analysis, speculative preview, apply to disk, verify build, run af... |

@@ -14,11 +14,47 @@
   <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
 </p>
 
-**The most complete MCP server for language intelligence.** 65 tools, 30 CI-verified languages, 24 agent workflows. Single Go binary.
+**Code intelligence infrastructure for AI agents.** 65 tools, 30 CI-verified languages, 24 agent workflows. Single Go binary.
 
-AI agents make incorrect code changes because they can't see the full picture: who calls this function, what breaks if I rename it, does the build still pass. Language servers have the answers, but existing MCP bridges either cold-start on every request or expose raw tools that agents use incorrectly.
+## What is it?
 
-agent-lsp is a **stateful runtime** over real language servers. It indexes your workspace once, keeps the index warm, and adds a **skill layer** that encodes correct multi-step operations so they actually complete.
+agent-lsp is an **MCP server** that orchestrates existing LSP servers (gopls, rust-analyzer, jdtls, etc.) into agent-native workflows.
+
+**Not an LSP server** — it's an orchestration layer that manages language servers and exposes batch operations, speculative editing, and multi-step workflows via MCP tools.
+
+**Architecture:**
+- **Language servers** (gopls, rust-analyzer, etc.) → provide code intelligence
+- **agent-lsp** (MCP server) → orchestrates workflows, maintains warm runtime
+- **AI agents** → consume via MCP protocol
+
+## Why agent-lsp?
+
+**Persistent warm runtime**  
+Language servers stay indexed across agent sessions. First session: indexes workspace (~10s for typical projects). Subsequent sessions: instant. No cold-start penalty on each request.
+
+**Batch operations**  
+`blast_radius` → one call returns all exports + all callers (test vs non-test partitioned). Without orchestration: 20+ sequential LSP calls.
+
+**Speculative editing**  
+`simulate_edit` → preview changes in memory, check diagnostic delta, apply or discard. Test edits before touching disk.
+
+**Workflow orchestration**  
+24 skills that chain LSP operations into complete pipelines:
+- `/lsp-refactor` → impact analysis → preview → apply → verify build → run tests
+- `/lsp-safe-edit` → preview → diagnostic diff → apply if safe
+- `/lsp-verify` → LSP diagnostics → build → test suite
+
+**Multi-language, single session**  
+One agent-lsp process routes `.go` to gopls, `.ts` to tsserver, `.py` to pyright. No reconfiguration between projects. Session persists across files and repositories.
+
+**How the pieces fit together:** [LSP](https://microsoft.github.io/language-server-protocol/) (Language Server Protocol) is how editors get code intelligence: completions, diagnostics, go-to-definition. [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) is the standard way AI tools like Claude Code discover and call external tools. agent-lsp bridges the two: language server intelligence, accessible to AI agents.
+
+## Use it when
+
+- Building agentic code generation systems
+- Automating refactors across large codebases
+- CI tooling that needs programmatic code intelligence
+- Any workflow where sequential LSP calls are too slow or complex
 
 ### What agents say
 
@@ -31,12 +67,6 @@ We asked AI agents to evaluate agent-lsp across 10 coding tasks (find callers, r
 > **GPT-5.5 (via Codex):** "I would recommend agent-lsp for symbol-aware work: references, implementations, rename previews, diagnostics, and large-file structure are materially faster and less error-prone than grep/read loops."
 
 > **Gemini 2.5 Pro (via Gemini CLI):** "I would highly recommend agent-lsp because it provides a level of semantic awareness that standard text-searching tools simply cannot match. The ability to perform high-confidence renames, find interface implementations, and preview the diagnostic impact of edits without writing to disk significantly reduces the risk of introducing regressions."
-
-**How the pieces fit together:** [LSP](https://microsoft.github.io/language-server-protocol/) (Language Server Protocol) is how editors get code intelligence: completions, diagnostics, go-to-definition. [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) is the standard way AI tools like Claude Code discover and call external tools. agent-lsp bridges the two: language server intelligence, accessible to AI agents.
-
-### How it works
-
-One agent-lsp process manages your language servers. Point your AI at `~/code/`. It routes `.go` to gopls, `.ts` to typescript-language-server, `.py` to pyright. No reconfiguration when you switch projects. The session stays warm across files, packages, and repositories.
 
 ### Tested, not assumed
 
@@ -55,6 +85,12 @@ Simulate changes in memory before writing to disk. No other MCP-LSP implementati
 ### Token savings
 
 Structured LSP responses use **5-34x fewer tokens** than grep/read on the same tasks. On HashiCorp Consul (319K lines), a blast-radius analysis uses 17.7MB via grep vs 841KB via LSP, reducing 5,534 tool calls to 119. Savings scale with codebase size. See [docs/token-savings.md](./docs/token-savings.md) for the full experiment across five codebases.
+
+### Why orchestration matters
+
+AI agents make incorrect code changes because they can't see the full picture: who calls this function, what breaks if I rename it, does the build still pass. Language servers have the answers, but raw LSP tools require 20+ sequential calls and complex orchestration logic.
+
+agent-lsp solves this by encoding correct multi-step operations into single calls and skills. `blast_radius` does what would take an agent 20+ calls in one. `/lsp-refactor` chains impact → preview → apply → verify → test without per-prompt orchestration.
 
 ### Persistent daemon mode
 
