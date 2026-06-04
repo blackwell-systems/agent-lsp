@@ -17,6 +17,15 @@ import (
 // generateFixedSchema generates a JSON Schema for type T and fixes nullable
 // array properties. The returned schema is safe to assign to Tool.InputSchema
 // before calling mcp.AddTool (which skips generation when InputSchema is set).
+// enumFields maps struct field names to their allowed enum values.
+// google/jsonschema-go does not support enum via struct tags, so we
+// inject them after schema generation.
+var enumFields = map[string][]any{
+	"direction":    {"incoming", "outgoing", "both"},
+	"detail_level": {"basic", "hover"},
+	"level":        {"emergency", "alert", "critical", "error", "warning", "notice", "info", "debug"},
+}
+
 func generateFixedSchema[T any]() *jsonschema.Schema {
 	rt := reflect.TypeFor[T]()
 	if rt.Kind() == reflect.Pointer {
@@ -27,7 +36,20 @@ func generateFixedSchema[T any]() *jsonschema.Schema {
 		return nil // fall back to auto-generation
 	}
 	fixNullableArrays(schema)
+	injectEnums(schema)
 	return schema
+}
+
+// injectEnums sets the Enum field on schema properties that match enumFields.
+func injectEnums(schema *jsonschema.Schema) {
+	if schema == nil || schema.Properties == nil {
+		return
+	}
+	for name, prop := range schema.Properties {
+		if vals, ok := enumFields[name]; ok && len(prop.Enum) == 0 {
+			prop.Enum = vals
+		}
+	}
 }
 
 // fixNullableArrays walks a schema and replaces nullable array types with plain
