@@ -374,11 +374,11 @@ func HandleGetDocumentSymbols(ctx context.Context, client *lsp.LSPClient, args m
 		return AppendTokenMeta(appendHint(types.TextResult(renderOutline(shifted, 0)), docSymbolHint), filePath), nil
 	}
 
-	data, mErr := json.Marshal(shifted)
-	if mErr != nil {
-		return types.ErrorResult(fmt.Sprintf("marshaling document symbols: %s", mErr)), nil
+	encodedResult, eErr := EncodeResult(ctx, shifted)
+	if eErr != nil {
+		return encodedResult, eErr
 	}
-	return AppendTokenMeta(appendHint(types.TextResult(string(data)), docSymbolHint), filePath), nil
+	return AppendTokenMeta(appendHint(encodedResult, docSymbolHint), filePath), nil
 }
 
 // workspaceSymbolEnriched is a SymbolInformation with an optional hover field.
