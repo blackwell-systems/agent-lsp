@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -275,4 +276,80 @@ func TestIsSyncGuardedSymbol(t *testing.T) {
 			t.Errorf("isSyncGuardedSymbol(%q) = %v, want %v", tt.name, got, tt.expected)
 		}
 	}
+}
+
+func TestChangeImpact_EncodeResult_GCF(t *testing.T) {
+	// Representative blast_radius response structure matching HandleGetChangeImpact output.
+	response := map[string]any{
+		"changed_symbols": []symbolRef{
+			{Name: "HandleGetChangeImpact", File: "internal/tools/change_impact.go", Line: 82},
+		},
+		"affected_symbols": []map[string]any{
+			{
+				"name": "HandleGetChangeImpact",
+				"file": "internal/tools/change_impact.go",
+				"line": 82,
+				"test_callers": []symbolRef{
+					{Name: "TestHandleGetChangeImpact_EmptyFiles", File: "internal/tools/change_impact_test.go", Line: 80},
+				},
+				"non_test_callers": []symbolRef{
+					{Name: "HandleGetChangeImpact", File: "cmd/agent-lsp/server.go", Line: 100},
+				},
+			},
+		},
+		"test_files":       []string{"internal/tools/change_impact_test.go"},
+		"test_functions":   []symbolRef{{Name: "TestHandleGetChangeImpact_EmptyFiles", File: "internal/tools/change_impact_test.go", Line: 80}},
+		"non_test_callers": []symbolRef{{Name: "HandleGetChangeImpact", File: "cmd/agent-lsp/server.go", Line: 100}},
+		"summary":          "Found 1 changed symbols with 1 test references across 1 test files.",
+		"warnings":         []string{},
+	}
+
+	t.Run("gcf format produces non-empty output different from json", func(t *testing.T) {
+		ctx := ContextWithOutputFormat(context.Background(), "gcf")
+		gcfResult, err := EncodeResult(ctx, response)
+		if err != nil {
+			t.Fatalf("EncodeResult with gcf format failed: %v", err)
+		}
+		if len(gcfResult.Content) == 0 || gcfResult.Content[0].Text == "" {
+			t.Fatal("expected non-empty GCF output")
+		}
+
+		// JSON encoding for comparison.
+		jsonData, _ := json.Marshal(response)
+		jsonStr := string(jsonData)
+
+		gcfStr := gcfResult.Content[0].Text
+		if gcfStr == jsonStr {
+			t.Error("GCF output should differ from JSON output")
+		}
+	})
+
+	t.Run("json format regression", func(t *testing.T) {
+		ctx := ContextWithOutputFormat(context.Background(), "json")
+		jsonResult, err := EncodeResult(ctx, response)
+		if err != nil {
+			t.Fatalf("EncodeResult with json format failed: %v", err)
+		}
+		if len(jsonResult.Content) == 0 || jsonResult.Content[0].Text == "" {
+			t.Fatal("expected non-empty JSON output")
+		}
+
+		// Should match standard json.Marshal output.
+		expected, _ := json.Marshal(response)
+		if jsonResult.Content[0].Text != string(expected) {
+			t.Errorf("JSON format result mismatch.\ngot:  %s\nwant: %s", jsonResult.Content[0].Text, string(expected))
+		}
+	})
+
+	t.Run("default format is json", func(t *testing.T) {
+		ctx := context.Background() // no format set
+		result, err := EncodeResult(ctx, response)
+		if err != nil {
+			t.Fatalf("EncodeResult with default format failed: %v", err)
+		}
+		expected, _ := json.Marshal(response)
+		if result.Content[0].Text != string(expected) {
+			t.Errorf("default format should produce JSON output")
+		}
+	})
 }

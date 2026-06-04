@@ -17,7 +17,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -324,15 +323,15 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 		"warnings":         refWarnings,
 	}
 
-	data, err := json.Marshal(response)
+	result, err := EncodeResult(ctx, response)
 	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("marshaling response: %s", err)), nil
+		return types.ErrorResult(fmt.Sprintf("encoding response: %s", err)), nil
 	}
 	impactHint := "Review high-callers symbols before making changes."
 	if len(refWarnings) > 0 {
 		impactHint = fmt.Sprintf("%d warnings encountered during analysis. %s", len(refWarnings), impactHint)
 	}
-	return appendHint(types.TextResult(string(data)), impactHint), nil
+	return appendHint(result, impactHint), nil
 }
 
 // collectExportedSymbols walks a DocumentSymbol tree and appends exported symbols
