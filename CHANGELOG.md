@@ -3,18 +3,19 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.12.0] - 2026-06-02
 
 ### Fixed
-- **Windows daemon mode** (contributed by @TheodorKleynhans): Fixed 12 Windows-specific bugs that made daemon mode (Python/TypeScript) unusable on Windows. Fixes include: process detachment (`CREATE_NEW_PROCESS_GROUP` + `CREATE_NO_WINDOW`), PID liveness checks (`OpenProcess` + `GetExitCodeProcess` instead of rejected `Signal(0)`), daemon registry race conditions (write `daemon.json` after socket bind), URI handling (RFC 8089 canonical form `file:///X:/path`), case-insensitive path comparison in cross-repo reference partitioning, `StopDaemon` using `TerminateProcess` instead of rejected `SIGTERM`, configurable broker timeout (`AGENT_LSP_BROKER_TIMEOUT_MS`, default 30s), and spawn diagnostics captured to `~/.cache/agent-lsp/spawn-logs/<language>.log`.
+- **Windows daemon mode**: Fixed 12 bugs that made daemon mode (Python/TypeScript) unusable on Windows. Process detachment now uses `CREATE_NEW_PROCESS_GROUP` + `CREATE_NO_WINDOW`. PID liveness uses `OpenProcess` + `GetExitCodeProcess`. Daemon registry race fixed (write `daemon.json` after socket bind). URI handling produces RFC 8089 canonical form `file:///X:/path`. Cross-repo path comparison is case-insensitive on NTFS. `StopDaemon` uses `TerminateProcess`. Configurable broker timeout via `AGENT_LSP_BROKER_TIMEOUT_MS` (default 30s). Spawn diagnostics captured to `~/.cache/agent-lsp/spawn-logs/<language>.log`. Contributed by [@TheodorKleynhans](https://github.com/TheodorKleynhans).
 
 ### Changed
-- **Test coverage improvements**: Added 785 unit tests across 5 core packages:
-  - `internal/lsp`: 39.2% → 50.1% (+10.9pp) - daemon lifecycle, client state, framing protocol, JDK detection, manager routing, error paths
-  - `internal/resources`: 39.3% → 73.2% (+33.9pp) - URI parsing, file I/O errors, subscription management, resource handlers
-  - `internal/tools`: 39.3% → 40.7% (+1.4pp) - call hierarchy, navigation, analysis, workspace operations, input validation
-  - `internal/config`: 70.0% → 96.2% (+26.2pp) - HTTP flags, config parsing (malformed JSON, missing fields, wrong types), validation, environment variables
-  - `internal/session`: 64.6% → 76.9% (+12.3pp) - session lifecycle, state transitions, cleanup, concurrent access, diagnostic comparison
+- **README positioning**: Restructured README to clarify that agent-lsp is an MCP server orchestrating LSP servers, not an LSP server itself. Added "What is it?" and "Why agent-lsp?" sections.
+- **Test coverage**: 785 new unit tests across 5 core packages:
+  - `internal/config`: 70.0% → 96.2% (+26.2pp)
+  - `internal/resources`: 39.3% → 73.2% (+33.9pp)
+  - `internal/session`: 64.6% → 76.9% (+12.3pp)
+  - `internal/lsp`: 39.2% → 50.1% (+10.9pp)
+  - `internal/tools`: 39.3% → 40.7% (+1.4pp)
 
 ## [0.11.2] - 2026-05-18
 
