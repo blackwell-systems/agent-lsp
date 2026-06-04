@@ -289,7 +289,17 @@ type toolDeps struct {
 	auditLogger               *audit.Logger
 	phaseTracker              *phase.Tracker
 	notifyHub                 *notify.Hub
-	outputFormat              string // "json" (default) or "gcf"; set from MCP capabilities
+	outputFormat              string // "json" (default) or "gcf"; set via AGENT_LSP_OUTPUT_FORMAT
+}
+
+// getOutputFormat reads the output format from the AGENT_LSP_OUTPUT_FORMAT
+// environment variable. Returns "json" if unset or empty.
+// Set to "gcf" to enable GCF tabular encoding for all tool responses.
+func getOutputFormat() string {
+	if v := os.Getenv("AGENT_LSP_OUTPUT_FORMAT"); v != "" {
+		return v
+	}
+	return "json"
 }
 
 // Run creates and starts the MCP server.
@@ -362,7 +372,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		auditLogger:               auditLogger,
 		phaseTracker:              phaseTracker,
 		notifyHub:                 notifyHub,
-		outputFormat:              "json",
+		outputFormat:              getOutputFormat(),
 	}
 
 	registerWorkspaceTools(deps)

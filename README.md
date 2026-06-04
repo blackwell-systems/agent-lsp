@@ -88,7 +88,14 @@ Structured LSP responses use **5-34x fewer tokens** than grep/read on the same t
 
 ### Token-optimized output (GCF)
 
-agent-lsp supports [GCF (Graph Compact Format)](https://github.com/blackwell-systems/gcf) as an optional output format. GCF replaces JSON field-name repetition with positional encoding, reducing tool response tokens by 34-44% on structured data. All tool handlers support format-aware encoding via `EncodeResult`; set `outputFormat: "gcf"` to enable. JSON remains the default. See [docs/gcf-integration.md](./docs/gcf-integration.md) for architecture details.
+agent-lsp supports [GCF (Graph Compact Format)](https://github.com/blackwell-systems/gcf) as an optional output format. GCF replaces JSON field-name repetition with positional encoding, reducing tool response tokens by 34-44% on structured data.
+
+```bash
+# Enable GCF output for all tool responses
+export AGENT_LSP_OUTPUT_FORMAT=gcf
+```
+
+JSON remains the default when the variable is unset. See [docs/gcf-integration.md](./docs/gcf-integration.md) for architecture details.
 
 ### Why orchestration matters
 

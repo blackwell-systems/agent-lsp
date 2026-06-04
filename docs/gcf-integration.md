@@ -4,6 +4,18 @@
 
 Add GCF (Graph Compact Format) as a native output format for agent-lsp's MCP tool responses. Tool responses currently serialized as JSON can optionally be emitted as GCF tabular format, saving 34-44% tokens on structured data.
 
+## Quick Start
+
+```bash
+# Enable GCF output for all tool responses
+export AGENT_LSP_OUTPUT_FORMAT=gcf
+
+# Start agent-lsp normally
+agent-lsp
+```
+
+Unset or set to `json` to revert to default JSON output.
+
 ## Why
 
 1. **34-44% fewer tokens on structured data.** Most agent-lsp tools return arrays of objects (symbols, references, diagnostics, callers). GCF tabular encoding eliminates field name repetition and structural delimiters.
