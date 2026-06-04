@@ -5,7 +5,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -177,11 +176,7 @@ func HandleExploreSymbol(ctx context.Context, client *lsp.LSPClient, args map[st
 		TestCallersCount: testCallersCount,
 	}
 
-	data, mErr := json.Marshal(result)
-	if mErr != nil {
-		return types.ErrorResult(fmt.Sprintf("explore_symbol: marshaling result: %s", mErr)), nil
-	}
-	return types.TextResult(string(data)), nil
+	return EncodeResult(ctx, result)
 }
 
 // topNFiles returns the top N files by reference count.
