@@ -16,6 +16,23 @@ agent-lsp
 
 Unset or set to `json` to revert to default JSON output.
 
+## Measured Token Savings
+
+Benchmarked on representative tool responses (`go run scripts/gcf-benchmark.go`):
+
+| Tool Response | JSON | GCF | Savings |
+|---|---|---|---|
+| `list_symbols` (10 symbols) | ~334 tokens | ~165 tokens | **50.6%** |
+| `list_symbols` (30 symbols) | ~1,082 tokens | ~548 tokens | **49.4%** |
+| `find_references` (12 locations) | ~220 tokens | ~125 tokens | **43.2%** |
+| `find_references` (50 locations) | ~858 tokens | ~437 tokens | **49.1%** |
+| `get_diagnostics` (5 diagnostics) | ~213 tokens | ~133 tokens | **37.6%** |
+| `blast_radius` (5 symbols, 6 callers) | ~526 tokens | ~365 tokens | **30.6%** |
+
+Token estimates use byte length / 3.5 (validated: 0.97 correlation with o200k_base for ASCII-dominant payloads).
+
+Savings grow with record count because the eliminated overhead (field names, delimiters, quotes) is per-record. At 50+ records, savings converge to ~49%.
+
 ## Why
 
 1. **34-44% fewer tokens on structured data.** Most agent-lsp tools return arrays of objects (symbols, references, diagnostics, callers). GCF tabular encoding eliminates field name repetition and structural delimiters.
