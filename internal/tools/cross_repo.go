@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -161,9 +160,5 @@ func HandleGetCrossRepoReferences(ctx context.Context, client *lsp.LSPClient, ar
 		response["warnings"] = warnings
 	}
 
-	data, mErr := json.Marshal(response)
-	if mErr != nil {
-		return types.ErrorResult(fmt.Sprintf("marshal response: %s", mErr)), nil
-	}
-	return types.TextResult(string(data)), nil
+	return EncodeResult(ctx, response)
 }

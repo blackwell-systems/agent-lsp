@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -138,15 +137,15 @@ func HandleCallHierarchy(ctx context.Context, client *lsp.LSPClient, args map[st
 		}
 	}
 
-	data, mErr := json.Marshal(result)
-	if mErr != nil {
-		return types.ErrorResult(fmt.Sprintf("marshaling call hierarchy result: %s", mErr)), nil
-	}
 	hint := "Use blast_radius for a full blast-radius analysis."
 	if crossConcurrent && len(result.ConcurrentCallers) > 0 {
 		hint = fmt.Sprintf("%d caller(s) cross concurrent boundaries. These callers run in separate goroutines/threads. %s", len(result.ConcurrentCallers), hint)
 	}
-	return appendHint(types.TextResult(string(data)), hint), nil
+	encoded, encErr := EncodeResult(ctx, result)
+	if encErr != nil {
+		return types.ErrorResult(fmt.Sprintf("marshaling call hierarchy result: %s", encErr)), nil
+	}
+	return appendHint(encoded, hint), nil
 }
 
 // detectConcurrentPattern reads the source file and checks lines around the
