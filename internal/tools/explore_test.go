@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 func TestHandleExploreSymbol_NilClient(t *testing.T) {
@@ -92,6 +94,60 @@ func TestTopNFiles_LessThanN(t *testing.T) {
 	top := topNFiles(counts, 5)
 	if len(top) != 2 {
 		t.Fatalf("expected 2 files, got %d", len(top))
+	}
+}
+
+func TestBuildExplorePayload(t *testing.T) {
+	result := exploreResult{
+		TypeInfo: "func Foo() error",
+		Source:   &exploreSource{SymbolName: "Foo"},
+		Callers: []exploreCaller{
+			{Name: "Bar", File: "/src/bar.go", Line: 10},
+		},
+		CallersCount: 1,
+	}
+	p := buildExplorePayload(result, "/src/foo.go")
+	if p.Tool != "explore_symbol" {
+		t.Errorf("wrong tool: %s", p.Tool)
+	}
+	if len(p.Symbols) != 2 {
+		t.Errorf("expected 2 symbols, got %d", len(p.Symbols))
+	}
+	if len(p.Edges) != 1 {
+		t.Errorf("expected 1 edge, got %d", len(p.Edges))
+	}
+	if p.Symbols[0].Signature != "func Foo() error" {
+		t.Errorf("expected signature in target symbol")
+	}
+}
+
+func TestBuildCallHierarchyPayload(t *testing.T) {
+	result := callHierarchyResult{
+		Items: []types.CallHierarchyItem{
+			{Name: "Target", URI: "file:///src/target.go", Kind: 12},
+		},
+		Incoming: []types.CallHierarchyIncomingCall{
+			{From: types.CallHierarchyItem{Name: "Caller1", URI: "file:///src/caller.go", Kind: 12}},
+		},
+		Outgoing: []types.CallHierarchyOutgoingCall{
+			{To: types.CallHierarchyItem{Name: "Callee1", URI: "file:///src/callee.go", Kind: 12}},
+		},
+	}
+	p := buildCallHierarchyPayload(result, "/src/target.go")
+	if p.Tool != "find_callers" {
+		t.Errorf("wrong tool: %s", p.Tool)
+	}
+	// 1 target + 1 incoming + 1 outgoing = 3 symbols
+	if len(p.Symbols) != 3 {
+		t.Errorf("expected 3 symbols, got %d", len(p.Symbols))
+	}
+	// 1 incoming edge + 1 outgoing edge = 2 edges
+	if len(p.Edges) != 2 {
+		t.Errorf("expected 2 edges, got %d", len(p.Edges))
+	}
+	// Target should be distance 0
+	if p.Symbols[0].Distance != 0 {
+		t.Errorf("expected target distance 0, got %d", p.Symbols[0].Distance)
 	}
 }
 
