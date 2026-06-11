@@ -6,8 +6,10 @@ import (
 	"os"
 	"strings"
 
+	gcf "github.com/blackwell-systems/agent-lsp/internal/encoding/gcf"
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
+	gcfgo "github.com/blackwell-systems/gcf-go"
 )
 
 // concurrentEntryPatterns are source code patterns that indicate a concurrent
@@ -141,11 +143,92 @@ func HandleCallHierarchy(ctx context.Context, client *lsp.LSPClient, args map[st
 	if crossConcurrent && len(result.ConcurrentCallers) > 0 {
 		hint = fmt.Sprintf("%d caller(s) cross concurrent boundaries. These callers run in separate goroutines/threads. %s", len(result.ConcurrentCallers), hint)
 	}
+	if OutputFormatFromContext(ctx) == "gcf" {
+		payload := buildCallHierarchyPayload(result, filePath)
+		encoded, encErr := EncodeResult(ctx, payload)
+		if encErr != nil {
+			return types.ErrorResult(fmt.Sprintf("marshaling call hierarchy result: %s", encErr)), nil
+		}
+		return appendHint(encoded, hint), nil
+	}
 	encoded, encErr := EncodeResult(ctx, result)
 	if encErr != nil {
 		return types.ErrorResult(fmt.Sprintf("marshaling call hierarchy result: %s", encErr)), nil
 	}
 	return appendHint(encoded, hint), nil
+}
+
+func buildCallHierarchyPayload(result callHierarchyResult, filePath string) *gcfgo.Payload {
+	var symbols []gcfgo.Symbol
+	var edges []gcfgo.Edge
+
+	// Target items (distance 0)
+	for _, item := range result.Items {
+		fp, _ := URIToFilePath(item.URI)
+		if fp == "" {
+			fp = filePath
+		}
+		symbols = append(symbols, gcfgo.Symbol{
+			QualifiedName: gcf.QualifiedName(fp, item.Name),
+			Kind:          gcf.MapSymbolKind(item.Kind),
+			Score:         1.0,
+			Provenance:    "lsp_resolved",
+			Distance:      0,
+		})
+	}
+
+	// Incoming callers (distance 1)
+	for i, call := range result.Incoming {
+		fp, _ := URIToFilePath(call.From.URI)
+		qn := gcf.QualifiedName(fp, call.From.Name)
+		score := max(0.1, 0.9-float64(i)*0.05)
+		symbols = append(symbols, gcfgo.Symbol{
+			QualifiedName: qn,
+			Kind:          gcf.MapSymbolKind(call.From.Kind),
+			Score:         score,
+			Provenance:    "lsp_resolved",
+			Distance:      1,
+		})
+		// Edge: caller calls target
+		if len(result.Items) > 0 {
+			targetFP, _ := URIToFilePath(result.Items[0].URI)
+			if targetFP == "" {
+				targetFP = filePath
+			}
+			edges = append(edges, gcfgo.Edge{
+				Source:   qn,
+				Target:   gcf.QualifiedName(targetFP, result.Items[0].Name),
+				EdgeType: "calls",
+			})
+		}
+	}
+
+	// Outgoing callees (distance 1)
+	for i, call := range result.Outgoing {
+		fp, _ := URIToFilePath(call.To.URI)
+		qn := gcf.QualifiedName(fp, call.To.Name)
+		score := max(0.1, 0.8-float64(i)*0.05)
+		symbols = append(symbols, gcfgo.Symbol{
+			QualifiedName: qn,
+			Kind:          gcf.MapSymbolKind(call.To.Kind),
+			Score:         score,
+			Provenance:    "lsp_resolved",
+			Distance:      1,
+		})
+		if len(result.Items) > 0 {
+			targetFP, _ := URIToFilePath(result.Items[0].URI)
+			if targetFP == "" {
+				targetFP = filePath
+			}
+			edges = append(edges, gcfgo.Edge{
+				Source:   gcf.QualifiedName(targetFP, result.Items[0].Name),
+				Target:   qn,
+				EdgeType: "calls",
+			})
+		}
+	}
+
+	return gcf.BuildGraphPayload("find_callers", symbols, edges)
 }
 
 // detectConcurrentPattern reads the source file and checks lines around the
