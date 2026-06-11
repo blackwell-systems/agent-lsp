@@ -374,6 +374,7 @@ waves:
             - internal/encoding/gcf/graph_test.go
             - internal/tools/helpers.go
             - internal/tools/helpers_test.go
+          context_source: prepared-brief
     - number: 2
       agents:
         - id: B
@@ -1303,5 +1304,5 @@ pre_mortem:
           mitigation: |
             Each payload builder uses a seen map to deduplicate by QualifiedName.
             QualifiedName function uses file path + symbol name for uniqueness.
-state: SCOUT_PENDING
+state: "REVIEWED"
 injection_method: hook
