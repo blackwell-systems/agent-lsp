@@ -137,6 +137,12 @@ func HandleDetectChanges(ctx context.Context, client *lsp.LSPClient, args map[st
 		return impactResult, nil
 	}
 
+	// Graph-profile: blast_radius already produced a graph payload.
+	// Risk classification is not applicable in graph mode; return as-is.
+	if OutputFormatFromContext(ctx) == "gcf" {
+		return appendHint(impactResult, "Review high-risk symbols before committing. Use blast_radius on specific files for detailed analysis."), nil
+	}
+
 	// Parse the impact result to enrich with risk classification.
 	var impactData map[string]any
 	if len(impactResult.Content) > 0 {
