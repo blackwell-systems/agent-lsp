@@ -17,6 +17,10 @@
 
 **Code intelligence infrastructure for AI agents.** 65 tools, 30 CI-verified languages, 24 agent workflows. Single Go binary.
 
+```bash
+curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh && agent-lsp init
+```
+
 ## What is it?
 
 agent-lsp is an **MCP server** that orchestrates existing LSP servers (gopls, rust-analyzer, jdtls, etc.) into agent-native workflows.
@@ -49,7 +53,7 @@ Language servers stay indexed across agent sessions. First session: indexes work
 One agent-lsp process routes `.go` to gopls, `.ts` to tsserver, `.py` to pyright. No reconfiguration between projects. Session persists across files and repositories.
 
 > [!TIP]
-> **Token-optimized output:** Tool responses encoded in [GCF](https://github.com/blackwell-systems/gcf) instead of JSON. 79% fewer input tokens, 63% fewer output tokens, [90.7% LLM comprehension accuracy](https://gcformat.com/guide/benchmarks.html) where JSON averages 53.6%. Tested across 10 models and 3 providers.
+> **Token-optimized output:** Tool responses encoded in [GCF](https://gcformat.com) instead of JSON. 30-84% fewer tokens depending on tool (up to 92.7% with session dedup). [90.7% LLM comprehension accuracy](https://gcformat.com/guide/benchmarks.html) where JSON averages 53.6%. See [below](#token-optimized-output-gcf) for measured savings per tool.
 
 **How the pieces fit together:** [LSP](https://microsoft.github.io/language-server-protocol/) (Language Server Protocol) is how editors get code intelligence: completions, diagnostics, go-to-definition. [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) is the standard way AI tools like Claude Code discover and call external tools. agent-lsp bridges the two: language server intelligence, accessible to AI agents.
 
@@ -92,14 +96,13 @@ Structured LSP responses use **5-34x fewer tokens** than grep/read on the same t
 
 ### Token-optimized output (GCF)
 
-agent-lsp supports [GCF (Graph Compact Format)](https://github.com/blackwell-systems/gcf) as an optional output format. GCF replaces JSON field-name repetition with positional encoding:
+Tool responses are encoded in [GCF (Graph Compact Format)](https://gcformat.com) instead of JSON. GCF eliminates field-name repetition, identifier repetition, and per-record structural overhead.
 
-| Tool | JSON | GCF | Savings |
-|------|------|-----|---------|
-| `list_symbols` (10) | ~334 tokens | ~165 tokens | **50.6%** |
-| `find_references` (50) | ~858 tokens | ~437 tokens | **49.1%** |
-| `get_diagnostics` (5) | ~213 tokens | ~133 tokens | **37.6%** |
-| `blast_radius` (5) | ~526 tokens | ~365 tokens | **30.6%** |
+| Profile | Tools | Savings vs JSON |
+|---------|-------|----------------|
+| Tabular | All 66 tools | **30-51%** |
+| Graph | blast_radius, find_callers, explore_symbol, find_references, type_hierarchy, cross_repo, detect_changes, list_symbols | **79-84%** |
+| Graph + session dedup | Same, via [gcf-proxy](https://github.com/blackwell-systems/gcf-proxy) `--session` | **92.7%** (5th call) |
 
 GCF is enabled by default. To revert to JSON:
 
@@ -107,7 +110,9 @@ GCF is enabled by default. To revert to JSON:
 export AGENT_LSP_OUTPUT_FORMAT=json
 ```
 
-Savings grow with record count (30-51% measured). Benchmark: `go run scripts/gcf-benchmark.go`. See [docs/guide/gcf-integration.md](./docs/guide/gcf-integration.md) for architecture details.
+Benchmark: `go run scripts/gcf-benchmark.go`. See [docs/guide/gcf-integration.md](./docs/guide/gcf-integration.md) for architecture details.
+
+**GCF:** [gcformat.com](https://gcformat.com) · [Spec](https://github.com/blackwell-systems/gcf) · [Go](https://github.com/blackwell-systems/gcf-go) · [Python](https://github.com/blackwell-systems/gcf-python) · [TypeScript](https://github.com/blackwell-systems/gcf-typescript) · [Playground](https://gcformat.com/playground.html)
 
 ### Why orchestration matters
 
@@ -146,13 +151,17 @@ Symbol edit tools (`replace_symbol_body`, `insert_after_symbol`, `insert_before_
 
 ### Works with
 
-| AI Tool | Transport | Config |
-|---------|-----------|--------|
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | stdio | `mcpServers` in `.mcp.json` |
-| [Continue](https://continue.dev) | stdio | `mcpServers` in `config.json` |
-| [Cline](https://github.com/cline/cline) | stdio | `mcpServers` in settings |
-| [Cursor](https://cursor.com) | stdio | `mcpServers` in settings |
-| Any MCP client | HTTP+SSE | `--http --port 8080` with Bearer token auth |
+| AI Tool | Transport | Setup |
+|---------|-----------|-------|
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | stdio | `agent-lsp init` |
+| [Cursor](https://cursor.com) | stdio | `agent-lsp init` |
+| [Windsurf](https://windsurf.com) | stdio | `agent-lsp init` |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | stdio | `agent-lsp init` |
+| [Continue](https://continue.dev) | stdio | `agent-lsp init` |
+| [Cline](https://github.com/cline/cline) | stdio | `agent-lsp init` |
+| Any MCP client | HTTP+SSE | `agent-lsp --http --port 8080` |
+
+See [docs/getting-started/mcp-clients.md](./docs/getting-started/mcp-clients.md) for copy-paste configs.
 
 ## Skills
 
