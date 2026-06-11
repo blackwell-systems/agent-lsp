@@ -1,3 +1,4 @@
+completion_date: "2026-06-11"
 title: GCF Graph Payload Encoding for Symbol-Returning Tools
 feature_slug: gcf-graph-encoding
 verdict: SUITABLE
@@ -1250,6 +1251,7 @@ waves:
             - internal/tools/typehierarchy_test.go
           dependencies:
             - A
+      base_commit: b61a1ccfdf4df57bcc154712bbec827d72052b8b
 quality_gates:
     level: standard
     gates:
@@ -1264,6 +1266,78 @@ quality_gates:
           required: true
 post_merge_checklist:
     groups: []
+completion_reports:
+    A:
+        status: complete
+        branch: polywave/gcf-graph-encoding/wave1-agent-A
+        commit: 176ca70
+        files_changed:
+            - internal/encoding/gcf/graph.go
+            - internal/encoding/gcf/graph_test.go
+            - internal/tools/helpers.go
+            - internal/tools/helpers_test.go
+        files_created:
+            - internal/encoding/gcf/graph.go
+            - internal/encoding/gcf/graph_test.go
+        tests_added:
+            - TestMapSymbolKind
+            - TestQualifiedName
+            - TestBuildGraphPayload
+            - TestEncodeGraph
+            - TestEncodeResult_GCF_GraphPayload
+        verification: PASS
+        notes: All 4 interface functions implemented and tested. EncodeResult updated with Payload type-switch. All verification gates pass. Full repo build clean.
+    B:
+        status: complete
+        branch: polywave/gcf-graph-encoding/wave2-agent-B
+        commit: 61b2b71
+        files_changed:
+            - internal/tools/change_impact.go
+            - internal/tools/detect_changes.go
+            - internal/tools/change_impact_test.go
+            - internal/tools/detect_changes_test.go
+        tests_added:
+            - TestBuildChangeImpactPayload
+            - TestBuildChangeImpactPayload_Dedup
+            - TestDetectChanges_GCF_EarlyReturn
+        verification: PASS
+    C:
+        status: complete
+        branch: polywave/gcf-graph-encoding/wave2-agent-C
+        commit: 129f7f8
+        files_changed:
+            - internal/tools/callhierarchy.go
+            - internal/tools/explore.go
+            - internal/tools/explore_test.go
+        tests_added:
+            - TestBuildExplorePayload
+            - TestBuildCallHierarchyPayload
+        verification: PASS
+        notes: Both handlers route to GCF graph encoding when OutputFormatFromContext returns gcf. JSON path unchanged. All tests pass, build and vet clean.
+    D:
+        status: complete
+        branch: polywave/gcf-graph-encoding/wave2-agent-D
+        commit: "8502384"
+        files_changed:
+            - internal/tools/cross_repo.go
+            - internal/tools/navigation.go
+            - internal/tools/cross_repo_test.go
+        tests_added:
+            - TestBuildCrossRepoPayload
+        verification: PASS
+        notes: Added GCF graph encoding paths to HandleGetCrossRepoReferences (via buildCrossRepoPayload) and locationsResult (via buildLocationsPayload). Test data adjusted to use distinct directories for unique QualifiedName outputs.
+    E:
+        status: complete
+        branch: polywave/gcf-graph-encoding/wave2-agent-E
+        commit: 4eb6d4d
+        files_changed:
+            - internal/tools/typehierarchy.go
+            - internal/tools/analysis.go
+            - internal/tools/typehierarchy_test.go
+        tests_added:
+            - TestBuildTypeHierarchyPayload
+        verification: PASS
+        notes: 'All three handlers migrated to GCF graph encoding. Build, vet, and targeted tests pass. Postconditions verified: each builder function present exactly once.'
 pre_mortem:
     overall_risk: medium
     rows:
@@ -1304,5 +1378,5 @@ pre_mortem:
           mitigation: |
             Each payload builder uses a seen map to deduplicate by QualifiedName.
             QualifiedName function uses file path + symbol name for uniqueness.
-state: "REVIEWED"
+state: COMPLETE
 injection_method: hook
