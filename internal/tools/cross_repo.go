@@ -7,8 +7,10 @@ import (
 	"runtime"
 	"strings"
 
+	gcf "github.com/blackwell-systems/agent-lsp/internal/encoding/gcf"
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
+	gcfgo "github.com/blackwell-systems/gcf-go"
 )
 
 // crossRepoRef represents a single reference found in a cross-repo lookup,
@@ -160,5 +162,50 @@ func HandleGetCrossRepoReferences(ctx context.Context, client *lsp.LSPClient, ar
 		response["warnings"] = warnings
 	}
 
+	if OutputFormatFromContext(ctx) == "gcf" {
+		payload := buildCrossRepoPayload(symbolName, refs, consumerRoots)
+		return EncodeResult(ctx, payload)
+	}
 	return EncodeResult(ctx, response)
+}
+
+// buildCrossRepoPayload converts cross-repo references into a graph Payload.
+func buildCrossRepoPayload(symbolName string, refs []crossRepoRef, consumerRoots []string) *gcfgo.Payload {
+	var symbols []gcfgo.Symbol
+	var edges []gcfgo.Edge
+
+	// Target symbol (distance 0)
+	targetQN := symbolName
+	symbols = append(symbols, gcfgo.Symbol{
+		QualifiedName: targetQN,
+		Kind:          "function",
+		Score:         1.0,
+		Provenance:    "lsp_resolved",
+		Distance:      0,
+	})
+
+	// References as symbols (distance 1), grouped by repo
+	seen := map[string]bool{}
+	for i, ref := range refs {
+		qn := gcf.QualifiedName(ref.File, symbolName)
+		if seen[qn] {
+			continue
+		}
+		seen[qn] = true
+		score := max(0.1, 0.9-float64(i)*0.02)
+		symbols = append(symbols, gcfgo.Symbol{
+			QualifiedName: qn,
+			Kind:          "external",
+			Score:         score,
+			Provenance:    "lsp_resolved",
+			Distance:      1,
+		})
+		edges = append(edges, gcfgo.Edge{
+			Source:   qn,
+			Target:   targetQN,
+			EdgeType: "references",
+		})
+	}
+
+	return gcf.BuildGraphPayload("cross_repo", symbols, edges)
 }
