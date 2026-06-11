@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.14.0] - 2026-06-11
 
 ### Added
 - **GCF graph profile encoding (79-84% fewer tokens)**: 8 symbol-returning tools now emit GCF graph `Payload` objects instead of generic tabular when GCF output is active. This enables gcf-proxy session dedup (92.7% savings by the 5th call).
