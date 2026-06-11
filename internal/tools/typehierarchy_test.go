@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
 // --- TestHandleTypeHierarchy_NilClient ---
@@ -124,5 +126,29 @@ func TestHandleTypeHierarchy_MissingLine(t *testing.T) {
 	}
 	if !r.IsError {
 		t.Fatalf("expected IsError=true")
+	}
+}
+
+func TestBuildTypeHierarchyPayload(t *testing.T) {
+	result := typeHierarchyResult{
+		Items: []types.TypeHierarchyItem{
+			{Name: "Reader", Kind: 11, URI: "file:///src/io.go"},
+		},
+		Subtypes: []types.TypeHierarchyItem{
+			{Name: "BufReader", Kind: 5, URI: "file:///src/bufio.go"},
+		},
+	}
+	p := buildTypeHierarchyPayload(result, "/src/io.go")
+	if p.Tool != "type_hierarchy" {
+		t.Errorf("wrong tool: %s", p.Tool)
+	}
+	if len(p.Symbols) != 2 {
+		t.Errorf("expected 2 symbols, got %d", len(p.Symbols))
+	}
+	if len(p.Edges) != 1 {
+		t.Errorf("expected 1 edge, got %d", len(p.Edges))
+	}
+	if p.Edges[0].EdgeType != "implements" {
+		t.Errorf("expected implements edge, got %s", p.Edges[0].EdgeType)
 	}
 }
