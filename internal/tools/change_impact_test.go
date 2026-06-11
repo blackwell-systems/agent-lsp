@@ -353,3 +353,63 @@ func TestChangeImpact_EncodeResult_GCF(t *testing.T) {
 		}
 	})
 }
+
+func TestBuildChangeImpactPayload(t *testing.T) {
+	changed := []symbolRef{{Name: "Foo", File: "/src/pkg/foo.go", Line: 10}}
+	callers := []symbolRef{{Name: "Bar", File: "/src/pkg/bar.go", Line: 20}}
+	tests := []symbolRef{{Name: "TestFoo", File: "/src/pkg/foo_test.go", Line: 5}}
+
+	p := buildChangeImpactPayload(changed, callers, tests)
+
+	if p.Tool != "blast_radius" {
+		t.Errorf("wrong tool: got %q, want %q", p.Tool, "blast_radius")
+	}
+	if len(p.Symbols) < 3 {
+		t.Errorf("expected >= 3 symbols, got %d", len(p.Symbols))
+	}
+	// Verify target symbol is distance 0
+	if p.Symbols[0].Distance != 0 {
+		t.Errorf("target symbol should be distance 0, got %d", p.Symbols[0].Distance)
+	}
+	// Verify target symbol score is 1.0
+	if p.Symbols[0].Score != 1.0 {
+		t.Errorf("target symbol score should be 1.0, got %f", p.Symbols[0].Score)
+	}
+	// Verify caller is distance 1
+	if p.Symbols[1].Distance != 1 {
+		t.Errorf("caller symbol should be distance 1, got %d", p.Symbols[1].Distance)
+	}
+	// Verify test function is distance 1 with score 0.7
+	if p.Symbols[2].Distance != 1 {
+		t.Errorf("test symbol should be distance 1, got %d", p.Symbols[2].Distance)
+	}
+	if p.Symbols[2].Score != 0.7 {
+		t.Errorf("test symbol score should be 0.7, got %f", p.Symbols[2].Score)
+	}
+	// Verify edges exist
+	if len(p.Edges) != 1 {
+		t.Errorf("expected 1 edge, got %d", len(p.Edges))
+	}
+	if len(p.Edges) > 0 && p.Edges[0].EdgeType != "calls" {
+		t.Errorf("edge type should be 'calls', got %q", p.Edges[0].EdgeType)
+	}
+}
+
+func TestBuildChangeImpactPayload_Dedup(t *testing.T) {
+	// Duplicate callers should be deduplicated.
+	callers := []symbolRef{
+		{Name: "Bar", File: "/src/pkg/bar.go", Line: 20},
+		{Name: "Bar", File: "/src/pkg/bar.go", Line: 25},
+	}
+	p := buildChangeImpactPayload(nil, callers, nil)
+	// Only one caller symbol should appear (deduplicated by qualified name).
+	callerCount := 0
+	for _, s := range p.Symbols {
+		if s.Distance == 1 {
+			callerCount++
+		}
+	}
+	if callerCount != 1 {
+		t.Errorf("expected 1 deduplicated caller, got %d", callerCount)
+	}
+}
