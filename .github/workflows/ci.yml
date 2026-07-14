@@ -7,7 +7,9 @@ on:
     branches: [main]
 
 jobs:
-  # Unit tests + binary smoke tests. No live LSP servers needed.
+  # Unit tests + binary smoke tests. gopls is installed so the live rename
+  # integration test (TestRenameSymbol_LiveGopls) exercises a real language
+  # server instead of skipping; all other internal tests are server-free.
   unit-and-smoke:
     runs-on: ubuntu-latest
     env:
@@ -25,6 +27,9 @@ jobs:
 
       - name: Vet
         run: go vet ./...
+
+      - name: Install gopls (for live rename integration test)
+        run: go install golang.org/x/tools/gopls@latest
 
       - name: Unit tests
         run: go test ./internal/... ./cmd/...

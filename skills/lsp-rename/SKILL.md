@@ -26,7 +26,7 @@ metadata:
           - "Edit"
           - "Write"
       execute:
-        description: "Capture pre-rename diagnostics, execute rename, apply, verify"
+        description: "Capture pre-rename diagnostics, execute rename (applies directly), verify"
         allowed:
           - "mcp__lsp__get_diagnostics"
           - "mcp__lsp__rename_symbol"    # dry_run=false
@@ -181,7 +181,7 @@ mcp__lsp__get_diagnostics
 
 Store the result as `before_diagnostics`.
 
-### Step 2 — Execute rename
+### Step 2 — Execute rename (applies directly)
 
 Call `mcp__lsp__rename_symbol` without `dry_run` (or with `dry_run=false`):
 
@@ -193,18 +193,15 @@ mcp__lsp__rename_symbol
   new_name: "<new_name>"
 ```
 
-This returns a `workspace_edit` with the full set of changes.
+Without `dry_run`, `rename_symbol` **applies the edit to disk itself** and returns
+a summary (`Renamed to "NewName" across N location(s) in M file(s): ...`). Do
+**not** call `apply_edit` afterward and do not reconstruct the edit by hand: the
+edit never leaves the server as data you copy back, which is what previously
+corrupted files (transposed range offsets, truncated `newText`). `apply_edit`
+remains for its text-match mode (`file_path` + `old_text` + `new_text`), not for
+committing a rename.
 
-### Step 3 — Apply the edit
-
-Call `mcp__lsp__apply_edit` with the `workspace_edit` from Step 2:
-
-```
-mcp__lsp__apply_edit
-  workspace_edit: <workspace_edit from rename_symbol>
-```
-
-### Step 4 — Check diagnostics
+### Step 3 — Check diagnostics
 
 Call `mcp__lsp__get_diagnostics` on the affected files and compare against
 `before_diagnostics`:

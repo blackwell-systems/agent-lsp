@@ -510,3 +510,51 @@ func TestExtractStringSlice_Missing(t *testing.T) {
 		t.Errorf("expected nil for missing key, got %v", got)
 	}
 }
+
+// TestSummarizeWorkspaceEdit_Changes counts files and locations in the "changes" form.
+func TestSummarizeWorkspaceEdit_Changes(t *testing.T) {
+	edit := map[string]any{
+		"changes": map[string]any{
+			"file:///proj/a/Main.java": []any{map[string]any{}, map[string]any{}, map[string]any{}},
+			"file:///proj/b/Util.java": []any{map[string]any{}},
+		},
+	}
+	files, locations, names := summarizeWorkspaceEdit(edit)
+	if files != 2 {
+		t.Errorf("files = %d, want 2", files)
+	}
+	if locations != 4 {
+		t.Errorf("locations = %d, want 4", locations)
+	}
+	// Basenames, sorted deterministically.
+	if strings.Join(names, ",") != "Main.java,Util.java" {
+		t.Errorf("names = %v, want [Main.java Util.java]", names)
+	}
+}
+
+// TestSummarizeWorkspaceEdit_DocumentChanges counts the documentChanges form.
+func TestSummarizeWorkspaceEdit_DocumentChanges(t *testing.T) {
+	edit := map[string]any{
+		"documentChanges": []any{
+			map[string]any{
+				"textDocument": map[string]any{"uri": "file:///proj/x.ts"},
+				"edits":        []any{map[string]any{}, map[string]any{}},
+			},
+		},
+	}
+	files, locations, names := summarizeWorkspaceEdit(edit)
+	if files != 1 || locations != 2 {
+		t.Errorf("got files=%d locations=%d, want 1/2", files, locations)
+	}
+	if len(names) != 1 || names[0] != "x.ts" {
+		t.Errorf("names = %v, want [x.ts]", names)
+	}
+}
+
+// TestSummarizeWorkspaceEdit_Empty returns zeros for nil/empty edits.
+func TestSummarizeWorkspaceEdit_Empty(t *testing.T) {
+	files, locations, names := summarizeWorkspaceEdit(map[string]any{})
+	if files != 0 || locations != 0 || names != nil {
+		t.Errorf("got files=%d locations=%d names=%v, want 0/0/nil", files, locations, names)
+	}
+}

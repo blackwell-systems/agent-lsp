@@ -184,3 +184,20 @@ func EncodeResult(ctx context.Context, data any) (types.ToolResult, error) {
 		return types.TextResult(string(raw)), nil
 	}
 }
+
+// EncodeResultJSON marshals data as JSON regardless of the context output format.
+// Use it for any payload the caller must round-trip byte-exact, in particular a
+// WorkspaceEdit that gets handed back to apply_edit. GCF's tabular form is a
+// summary format: it flattens a TextEdit's range into positional path columns
+// (range>end>character, range>end>line, ...) and requires the newText to be
+// copied verbatim out of tool output and back into a tool argument. LLM callers
+// corrupt that round-trip, transposing the range offsets and truncating a large
+// newText, which overwrites the file with a mangled edit. Edits therefore always
+// serialize as self-labeling JSON. See issue #12.
+func EncodeResultJSON(data any) (types.ToolResult, error) {
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return types.ErrorResult(err.Error()), nil
+	}
+	return types.TextResult(string(raw)), nil
+}

@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [0.16.0] - 2026-07-14
+
+### Fixed
+- **rename_symbol file corruption** ([#12](https://github.com/blackwell-systems/agent-lsp/issues/12)): `rename_symbol` (non-dry-run) used to return the raw WorkspaceEdit and rely on the caller copying it back into `apply_edit` — the only edit tool that did so; `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, and `safe_delete_symbol` all apply server-side. That round-trip corrupted files: under `AGENT_LSP_OUTPUT_FORMAT=gcf` the edit was GCF-encoded (a summary format that flattens each TextEdit's range into positional path columns like `range>end>character` and requires the verbatim `newText` to be copied out of tool output and back into a tool argument), so LLM callers transposed the range offsets and truncated a large `newText`, overwriting the file. gcf-go itself encodes and decodes these WorkspaceEdits losslessly (verified), so this was an agent-lsp wire-format and round-trip bug, not a gcf-go bug. Reported by [@V0idk](https://github.com/V0idk).
+
+### Changed
+- **BREAKING: `rename_symbol` now applies the edit itself and returns a summary** instead of returning a WorkspaceEdit for the caller to apply. The result is `Renamed to "X" across N location(s) in M file(s): ...` plus a post-rename diagnostics count, consistent with the other edit tools — the WorkspaceEdit never leaves the server as data to reconstruct, which eliminates the round-trip that corrupted files (#12). A separate `apply_edit` call after a non-dry-run rename is no longer needed (or wanted); `apply_edit` remains for its text-match mode. The `dry_run=true` preview is unchanged in intent (returns the edit for inspection) but now serializes as self-labeling JSON regardless of `AGENT_LSP_OUTPUT_FORMAT`, plus file/location counts. The `lsp-rename` skill's execute phase is updated accordingly.
+- **gcf-go upgraded to v1.5.0**. Brings nested-null flatten losslessness (a nested object null at an intermediate level, e.g. `{meta:{owner:null}}`, is no longer silently dropped on round-trip) and deterministic graph edge ordering (edges sorted by source, then target, then type). Generic-profile delta encoding and labeled streaming trailer counts are available as opt-in APIs; agent-lsp does not use them yet, so default output is byte-identical. No API changes required.
+
+### Tests
+- Added a live end-to-end regression (`TestRenameSymbol_LiveGopls`) that drives a real `textDocument/rename` through gopls and the full handler, asserting the file is renamed on disk and the tool returns a summary with no raw edit leaked. Skips cleanly when gopls is absent; CI's `unit-and-smoke` job now installs gopls so it runs there. Added unit coverage for the apply path against the pathological single-big-edit shape from #12 (`TestApplyWorkspaceEdit_*`), the JSON edit-encoding guard (`TestEncodeResultJSON_*`), and the rename summary counter (`TestSummarizeWorkspaceEdit_*`).
+
 ## [0.15.2] - 2026-07-08
 
 ### Fixed

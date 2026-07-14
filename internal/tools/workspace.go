@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
@@ -71,21 +72,97 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 		result = filterWorkspaceEditByGlobs(result, globs)
 	}
 
+	if isEmptyWorkspaceEdit(result) {
+		return types.TextResult(fmt.Sprintf("No rename edits produced for the symbol at %s:%d:%d (nothing to rename, or the position does not resolve to a renameable symbol).", filePath, line, col)), nil
+	}
+
+	files, locations, fileNames := summarizeWorkspaceEdit(result)
+
 	dryRun, _ := args["dry_run"].(bool)
 	if dryRun {
 		type previewEnvelope struct {
 			WorkspaceEdit any `json:"workspace_edit"`
 			Preview       struct {
-				Note string `json:"note"`
+				Files     int      `json:"files"`
+				Locations int      `json:"locations"`
+				FileNames []string `json:"file_names"`
+				Note      string   `json:"note"`
 			} `json:"preview"`
 		}
 		env := previewEnvelope{WorkspaceEdit: result}
-		env.Preview.Note = "dry_run=true: inspect workspace_edit and call apply_edit to commit"
-		encoded, _ := EncodeResult(ctx, env)
-		return appendHint(encoded, "Review the workspace edit, then call rename_symbol without dry_run to apply."), nil
+		env.Preview.Files = files
+		env.Preview.Locations = locations
+		env.Preview.FileNames = fileNames
+		env.Preview.Note = "dry_run=true: preview only, nothing written. Re-run rename_symbol without dry_run to apply."
+		// A preview carries the raw edit for inspection; it must round-trip byte-exact,
+		// so always JSON, never GCF's summary tabular form. See issue #12.
+		encoded, _ := EncodeResultJSON(env)
+		return appendHint(encoded, "Re-run rename_symbol without dry_run to apply. Do not reconstruct this edit into apply_edit; rename_symbol applies it directly."), nil
 	}
-	encoded, _ := EncodeResult(ctx, result)
-	return appendHint(encoded, "Use get_diagnostics to verify the rename didn't introduce errors."), nil
+
+	// Apply the edit server-side, consistent with the other edit tools
+	// (replace_symbol_body, insert_*, safe_delete_symbol). The WorkspaceEdit never
+	// leaves the server as data the caller must reconstruct, which is what corrupted
+	// files under GCF (transposed range offsets, truncated newText). See issue #12.
+	if err := client.ApplyWorkspaceEdit(ctx, result); err != nil {
+		return types.ErrorResult(fmt.Sprintf("rename_symbol: applying edit: %s", err)), nil
+	}
+
+	errCount, warnCount := getDiagnosticsForFile(ctx, client, filePath)
+	summary := fmt.Sprintf("Renamed to %q across %d location(s) in %d file(s): %s",
+		newName, locations, files, strings.Join(fileNames, ", "))
+	hint := fmt.Sprintf("errors_after: %d, warnings_after: %d. Run get_diagnostics for details.", errCount, warnCount)
+	return appendHint(types.TextResult(summary), hint), nil
+}
+
+// summarizeWorkspaceEdit counts the files and edit locations in a WorkspaceEdit,
+// handling both the "changes" (map[uri][]TextEdit) and "documentChanges"
+// ([]TextDocumentEdit) forms. File names are the URI path basenames, sorted for
+// deterministic output. It never surfaces newText, so it is safe to return to
+// the caller without a byte-exact round-trip hazard.
+func summarizeWorkspaceEdit(result any) (files int, locations int, fileNames []string) {
+	data, err := json.Marshal(result)
+	if err != nil {
+		return 0, 0, nil
+	}
+	var we struct {
+		Changes         map[string][]any `json:"changes"`
+		DocumentChanges []struct {
+			TextDocument struct {
+				URI string `json:"uri"`
+			} `json:"textDocument"`
+			Edits []any `json:"edits"`
+		} `json:"documentChanges"`
+	}
+	if err := json.Unmarshal(data, &we); err != nil {
+		return 0, 0, nil
+	}
+
+	seen := map[string]struct{}{}
+	add := func(uri string, n int) {
+		if _, ok := seen[uri]; !ok {
+			seen[uri] = struct{}{}
+			fileNames = append(fileNames, uriBasename(uri))
+		}
+		locations += n
+	}
+	for uri, edits := range we.Changes {
+		add(uri, len(edits))
+	}
+	for _, dc := range we.DocumentChanges {
+		add(dc.TextDocument.URI, len(dc.Edits))
+	}
+	sort.Strings(fileNames)
+	return len(seen), locations, fileNames
+}
+
+// uriBasename returns the final path segment of a file URI, falling back to the
+// whole string when it has no slash.
+func uriBasename(uri string) string {
+	if i := strings.LastIndex(uri, "/"); i >= 0 && i+1 < len(uri) {
+		return uri[i+1:]
+	}
+	return uri
 }
 
 // renameWithFuzzyFallback retries rename using workspace symbol candidates when the

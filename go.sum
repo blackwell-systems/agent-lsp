@@ -1,5 +1,5 @@
-github.com/blackwell-systems/gcf-go v1.3.1 h1:hoIm88moF2VC+b9m+C3Xx4tl625z/hSgiVuHwOvnKXs=
-github.com/blackwell-systems/gcf-go v1.3.1/go.mod h1:hYxLOn6JHzNNNH7wfgRXWETX2lMtRtjG8FEX45I6SAI=
+github.com/blackwell-systems/gcf-go v1.5.0 h1:ZOWyxvRF1TZOmzPYXVO1dOTU6VRslNaJgnzSDDh8hL4=
+github.com/blackwell-systems/gcf-go v1.5.0/go.mod h1:hYxLOn6JHzNNNH7wfgRXWETX2lMtRtjG8FEX45I6SAI=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=

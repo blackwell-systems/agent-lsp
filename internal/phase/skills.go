@@ -46,7 +46,7 @@ func skillRename() *SkillPhaseConfig {
 			},
 			{
 				Name:        "execute",
-				Description: "Capture pre-rename diagnostics, execute rename, apply, verify",
+				Description: "Capture pre-rename diagnostics, execute rename (applies directly), verify",
 				Allowed: []string{
 					"get_diagnostics",
 					"rename_symbol", // dry_run=false
@@ -213,8 +213,8 @@ func skillSafeEdit() *SkillPhaseConfig {
 			},
 		},
 		GlobalForbidden: []string{
-			"rename_symbol",     // safe-edit uses direct edits
-			"blast_radius", // blast radius is lsp-impact's job
+			"rename_symbol", // safe-edit uses direct edits
+			"blast_radius",  // blast radius is lsp-impact's job
 		},
 	}
 }
