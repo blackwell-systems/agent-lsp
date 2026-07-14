@@ -30,6 +30,11 @@ const (
 	ConfidenceHigh     Confidence = "high"
 	ConfidencePartial  Confidence = "partial"
 	ConfidenceEventual Confidence = "eventual"
+	// ConfidenceLow marks a clean result (no new errors) that cannot be trusted
+	// because the language server was still indexing/priming when it was read.
+	// A "no errors introduced" answer under ConfidenceLow may simply mean the
+	// diagnostics had not been computed yet, not that the edit is safe.
+	ConfidenceLow Confidence = "low"
 )
 
 // AppliedEdit records a single edit applied within a session.

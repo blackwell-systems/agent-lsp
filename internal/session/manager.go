@@ -258,14 +258,10 @@ func (m *SessionManager) Evaluate(ctx context.Context, sessionID, scope string, 
 
 	netDelta := len(allIntroduced) - len(allResolved)
 
-	// Determine confidence.
-	confidence := ConfidenceHigh
-	if scope == "workspace" {
-		confidence = ConfidenceEventual
-	}
-	if timedOut {
-		confidence = ConfidencePartial
-	}
+	// session.Client is normally non-nil; guard anyway because the rest of this
+	// method already tolerates a nil client when there are no baselines to diff.
+	activeProgress := session.Client != nil && session.Client.HasActiveProgress()
+	confidence := evalConfidence(scope, timedOut, netDelta, activeProgress)
 
 	// Update status.
 	session.SetStatus(StatusEvaluated)
@@ -282,6 +278,35 @@ func (m *SessionManager) Evaluate(ctx context.Context, sessionID, scope string, 
 		Timeout:          timedOut,
 		DurationMs:       time.Since(start).Milliseconds(),
 	}, nil
+}
+
+// evalConfidence decides how much to trust an evaluation result.
+//
+//   - workspace scope: results arrive incrementally as the server indexes the
+//     rest of the workspace, so a file-local snapshot is only ConfidenceEventual.
+//   - timedOut: diagnostics did not stabilise within the window, so the diff is
+//     ConfidencePartial.
+//   - a clean result (netDelta <= 0, i.e. no new errors) while background work
+//     is still active is ConfidenceLow: "no errors" may just mean the server has
+//     not analysed the edit yet. This guards against a still-priming server (e.g.
+//     rust-analyzer running cargo check) reporting a false all-clear. A result
+//     that DID surface errors (netDelta > 0) stays trustworthy — errors do not
+//     appear spuriously — so it is not downgraded.
+//
+// The active-progress downgrade is applied last so an unindexed clean result is
+// reported as low even if it would otherwise have looked high or partial.
+func evalConfidence(scope string, timedOut bool, netDelta int, activeProgress bool) Confidence {
+	confidence := ConfidenceHigh
+	if scope == "workspace" {
+		confidence = ConfidenceEventual
+	}
+	if timedOut {
+		confidence = ConfidencePartial
+	}
+	if netDelta <= 0 && activeProgress {
+		confidence = ConfidenceLow
+	}
+	return confidence
 }
 
 // SimulateChain applies a sequence of edits and evaluates after each one.

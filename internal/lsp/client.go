@@ -643,6 +643,17 @@ func (c *LSPClient) handleProgress(params json.RawMessage) {
 	}
 }
 
+// HasActiveProgress reports whether the server currently has open $/progress
+// work-done tokens, i.e. background work (indexing, cache priming, cargo check)
+// is still running. Used to gauge whether a "no diagnostics" result can be
+// trusted: while progress is active, the absence of errors may just mean the
+// analysis has not finished. Returns false for servers that emit no progress.
+func (c *LSPClient) HasActiveProgress() bool {
+	c.progressMu.Lock()
+	defer c.progressMu.Unlock()
+	return len(c.progressTokens) > 0
+}
+
 // waitForWorkspaceReady blocks until activeProgressTokens is empty or 60s
 // elapses. Uses a condition variable so handleProgress can signal immediately.
 // A timer goroutine guarantees the deadline fires even if gopls never emits
@@ -943,7 +954,7 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 					"dynamicRegistration": true,
 				},
 				"documentSymbol": map[string]any{
-					"dynamicRegistration":              true,
+					"dynamicRegistration":               true,
 					"hierarchicalDocumentSymbolSupport": true,
 				},
 				"rename": map[string]any{

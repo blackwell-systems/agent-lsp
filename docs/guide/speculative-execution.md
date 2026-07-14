@@ -438,6 +438,7 @@ Position matching uses post-edit coordinates. Baseline diagnostics reflect pre-e
 - `"high"`: single-file, diagnostics settled within timeout
 - `"partial"`: timed out, returned snapshot may be incomplete
 - `"eventual"`: workspace scope, cross-file propagation may be incomplete
+- `"low"`: a clean result (`net_delta <= 0`) read while the server still had active `$/progress` work (indexing, cache priming, `cargo check`). "No errors" may just mean the analysis had not run yet, so do not treat it as an all-clear. A result that surfaced errors (`net_delta > 0`) is never downgraded — errors do not appear spuriously.
 
 Note: `affected_symbols` and `edit_risk_score` were planned fields that were not implemented. The shipped `EvaluationResult` type contains only the fields shown above.
 
