@@ -7,7 +7,7 @@
   <a href="#multi-language-support"><img src="https://img.shields.io/badge/languages-30_CI--verified-brightgreen.svg" alt="Languages"></a>
   <a href="https://github.com/blackwell-systems/mcp-assert"><img src="https://raw.githubusercontent.com/blackwell-systems/mcp-assert/main/assets/badge-passing.svg?v=3" alt="mcp-assert: passing" height="20"></a>
   <a href="https://agentskills.io"><img src="assets/badge-agentskills.svg" alt="Agent Skills"></a>
-  <a href="https://github.com/blackwell-systems/agent-lsp"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/assets/downloads-badge.json" alt="downloads"></a>
+  <a href="https://github.com/blackwell-systems/agent-lsp"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/blackwell-systems/agent-lsp/badges/assets/downloads-badge.json" alt="downloads"></a>
   <br>
   <a href="https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/"><img src="https://img.shields.io/badge/LSP-3.17-blue.svg" alt="LSP 3.17"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>

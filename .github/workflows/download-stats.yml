@@ -17,19 +17,34 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Check out badges branch and seed high-water-mark cache
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # main is protected by the "Strict Protection" ruleset, so the default
+          # GITHUB_TOKEN cannot push there. The generated assets are published to
+          # the unprotected 'badges' branch (no ruleset bypass needed); the README
+          # downloads badge points at assets/downloads-badge.json on that branch.
+          git fetch origin badges:refs/remotes/origin/badges
+          git worktree add /tmp/badges origin/badges
+          # Seed the high-water-mark cache from the badges branch (the source of
+          # truth) so the script never regresses totals on a transient API miss.
+          cp /tmp/badges/assets/download-stats.cache assets/download-stats.cache
+
       - name: Generate download stats
         run: bash scripts/download-stats.sh
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Commit and push if changed
+      - name: Publish to badges branch if changed
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add assets/download-stats.svg assets/downloads-badge.json assets/download-stats.cache
+          cp assets/downloads-badge.json assets/download-stats.svg assets/download-stats.cache /tmp/badges/assets/
+          cd /tmp/badges
+          git checkout -B badges
+          git add assets/downloads-badge.json assets/download-stats.svg assets/download-stats.cache
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
             git commit -m "chore: update download stats"
-            git push
+            git push origin badges
           fi
