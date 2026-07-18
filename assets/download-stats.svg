@@ -19,16 +19,16 @@
   <line x1="24" y1="48" x2="296" y2="48" stroke="#334155" stroke-width="1"/>
 
   <text x="24" y="74" fill="#94a3b8" font-family="ui-monospace,monospace" font-size="12">pypi (agent-lsp)</text>
-  <text x="296" y="74" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">25,876</text>
+  <text x="296" y="74" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">25876</text>
   <text x="24" y="96" fill="#94a3b8" font-family="ui-monospace,monospace" font-size="12">docker (agent-lsp)</text>
-  <text x="296" y="96" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">11,229</text>
+  <text x="296" y="96" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">11229</text>
   <text x="24" y="118" fill="#94a3b8" font-family="ui-monospace,monospace" font-size="12">npm (@blackwell-systems)</text>
-  <text x="296" y="118" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">5,787</text>
+  <text x="296" y="118" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">5787</text>
   <text x="24" y="140" fill="#94a3b8" font-family="ui-monospace,monospace" font-size="12">github releases</text>
-  <text x="296" y="140" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">1,171</text>
+  <text x="296" y="140" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">1171</text>
 
   <line x1="24" y1="144" x2="296" y2="144" stroke="#334155" stroke-width="1"/>
 
-  <text x="24" y="172" fill="url(#accent)" font-family="system-ui,-apple-system,sans-serif" font-size="16" font-weight="700">44,063 total</text>
+  <text x="24" y="172" fill="url(#accent)" font-family="system-ui,-apple-system,sans-serif" font-size="16" font-weight="700">44063 total</text>
   <text x="296" y="172" fill="#64748b" font-family="system-ui,-apple-system,sans-serif" font-size="10" text-anchor="end">cumulative installs</text>
 </svg>
