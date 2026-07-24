@@ -21,14 +21,14 @@
   <text x="24" y="74" fill="#94a3b8" font-family="ui-monospace,monospace" font-size="12">pypi (agent-lsp)</text>
   <text x="296" y="74" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">27059</text>
   <text x="24" y="96" fill="#94a3b8" font-family="ui-monospace,monospace" font-size="12">docker (agent-lsp)</text>
-  <text x="296" y="96" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">11453</text>
+  <text x="296" y="96" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">11466</text>
   <text x="24" y="118" fill="#94a3b8" font-family="ui-monospace,monospace" font-size="12">npm (@blackwell-systems)</text>
-  <text x="296" y="118" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">5939</text>
+  <text x="296" y="118" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">5989</text>
   <text x="24" y="140" fill="#94a3b8" font-family="ui-monospace,monospace" font-size="12">github releases</text>
-  <text x="296" y="140" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">1273</text>
+  <text x="296" y="140" fill="#e2e8f0" font-family="ui-monospace,monospace" font-size="13" font-weight="600" text-anchor="end">1285</text>
 
   <line x1="24" y1="144" x2="296" y2="144" stroke="#334155" stroke-width="1"/>
 
-  <text x="24" y="172" fill="url(#accent)" font-family="system-ui,-apple-system,sans-serif" font-size="16" font-weight="700">45724 total</text>
+  <text x="24" y="172" fill="url(#accent)" font-family="system-ui,-apple-system,sans-serif" font-size="16" font-weight="700">45799 total</text>
   <text x="296" y="172" fill="#64748b" font-family="system-ui,-apple-system,sans-serif" font-size="10" text-anchor="end">cumulative installs</text>
 </svg>
