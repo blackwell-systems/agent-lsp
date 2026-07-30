@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.17.0] - 2026-07-18
 
 ### Added
 - **`--merge-config` flag** ([#13](https://github.com/blackwell-systems/agent-lsp/issues/13)): overlay a config file on top of auto-detected servers instead of replacing them. Auto-detection forms the base; each config entry either overrides an auto-detected server (matched by language identifier, falling back to the first extension) or adds a new one, while un-overridden auto-detected servers are kept. `--config` is unchanged (still replaces auto-detection entirely). Requested by [@Pakti](https://github.com/Pakti).
