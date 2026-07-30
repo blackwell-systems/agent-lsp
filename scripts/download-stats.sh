@@ -83,7 +83,19 @@ for v in "$npm_total" "$pypi_total" "$gh_total" "$docker_total"; do
 done
 if (( cumulative == 0 )); then cumulative="?"; fi
 
-fmt() { printf "%'d" "$1" 2>/dev/null || echo "$1"; }
+# Insert thousands separators, locale-independently. printf "%'d" only groups in
+# a locale that defines a separator, so it silently produces bare digits under the
+# C locale (e.g. GitHub Actions runners). A pure-sed grouping works everywhere.
+# Non-numeric input (e.g. the "?" fallback) passes through unchanged.
+fmt() {
+  case "$1" in
+  '' | *[!0-9]*)
+    printf '%s' "$1"
+    return
+    ;;
+  esac
+  printf '%s' "$1" | sed -e ':a' -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1,\2/;ta'
+}
 
 npm_fmt=$(fmt "$npm_total" 2>/dev/null || echo "$npm_total")
 pypi_fmt=$(fmt "$pypi_total" 2>/dev/null || echo "$pypi_total")
