@@ -22,3 +22,53 @@ type ServerEntry struct {
 type Config struct {
 	Servers []ServerEntry `json:"servers"`
 }
+
+// serverKey returns the identity a ServerEntry is merged on: its LanguageID,
+// or the first extension when LanguageID is empty. An entry with neither yields
+// "", which never matches for override purposes (such entries always append).
+func serverKey(e ServerEntry) string {
+	if e.LanguageID != "" {
+		return e.LanguageID
+	}
+	if len(e.Extensions) > 0 {
+		return e.Extensions[0]
+	}
+	return ""
+}
+
+// MergeConfigs overlays override onto base, keyed by language identifier (see
+// serverKey). An override entry whose key matches a base entry replaces that
+// entry in place; an override entry with a new key is appended; base entries
+// with no matching override are kept. Base order is preserved, with appended
+// override entries following in their original order. This backs --merge-config:
+// auto-detected servers form the base, and the user's config file overrides or
+// extends them. Either argument may be nil.
+func MergeConfigs(base, override *Config) *Config {
+	merged := &Config{}
+	keyToIndex := make(map[string]int)
+
+	if base != nil {
+		for _, e := range base.Servers {
+			if k := serverKey(e); k != "" {
+				keyToIndex[k] = len(merged.Servers)
+			}
+			merged.Servers = append(merged.Servers, e)
+		}
+	}
+
+	if override != nil {
+		for _, e := range override.Servers {
+			k := serverKey(e)
+			if idx, ok := keyToIndex[k]; ok && k != "" {
+				merged.Servers[idx] = e // override in place
+				continue
+			}
+			if k != "" {
+				keyToIndex[k] = len(merged.Servers)
+			}
+			merged.Servers = append(merged.Servers, e)
+		}
+	}
+
+	return merged
+}

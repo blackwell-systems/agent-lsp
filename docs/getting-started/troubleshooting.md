@@ -25,6 +25,11 @@ rust-analyzer --version
 # jdtls is typically installed via VS Code or manually
 ```
 
+If the server is installed but not on `PATH`, or you want a custom binary or
+flags for one language while keeping auto-detection for the rest, run agent-lsp
+with `--merge-config` and point the entry at the full path. See
+[Choosing which language servers to run](mcp-clients.md#choosing-which-language-servers-to-run).
+
 **Check 2: Spawn logs**
 
 agent-lsp captures language server startup output:

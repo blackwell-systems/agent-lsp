@@ -166,6 +166,27 @@ func ParseArgs(args []string) (ParseResult, error) {
 		return httpResult(ParseResult{Config: cfg}), nil
 	}
 
+	// Mode 3b: config file merged with auto-detected servers.
+	// Auto-detection forms the base; the config file overrides or extends it
+	// (keyed by language identifier). Preserves auto-detection while letting the
+	// user add custom servers or override specific auto-detected ones.
+	if args[0] == "--merge-config" {
+		if len(args) < 2 {
+			return ParseResult{}, fmt.Errorf("--merge-config requires a file path argument\n" +
+				"usage: agent-lsp --merge-config /path/to/lsp-mcp.json\n" +
+				"       (auto-detects installed servers, then overlays the config file on top)")
+		}
+		override, err := LoadConfig(args[1])
+		if err != nil {
+			return ParseResult{}, fmt.Errorf("load merge-config %s: %w", args[1], err)
+		}
+		base, err := AutodetectServers()
+		if err != nil {
+			return ParseResult{}, fmt.Errorf("auto-detect for --merge-config: %w", err)
+		}
+		return httpResult(ParseResult{Config: MergeConfigs(base, override)}), nil
+	}
+
 	// Mode 1: legacy (len>=2 AND args[0] contains no ":")
 	if len(args) >= 2 && !strings.Contains(args[0], ":") {
 		// Validate that the server binary exists.
