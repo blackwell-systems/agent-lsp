@@ -1,3 +1,5 @@
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.blackwell-systems%2Fagent-lsp.svg)](https://mcptoplist.com/server/io.github.blackwell-systems%2Fagent-lsp)
+
 <p align="center">
   <img src="assets/social-preview.png" alt="agent-lsp" width="600">
 </p>
