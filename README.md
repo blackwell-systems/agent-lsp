@@ -104,6 +104,8 @@ Tool responses are encoded in [GCF (Graph Compact Format)](https://gcformat.com)
 | Graph | blast_radius, find_callers, explore_symbol, find_references, type_hierarchy, cross_repo, detect_changes, list_symbols | **79-84%** |
 | Graph + session dedup | Same, via [gcf-proxy](https://github.com/blackwell-systems/gcf-proxy) `--session` | **92.7%** (5th call) |
 
+Grouped/nested responses (callers under a symbol, diagnostics with related info) tabularize too, for ~14% over JSON on that shape ([details](./docs/guide/gcf-integration.md#nested-container-responses-grouped-data)).
+
 GCF is enabled by default. To revert to JSON:
 
 ```bash

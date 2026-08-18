@@ -29,6 +29,20 @@ Token estimates use byte length / 3.5 (validated: 0.97 correlation with o200k_ba
 
 Savings grow with record count because the eliminated overhead (field names, delimiters, quotes) is per-record. At 50+ records, savings converge to ~49%.
 
+### Nested-container responses (grouped data)
+
+Some tools return **grouped** data: a nested object array inside a field (blast_radius symbols each with their own callers, detect_changes files each with affected symbols, diagnostics with `relatedInformation`, explore_symbol with parallel refs/calls). GCF encodes these with the `^` attachment marker and a nested tabular block per group:
+
+| Tool Response (nested shape) | JSON | GCF | Savings |
+|---|---|---|---|
+| `blast_radius` grouped (symbols → callers) | ~139 tokens | ~112 tokens | **19.5%** |
+| `get_diagnostics` (+ relatedInformation) | ~114 tokens | ~100 tokens | **12.2%** |
+| `explore_symbol` (refs + incoming_calls) | ~87 tokens | ~75 tokens | **13.7%** |
+| `detect_changes` (files → affected_symbols) | ~75 tokens | ~70 tokens | **5.7%** |
+| **Total** | **~417 tokens** | **~359 tokens** | **13.8%** |
+
+These savings depend on the gcf-go **v1.7.1** encoder (the v1.5.1 nested-container fix). Before it, a nested object array fell through to Go's `fmt` map printing, an unparseable blob, so the nested cases both saved less **and** were not valid GCF. v1.7.1 emits a proper tabular section, which roughly tripled savings-vs-JSON on nested data (~5% → ~14%) and, more importantly, made grouped responses parseable. Reproduce with `go run scripts/gcf-benchmark.go`.
+
 ## Why
 
 1. **34-44% fewer tokens on structured data.** Most agent-lsp tools return arrays of objects (symbols, references, diagnostics, callers). GCF tabular encoding eliminates field name repetition and structural delimiters.
