@@ -42,3 +42,10 @@ saw.config.json
 .spec-workflow/
 .claude/scheduled_tasks.lock
 agent-lsp.exe
+
+# Download-stat assets live on the unprotected badges branch (auto-updated
+# by .github/workflows/download-stats.yml). Not tracked on main to avoid a stale
+# duplicate; the README badge reads from the badges branch.
+assets/downloads-badge.json
+assets/download-stats.svg
+assets/download-stats.cache
