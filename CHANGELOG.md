@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+- **gcf-go upgraded to v1.5.0 → v1.7.1** (gcf spec v3.4.1 → v3.5.3). Main win is a nested-container encoding fix (v1.5.1): a nested `[]map[string]any` or `[]struct` in a tool response (e.g. a diagnostics list, grouped callers) now emits a proper tabular section instead of falling through to Go's `fmt` map printing. Also brings keyed-tabular map encoding for `map[string]Struct` responses (v1.6.0), canonical output alignment/determinism, and the v3.5.3 numeric domain (integers canonicalized to `int64`). `internal/encoding/gcf.Encode` now calls `EncodeGenericChecked` so an out-of-`int64` integer returns an error and falls back to JSON rather than panicking; agent-lsp data stays well within `int64`, so this is defensive. Graph-profile output (symbols, references, blast_radius) is unchanged.
+
 ## [0.17.0] - 2026-07-18
 
 ### Added
