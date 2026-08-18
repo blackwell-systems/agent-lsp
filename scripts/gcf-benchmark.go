@@ -1,3 +1,4 @@
+//go:build ignore
 // +build ignore
 
 // Quick benchmark comparing JSON vs GCF token counts on representative tool responses.
@@ -29,7 +30,7 @@ var blastRadiusResponse = map[string]any{
 		{"name": "NewRouter", "file": "internal/router/router.go", "line": 15, "test_callers": 1, "non_test_callers": 6, "sync_guarded": false},
 	},
 	"test_files":     []string{"internal/auth/middleware_test.go", "internal/server/server_test.go", "internal/handler/request_test.go", "internal/auth/token_test.go", "internal/router/router_test.go"},
-	"test_functions":  []string{"TestAuthMiddleware", "TestNewServer", "TestHandleRequest", "TestValidateToken", "TestNewRouter", "TestAuthFlow", "TestServerStart"},
+	"test_functions": []string{"TestAuthMiddleware", "TestNewServer", "TestHandleRequest", "TestValidateToken", "TestNewRouter", "TestAuthFlow", "TestServerStart"},
 	"non_test_callers": []map[string]any{
 		{"name": "main", "file": "cmd/server/main.go", "line": 15},
 		{"name": "Setup", "file": "internal/setup/setup.go", "line": 30},
@@ -79,6 +80,65 @@ var diagnosticsResponse = []map[string]any{
 	{"file": "internal/auth/token.go", "line": 34, "character": 2, "severity": "error", "message": "cannot use claims (variable of type *Claims) as jwt.Claims", "source": "gopls"},
 	{"file": "internal/server/server.go", "line": 90, "character": 12, "severity": "information", "message": "unused parameter: ctx", "source": "gopls"},
 	{"file": "internal/handler/request.go", "line": 15, "character": 1, "severity": "warning", "message": "exported function HandleRequest should have comment", "source": "gopls"},
+}
+
+// --- Nested-container shapes ------------------------------------------------
+// These responses carry a nested object array inside a field (an []map[string]any
+// or []struct, not a flat top-level array). gcf-go v1.5.1 fixed the encoding of
+// exactly this shape: before it, a nested array fell through to Go's fmt map
+// printing (unparseable "map[callers:[map[...]]]" output); v1.7.1 emits a proper
+// tabular section with the ^ attachment marker. These cases quantify the
+// improvement on realistic grouped responses.
+
+// blast_radius grouped by symbol: each symbol carries its own callers array.
+var blastRadiusGroupedResponse = map[string]any{
+	"symbols": []map[string]any{
+		{"name": "AuthMiddleware", "file": "internal/auth/middleware.go", "line": 45, "callers": []map[string]any{
+			{"file": "internal/server/server.go", "line": 12, "kind": "call"},
+			{"file": "internal/handler/request.go", "line": 78, "kind": "call"},
+			{"file": "internal/router/router.go", "line": 34, "kind": "call"},
+		}},
+		{"name": "ValidateToken", "file": "internal/auth/token.go", "line": 23, "callers": []map[string]any{
+			{"file": "internal/auth/middleware.go", "line": 48, "kind": "call"},
+			{"file": "internal/auth/token_test.go", "line": 15, "kind": "test"},
+		}},
+	},
+}
+
+// detect_changes: each changed file carries a nested affected_symbols array.
+var detectChangesResponse = map[string]any{
+	"changed_files": []map[string]any{
+		{"path": "internal/auth/token.go", "risk": "high", "affected_symbols": []map[string]any{
+			{"name": "ValidateToken", "callers": 8}, {"name": "Claims", "callers": 12},
+		}},
+		{"path": "internal/server/server.go", "risk": "medium", "affected_symbols": []map[string]any{
+			{"name": "NewServer", "callers": 5},
+		}},
+	},
+}
+
+// get_diagnostics with LSP relatedInformation: each diagnostic nests a related array.
+var diagnosticsRelatedResponse = map[string]any{
+	"diagnostics": []map[string]any{
+		{"file": "internal/auth/middleware.go", "line": 52, "severity": "error", "message": "undefined: jwt.Parse", "related": []map[string]any{
+			{"file": "internal/auth/token.go", "line": 10, "message": "expected import here"},
+		}},
+		{"file": "internal/auth/token.go", "line": 34, "severity": "error", "message": "cannot use claims as jwt.Claims", "related": []map[string]any{
+			{"file": "internal/auth/token.go", "line": 18, "message": "Claims defined here"},
+		}},
+	},
+}
+
+// explore_symbol: a symbol with several parallel nested arrays.
+var exploreSymbolResponse = map[string]any{
+	"symbol": "ValidateToken",
+	"references": []map[string]any{
+		{"file": "internal/auth/middleware.go", "line": 48}, {"file": "internal/auth/token_test.go", "line": 15},
+	},
+	"incoming_calls": []map[string]any{
+		{"from": "AuthMiddleware", "file": "internal/auth/middleware.go", "line": 48},
+		{"from": "TestValidateToken", "file": "internal/auth/token_test.go", "line": 15},
+	},
 }
 
 // estimateTokens gives a rough token count (byte length / 3.5 for ASCII-dominant text)
@@ -149,4 +209,14 @@ func main() {
 		})
 	}
 	benchmark("list_symbols (30 symbols)", bigSymbols)
+
+	// Nested-container shapes (grouped responses). These exercise the gcf-go
+	// v1.5.1 nested-array fix: pre-fix they emitted Go fmt map printing; v1.7.1
+	// emits a proper tabular section, lifting savings-vs-JSON on nested data
+	// (measured ~5% -> ~14% total) and keeping the output parseable.
+	fmt.Println("\n# Nested-container responses (v1.5.1 datashape fix)")
+	benchmark("blast_radius grouped (symbols -> callers)", blastRadiusGroupedResponse)
+	benchmark("detect_changes (files -> affected_symbols)", detectChangesResponse)
+	benchmark("get_diagnostics (+ relatedInformation)", diagnosticsRelatedResponse)
+	benchmark("explore_symbol (refs + incoming_calls)", exploreSymbolResponse)
 }
