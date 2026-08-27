@@ -431,6 +431,30 @@ func TestLSPClient_GetOpenDocuments(t *testing.T) {
 	}
 }
 
+// TestLSPClient_LanguageIDForFile_KnownExtension tests that LanguageIDForFile
+// delegates to languageIDFromPath for known extensions.
+func TestLSPClient_LanguageIDForFile_KnownExtension(t *testing.T) {
+	c := NewLSPClient("fake", nil)
+	tests := []struct {
+		path string
+		want string
+	}{
+		{"/project/main.go", "go"},
+		{"/project/app.ts", "typescript"},
+		{"/project/app.py", "python"},
+		{"/project/main.rs", "rust"},
+		{"/project/script.luau", "luau"}, // luau is in client.go's built-in map
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			got := c.LanguageIDForFile(tt.path)
+			if got != tt.want {
+				t.Errorf("LanguageIDForFile(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestLanguageIDFromURI(t *testing.T) {
 	tests := []struct {
 		uri  string

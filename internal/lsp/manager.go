@@ -374,6 +374,27 @@ func inferLanguageID(entry config.ServerEntry) string {
 	}
 }
 
+// LanguageIDForFile returns the LSP language ID for the given file path,
+// consulting the server config's extensions field first. This allows custom
+// language mappings (e.g. .luau -> "luau") configured via server_config.
+// Falls back to the built-in LanguageIDFromPath mapping.
+func (m *ServerManager) LanguageIDForFile(filePath string) string {
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(filePath)), ".")
+	if ext == "" {
+		return LanguageIDFromPath(filePath)
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, e := range m.entries {
+		if e.extensions[ext] {
+			return e.languageID
+		}
+	}
+	return LanguageIDFromPath(filePath)
+}
+
 // LanguageIDFromPath maps a file path's extension to an LSP language ID.
 // Canonical implementation shared by internal/lsp and internal/tools (E5 deduplication).
 // Covers Go, TypeScript, JavaScript, Python, Rust, and common language server languages.

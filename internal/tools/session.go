@@ -162,7 +162,7 @@ func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[str
 
 	languageID, _ := args["language_id"].(string)
 	if languageID == "" {
-		languageID = "plaintext"
+		languageID = client.LanguageIDForFile(filePath)
 	}
 
 	// text is an optional Go-specific extension not present in the TypeScript schema.

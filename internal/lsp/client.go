@@ -857,6 +857,14 @@ func (c *LSPClient) IsInitialized() bool {
 	return c.initialized
 }
 
+// MarkInitializedForTest sets the initialized state for testing.
+// This allows tests to simulate an LSP handshake without spawning a process.
+func (c *LSPClient) MarkInitializedForTest() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.initialized = true
+}
+
 // isJDTLS reports whether the server binary appears to be Eclipse jdtls.
 // Checks the binary name for "jdtls" (covers /usr/local/bin/jdtls and
 // wrapper scripts named jdtls).
@@ -1420,6 +1428,58 @@ func (c *LSPClient) UnsubscribeFromDiagnostics(cb types.DiagnosticUpdateCallback
 		}
 	}
 	c.diagSubs = subs
+}
+
+// LanguageIDForFile returns the LSP language ID for a file path.
+// This is the primary entry point for tool handlers to determine the correct
+// language ID for document operations. Uses the same extension mapping as
+// languageIDFromURI but accepts a file path directly.
+func (c *LSPClient) LanguageIDForFile(filePath string) string {
+	return languageIDFromPath(filePath)
+}
+
+// languageIDFromPath maps a file path's extension to an LSP language ID.
+func languageIDFromPath(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == "" {
+		return "plaintext"
+	}
+	// Strip the leading dot.
+	ext = ext[1:]
+	switch ext {
+	case "go":
+		return "go"
+	case "ts", "tsx":
+		return "typescript"
+	case "js", "jsx":
+		return "javascript"
+	case "py":
+		return "python"
+	case "rs":
+		return "rust"
+	case "cs":
+		return "csharp"
+	case "hs", "lhs":
+		return "haskell"
+	case "rb":
+		return "ruby"
+	case "kt", "kts":
+		return "kotlin"
+	case "ml", "mli":
+		return "ocaml"
+	case "c":
+		return "c"
+	case "cpp", "cc", "cxx":
+		return "cpp"
+	case "java":
+		return "java"
+	case "luau":
+		return "luau"
+	case "lua":
+		return "lua"
+	default:
+		return "plaintext"
+	}
 }
 
 // languageIDFromURI infers a language ID from a file:// URI by extension.

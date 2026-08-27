@@ -131,7 +131,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 	var warnings []string
 
 	for _, file := range changedFiles {
-		langID := lsp.LanguageIDFromPath(file)
+		langID := client.LanguageIDForFile(file)
 		symbols, err := WithDocument[[]types.DocumentSymbol](ctx, client, file, langID, func(fURI string) ([]types.DocumentSymbol, error) {
 			return client.GetDocumentSymbols(ctx, fURI)
 		})
@@ -280,7 +280,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 			transitiveSymbols = append(transitiveSymbols, exportedSymbol{
 				Name:   caller.Name,
 				File:   caller.File,
-				LangID: lsp.LanguageIDFromPath(caller.File),
+				LangID: client.LanguageIDForFile(caller.File),
 				Position: types.Position{
 					Line:      caller.Line - 1, // convert back to 0-indexed
 					Character: 0,
@@ -525,7 +525,7 @@ func findEnclosingTestFunction(ctx context.Context, client *lsp.LSPClient, cache
 	}
 
 	// Query and cache.
-	syms, err := WithDocument[[]types.DocumentSymbol](ctx, client, refPath, lsp.LanguageIDFromPath(refPath), func(fURI string) ([]types.DocumentSymbol, error) {
+	syms, err := WithDocument[[]types.DocumentSymbol](ctx, client, refPath, client.LanguageIDForFile(refPath), func(fURI string) ([]types.DocumentSymbol, error) {
 		return client.GetDocumentSymbols(ctx, fURI)
 	})
 	if err != nil {

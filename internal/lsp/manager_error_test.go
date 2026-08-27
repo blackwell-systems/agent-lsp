@@ -407,6 +407,92 @@ func TestServerManager_ConcurrentAccess(t *testing.T) {
 	// If we get here without data races, test passes
 }
 
+// TestServerManager_LanguageIDForFile_CustomExtension tests that LanguageIDForFile
+// returns the custom language ID from server config when the extension matches.
+func TestServerManager_LanguageIDForFile_CustomExtension(t *testing.T) {
+	client := NewLSPClient("fake", nil)
+	m := &ServerManager{
+		entries: []*managedEntry{
+			{
+				client:     client,
+				extensions: map[string]bool{"luau": true},
+				languageID: "luau",
+			},
+		},
+	}
+
+	got := m.LanguageIDForFile("/project/script.luau")
+	if got != "luau" {
+		t.Errorf("LanguageIDForFile(%q) = %q, want %q", "/project/script.luau", got, "luau")
+	}
+}
+
+// TestServerManager_LanguageIDForFile_BuiltinExtension tests that LanguageIDForFile
+// falls back to LanguageIDFromPath for extensions not in the server config.
+func TestServerManager_LanguageIDForFile_BuiltinExtension(t *testing.T) {
+	client := NewLSPClient("fake", nil)
+	m := &ServerManager{
+		entries: []*managedEntry{
+			{
+				client:     client,
+				extensions: map[string]bool{"luau": true},
+				languageID: "luau",
+			},
+		},
+	}
+
+	got := m.LanguageIDForFile("/project/main.go")
+	if got != "go" {
+		t.Errorf("LanguageIDForFile(%q) = %q, want %q", "/project/main.go", got, "go")
+	}
+}
+
+// TestServerManager_LanguageIDForFile_CaseInsensitive tests case-insensitive extension matching.
+func TestServerManager_LanguageIDForFile_CaseInsensitive(t *testing.T) {
+	client := NewLSPClient("fake", nil)
+	m := &ServerManager{
+		entries: []*managedEntry{
+			{
+				client:     client,
+				extensions: map[string]bool{"luau": true},
+				languageID: "luau",
+			},
+		},
+	}
+
+	got := m.LanguageIDForFile("/project/Script.LUAU")
+	if got != "luau" {
+		t.Errorf("LanguageIDForFile(%q) = %q, want %q", "/project/Script.LUAU", got, "luau")
+	}
+}
+
+// TestServerManager_LanguageIDForFile_EmptyEntries tests fallback with no entries.
+func TestServerManager_LanguageIDForFile_EmptyEntries(t *testing.T) {
+	m := &ServerManager{entries: []*managedEntry{}}
+
+	got := m.LanguageIDForFile("/project/main.go")
+	if got != "go" {
+		t.Errorf("LanguageIDForFile(%q) = %q, want %q", "/project/main.go", got, "go")
+	}
+}
+
+// TestServerManager_LanguageIDForFile_NoExtension tests file with no extension.
+func TestServerManager_LanguageIDForFile_NoExtension(t *testing.T) {
+	m := &ServerManager{
+		entries: []*managedEntry{
+			{
+				extensions: map[string]bool{"luau": true},
+				languageID: "luau",
+			},
+		},
+	}
+
+	got := m.LanguageIDForFile("/project/Makefile")
+	if got != "plaintext" {
+		t.Errorf("LanguageIDForFile(%q) = %q, want %q", "/project/Makefile", got, "plaintext")
+	}
+}
+
 // TestServerManager_ExtensionEdgeCases tests edge cases in extension handling
 func TestServerManager_ExtensionEdgeCases(t *testing.T) {
 	m := NewMultiServerManager([]config.ServerEntry{
