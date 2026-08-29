@@ -473,3 +473,44 @@ func TestLanguageIDFromURI(t *testing.T) {
 		}
 	}
 }
+
+// TestWriteRawAfterProcessExit verifies that once the subprocess exits, the
+// exit-monitor goroutine nulls stdin and sets exited, so a later request
+// returns a clean "LSP process has exited" error rather than the confusing
+// low-level "file already closed" pipe write error.
+func TestWriteRawAfterProcessExit(t *testing.T) {
+	// Spawn a process that exits immediately so cmd.Wait returns quickly and
+	// the exit monitor runs. No real LSP handshake is involved.
+	c := NewLSPClient("/bin/sh", []string{"-c", "exit 0"})
+	if err := c.start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	// Wait (bounded) for the exit monitor goroutine to observe the exit and
+	// flip the exited flag under c.mu.
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		c.mu.Lock()
+		exited := c.exited
+		c.mu.Unlock()
+		if exited {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for exit monitor to set exited")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// A request routed through writeRaw must now surface a clear error.
+	_, err := c.SendRequest(context.Background(), "textDocument/hover", nil)
+	if err == nil {
+		t.Fatal("expected an error after process exit, got nil")
+	}
+	if !strings.Contains(err.Error(), "exited") {
+		t.Errorf("error %q should mention that the process exited", err.Error())
+	}
+	if strings.Contains(err.Error(), "file already closed") {
+		t.Errorf("error %q should not leak the low-level closed-pipe error", err.Error())
+	}
+}
