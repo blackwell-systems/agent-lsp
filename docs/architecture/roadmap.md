@@ -244,7 +244,7 @@ The inspector skill is agent-lsp's most powerful quality tool: it found a nil se
 
 Proven by finding unrecovered goroutines in mark3labs/mcp-go (#860). These checks detect real crash-path bugs that tests miss because they require specific timing or nil states to trigger. Language-agnostic: the check taxonomy is universal, with per-language heuristics selected by `language_id`.
 
-**Language family mapping (covers 25 of 30 supported languages):**
+**Language family mapping (covers 25 of 31 supported languages):**
 
 | Family | Languages | Concurrent entry pattern | Sync primitive | Recovery |
 |--------|-----------|------------------------|----------------|----------|
@@ -310,7 +310,7 @@ Skills calling other skills. `/lsp-refactor` is already composed from `/lsp-impa
 
 Not every language server supports the same capabilities. gopls supports call hierarchy, type hierarchy, and semantic tokens. Gleam's LSP does not. But `/lsp-impact` calls all three. Currently, skills handle this at runtime: if a tool returns `IsError` or empty, the agent skips the step or improvises. This works but is fragile and depends on the agent reading prose instructions correctly.
 
-The 30 CI-verified languages expose different capability profiles. A skill that works perfectly with gopls may produce partial or misleading results with a less capable server, and the agent has no way to know this before activating the skill.
+The 31 CI-verified languages expose different capability profiles. A skill that works perfectly with gopls may produce partial or misleading results with a less capable server, and the agent has no way to know this before activating the skill.
 
 ### The solution: capability metadata in SKILL.md frontmatter
 
@@ -335,7 +335,7 @@ allowed-tools: mcp__lsp__find_references mcp__lsp__find_callers ...
 
 ### Capability profiles by language
 
-Based on CI testing across 30 languages, the capability landscape clusters into tiers:
+Based on CI testing across 31 languages, the capability landscape clusters into tiers:
 
 | Tier | Capabilities | Languages |
 |------|-------------|-----------|
@@ -903,7 +903,7 @@ Parses each file independently using tree-sitter AST analysis. No dependency res
 - `/lsp-inspect` (structural scan phase): find `go func()` blocks, identify error handling patterns, locate channel operations. Pattern-based, not type-based.
 - `/lsp-dead-code` (candidate identification): tree-sitter finds all exported symbols. LSP then verifies the candidates that look dead.
 
-**Implementation:** CGo bindings to the C tree-sitter library with vendored grammars for all 30 CI-verified languages. Falls back to tree-sitter automatically for languages without a configured LSP server (Bash, YAML, Terraform, Dockerfile, Makefile).
+**Implementation:** CGo bindings to the C tree-sitter library with vendored grammars for all 31 CI-verified languages. Falls back to tree-sitter automatically for languages without a configured LSP server (Bash, YAML, Terraform, Dockerfile, Makefile).
 
 ### Layer 2: Selective LSP (precision work)
 
