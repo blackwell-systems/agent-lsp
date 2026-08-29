@@ -2038,10 +2038,14 @@ func TestMultiLanguage(t *testing.T) {
 				tier1: r.tier1,
 				tier2: r.tier2,
 			})
+			if r.tier1 == "pass" {
+				assertTier2Baseline(t, lang.name, r.tier2)
+			}
 		})
 	}
 
 	printMultiLangSummary(t, results)
+	dumpTier2Baseline(t, results)
 }
 
 // TestFuzzyPositionFallback verifies that go_to_definition and find_references
