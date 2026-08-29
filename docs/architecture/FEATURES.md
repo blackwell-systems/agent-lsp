@@ -228,7 +228,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Sets minimum log level: `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency`
 - Also configurable via `LOG_LEVEL` env var
 - Parameters: `level` (string, req)
-- No LSP required; CI-verified for all 30 languages
+- No LSP required; CI-verified for all 31 languages
 
 ### Build & Test (4 tools)
 
@@ -296,7 +296,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Agents calling `destroy_session` after `preview_edit` (which auto-cleans up) no longer see a confusing error
 
 **Total: 66 tools** (63 core + 3 phase enforcement)
-- **CI-verified: 66** (including `set_log_level` verified separately across all 30 languages, and 3 phase enforcement tools verified via mcp-assert)
+- **CI-verified: 66** (including `set_log_level` verified separately across all 31 languages, and 3 phase enforcement tools verified via mcp-assert)
 - **ToolAnnotations:** All 66 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
 - **jsonschema struct tags:** 171+ tags across all Args structs; 100% parameter description coverage
 - **1-indexed coordinates:** All line/column parameters are 1-based (editor convention)
@@ -472,7 +472,7 @@ warnings: [roots that failed indexing]
 
 ---
 
-## Languages (30 CI-verified)
+## Languages (31 CI-verified)
 
 | Language | Server Binary | CI Status | Notes |
 |----------|---------------|-----------|-------|
@@ -492,6 +492,7 @@ warnings: [roots that failed indexing]
 | C# | `csharp-ls` | passing | `dotnet tool install -g csharp-ls` |
 | Kotlin | `kotlin-language-server` | passing | GitHub releases |
 | Lua | `lua-language-server` | passing | GitHub releases |
+| Luau | `luau-lsp` | passing | GitHub releases; `supportsFormatting=false` (format tools skip) |
 | Swift | `sourcekit-lsp` | passing | macos-latest runner only; ships with Xcode |
 | Zig | `zls` | passing | must match Zig version exactly |
 | CSS | `vscode-css-language-server` | passing | `npm i -g vscode-langservers-extracted` |
@@ -507,7 +508,7 @@ warnings: [roots that failed indexing]
 | Dart | `dart` | passing | Ships with Dart SDK; `brew install dart` |
 | MongoDB | `mongodb-language-server` | investigating | extracted from vscode VSIX at `dist/languageServer.js`; mongo:7 service container |
 
-**Tier 1 (Core 4 tools):** `start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`, verified for all 30 languages
+**Tier 1 (Core 4 tools):** `start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`, verified for all 31 languages
 **Tier 2 (Extended 34 tools):** verified per-language; coverage varies by server capabilities
 
 ### CI Tool Coverage Matrix (Tier 2)
@@ -530,6 +531,7 @@ warnings: [roots that failed indexing]
 | C# | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
 | Kotlin | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
 | Lua | pass | — | — | pass | pass | pass | — | — | pass | pass | pass | pass |
+| Luau | pass | pass | pass | pass | pass | — | — | — | pass | — | pass | — |
 | Swift | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
 | Zig | pass | pass | pass | pass | fail | pass | — | — | pass | — | pass | pass |
 | CSS | pass | — | — | pass | pass | pass | — | — | pass | — | — | — |
@@ -549,7 +551,7 @@ warnings: [roots that failed indexing]
 
 | Tier | Languages | Count | Notes |
 |------|-----------|-------|-------|
-| Current | all 30 above | 30 | |
+| Current | all 31 above | 31 | |
 | Tier 3 candidates | Bash (bash-language-server) | 1 | good hover and completions; definition/references limited |
 | Tier 4 — skip for now | Haskell (ghcup slow), OCaml (opam nontrivial), Elm (niche), R (niche) | 4 | CI complexity blockers |
 
@@ -1016,7 +1018,7 @@ docker run --rm -p 8080:8080 -v /your/project:/workspace \
 ```
 
 **Languages not in pre-built tags (use `LSP_SERVERS` or custom image):**
-Rust, Java, C#, Kotlin, Dart, Scala, Lua, Elixir, Clojure, Zig, Haskell, Swift
+Rust, Java, C#, Kotlin, Dart, Scala, Lua, Luau, Elixir, Clojure, Zig, Haskell, Swift
 
 **Runtime install via `LSP_SERVERS` env var:**
 `gopls`, `typescript-language-server`, `pyright-langserver`, `rust-analyzer`, `clangd`, `solargraph`, `intelephense`, `csharp-ls`, `lua-language-server`, `zls`, `kotlin-language-server`, `metals`, `elixir-ls`, `clojure-lsp`, `haskell-language-server-wrapper`, `sourcekit-lsp`, `jdtls`, `dart`
@@ -1390,6 +1392,7 @@ locs, err := client.GetDefinition(ctx, fileURI, lsp.Position{Line: 10, Character
 | `multi-lang-zig` | Zig | ubuntu-latest | |
 | `multi-lang-terraform` | Terraform | ubuntu-latest | |
 | `multi-lang-lua` | Lua | ubuntu-latest | |
+| `multi-lang-luau` | Luau | ubuntu-latest | luau-lsp; supportsFormatting=false |
 | `multi-lang-swift` | Swift | macos-latest | sourcekit-lsp macOS only |
 | `multi-lang-scala` | Scala | ubuntu-latest | continue-on-error; 30min timeout |
 | `multi-lang-gleam` | Gleam | ubuntu-latest | |

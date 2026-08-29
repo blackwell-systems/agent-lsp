@@ -1,5 +1,29 @@
 {
   "entries": {
+    "0b2168a6c40fc02eb7795ceb1a7937aa": {
+      "custom": {
+        "gate_type": "custom",
+        "command": "GOWORK=off go test -c -o /dev/null ./test/",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-08-29T12:38:00.689181-07:00"
+      }
+    },
+    "303043ed883047bbcef362daaaf52f2e": {
+      "build": {
+        "gate_type": "build",
+        "command": "GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-08-29T12:37:59.947491-07:00"
+      }
+    },
     "39826555848f011da91d66eebc9fdd9b": {
       "test": {
         "gate_type": "test",
@@ -22,6 +46,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-06-04T02:56:31.051707-07:00"
+      }
+    },
+    "48f6f55babe8129a0aefefc52fda7c5c": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "GOWORK=off go vet ./test/...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-08-29T12:43:34.702227-07:00"
       }
     },
     "4fbf8ee7c8bccde546231b999e6ada8d": {
@@ -58,6 +94,30 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-06-04T03:04:54.383249-07:00"
+      }
+    },
+    "7c6d8bf55837764801a45d789c0257e8": {
+      "custom": {
+        "gate_type": "custom",
+        "command": "GOWORK=off go test -c -o /dev/null ./test/",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-08-29T12:43:35.242944-07:00"
+      }
+    },
+    "86638ad9464084ec677c95b1e3347bba": {
+      "build": {
+        "gate_type": "build",
+        "command": "GOWORK=off go build ./...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-08-29T12:43:34.49403-07:00"
       }
     },
     "9ef33566c629050d99a40cee26878a32": {
@@ -118,6 +178,18 @@
         "stderr": "",
         "from_cache": true,
         "cached_at": "2026-06-04T03:04:54.870833-07:00"
+      }
+    },
+    "decec80459e4f98108721896c0725f09": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "GOWORK=off go vet ./test/...",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-08-29T12:38:00.14471-07:00"
       }
     },
     "ded5035f1fbcc4d1763bd34b8c8b18da": {

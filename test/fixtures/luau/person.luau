@@ -1,8 +1,8 @@
 --!strict
 -- A person with a name and age.
 
-local Human = {}
-Human.__index = Human
+local Person = {}
+Person.__index = Person
 
 export type PersonType = {
 	name: string,
@@ -10,16 +10,16 @@ export type PersonType = {
 }
 
 -- Create a new Person.
-function Human.new(name: string, age: number)
-	local self = setmetatable({}, Human)
+function Person.new(name: string, age: number)
+	local self = setmetatable({}, Person)
 	self.name = name
 	self.age = age
 	return self
 end
 
 -- Return a greeting for this person.
-function Human.greet(self): string
+function Person.greet(self): string
 	return "Hello, " .. self.name
 end
 
-return Human
+return Person

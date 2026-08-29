@@ -134,6 +134,11 @@ type LSPClient struct {
 
 	initialized bool
 
+	// exited is set to true by the process-exit monitor goroutine once the
+	// subprocess has exited. Guarded by c.mu. Distinguishes an exited client
+	// (stdin nulled because the process died) from one that was never started.
+	exited bool
+
 	// daemon mode fields
 	isDaemon   bool        // true if connected to a daemon broker (not a direct subprocess)
 	daemonInfo *DaemonInfo // metadata about the connected daemon
@@ -391,6 +396,12 @@ func (c *LSPClient) start() error {
 		c.rejectPending(exitErr)
 		c.mu.Lock()
 		c.initialized = false
+		c.exited = true
+		// Null out stdin so later writeRaw calls return a clear "process has
+		// exited" error instead of writing to a closed pipe. Do not Close it
+		// here: the process already exited (pipe is closed) and Shutdown may
+		// also close it, so nulling the reference avoids a double-close race.
+		c.stdin = nil
 		c.mu.Unlock()
 		if err != nil {
 			c.stderrMu.Lock()
@@ -749,8 +760,12 @@ func (c *LSPClient) writeRaw(body []byte) error {
 	defer c.writeMu.Unlock()
 	c.mu.Lock()
 	w := c.stdin
+	exited := c.exited
 	c.mu.Unlock()
 	if w == nil {
+		if exited {
+			return fmt.Errorf("LSP process has exited")
+		}
 		return fmt.Errorf("LSP client not started")
 	}
 	_, err := w.Write(EncodeMessage(body))
