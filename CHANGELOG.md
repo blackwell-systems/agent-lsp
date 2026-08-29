@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [0.19.1] - 2026-08-29
+
+### Fixed
+- **`get_cross_repo_references` returned a markdown fence as the symbol name**: the tool derived the queried symbol's name from the first token of the LSP hover text, which for servers that return markdown hovers (e.g. `gopls`) is the opening code fence (```go```) rather than the identifier. It now skips fence lines and leading declaration keywords (`type`, `func`, `class`, and so on) and returns the first real identifier, so the response's `symbol` field is correct.
+- **Confusing error when a language server exits mid-session**: writes to a server that had already exited surfaced a low-level `writeRaw: ... file already closed` error. The client now detects the exit and returns a clear `LSP process has exited` result, so tools degrade gracefully (they skip) instead of emitting a cryptic pipe error, and a session recovers cleanly via `restart_lsp_server` when a server self-terminates. This makes servers that shut themselves down mid-session (observed with the Dart and `nil`/Nix servers) behave predictably.
+
+### Changed
+- **CI-verified language count is now 31** (Luau): the MCP `instructions` string, `server.json`, and the Scoop bucket description reflect Luau as a first-class, CI-exercised language. No tool or API changes.
+
 ## [0.19.0] - 2026-08-29
 
 ### Added
