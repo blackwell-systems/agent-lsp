@@ -427,6 +427,10 @@ func LanguageIDFromPath(path string) string {
 		return "cpp"
 	case ".java":
 		return "java"
+	case ".luau":
+		return "luau"
+	case ".lua":
+		return "lua"
 	default:
 		return "plaintext"
 	}
