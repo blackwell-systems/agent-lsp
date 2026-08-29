@@ -1978,8 +1978,19 @@ func TestGetCrossRepoReferences(t *testing.T) {
 	if graphSymbolCount(p) == 0 {
 		t.Errorf("get_cross_repo_references: expected the queried symbol in the graph")
 	}
+	names := graphSymbolNames(p)
+	found := false
+	for _, n := range names {
+		if n == "Person" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("get_cross_repo_references: expected %q among graph symbols, got %v", "Person", names)
+	}
 
-	t.Logf("[TestGetCrossRepoReferences] symbols=%d edges=%d names=%v", graphSymbolCount(p), graphEdgeCount(p), graphSymbolNames(p))
+	t.Logf("[TestGetCrossRepoReferences] symbols=%d edges=%d names=%v", graphSymbolCount(p), graphEdgeCount(p), names)
 }
 
 // statusIcon returns a visual icon for a tool result status.

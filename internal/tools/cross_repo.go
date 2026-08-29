@@ -122,12 +122,8 @@ func HandleGetCrossRepoReferences(ctx context.Context, client *lsp.LSPClient, ar
 		return client.GetInfoOnLocation(ctx, fURI, pos)
 	})
 	if hErr == nil && hoverResult != "" {
-		// Extract first word from hover text as the symbol name.
-		word := strings.FieldsFunc(hoverResult, func(r rune) bool {
-			return r == ' ' || r == '\n' || r == '\t' || r == '(' || r == ')' || r == '\r'
-		})
-		if len(word) > 0 {
-			symbolName = word[0]
+		if name := symbolNameFromHover(hoverResult); name != "" {
+			symbolName = name
 		}
 	}
 
@@ -170,6 +166,46 @@ func HandleGetCrossRepoReferences(ctx context.Context, client *lsp.LSPClient, ar
 }
 
 // buildCrossRepoPayload converts cross-repo references into a graph Payload.
+// symbolNameFromHover extracts a symbol name from LSP hover text. Hover is
+// usually markdown: a fenced code block (```lang ... ```) containing the
+// declaration. The previous "first whitespace-delimited token" heuristic
+// grabbed the opening fence itself (e.g. "```go"), so this skips fence lines
+// and leading declaration keywords and returns the first identifier.
+func symbolNameFromHover(hover string) string {
+	// Find the first meaningful line: not blank, not a markdown fence.
+	var decl string
+	for _, line := range strings.Split(hover, "\n") {
+		t := strings.TrimSpace(line)
+		if t == "" || strings.HasPrefix(t, "```") {
+			continue
+		}
+		decl = t
+		break
+	}
+	if decl == "" {
+		return ""
+	}
+	declKeywords := map[string]bool{
+		"type": true, "func": true, "fn": true, "function": true, "def": true,
+		"var": true, "const": true, "let": true, "val": true,
+		"class": true, "struct": true, "interface": true, "enum": true,
+		"trait": true, "module": true, "package": true, "namespace": true,
+		"public": true, "private": true, "protected": true, "static": true,
+		"final": true, "abstract": true, "async": true, "export": true,
+	}
+	tokens := strings.FieldsFunc(decl, func(r rune) bool {
+		return !(r == '_' || r == '.' ||
+			(r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9'))
+	})
+	for _, tok := range tokens {
+		if tok == "" || declKeywords[tok] {
+			continue
+		}
+		return tok
+	}
+	return ""
+}
+
 func buildCrossRepoPayload(symbolName string, refs []crossRepoRef, consumerRoots []string) *gcfgo.Payload {
 	var symbols []gcfgo.Symbol
 	var edges []gcfgo.Edge
