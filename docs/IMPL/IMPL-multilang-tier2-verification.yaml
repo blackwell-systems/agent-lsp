@@ -467,6 +467,7 @@ waves:
             - test/multi_lang_test.go
           dependencies:
             - B
+          context_source: prepared-brief
     - number: 4
       agents:
         - id: D
@@ -636,6 +637,20 @@ completion_reports:
             - test/build_tools_test.go
         verification: PASS
         notes: 'All ~18 Tier-2 parsers rewired to GCF. Graph tools (list_symbols, find_symbol, go_to_definition, find_references, go_to_declaration, find_callers, type_hierarchy) use decodeGraph + graphSymbolNames/graphSymbolCount/graphEdgeCount. Generic tools (get_completions, get_document_highlights, get_inlay_hints, get_semantic_tokens, get_server_capabilities, add_workspace_folder, detect_lsp_servers, get_symbol_source, get_signature_help) use decodeGeneric via new OrderedMap helpers genericLen/genericGet/genericSliceLen. INTERFACE DEVIATION: rename_symbol keeps a text-summary assertion (NOT decodeGeneric) because the applied (non-dry-run) path returns a plain-text summary ''Renamed to X across N location(s) in M file(s)'', not JSON/GCF, per issue #12 (workspace.go:112); verified against gopls. find_references/go_to_definition counts come from p.Symbols (locations are related symbols), not Edges. 3 arg-schema drifts fixed: get_symbol_source character->column; go_to_symbol symbol_path/language; restart_lsp_server root_dir. Also removed unsupported language_id arg from get_server_capabilities in testExecuteCommand, and fixed Tier-1 get_diagnostics count decode. apply_edit skips its write step under GCF (format edits are a non-byte-exact GCF summary that cannot be safely reconstructed into a WorkspaceEdit, issue #12; both gate fixtures produce empty edits anyway). OUT-OF-SCOPE DEP RESOLVED: build_tools_test.go was absent from the IMPL file_ownership table; team-lead approved option A to extend ownership; run_build (Success), run_tests (Passed), get_tests_for_file (SourceFile) now decode GCF via the shared helpers. Real run TestMultiLanguage/(Go|Luau) PASSES 46s: Go build/test tools real-pass, Luau build/test skip (no dispatch, legit) - both confirmed. Zero ''failed to parse'' across all Tier-2 tools. FOLLOW-UP BUG (noted, NOT fixed this wave): the suite mutates fixtures on disk (rename_symbol renames Person->RenamedPerson in fixtures/go/main.go and Person->Human in luau; apply_edit/format can rewrite files) - a test-isolation defect requiring ''git checkout -- test/fixtures/'' after runs. Postconditions: character=0, decodeGraph|decodeGeneric=20, json.Unmarshal([]byte(text)=2 (only out-of-scope standalone TestGetChangeImpact/TestGetCrossRepoReferences, whose get_change_impact/get_cross_repo_references also emit GCF and would need decoding in a later pass).'
+    C:
+        status: complete
+        branch: fix/luau-tier2-and-harness
+        commit: a478009
+        files_changed:
+            - test/tier2_baseline_test.go
+            - test/multi_lang_test.go
+        files_created:
+            - test/tier2_baseline_test.go
+        tests_added:
+            - assertTier2Baseline
+            - dumpTier2Baseline
+        verification: PASS
+        notes: 'Baseline DERIVED FROM REAL local gopls/luau-lsp runs via AGENT_LSP_DUMP_BASELINE on a clean fixture checkout, not the stale docs matrix. Go/Luau maps are exhaustive (every tool explicit); all other ~28 languages default every Tier-2 tool to allowed-skip (catches parse-regression bug class without over-claiming pass). Documented real fails pinned allowed-fail: Zig find_symbol, Gleam find_symbol, Elixir list_symbols. Continue-on-error jobs (Java, Scala, Elixir, Prisma, Nix, MongoDB) get allowed-fail on their core tools. Fixture-mutation hazard handled: rename_symbol/apply_edit are allowed-skip so a dirty re-run does not spuriously fail (verified by running the suite twice without restoring fixtures - both pass). Wired assertTier2Baseline into TestMultiLanguage gated on r.tier1==pass. Committed only the two owned files; ran git checkout -- test/fixtures/ before commit (git status shows no fixtures changes). Did not touch parsers (Wave 2), gcf_decode_test.go (Agent A), or docs (Wave 4).'
 pre_mortem:
     overall_risk: medium
     rows:
