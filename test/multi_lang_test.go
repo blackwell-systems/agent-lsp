@@ -1,8 +1,8 @@
 package main_test
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -200,6 +200,37 @@ func textFromResult(res *mcp.CallToolResult) (string, error) {
 }
 
 // runLanguageTest runs Tier 1 and Tier 2 tests for a single language.
+// restoreFixtureAfter snapshots every regular file under dir and registers a
+// t.Cleanup that rewrites any file the test mutated back to its original bytes.
+// The Tier-2 suite applies real edits to fixtures on disk (rename_symbol renames
+// symbols across files, apply_edit / format_document rewrite files), which would
+// otherwise leave the working tree dirty and make repeat runs non-idempotent.
+// Files created during the test (server artifacts) are left untouched.
+func restoreFixtureAfter(t *testing.T, dir string) {
+	t.Helper()
+	snapshot := map[string][]byte{}
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if b, rerr := os.ReadFile(path); rerr == nil {
+			snapshot[path] = b
+		}
+		return nil
+	})
+	t.Cleanup(func() {
+		for path, orig := range snapshot {
+			cur, err := os.ReadFile(path)
+			if err != nil || bytes.Equal(cur, orig) {
+				continue
+			}
+			if werr := os.WriteFile(path, orig, 0o644); werr != nil {
+				t.Logf("restoreFixtureAfter: could not restore %s: %v", path, werr)
+			}
+		}
+	})
+}
+
 func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestResult {
 	t.Helper()
 
@@ -209,6 +240,11 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		t.Skipf("skipping %s: %s not found on PATH", lang.name, lang.binary)
 		return langTestResult{tier1: "skip"}
 	}
+
+	// The Tier-2 suite mutates fixtures on disk (rename_symbol renames symbols,
+	// apply_edit / format_document rewrite files). Snapshot and restore so runs
+	// are idempotent and never leave the working tree dirty.
+	restoreFixtureAfter(t, lang.fixture)
 
 	// Determine timeout. JVM-based servers (Java, Kotlin, Scala) need longer
 	// timeouts due to slow cold-start initialization.
@@ -1795,12 +1831,16 @@ func TestGetChangeImpact(t *testing.T) {
 			t.Logf("  probe #%d: IsError: %.200s", attempt, text)
 		} else {
 			text, _ := textFromResult(probeRes)
-			if strings.Contains(text, "greeter.go") {
-				t.Logf("  probe #%d: gopls ready (cross-file refs found)", attempt)
+			// find_references emits a GCF graph. Readiness = gopls has indexed
+			// usages beyond the definition (>= 2 reference locations). The graph
+			// QualifiedName carries the directory, not the filename, so the
+			// cross-file hit cannot be matched by a filename string.
+			if p, derr := decodeGraph(text); derr == nil && graphSymbolCount(p) >= 2 {
+				t.Logf("  probe #%d: gopls ready (%d references indexed)", attempt, graphSymbolCount(p))
 				ready = true
 				break
 			}
-			t.Logf("  probe #%d: refs returned but no cross-file hit (len=%d): %.200s", attempt, len(text), text)
+			t.Logf("  probe #%d: refs not yet fully indexed: %.120s", attempt, text)
 		}
 		time.Sleep(3 * time.Second)
 	}
@@ -1808,7 +1848,8 @@ func TestGetChangeImpact(t *testing.T) {
 		t.Skip("gopls never returned cross-file references within warmup window — CI runner too slow")
 	}
 
-	res, err = callTool(ctx, session, "get_change_impact", map[string]any{
+	// The change-impact handler is registered under the tool name "blast_radius".
+	res, err = callTool(ctx, session, "blast_radius", map[string]any{
 		"changed_files": []any{greeterFile},
 	})
 	if err != nil {
@@ -1830,23 +1871,18 @@ func TestGetChangeImpact(t *testing.T) {
 		return
 	}
 
-	var result map[string]any
-	if err := json.Unmarshal([]byte(text), &result); err != nil {
-		t.Errorf("get_change_impact: failed to parse JSON response: %s", text)
+	// get_change_impact emits a GCF graph payload: changed symbols at distance 0,
+	// callers and test functions at distance 1, with caller -> changed edges.
+	p, err := decodeGraph(text)
+	if err != nil {
+		t.Errorf("get_change_impact: failed to decode GCF graph: %v — raw: %s", err, text)
 		return
 	}
-
-	changedSymbols, _ := result["changed_symbols"].([]any)
-	if len(changedSymbols) == 0 {
-		t.Errorf("get_change_impact: expected changed_symbols to be non-empty")
+	if graphSymbolCount(p) == 0 {
+		t.Errorf("get_change_impact: expected at least one symbol in the impact graph")
 	}
 
-	summary, _ := result["summary"].(string)
-	if summary == "" {
-		t.Errorf("get_change_impact: expected non-empty summary")
-	}
-
-	t.Logf("[TestGetChangeImpact] changed_symbols=%d summary=%q", len(changedSymbols), summary)
+	t.Logf("[TestGetChangeImpact] symbols=%d edges=%d", graphSymbolCount(p), graphEdgeCount(p))
 }
 
 // TestGetCrossRepoReferences tests the get_cross_repo_references tool end-to-end
@@ -1932,20 +1968,18 @@ func TestGetCrossRepoReferences(t *testing.T) {
 		return
 	}
 
-	var result map[string]any
-	if err := json.Unmarshal([]byte(text), &result); err != nil {
-		t.Errorf("get_cross_repo_references: failed to parse JSON response: %s", text)
+	// get_cross_repo_references emits a GCF graph payload: the queried symbol at
+	// distance 0, external references at distance 1 with reference edges.
+	p, err := decodeGraph(text)
+	if err != nil {
+		t.Errorf("get_cross_repo_references: failed to decode GCF graph: %v — raw: %s", err, text)
 		return
 	}
-
-	if _, ok := result["symbol"]; !ok {
-		t.Errorf("get_cross_repo_references: missing 'symbol' key in response")
-	}
-	if _, ok := result["summary"]; !ok {
-		t.Errorf("get_cross_repo_references: missing 'summary' key in response")
+	if graphSymbolCount(p) == 0 {
+		t.Errorf("get_cross_repo_references: expected the queried symbol in the graph")
 	}
 
-	t.Logf("[TestGetCrossRepoReferences] symbol=%v summary=%v", result["symbol"], result["summary"])
+	t.Logf("[TestGetCrossRepoReferences] symbols=%d edges=%d names=%v", graphSymbolCount(p), graphEdgeCount(p), graphSymbolNames(p))
 }
 
 // statusIcon returns a visual icon for a tool result status.
