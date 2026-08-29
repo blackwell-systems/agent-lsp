@@ -2461,47 +2461,12 @@ func (c *LSPClient) GetWorkspaceFolders() []workspaceFolder {
 	return out
 }
 
-// supportsWorkspaceFolderChanges reports whether the server advertised support
-// for workspace/didChangeWorkspaceFolders via
-// capabilities.workspace.workspaceFolders (supported == true and a truthy
-// changeNotifications). Servers that did not advertise this must not receive the
-// notification: sending it violates the LSP spec and some servers reject it.
-func (c *LSPClient) supportsWorkspaceFolderChanges() bool {
-	c.capsMu.RLock()
-	defer c.capsMu.RUnlock()
-	ws, ok := c.capabilities["workspace"].(map[string]any)
-	if !ok {
-		return false
-	}
-	wf, ok := ws["workspaceFolders"].(map[string]any)
-	if !ok {
-		return false
-	}
-	if s, ok := wf["supported"].(bool); !ok || !s {
-		return false
-	}
-	switch cn := wf["changeNotifications"].(type) {
-	case bool:
-		return cn
-	case string:
-		return cn != ""
-	default:
-		return cn != nil
-	}
-}
-
 // AddWorkspaceFolder adds a directory to the workspace via
 // workspace/didChangeWorkspaceFolders. The LSP server re-indexes the new root
-// and cross-folder references become available immediately. Servers that did not
-// advertise workspace-folder change support are left untouched (the notification
-// is not sent), since sending it violates the LSP spec.
+// and cross-folder references become available immediately.
 func (c *LSPClient) AddWorkspaceFolder(ctx context.Context, path string) error {
 	folderURI := PathToFileURI(path)
 	folder := workspaceFolder{URI: folderURI, Name: path}
-
-	if !c.supportsWorkspaceFolderChanges() {
-		return fmt.Errorf("server does not support workspace folder change notifications")
-	}
 
 	c.capsMu.Lock()
 	for _, f := range c.workspaceFolders {
