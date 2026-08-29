@@ -40,12 +40,31 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Extract release notes from CHANGELOG
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          awk -v tag="## [${VERSION}]" '
+            index($0, tag) == 1 { f = 1; next }
+            f && /^## \[/ { exit }
+            f { print }
+          ' CHANGELOG.md > /tmp/release-notes.md
+          echo "----- release notes for ${VERSION} -----"
+          cat /tmp/release-notes.md
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "ERROR: no CHANGELOG section found for ${VERSION}" >&2
+            exit 1
+          fi
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: "~> v2"
-          args: release --clean
+          # --release-notes makes GoReleaser use our curated CHANGELOG section as
+          # the release body verbatim, instead of auto-generating from commit
+          # messages (which would overwrite it).
+          args: release --clean --release-notes=/tmp/release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

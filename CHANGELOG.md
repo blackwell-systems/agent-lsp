@@ -3,7 +3,10 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.19.0] - 2026-08-29
+
+### Added
+- **Custom language routing for unrecognized file extensions** ([#21](https://github.com/blackwell-systems/agent-lsp/pull/21)): a file whose extension is not in the built-in list now routes to a matching configured server instead of silently falling back to `plaintext`, so it gets full hover, diagnostics, definition, and references. Extension-based routing takes priority over the current client in multi-server mode, and tool handlers no longer hardcode `plaintext`. This enables **Luau** (`luau-lsp`) as a first-class, CI-exercised language. Contributed by [@fluffy-den](https://github.com/fluffy-den). Closes #19, #20.
 
 ### Fixed
 - **macOS auto-watcher file-descriptor exhaustion** ([#18](https://github.com/blackwell-systems/agent-lsp/issues/18)): the always-on auto-watcher walked the whole workspace and, because the fsnotify kqueue backend opens one fd per file in every watched directory, a tree containing large data/cache directories (browser profiles, leveldb, caches) could grow to hundreds of thousands of fds, peg `kern.maxfilesperproc`, and exhaust the system-wide file table (machine-wide `ENFILE`). The watcher is now bounded two ways. **At startup** it skips any single directory larger than `AGENT_LSP_WATCH_MAX_DIR_ENTRIES` (default 2048) and stops once total watched entries exceed `AGENT_LSP_WATCH_MAX_ENTRIES` (default 50000), applied to the initial walk, workspace-folder extension, and runtime directory creation. **At runtime** a guard samples the process's open-fd count every 30s and tears the watcher down if it exceeds `AGENT_LSP_WATCH_MAX_FDS` (default 60000), catching descriptors fsnotify opens for files *created while the watcher runs* (which the startup budget cannot see). `AGENT_LSP_DISABLE_WATCHER=1` turns the watcher off entirely. (FSEvents would avoid per-file fds outright, but it requires cgo and would break the project's `CGO_ENABLED=0` cross-compiled release; the runtime guard is the pure-Go equivalent.) Reported by [@ratacat](https://github.com/ratacat).
