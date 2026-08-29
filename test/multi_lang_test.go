@@ -13,54 +13,105 @@ import (
 	"testing"
 	"time"
 
+	gcfgo "github.com/blackwell-systems/gcf-go"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// genericLen returns the element/entry count of a decoded GCF generic value.
+// decodeGeneric yields either a *gcfgo.OrderedMap (keyed object) or a []any
+// (top-level tabular array); this normalizes both so tests can assert
+// non-emptiness without caring which shape a given tool emitted.
+func genericLen(v any) int {
+	switch g := v.(type) {
+	case *gcfgo.OrderedMap:
+		return g.Len()
+	case []any:
+		return len(g)
+	case nil:
+		return 0
+	default:
+		return 0
+	}
+}
+
+// genericGet fetches a top-level key from a decoded GCF generic value when it
+// is an OrderedMap. Returns (nil, false) for non-map shapes or missing keys.
+func genericGet(v any, key string) (any, bool) {
+	if g, ok := v.(*gcfgo.OrderedMap); ok {
+		return g.Get(key)
+	}
+	return nil, false
+}
+
+// genericSliceLen returns the length of a decoded generic value's key when that
+// key holds a slice (e.g. a CompletionList's "Items" or a capabilities list).
+// Returns 0 when the key is absent or not a slice.
+func genericSliceLen(v any, key string) int {
+	val, ok := genericGet(v, key)
+	if !ok {
+		return 0
+	}
+	if s, ok := val.([]any); ok {
+		return len(s)
+	}
+	return 0
+}
+
+// graphSymbolCount returns len(p.Symbols) for a decoded graph Payload. Graph
+// tools that model results as target/related symbols (find_references,
+// go_to_definition, list_symbols) carry their count here rather than in Edges.
+func graphSymbolCount(p *gcfgo.Payload) int {
+	if p == nil {
+		return 0
+	}
+	return len(p.Symbols)
+}
+
 // langConfig holds per-language test configuration.
 type langConfig struct {
-	name               string
-	id                 string
-	binary             string
-	serverArgs         []string
-	javaHome           string
-	fixture            string // absolute path to fixture dir
-	file               string // absolute path to primary source file
-	hoverLine          int
-	hoverColumn        int
-	definitionLine     int
-	definitionColumn   int
-	callSiteLine       int
-	callSiteColumn     int
-	callSiteFile       string // defaults to .file if empty
-	referenceLine      int
-	referenceColumn    int
-	completionLine     int
-	completionColumn   int
-	completionFile     string // defaults to .file if empty
-	workspaceSymbol    string
-	supportsFormatting bool
-	secondFile         string
-	symbolName         string
-	declarationLine    int // C only
-	declarationColumn  int // C only
+	name                string
+	id                  string
+	binary              string
+	serverArgs          []string
+	javaHome            string
+	fixture             string // absolute path to fixture dir
+	file                string // absolute path to primary source file
+	hoverLine           int
+	hoverColumn         int
+	definitionLine      int
+	definitionColumn    int
+	callSiteLine        int
+	callSiteColumn      int
+	callSiteFile        string // defaults to .file if empty
+	referenceLine       int
+	referenceColumn     int
+	completionLine      int
+	completionColumn    int
+	completionFile      string // defaults to .file if empty
+	workspaceSymbol     string
+	supportsFormatting  bool
+	secondFile          string
+	symbolName          string
+	declarationLine     int // C only
+	declarationColumn   int // C only
 	typeHierarchyLine   int // Java and TypeScript only
 	typeHierarchyColumn int // Java and TypeScript only
 
 	// Fields for Tier 2 expansion tools.
-	typeDefLine        int    // for go_to_type_definition; uses referenceLine if 0
-	typeDefColumn      int    // for go_to_type_definition; uses referenceColumn if 0
-	typeDefFile        string // for go_to_type_definition; uses file if empty
-	signatureHelpLine   int   // for get_signature_help; uses completionLine if 0
-	signatureHelpColumn int   // for get_signature_help; uses completionColumn if 0
+	typeDefLine         int    // for go_to_type_definition; uses referenceLine if 0
+	typeDefColumn       int    // for go_to_type_definition; uses referenceColumn if 0
+	typeDefFile         string // for go_to_type_definition; uses file if empty
+	signatureHelpLine   int    // for get_signature_help; uses completionLine if 0
+	signatureHelpColumn int    // for get_signature_help; uses completionColumn if 0
 	signatureHelpFile   string // for get_signature_help; uses completionFile if empty
-	highlightLine      int    // for get_document_highlights; uses hoverLine if 0
-	highlightColumn    int    // for get_document_highlights; uses hoverColumn if 0
-	inlayHintEndLine   int    // end line for get_inlay_hints range; computed from hoverLine if 0
-	renameSymbolLine   int    // for rename_symbol / prepare_rename
-	renameSymbolColumn int    // for rename_symbol / prepare_rename
-	renameSymbolName   string // new_name for rename_symbol
-	codeActionLine     int    // start line for suggest_fixes range; uses hoverLine if 0
-	codeActionEndLine  int    // end line for suggest_fixes range; codeActionLine+1 if 0
+	highlightLine       int    // for get_document_highlights; uses hoverLine if 0
+	highlightColumn     int    // for get_document_highlights; uses hoverColumn if 0
+	inlayHintEndLine    int    // end line for get_inlay_hints range; computed from hoverLine if 0
+	renameSymbolLine    int    // for rename_symbol / prepare_rename
+	renameSymbolColumn  int    // for rename_symbol / prepare_rename
+	renameSymbolName    string // new_name for rename_symbol
+	codeActionLine      int    // start line for suggest_fixes range; uses hoverLine if 0
+	codeActionEndLine   int    // end line for suggest_fixes range; codeActionLine+1 if 0
 }
 
 // toolResult holds the outcome of a single Tier 2 tool test.
@@ -72,7 +123,7 @@ type toolResult struct {
 
 // langTestResult holds Tier 1 and Tier 2 results for one language.
 type langTestResult struct {
-	tier1 string       // "pass", "fail", "skip"
+	tier1 string // "pass", "fail", "skip"
 	tier2 []toolResult
 }
 
@@ -274,9 +325,25 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		t.Errorf("[%s] get_diagnostics: %v", lang.name, err)
 		return langTestResult{tier1: "fail"}
 	}
-	var diagItems []any
-	_ = json.Unmarshal([]byte(diagText), &diagItems)
-	t.Logf("[%s] diagnostics count: %d", lang.name, len(diagItems))
+	// get_diagnostics emits a GCF generic OrderedMap keyed by file URI, whose
+	// value is a tabular array of diagnostics for that file. Sum those to get a
+	// count; a clean file yields 0. Decode failure leaves the count at 0.
+	diagCount := 0
+	if dv, derr := decodeGeneric(diagText); derr == nil {
+		switch g := dv.(type) {
+		case *gcfgo.OrderedMap:
+			for _, k := range g.Keys() {
+				if val, ok := g.Get(k); ok {
+					if s, ok := val.([]any); ok {
+						diagCount += len(s)
+					}
+				}
+			}
+		case []any:
+			diagCount = len(g)
+		}
+	}
+	t.Logf("[%s] diagnostics count: %d", lang.name, diagCount)
 
 	// --- Tier 1: inspect_symbol (hover) ---
 	res, err = callTool(ctx, session, "inspect_symbol", map[string]any{
@@ -299,7 +366,7 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		return langTestResult{tier1: "fail"}
 	}
 	if len(hoverText) == 0 {
-		if len(diagItems) == 0 {
+		if diagCount == 0 {
 			// Both diagnostics and hover are empty: server likely hasn't finished
 			// indexing the workspace. Skip rather than fail.
 			t.Skipf("[%s] skipping: server returned no diagnostics and no hover (workspace not indexed)", lang.name)
@@ -368,24 +435,27 @@ func testDocumentSymbols(t *testing.T, ctx context.Context, session *mcp.ClientS
 		return toolResult{tool: "list_symbols", status: "fail",
 			detail: fmt.Sprintf("failed to parse list_symbols response: %v", err)}
 	}
-	var items []map[string]any
-	if err := json.Unmarshal([]byte(text), &items); err != nil {
+	// list_symbols emits a GCF graph payload (targets). Decode it and match on
+	// the trailing name segment of each symbol's QualifiedName.
+	p, err := decodeGraph(text)
+	if err != nil {
 		return toolResult{tool: "list_symbols", status: "fail",
-			detail: fmt.Sprintf("failed to parse list_symbols response: %s", text)}
+			detail: fmt.Sprintf("failed to decode list_symbols GCF graph: %v — raw: %s", err, text)}
 	}
-	if len(items) == 0 {
+	names := graphSymbolNames(p)
+	if len(names) == 0 {
 		return toolResult{tool: "list_symbols", status: "fail", detail: "empty symbol list"}
 	}
 	found := false
-	for _, item := range items {
-		if name, ok := item["name"].(string); ok && strings.Contains(name, lang.symbolName) {
+	for _, name := range names {
+		if strings.Contains(name, lang.symbolName) {
 			found = true
 			break
 		}
 	}
 	if !found {
 		return toolResult{tool: "list_symbols", status: "fail",
-			detail: fmt.Sprintf("symbol %q not found in results", lang.symbolName)}
+			detail: fmt.Sprintf("symbol %q not found in results: %v", lang.symbolName, names)}
 	}
 	return toolResult{tool: "list_symbols", status: "pass"}
 }
@@ -416,48 +486,18 @@ func testGoToDefinition(t *testing.T, ctx context.Context, session *mcp.ClientSe
 			detail: fmt.Sprintf("failed to parse go_to_definition response: %v", err)}
 	}
 
-	// Result may be a JSON object or array; extract the first element if array.
-	var result map[string]any
-	var arr []map[string]any
-	if err := json.Unmarshal([]byte(text), &arr); err == nil && len(arr) > 0 {
-		result = arr[0]
-	} else if err := json.Unmarshal([]byte(text), &result); err != nil {
+	// go_to_definition emits a GCF graph payload (one "related" symbol per
+	// location). The graph form does not carry file/line for the definition, so
+	// the ±1 line tolerance is no longer expressible here; assert instead that at
+	// least one location symbol came back (a resolved definition).
+	p, err := decodeGraph(text)
+	if err != nil {
 		return toolResult{tool: "go_to_definition", status: "fail",
-			detail: fmt.Sprintf("failed to parse go_to_definition response: %s", text)}
+			detail: fmt.Sprintf("failed to decode go_to_definition GCF graph: %v — raw: %s", err, text)}
 	}
-
-	// Assert file/uri is non-empty.
-	fileVal, hasFile := result["file"]
-	uriVal, hasURI := result["uri"]
-	if !hasFile && !hasURI {
+	if graphSymbolCount(p) == 0 {
 		return toolResult{tool: "go_to_definition", status: "fail",
-			detail: "result has no 'file' or 'uri' field"}
-	}
-	if hasFile {
-		if s, ok := fileVal.(string); !ok || s == "" {
-			return toolResult{tool: "go_to_definition", status: "fail", detail: "'file' field is empty"}
-		}
-	} else if hasURI {
-		if s, ok := uriVal.(string); !ok || s == "" {
-			return toolResult{tool: "go_to_definition", status: "fail", detail: "'uri' field is empty"}
-		}
-	}
-
-	// Assert result line is within ±1 of lang.definitionLine.
-	var resultLine float64
-	if lineVal, ok := result["line"].(float64); ok {
-		resultLine = lineVal
-	} else if rangeVal, ok := result["range"].(map[string]any); ok {
-		if startVal, ok := rangeVal["start"].(map[string]any); ok {
-			if l, ok := startVal["line"].(float64); ok {
-				resultLine = l + 1 // convert 0-based to 1-based
-			}
-		}
-	}
-	diff := int(resultLine) - lang.definitionLine
-	if diff < -1 || diff > 1 {
-		return toolResult{tool: "go_to_definition", status: "fail",
-			detail: fmt.Sprintf("definition line %d not within ±1 of expected %d", int(resultLine), lang.definitionLine)}
+			detail: "no definition location returned"}
 	}
 
 	return toolResult{tool: "go_to_definition", status: "pass"}
@@ -497,18 +537,22 @@ func testGetReferences(t *testing.T, ctx context.Context, session *mcp.ClientSes
 		return toolResult{tool: "find_references", status: "fail",
 			detail: fmt.Sprintf("failed to parse find_references response: %v", err)}
 	}
-	var items []any
-	if err := json.Unmarshal([]byte(text), &items); err != nil {
+	// find_references emits a GCF graph payload; each reference location is a
+	// "related" symbol, so the reference count is len(p.Symbols) (references are
+	// modeled as symbols, not edges, on this path).
+	p, err := decodeGraph(text)
+	if err != nil {
 		return toolResult{tool: "find_references", status: "fail",
-			detail: fmt.Sprintf("failed to parse find_references response: %s", text)}
+			detail: fmt.Sprintf("failed to decode find_references GCF graph: %v — raw: %s", err, text)}
 	}
+	refCount := graphSymbolCount(p)
 	minRefs := 1
 	if lang.secondFile != "" {
 		minRefs = 2
 	}
-	if len(items) < minRefs {
+	if refCount < minRefs {
 		return toolResult{tool: "find_references", status: "fail",
-			detail: fmt.Sprintf("expected >= %d references, got %d", minRefs, len(items))}
+			detail: fmt.Sprintf("expected >= %d references, got %d", minRefs, refCount)}
 	}
 	return toolResult{tool: "find_references", status: "pass"}
 }
@@ -538,20 +582,20 @@ func testGetCompletions(t *testing.T, ctx context.Context, session *mcp.ClientSe
 		return toolResult{tool: "get_completions", status: "fail",
 			detail: fmt.Sprintf("failed to parse get_completions response: %v", err)}
 	}
-	// Response may be a raw array or a CompletionList object with an "items" field.
-	var items []any
-	if err := json.Unmarshal([]byte(text), &items); err != nil {
-		// Try CompletionList shape: {"items": [...], "isIncomplete": bool}
-		var cl struct {
-			Items []any `json:"items"`
-		}
-		if err2 := json.Unmarshal([]byte(text), &cl); err2 != nil {
-			return toolResult{tool: "get_completions", status: "fail",
-				detail: fmt.Sprintf("failed to parse get_completions response: %s", text)}
-		}
-		items = cl.Items
+	// get_completions emits a GCF generic payload: either a top-level tabular of
+	// items ([]any) or an OrderedMap with an "Items" list (CompletionList shape,
+	// alongside "IsIncomplete"). Count entries from whichever shape came back.
+	v, err := decodeGeneric(text)
+	if err != nil {
+		return toolResult{tool: "get_completions", status: "fail",
+			detail: fmt.Sprintf("failed to decode get_completions GCF generic: %v — raw: %s", err, text)}
 	}
-	if len(items) == 0 {
+	count := genericSliceLen(v, "Items")
+	if count == 0 {
+		// Top-level tabular form: the payload itself is the item array.
+		count = genericLen(v)
+	}
+	if count == 0 {
 		return toolResult{tool: "get_completions", status: "fail", detail: "empty completion list"}
 	}
 	return toolResult{tool: "get_completions", status: "pass"}
@@ -575,17 +619,20 @@ func testWorkspaceSymbols(t *testing.T, ctx context.Context, session *mcp.Client
 		return toolResult{tool: "find_symbol", status: "fail",
 			detail: fmt.Sprintf("failed to parse find_symbol response: %v", err)}
 	}
-	var items []map[string]any
-	if err := json.Unmarshal([]byte(text), &items); err != nil {
+	// find_symbol emits a GCF graph payload (targets). Match the query against the
+	// trailing name segment of each symbol's QualifiedName.
+	p, err := decodeGraph(text)
+	if err != nil {
 		return toolResult{tool: "find_symbol", status: "fail",
-			detail: fmt.Sprintf("failed to parse find_symbol response: %s", text)}
+			detail: fmt.Sprintf("failed to decode find_symbol GCF graph: %v — raw: %s", err, text)}
 	}
-	if len(items) == 0 {
+	names := graphSymbolNames(p)
+	if len(names) == 0 {
 		return toolResult{tool: "find_symbol", status: "fail", detail: "empty workspace symbol list"}
 	}
 	found := false
-	for _, item := range items {
-		if name, ok := item["name"].(string); ok && strings.Contains(name, lang.workspaceSymbol) {
+	for _, name := range names {
+		if strings.Contains(name, lang.workspaceSymbol) {
 			found = true
 			break
 		}
@@ -619,9 +666,9 @@ func testFormatDocument(t *testing.T, ctx context.Context, session *mcp.ClientSe
 		// Empty content means file is already formatted — acceptable.
 		return toolResult{tool: "format_document", status: "pass", detail: "empty content (already formatted)"}
 	}
-	// An empty array is fine — means no edits needed.
-	var edits []any
-	_ = json.Unmarshal([]byte(text), &edits)
+	// A non-error response with text (GCF-encoded TextEdit tabular, possibly
+	// empty) means formatting succeeded; an empty edit set is fine.
+	_ = text
 	return toolResult{tool: "format_document", status: "pass"}
 }
 
@@ -661,30 +708,17 @@ func testGoToDeclaration(t *testing.T, ctx context.Context, session *mcp.ClientS
 			detail: fmt.Sprintf("failed to parse go_to_declaration response: %v", err)}
 	}
 
-	// Result may be an object or array; extract first element if array.
-	var result map[string]any
-	var arr []map[string]any
-	if err := json.Unmarshal([]byte(text), &arr); err == nil && len(arr) > 0 {
-		result = arr[0]
-	} else if err := json.Unmarshal([]byte(text), &result); err != nil {
+	// go_to_declaration emits a GCF graph payload. The graph form does not carry
+	// the target file path (previously asserted to end with person.h), so assert
+	// that a declaration location resolved instead.
+	p, err := decodeGraph(text)
+	if err != nil {
 		return toolResult{tool: "go_to_declaration", status: "fail",
-			detail: fmt.Sprintf("failed to parse go_to_declaration response: %s", text)}
+			detail: fmt.Sprintf("failed to decode go_to_declaration GCF graph: %v — raw: %s", err, text)}
 	}
-
-	// Assert file field ends with "person.h".
-	fileVal, ok := result["file"].(string)
-	if !ok || fileVal == "" {
-		// Try "uri".
-		uriVal, ok := result["uri"].(string)
-		if !ok || uriVal == "" {
-			return toolResult{tool: "go_to_declaration", status: "fail",
-				detail: "result has no 'file' or 'uri' field"}
-		}
-		fileVal = uriVal
-	}
-	if !strings.HasSuffix(fileVal, "person.h") {
+	if graphSymbolCount(p) == 0 {
 		return toolResult{tool: "go_to_declaration", status: "fail",
-			detail: fmt.Sprintf("expected file to end with 'person.h', got %q", fileVal)}
+			detail: "no declaration location returned"}
 	}
 	return toolResult{tool: "go_to_declaration", status: "pass"}
 }
@@ -715,21 +749,20 @@ func testTypeHierarchy(t *testing.T, ctx context.Context, session *mcp.ClientSes
 		return toolResult{tool: "type_hierarchy", status: "fail",
 			detail: fmt.Sprintf("failed to parse type_hierarchy response: %v", err)}
 	}
-	var result struct {
-		Items      []map[string]any `json:"items"`
-		Supertypes []map[string]any `json:"supertypes"`
-		Subtypes   []map[string]any `json:"subtypes"`
+	// May be a plain-text message like "No type hierarchy item found" when the
+	// server has nothing at the position — treat as skip before decoding.
+	if strings.Contains(text, "No type hierarchy item found") {
+		return toolResult{tool: "type_hierarchy", status: "skip",
+			detail: "server returned no type hierarchy item at configured position"}
 	}
-	if err := json.Unmarshal([]byte(text), &result); err != nil {
-		// May be a plain text message like "No type hierarchy item found"
-		if strings.Contains(text, "No type hierarchy item found") {
-			return toolResult{tool: "type_hierarchy", status: "skip",
-				detail: "server returned no type hierarchy item at configured position"}
-		}
+	// type_hierarchy emits a GCF graph payload (supertypes/subtypes as related
+	// symbols). No symbols means the server did not index this position.
+	p, err := decodeGraph(text)
+	if err != nil {
 		return toolResult{tool: "type_hierarchy", status: "fail",
-			detail: fmt.Sprintf("failed to unmarshal type_hierarchy response: %s", text)}
+			detail: fmt.Sprintf("failed to decode type_hierarchy GCF graph: %v — raw: %s", err, text)}
 	}
-	if len(result.Items) == 0 {
+	if graphSymbolCount(p) == 0 {
 		return toolResult{tool: "type_hierarchy", status: "skip",
 			detail: "no items returned (server may not index this position)"}
 	}
@@ -788,19 +821,20 @@ func testCallHierarchy(t *testing.T, ctx context.Context, session *mcp.ClientSes
 		return toolResult{tool: "find_callers", status: "fail",
 			detail: fmt.Sprintf("failed to parse find_callers response: %v", err)}
 	}
-	var result struct {
-		Items   []map[string]any `json:"items"`
-		Callers []map[string]any `json:"callers"`
-		Callees []map[string]any `json:"callees"`
+	// Plain-text "No call hierarchy" message means the position has no callable
+	// item — skip before decoding.
+	if strings.Contains(text, "No call hierarchy") {
+		return toolResult{tool: "find_callers", status: "skip", detail: "no call hierarchy item at position"}
 	}
-	if err := json.Unmarshal([]byte(text), &result); err != nil {
-		if strings.Contains(text, "No call hierarchy") {
-			return toolResult{tool: "find_callers", status: "skip", detail: "no call hierarchy item at position"}
-		}
+	// find_callers emits a GCF graph payload; callers/callees are related symbols
+	// linked by edges. Presence of either symbols or edges means the hierarchy
+	// resolved.
+	p, err := decodeGraph(text)
+	if err != nil {
 		return toolResult{tool: "find_callers", status: "fail",
-			detail: fmt.Sprintf("failed to unmarshal find_callers response: %s", text)}
+			detail: fmt.Sprintf("failed to decode find_callers GCF graph: %v — raw: %s", err, text)}
 	}
-	if len(result.Items) == 0 {
+	if graphSymbolCount(p) == 0 && graphEdgeCount(p) == 0 {
 		return toolResult{tool: "find_callers", status: "skip", detail: "no items returned"}
 	}
 	return toolResult{tool: "find_callers", status: "pass"}
@@ -833,8 +867,10 @@ func testGetSemanticTokens(t *testing.T, ctx context.Context, session *mcp.Clien
 		return toolResult{tool: "get_semantic_tokens", status: "fail",
 			detail: fmt.Sprintf("failed to parse semantic tokens response: %v", err)}
 	}
-	var tokens []map[string]any
-	if err := json.Unmarshal([]byte(text), &tokens); err != nil || len(tokens) == 0 {
+	// When there are no tokens the server returns a plain-text notice (not GCF);
+	// treat any decode failure or empty payload as skip, matching prior behavior.
+	v, err := decodeGeneric(text)
+	if err != nil || genericLen(v) == 0 {
 		return toolResult{tool: "get_semantic_tokens", status: "skip", detail: "no tokens returned"}
 	}
 	return toolResult{tool: "get_semantic_tokens", status: "pass"}
@@ -878,12 +914,14 @@ func testGetSignatureHelp(t *testing.T, ctx context.Context, session *mcp.Client
 	if err != nil || strings.TrimSpace(text) == "" || text == "null" || text == "{}" {
 		return toolResult{tool: "get_signature_help", status: "skip", detail: "no signature help at position"}
 	}
-	var result map[string]any
-	if err := json.Unmarshal([]byte(text), &result); err != nil {
-		return toolResult{tool: "get_signature_help", status: "skip", detail: "empty or non-JSON response"}
+	// get_signature_help emits a GCF generic OrderedMap with a "signatures" list
+	// (alongside activeSignature). No signatures means nothing to help at this
+	// position — skip.
+	v, err := decodeGeneric(text)
+	if err != nil {
+		return toolResult{tool: "get_signature_help", status: "skip", detail: "empty or non-GCF response"}
 	}
-	sigs, _ := result["signatures"].([]any)
-	if len(sigs) == 0 {
+	if genericSliceLen(v, "signatures") == 0 {
 		return toolResult{tool: "get_signature_help", status: "skip", detail: "no signatures returned"}
 	}
 	return toolResult{tool: "get_signature_help", status: "pass"}
@@ -919,12 +957,14 @@ func testGetDocumentHighlights(t *testing.T, ctx context.Context, session *mcp.C
 		return toolResult{tool: "get_document_highlights", status: "fail",
 			detail: fmt.Sprintf("failed to parse response: %v", err)}
 	}
-	var items []map[string]any
-	if err := json.Unmarshal([]byte(text), &items); err != nil {
+	// get_document_highlights emits a GCF generic payload as a top-level tabular
+	// array of highlight ranges.
+	v, err := decodeGeneric(text)
+	if err != nil {
 		return toolResult{tool: "get_document_highlights", status: "fail",
-			detail: fmt.Sprintf("failed to unmarshal response: %s", text)}
+			detail: fmt.Sprintf("failed to decode get_document_highlights GCF generic: %v — raw: %s", err, text)}
 	}
-	if len(items) == 0 {
+	if genericLen(v) == 0 {
 		return toolResult{tool: "get_document_highlights", status: "skip", detail: "no highlights returned"}
 	}
 	return toolResult{tool: "get_document_highlights", status: "pass"}
@@ -960,12 +1000,14 @@ func testGetInlayHints(t *testing.T, ctx context.Context, session *mcp.ClientSes
 		return toolResult{tool: "get_inlay_hints", status: "fail",
 			detail: fmt.Sprintf("failed to parse response: %v", err)}
 	}
-	var hints []map[string]any
-	if err := json.Unmarshal([]byte(text), &hints); err != nil {
+	// get_inlay_hints emits a GCF generic payload (tabular of hints). An empty
+	// payload means the server produced no hints for the range — skip.
+	v, err := decodeGeneric(text)
+	if err != nil {
 		return toolResult{tool: "get_inlay_hints", status: "fail",
-			detail: fmt.Sprintf("failed to unmarshal response: %s", text)}
+			detail: fmt.Sprintf("failed to decode get_inlay_hints GCF generic: %v — raw: %s", err, text)}
 	}
-	if len(hints) == 0 {
+	if genericLen(v) == 0 {
 		return toolResult{tool: "get_inlay_hints", status: "skip", detail: "no inlay hints returned"}
 	}
 	return toolResult{tool: "get_inlay_hints", status: "pass"}
@@ -1057,18 +1099,30 @@ func testRenameSymbol(t *testing.T, ctx context.Context, session *mcp.ClientSess
 	}
 	text, err := textFromResult(res)
 	if err != nil || strings.TrimSpace(text) == "" || text == "null" {
-		return toolResult{tool: "rename_symbol", status: "skip", detail: "no WorkspaceEdit returned"}
+		return toolResult{tool: "rename_symbol", status: "skip", detail: "no rename result returned"}
 	}
-	var result map[string]any
-	if err := json.Unmarshal([]byte(text), &result); err != nil {
+	// rename_symbol (non-dry-run) applies the WorkspaceEdit server-side and
+	// returns a plain-text summary, e.g.
+	//   Renamed to "RenamedPerson" across 4 location(s) in 2 file(s): a.go, b.go
+	// It is NOT JSON and NOT GCF (the byte-exact WorkspaceEdit only serializes as
+	// JSON on the dry_run path; see internal/tools/workspace.go and issue #12).
+	// Assert the summary confirms at least one renamed location.
+	if !strings.Contains(text, "Renamed to") {
 		return toolResult{tool: "rename_symbol", status: "fail",
-			detail: fmt.Sprintf("failed to unmarshal WorkspaceEdit: %s", text)}
+			detail: fmt.Sprintf("unexpected rename_symbol response (no summary): %s", text)}
 	}
-	_, hasChanges := result["changes"]
-	_, hasDocChanges := result["documentChanges"]
-	if !hasChanges && !hasDocChanges {
-		return toolResult{tool: "rename_symbol", status: "skip",
-			detail: "WorkspaceEdit has neither 'changes' nor 'documentChanges'"}
+	var renamedTo string
+	var locations int
+	if _, serr := fmt.Sscanf(text, "Renamed to %q across %d location", &renamedTo, &locations); serr != nil {
+		// Fall back to a substring check if the exact format shifts; a summary
+		// that mentions "location(s)" still proves the edit was applied.
+		if !strings.Contains(text, "location") {
+			return toolResult{tool: "rename_symbol", status: "fail",
+				detail: fmt.Sprintf("could not parse rename summary: %s", text)}
+		}
+	} else if locations < 1 {
+		return toolResult{tool: "rename_symbol", status: "fail",
+			detail: fmt.Sprintf("rename reported %d locations: %s", locations, text)}
 	}
 	return toolResult{tool: "rename_symbol", status: "pass"}
 }
@@ -1089,27 +1143,34 @@ func testGetServerCapabilities(t *testing.T, ctx context.Context, session *mcp.C
 		return toolResult{tool: "get_server_capabilities", status: "fail",
 			detail: fmt.Sprintf("failed to parse response: %v", err)}
 	}
-	var result map[string]any
-	if err := json.Unmarshal([]byte(text), &result); err != nil {
+	// get_server_capabilities emits a GCF generic OrderedMap whose "SupportedTools"
+	// key holds the tool list (encoded from the JSON supported_tools field).
+	v, err := decodeGeneric(text)
+	if err != nil {
 		return toolResult{tool: "get_server_capabilities", status: "fail",
-			detail: fmt.Sprintf("failed to unmarshal response: %s", text)}
+			detail: fmt.Sprintf("failed to decode get_server_capabilities GCF generic: %v — raw: %s", err, text)}
 	}
-	supportedTools, ok := result["supported_tools"].([]any)
+	toolsVal, ok := genericGet(v, "SupportedTools")
+	if !ok {
+		return toolResult{tool: "get_server_capabilities", status: "fail",
+			detail: "SupportedTools missing from capabilities response"}
+	}
+	supportedTools, ok := toolsVal.([]any)
 	if !ok || len(supportedTools) == 0 {
 		return toolResult{tool: "get_server_capabilities", status: "fail",
-			detail: "supported_tools missing or empty"}
+			detail: "SupportedTools missing or empty"}
 	}
 	// Verify start_lsp is always present.
 	found := false
-	for _, v := range supportedTools {
-		if s, ok := v.(string); ok && s == "start_lsp" {
+	for _, tv := range supportedTools {
+		if s, ok := tv.(string); ok && s == "start_lsp" {
 			found = true
 			break
 		}
 	}
 	if !found {
 		return toolResult{tool: "get_server_capabilities", status: "fail",
-			detail: "'start_lsp' not in supported_tools"}
+			detail: "'start_lsp' not in SupportedTools"}
 	}
 	return toolResult{tool: "get_server_capabilities", status: "pass"}
 }
@@ -1152,8 +1213,10 @@ func testWorkspaceFolders(t *testing.T, ctx context.Context, session *mcp.Client
 		return toolResult{tool: "workspace_folders", status: "fail",
 			detail: fmt.Sprintf("failed to parse add response: %v", err)}
 	}
-	var addResult map[string]any
-	if err := json.Unmarshal([]byte(text), &addResult); err != nil || addResult["added"] == nil {
+	// add_workspace_folder emits a GCF generic OrderedMap carrying an "added" key
+	// (the folder path) and a "workspace_folders" list.
+	addResult, aerr := decodeGeneric(text)
+	if added, ok := genericGet(addResult, "added"); aerr != nil || !ok || added == nil {
 		return toolResult{tool: "workspace_folders", status: "fail",
 			detail: fmt.Sprintf("add_workspace_folder: unexpected response: %s", text)}
 	}
@@ -1357,59 +1420,28 @@ func testApplyEdit(t *testing.T, ctx context.Context, session *mcp.ClientSession
 	if err != nil {
 		return toolResult{tool: "apply_edit", status: "fail", detail: err.Error()}
 	}
-	var edits []map[string]any
-	if err := json.Unmarshal([]byte(text), &edits); err != nil {
+	// format_document emits its TextEdit[] as a GCF generic tabular. Count the
+	// edits to decide whether the write path is worth exercising.
+	v, err := decodeGeneric(text)
+	if err != nil {
 		return toolResult{tool: "apply_edit", status: "fail",
-			detail: fmt.Sprintf("parse format edits: %v — raw: %s", err, text)}
+			detail: fmt.Sprintf("failed to decode format_document GCF generic: %v — raw: %s", err, text)}
 	}
-	if len(edits) == 0 {
+	if genericLen(v) == 0 {
 		return toolResult{tool: "apply_edit", status: "skip",
 			detail: "no formatting edits returned (fixture already clean — run from fresh checkout to exercise write path)"}
 	}
 
-	// Step 2: apply the edits.
-	fileURI := "file://" + lang.file
-	res, err = callTool(ctx, session, "apply_edit", map[string]any{
-		"workspace_edit": map[string]any{
-			"changes": map[string]any{fileURI: edits},
-		},
-	})
-	if err != nil {
-		return toolResult{tool: "apply_edit", status: "fail", detail: err.Error()}
-	}
-	if res.IsError {
-		errText, _ := textFromResult(res)
-		return toolResult{tool: "apply_edit", status: "fail",
-			detail: fmt.Sprintf("apply_edit returned IsError: %s", errText)}
-	}
-
-	// Step 3: re-format to verify the write actually hit disk.
-	res, err = callTool(ctx, session, "format_document", map[string]any{
-		"file_path":   lang.file,
-		"language_id": lang.id,
-	})
-	if err != nil || res.IsError {
-		// apply didn't error — treat as pass even if we can't verify
-		return toolResult{tool: "apply_edit", status: "pass"}
-	}
-	text2, _ := textFromResult(res)
-	var edits2 []map[string]any
-	if err := json.Unmarshal([]byte(text2), &edits2); err == nil && len(edits2) > 0 {
-		// Some formatters (e.g. Gleam) always return a full-file replacement
-		// TextEdit even when nothing changed. Check if the edit content matches
-		// the current file content; if so, it's a no-op and the write succeeded.
-		if len(edits2) == 1 {
-			if newText, ok := edits2[0]["newText"].(string); ok {
-				fileContent, readErr := os.ReadFile(lang.file)
-				if readErr == nil && strings.TrimSpace(newText) == strings.TrimSpace(string(fileContent)) {
-					return toolResult{tool: "apply_edit", status: "pass"}
-				}
-			}
-		}
-		return toolResult{tool: "apply_edit", status: "fail",
-			detail: fmt.Sprintf("re-format returned %d edits after apply — file write may not have persisted", len(edits2))}
-	}
-	return toolResult{tool: "apply_edit", status: "pass"}
+	// A non-empty edit set exists. Under GCF the server flattens each TextEdit's
+	// range into positional path columns (Range>Start>Line, ...) — a summary form
+	// that is deliberately NOT byte-exact and must not be reconstructed back into
+	// a WorkspaceEdit for apply_edit (see internal/tools/helpers.go:197, issue #12:
+	// reconstructing corrupts the file). Rebuilding the LSP edit from the GCF
+	// tabular here would hand-roll that unsafe round-trip, so skip the write step
+	// and record that the edit set was produced. The dedicated apply_edit unit
+	// tests cover the JSON round-trip path directly.
+	return toolResult{tool: "apply_edit", status: "skip",
+		detail: fmt.Sprintf("format produced %d edit(s) as GCF summary; write path needs byte-exact JSON edit (issue #12), not reconstructable from GCF here", genericLen(v))}
 }
 
 // testDetectLspServers tests the detect_lsp_servers tool against the language fixture.
@@ -1430,10 +1462,11 @@ func testDetectLspServers(t *testing.T, ctx context.Context, session *mcp.Client
 	if err != nil {
 		return toolResult{tool: "detect_lsp_servers", status: "fail", detail: err.Error()}
 	}
-	var result map[string]any
-	if err := json.Unmarshal([]byte(text), &result); err != nil {
+	// detect_lsp_servers emits a GCF generic OrderedMap (InstalledServers,
+	// WorkspaceDir, etc.). A successful decode confirms the response shape.
+	if _, err := decodeGeneric(text); err != nil {
 		return toolResult{tool: "detect_lsp_servers", status: "fail",
-			detail: fmt.Sprintf("failed to parse detect_lsp_servers response: %s", text)}
+			detail: fmt.Sprintf("failed to decode detect_lsp_servers GCF generic: %v — raw: %s", err, text)}
 	}
 	return toolResult{tool: "detect_lsp_servers", status: "pass"}
 }
@@ -1489,7 +1522,7 @@ func testGetSymbolSource(t *testing.T, ctx context.Context, session *mcp.ClientS
 		"file_path":   lang.file,
 		"language_id": lang.id,
 		"line":        lang.hoverLine,
-		"character":   lang.hoverColumn,
+		"column":      lang.hoverColumn,
 	})
 	if err != nil {
 		return toolResult{tool: "get_symbol_source", status: "fail", detail: err.Error()}
@@ -1503,16 +1536,22 @@ func testGetSymbolSource(t *testing.T, ctx context.Context, session *mcp.ClientS
 	if err != nil || strings.TrimSpace(text) == "" {
 		return toolResult{tool: "get_symbol_source", status: "fail", detail: "empty get_symbol_source response"}
 	}
-	var result map[string]any
-	if err := json.Unmarshal([]byte(text), &result); err != nil {
+	// get_symbol_source emits a GCF generic OrderedMap. The JSON fields
+	// symbol_name/source encode as the keys SymbolName/Source.
+	v, err := decodeGeneric(text)
+	if err != nil {
 		return toolResult{tool: "get_symbol_source", status: "fail",
-			detail: fmt.Sprintf("failed to parse get_symbol_source response: %s", text)}
+			detail: fmt.Sprintf("failed to decode get_symbol_source GCF generic: %v — raw: %s", err, text)}
 	}
-	if _, ok := result["symbol_name"]; !ok {
-		return toolResult{tool: "get_symbol_source", status: "fail", detail: "missing symbol_name in response"}
+	if name, ok := genericGet(v, "SymbolName"); !ok || name == nil {
+		return toolResult{tool: "get_symbol_source", status: "fail", detail: "missing SymbolName in response"}
 	}
-	if src, ok := result["source"].(string); !ok || strings.TrimSpace(src) == "" {
-		return toolResult{tool: "get_symbol_source", status: "fail", detail: "empty source in response"}
+	src, ok := genericGet(v, "Source")
+	if !ok {
+		return toolResult{tool: "get_symbol_source", status: "fail", detail: "missing Source in response"}
+	}
+	if s, ok := src.(string); !ok || strings.TrimSpace(s) == "" {
+		return toolResult{tool: "get_symbol_source", status: "fail", detail: "empty Source in response"}
 	}
 	return toolResult{tool: "get_symbol_source", status: "pass"}
 }
@@ -1526,8 +1565,8 @@ func testGoToSymbol(t *testing.T, ctx context.Context, session *mcp.ClientSessio
 		return toolResult{tool: "go_to_symbol", status: "skip", detail: "no workspaceSymbol configured"}
 	}
 	res, err := callTool(ctx, session, "go_to_symbol", map[string]any{
-		"query":       lang.workspaceSymbol,
-		"language_id": lang.id,
+		"symbol_path": lang.workspaceSymbol,
+		"language":    lang.id,
 	})
 	if err != nil {
 		return toolResult{tool: "go_to_symbol", status: "fail", detail: err.Error()}
@@ -1553,7 +1592,7 @@ func testRestartLspServer(t *testing.T, ctx context.Context, session *mcp.Client
 		return toolResult{tool: "restart_lsp_server", status: "skip", detail: "no hover position configured"}
 	}
 	res, err := callTool(ctx, session, "restart_lsp_server", map[string]any{
-		"language_id": lang.id,
+		"root_dir": lang.fixture,
 	})
 	if err != nil {
 		return toolResult{tool: "restart_lsp_server", status: "fail", detail: err.Error()}
@@ -1617,27 +1656,37 @@ func testSetLogLevel(t *testing.T, ctx context.Context, session *mcp.ClientSessi
 func testExecuteCommand(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
 	t.Helper()
 
-	// Query capabilities to find available commands.
-	caps, err := callTool(ctx, session, "get_server_capabilities", map[string]any{
-		"language_id": lang.id,
-	})
+	// Query capabilities to find available commands. get_server_capabilities takes
+	// no arguments (passing language_id is rejected as an unexpected property).
+	caps, err := callTool(ctx, session, "get_server_capabilities", map[string]any{})
 	if err != nil || caps.IsError {
 		return toolResult{tool: "execute_command", status: "skip", detail: "could not retrieve server capabilities"}
 	}
 	capsText, _ := textFromResult(caps)
-	if !strings.Contains(capsText, `"executeCommandProvider"`) {
+	if !strings.Contains(capsText, "executeCommandProvider") {
 		return toolResult{tool: "execute_command", status: "skip", detail: "server does not advertise executeCommandProvider"}
 	}
 
-	var capsMap map[string]any
-	if err := json.Unmarshal([]byte(capsText), &capsMap); err != nil {
-		return toolResult{tool: "execute_command", status: "skip", detail: "could not parse capabilities JSON"}
+	// get_server_capabilities emits a GCF generic OrderedMap; the LSP capabilities
+	// live under the nested "Capabilities" map, with executeCommandProvider.commands
+	// as a list. Navigate the OrderedMaps to pull the first command.
+	v, derr := decodeGeneric(capsText)
+	if derr != nil {
+		return toolResult{tool: "execute_command", status: "skip", detail: "could not decode capabilities GCF"}
 	}
-	ecp, ok := capsMap["executeCommandProvider"].(map[string]any)
+	capsInner, ok := genericGet(v, "Capabilities")
 	if !ok {
-		return toolResult{tool: "execute_command", status: "skip", detail: "executeCommandProvider is not an object"}
+		return toolResult{tool: "execute_command", status: "skip", detail: "no Capabilities section in response"}
 	}
-	cmds, ok := ecp["commands"].([]any)
+	ecpVal, ok := genericGet(capsInner, "executeCommandProvider")
+	if !ok {
+		return toolResult{tool: "execute_command", status: "skip", detail: "executeCommandProvider not present in capabilities"}
+	}
+	cmdsVal, ok := genericGet(ecpVal, "commands")
+	if !ok {
+		return toolResult{tool: "execute_command", status: "skip", detail: "executeCommandProvider has no commands list"}
+	}
+	cmds, ok := cmdsVal.([]any)
 	if !ok || len(cmds) == 0 {
 		return toolResult{tool: "execute_command", status: "skip", detail: "no commands listed in executeCommandProvider"}
 	}
