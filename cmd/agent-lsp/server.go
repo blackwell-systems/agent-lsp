@@ -195,22 +195,18 @@ func makeCallToolResult(r any) *mcp.CallToolResult {
 }
 
 // clientForFile returns the LSP client for the given file path.
-// Prefers cs.get() when initialized — cs is updated by start_lsp and always
-// reflects the most recently initialized client. Falls back to resolver.ClientForFile
-// for extension-based routing (multi-server mode after start_lsp has run).
+// Checks extension-based routing first (multi-server mode), then falls back
+// to cs.get() for the default/current client.
 func clientForFile(resolver lsp.ClientResolver, cs *clientState, filePath string) *lsp.LSPClient {
-	// cs.get() is the source of truth: start_lsp sets it via cs.set(c) after
-	// successful Initialize. In single-server mode this is the only initialized
-	// client. In multi-server mode it is set to DefaultClient() after StartAll.
-	if c := cs.get(); c != nil && c.IsInitialized() {
-		return c
-	}
-	// cs has no initialized client yet — try extension-based routing for
-	// multi-server mode where individual clients may have been started.
+	// Extension-based routing: check if a specific server handles this file type
 	if filePath != "" {
 		if c := resolver.ClientForFile(filePath); c != nil && c.IsInitialized() {
 			return c
 		}
+	}
+	// Fall back to the default/current client
+	if c := cs.get(); c != nil && c.IsInitialized() {
+		return c
 	}
 	// Return whatever cs has (may be nil or uninitialized — caller's
 	// CheckInitialized will surface the error to the user).

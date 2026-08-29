@@ -213,7 +213,7 @@ func HandleGetInfoOnLocation(ctx context.Context, client *lsp.LSPClient, args ma
 
 	languageID, _ := args["language_id"].(string)
 	if languageID == "" {
-		languageID = "plaintext"
+		languageID = client.LanguageIDForFile(filePath)
 	}
 
 	result, wErr := WithDocument[string](ctx, client, filePath, languageID, func(fileURI string) (string, error) {
@@ -244,7 +244,7 @@ func HandleGetCompletions(ctx context.Context, client *lsp.LSPClient, args map[s
 
 	languageID, _ := args["language_id"].(string)
 	if languageID == "" {
-		languageID = "plaintext"
+		languageID = client.LanguageIDForFile(filePath)
 	}
 
 	result, wErr := WithDocument[types.CompletionList](ctx, client, filePath, languageID, func(fileURI string) (types.CompletionList, error) {
@@ -276,7 +276,7 @@ func HandleGetSignatureHelp(ctx context.Context, client *lsp.LSPClient, args map
 
 	languageID, _ := args["language_id"].(string)
 	if languageID == "" {
-		languageID = "plaintext"
+		languageID = client.LanguageIDForFile(filePath)
 	}
 
 	result, wErr := WithDocument[any](ctx, client, filePath, languageID, func(fileURI string) (any, error) {
@@ -308,7 +308,7 @@ func HandleGetCodeActions(ctx context.Context, client *lsp.LSPClient, args map[s
 
 	languageID, _ := args["language_id"].(string)
 	if languageID == "" {
-		languageID = "plaintext"
+		languageID = client.LanguageIDForFile(filePath)
 	}
 
 	result, wErr := WithDocument[[]types.CodeAction](ctx, client, filePath, languageID, func(fileURI string) ([]types.CodeAction, error) {
@@ -335,7 +335,7 @@ func HandleGetDocumentSymbols(ctx context.Context, client *lsp.LSPClient, args m
 
 	languageID, _ := args["language_id"].(string)
 	if languageID == "" {
-		languageID = "plaintext"
+		languageID = client.LanguageIDForFile(filePath)
 	}
 
 	format, _ := args["format"].(string)

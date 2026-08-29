@@ -267,6 +267,35 @@ jobs:
       - name: Run Lua tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Lua$" ./test/ -timeout 10m
 
+  multi-lang-luau:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install luau-lsp
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LLSP_VERSION=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/JohnnyMorganz/luau-lsp/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          echo "Installing luau-lsp ${LLSP_VERSION}"
+          wget -q "https://github.com/JohnnyMorganz/luau-lsp/releases/download/${LLSP_VERSION}/luau-lsp-linux-x86_64.zip" -O /tmp/luau-lsp.zip
+          sudo mkdir -p /opt/luau-lsp
+          sudo unzip -o -q /tmp/luau-lsp.zip -d /opt/luau-lsp
+          sudo chmod +x /opt/luau-lsp/luau-lsp
+          sudo ln -sf /opt/luau-lsp/luau-lsp /usr/local/bin/luau-lsp
+          luau-lsp --version
+
+      - name: Run Luau tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^Luau$" ./test/ -timeout 10m
+
   # Swift via sourcekit-lsp — macOS runner required (sourcekit-lsp ships with Xcode)
   multi-lang-swift:
     runs-on: macos-latest

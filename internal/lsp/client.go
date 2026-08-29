@@ -858,6 +858,14 @@ func (c *LSPClient) IsInitialized() bool {
 	return c.initialized
 }
 
+// MarkInitializedForTest sets the initialized state for testing.
+// This allows tests to simulate an LSP handshake without spawning a process.
+func (c *LSPClient) MarkInitializedForTest() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.initialized = true
+}
+
 // isJDTLS reports whether the server binary appears to be Eclipse jdtls.
 // Checks the binary name for "jdtls" (covers /usr/local/bin/jdtls and
 // wrapper scripts named jdtls).
@@ -1421,6 +1429,13 @@ func (c *LSPClient) UnsubscribeFromDiagnostics(cb types.DiagnosticUpdateCallback
 		}
 	}
 	c.diagSubs = subs
+}
+
+// LanguageIDForFile returns the LSP language ID for a file path. It delegates to
+// the canonical LanguageIDFromPath (internal/lsp/manager.go) so there is a single
+// extension→language map for the package.
+func (c *LSPClient) LanguageIDForFile(filePath string) string {
+	return LanguageIDFromPath(filePath)
 }
 
 // languageIDFromURI infers a language ID from a file:// URI by extension.

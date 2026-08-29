@@ -79,7 +79,7 @@ func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr 
 
 	// Build args for HandleSimulateEditAtomic.
 	workspaceRoot := client.RootDir()
-	language := lsp.LanguageIDFromPath(filePath)
+	language := client.LanguageIDForFile(filePath)
 
 	simArgs := map[string]any{
 		"workspace_root": workspaceRoot,
