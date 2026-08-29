@@ -3,6 +3,7 @@ package main_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -55,6 +56,48 @@ func genericSliceLen(v any, key string) int {
 		return len(s)
 	}
 	return 0
+}
+
+// isGCF reports whether a tool response is GCF-encoded (vs JSON). The standalone
+// gopls tests (change-impact, cross-repo) run in either format depending on
+// AGENT_LSP_OUTPUT_FORMAT: the CI jobs force "json", the default is "gcf". These
+// tests must handle both.
+func isGCF(text string) bool {
+	return strings.HasPrefix(strings.TrimSpace(text), "GCF ")
+}
+
+// referenceCount returns the number of reference locations in a find_references
+// response, handling both GCF (graph symbols) and JSON (array of locations or a
+// {"references": [...]} object).
+func referenceCount(text string) int {
+	if isGCF(text) {
+		p, err := decodeGraph(text)
+		if err != nil {
+			return 0
+		}
+		return graphSymbolCount(p)
+	}
+	var arr []any
+	if json.Unmarshal([]byte(text), &arr) == nil {
+		return len(arr)
+	}
+	var obj struct {
+		References []any `json:"references"`
+	}
+	if json.Unmarshal([]byte(text), &obj) == nil {
+		return len(obj.References)
+	}
+	return 0
+}
+
+// containsName reports whether names contains want.
+func containsName(names []string, want string) bool {
+	for _, n := range names {
+		if n == want {
+			return true
+		}
+	}
+	return false
 }
 
 // graphSymbolCount returns len(p.Symbols) for a decoded graph Payload. Graph
@@ -1831,12 +1874,14 @@ func TestGetChangeImpact(t *testing.T) {
 			t.Logf("  probe #%d: IsError: %.200s", attempt, text)
 		} else {
 			text, _ := textFromResult(probeRes)
-			// find_references emits a GCF graph. Readiness = gopls has indexed
-			// usages beyond the definition (>= 2 reference locations). The graph
-			// QualifiedName carries the directory, not the filename, so the
-			// cross-file hit cannot be matched by a filename string.
-			if p, derr := decodeGraph(text); derr == nil && graphSymbolCount(p) >= 2 {
-				t.Logf("  probe #%d: gopls ready (%d references indexed)", attempt, graphSymbolCount(p))
+			// Readiness = gopls has indexed usages beyond the definition (>= 2
+			// reference locations). The response is GCF or JSON depending on
+			// AGENT_LSP_OUTPUT_FORMAT (the CI jobs force json; the default is
+			// gcf), so count references in whichever format came back. GCF graph
+			// QualifiedName carries the directory not the filename, so a cross-file
+			// hit cannot be matched by a filename string; the count is the signal.
+			if n := referenceCount(text); n >= 2 {
+				t.Logf("  probe #%d: gopls ready (%d references indexed)", attempt, n)
 				ready = true
 				break
 			}
@@ -1871,18 +1916,31 @@ func TestGetChangeImpact(t *testing.T) {
 		return
 	}
 
-	// get_change_impact emits a GCF graph payload: changed symbols at distance 0,
-	// callers and test functions at distance 1, with caller -> changed edges.
-	p, err := decodeGraph(text)
-	if err != nil {
-		t.Errorf("get_change_impact: failed to decode GCF graph: %v — raw: %s", err, text)
-		return
+	// blast_radius returns a graph payload in GCF mode and a
+	// {"changed_symbols": [...]} object in JSON mode (AGENT_LSP_OUTPUT_FORMAT).
+	// Assert at least one changed symbol in whichever format came back.
+	if isGCF(text) {
+		p, err := decodeGraph(text)
+		if err != nil {
+			t.Errorf("blast_radius: failed to decode GCF graph: %v — raw: %s", err, text)
+			return
+		}
+		if graphSymbolCount(p) == 0 {
+			t.Errorf("blast_radius: expected at least one symbol in the impact graph")
+		}
+		t.Logf("[TestGetChangeImpact] symbols=%d edges=%d", graphSymbolCount(p), graphEdgeCount(p))
+	} else {
+		var result map[string]any
+		if err := json.Unmarshal([]byte(text), &result); err != nil {
+			t.Errorf("blast_radius: failed to parse JSON response: %s", text)
+			return
+		}
+		changed, _ := result["changed_symbols"].([]any)
+		if len(changed) == 0 {
+			t.Errorf("blast_radius: expected changed_symbols to be non-empty")
+		}
+		t.Logf("[TestGetChangeImpact] changed_symbols=%d", len(changed))
 	}
-	if graphSymbolCount(p) == 0 {
-		t.Errorf("get_change_impact: expected at least one symbol in the impact graph")
-	}
-
-	t.Logf("[TestGetChangeImpact] symbols=%d edges=%d", graphSymbolCount(p), graphEdgeCount(p))
 }
 
 // TestGetCrossRepoReferences tests the get_cross_repo_references tool end-to-end
@@ -1968,29 +2026,33 @@ func TestGetCrossRepoReferences(t *testing.T) {
 		return
 	}
 
-	// get_cross_repo_references emits a GCF graph payload: the queried symbol at
-	// distance 0, external references at distance 1 with reference edges.
-	p, err := decodeGraph(text)
-	if err != nil {
-		t.Errorf("get_cross_repo_references: failed to decode GCF graph: %v — raw: %s", err, text)
-		return
-	}
-	if graphSymbolCount(p) == 0 {
-		t.Errorf("get_cross_repo_references: expected the queried symbol in the graph")
-	}
-	names := graphSymbolNames(p)
-	found := false
-	for _, n := range names {
-		if n == "Person" {
-			found = true
-			break
+	// get_cross_repo_references returns a graph payload in GCF mode (queried
+	// symbol at distance 0, references at distance 1) and a
+	// {"symbol": ..., "references": [...]} object in JSON mode. Assert the queried
+	// symbol name ("Person") is present in whichever format came back. This also
+	// guards the symbolNameFromHover fix (the name used to resolve to "```go").
+	if isGCF(text) {
+		p, err := decodeGraph(text)
+		if err != nil {
+			t.Errorf("get_cross_repo_references: failed to decode GCF graph: %v — raw: %s", err, text)
+			return
 		}
+		names := graphSymbolNames(p)
+		if !containsName(names, "Person") {
+			t.Errorf("get_cross_repo_references: expected %q among graph symbols, got %v", "Person", names)
+		}
+		t.Logf("[TestGetCrossRepoReferences] symbols=%d edges=%d names=%v", graphSymbolCount(p), graphEdgeCount(p), names)
+	} else {
+		var result map[string]any
+		if err := json.Unmarshal([]byte(text), &result); err != nil {
+			t.Errorf("get_cross_repo_references: failed to parse JSON response: %s", text)
+			return
+		}
+		if sym, _ := result["symbol"].(string); sym != "Person" {
+			t.Errorf("get_cross_repo_references: expected symbol %q, got %q", "Person", sym)
+		}
+		t.Logf("[TestGetCrossRepoReferences] symbol=%v summary=%v", result["symbol"], result["summary"])
 	}
-	if !found {
-		t.Errorf("get_cross_repo_references: expected %q among graph symbols, got %v", "Person", names)
-	}
-
-	t.Logf("[TestGetCrossRepoReferences] symbols=%d edges=%d names=%v", graphSymbolCount(p), graphEdgeCount(p), names)
 }
 
 // statusIcon returns a visual icon for a tool result status.
