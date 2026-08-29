@@ -18,6 +18,7 @@
 | C# | `csharp-ls` | `dotnet tool install -g csharp-ls` |
 | Kotlin | `kotlin-language-server` | [GitHub releases](https://github.com/fwcd/kotlin-language-server/releases) |
 | Lua | `lua-language-server` | [GitHub releases](https://github.com/LuaLS/lua-language-server/releases) |
+| Luau | `luau-lsp` | [GitHub releases](https://github.com/JohnnyMorganz/luau-lsp/releases) |
 | Swift | `sourcekit-lsp` | Ships with Xcode / Swift toolchain |
 | Zig | `zls` | [GitHub releases](https://github.com/zigtools/zls/releases) (match Zig version) |
 | CSS | `vscode-css-language-server` | `npm i -g vscode-langservers-extracted` |
@@ -37,7 +38,7 @@
 
 ## CI tool coverage matrix
 
-Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verified for all 30 languages. Tier 2: 34 additional tools.
+Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verified for all 31 languages. Tier 2: 34 additional tools.
 
 | Language | Tier 1 | symbols | definition | references | completions | workspace | format | declaration | type_hierarchy | hover | call_hier | sem_tok | sig_help |
 |----------|--------|---------|------------|------------|-------------|-----------|--------|-------------|----------------|-------|-----------|---------|----------|
@@ -57,6 +58,7 @@ Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verif
 | C# | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
 | Kotlin | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
 | Lua | pass | pass | — | — | pass | pass | pass | — | — | pass | pass | pass | pass |
+| Luau | pass | pass | pass | pass | pass | pass | — | — | — | pass | — | pass | — |
 | Swift | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
 | Zig | pass | pass | pass | pass | pass | fail | pass | — | — | pass | — | pass | pass |
 | CSS | pass | pass | — | — | pass | pass | pass | — | — | pass | — | — | — |
@@ -76,7 +78,7 @@ See [ci-notes.md](./ci-notes.md) for per-language CI quirks.
 
 ---
 
-## Current (30 languages, CI-tested)
+## Current (31 languages, CI-tested)
 
 **stable** = all Tier 1 tools pass CI. **experimental** = server works but CI results are informational.
 
@@ -98,6 +100,7 @@ See [ci-notes.md](./ci-notes.md) for per-language CI quirks.
 | C# | csharp-ls | stable |
 | Kotlin | kotlin-language-server | stable |
 | Lua | lua-language-server | stable |
+| Luau | luau-lsp | stable |
 | Swift | sourcekit-lsp | stable (macos-latest runner) |
 | Zig | zls | stable |
 | CSS | vscode-css-language-server | stable |
@@ -125,6 +128,7 @@ See [ci-notes.md](./ci-notes.md) for per-language CI quirks.
 | `multi-lang-zig` | Zig | ubuntu-latest |
 | `multi-lang-terraform` | Terraform | ubuntu-latest |
 | `multi-lang-lua` | Lua | ubuntu-latest |
+| `multi-lang-luau` | Luau | ubuntu-latest |
 | `multi-lang-swift` | Swift | macos-latest |
 | `multi-lang-scala` | Scala | ubuntu-latest (continue-on-error) |
 | `multi-lang-gleam` | Gleam | ubuntu-latest |
@@ -205,8 +209,8 @@ Each new language needs three things:
 
 | Tier | Languages | Count |
 |---|---|---|
-| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Swift, Zig, CSS, HTML, Terraform, Scala, Gleam, Elixir, Prisma, SQL, Clojure, Nix, Dart, MongoDB | **30** |
+| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Luau, Swift, Zig, CSS, HTML, Terraform, Scala, Gleam, Elixir, Prisma, SQL, Clojure, Nix, Dart, MongoDB | **31** |
 | Tier 3 candidates | Bash | 1 |
-| **Potential total** | | **31** |
+| **Potential total** | | **32** |
 
-The 30-language set covers systems, web, JVM, scripting, infrastructure, config, functional, schema, query, document-database, and Nix/functional-package-manager domains.
+The 31-language set covers systems, web, JVM, scripting, infrastructure, config, functional, schema, query, document-database, and Nix/functional-package-manager domains.
