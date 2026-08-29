@@ -87,3 +87,5 @@
   - IMPL doc: docs/IMPL/complete/IMPL-gcf-tabular-encoding.yaml
 - **gcf-graph-encoding**: completed 2026-06-11, 2 waves, 5 agents
   - IMPL doc: docs/IMPL/complete/IMPL-gcf-graph-encoding.yaml
+- **multilang-tier2-verification**: completed 2026-08-29, 4 waves, 5 agents
+  - IMPL doc: docs/IMPL/complete/IMPL-multilang-tier2-verification.yaml
