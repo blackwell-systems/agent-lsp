@@ -606,21 +606,11 @@ quality_gates:
         - type: custom
           command: GOWORK=off go test -c -o /dev/null ./test/
           required: true
-scaffolds:
-    - file_path: test/gcf_decode_test.go
-      contents: |
-        Package main_test. New file that will hold the shared GCF-decode helpers
-        consumed by test/multi_lang_test.go. Wave 1 (Agent A) creates the full
-        implementation; it is listed as a scaffold so the file exists before Wave 2
-        (Agent B) rewires the ~18 Tier-2 test functions to call these helpers.
-        Must export (test-package-internal, unexported is fine since same package):
-          - decodeGraph(text string) (*gcfgo.Payload, error)
-          - decodeGeneric(text string) (any, error)
-          - graphSymbolNames(p *gcfgo.Payload) []string
-          - graphEdgeCount(p *gcfgo.Payload) int
-        Import: gcfgo "github.com/blackwell-systems/gcf-go"
-      import_path: github.com/blackwell-systems/gcf-go
-      status: pending
+scaffolds: []
+# NOTE: test/gcf_decode_test.go is created in full by Wave 1 (solo Agent A, action:new).
+# It was originally double-modeled as a scaffold, but sequential waves already guarantee
+# the file exists and is committed before Wave 2 (Agent B) consumes it, so a separate
+# scaffold step is redundant. The helper API is fully specified in interface_contracts.
 pre_mortem:
     overall_risk: medium
     rows:
