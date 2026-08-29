@@ -779,12 +779,49 @@ known_issues:
             writeRaw returns a clean "LSP process has exited". Unit-tested
             (TestWriteRawAfterProcessExit). This fixes the dart/nil close_document /
             did_change_watched_files IsError observed in CI.
-        FOLLOW-UP (separate, not blocking): the third-party dart (dart language-server)
-        and nil (nix) servers self-exit mid-session in CI; root cause needs local
-        reproduction with those SDKs. agent-lsp now degrades gracefully (clean error +
-        skip). Also still open: the fixture-mutation test-isolation defect (rename/
-        apply_edit rewrite fixtures on disk) and the two standalone tests
-        TestGetChangeImpact/TestGetCrossRepoReferences that still json.Unmarshal GCF.
+        The follow-ups noted here were all subsequently addressed: see the
+        "Post-merge follow-ups resolved" entry below.
+    - title: "Post-merge follow-ups resolved"
+      status: resolved
+      description: |
+        All follow-ups tracked during this IMPL were resolved directly on main
+        (this is a solo project; no PRs).
+
+        1. Fixture-mutation test isolation (commit 2f5ac37): the Tier-2 suite applied
+           real edits to fixtures on disk (rename_symbol renames symbols across files;
+           apply_edit / format_document rewrite files), leaving the tree dirty and
+           making repeat runs non-idempotent. runLanguageTest now snapshots the fixture
+           dir and restores mutated files via t.Cleanup. Verified idempotent (a Go+Luau
+           run leaves fixtures clean with no manual git checkout).
+
+        2. Standalone GCF tests (commits 2f5ac37 then 0cfff25): TestGetChangeImpact and
+           TestGetCrossRepoReferences parsed responses with json.Unmarshal. They also
+           had a stale tool name (get_change_impact; the handler is registered as
+           blast_radius) and a warmup probe that matched a filename string GCF does not
+           carry. Rewired to be FORMAT-AGNOSTIC: the change-impact-test and
+           cross-repo-references-test CI jobs run with AGENT_LSP_OUTPUT_FORMAT=json
+           (JSON output) while the default is gcf, so the tests parse whichever format
+           the response actually carries (GCF graph when it starts with the "GCF "
+           header, JSON otherwise). Verified locally in BOTH modes; CI green (23/23).
+           NOTE for a future cleanup: those two CI jobs are the only ones forcing json;
+           aligning them to the gcf default (or adding a gcf variant) would test the
+           format users actually get.
+
+        3. get_cross_repo_references symbol name (commit 075cd77): the handler derived
+           the symbol name from the first token of the LSP hover text, which is a
+           markdown code fence ("```go") for gopls. Replaced with symbolNameFromHover
+           (skips fence lines and declaration keywords). Format-independent (fixed in
+           the handler); the standalone test now asserts the name resolves to "Person".
+
+        4. dart/nil mid-session self-exit (diagnosed; not an agent-lsp bug): reproduced
+           locally with dart 3.13.2. The dart language-server exits CLEANLY (exit code 0,
+           empty stderr, ~38s uptime) on its own, an intrinsic lifecycle/idle shutdown,
+           not induced by agent-lsp. It is already handled gracefully by the Wave 5
+           dead-connection fix (clean "LSP process has exited" -> skip; restart_lsp_server
+           revives it). A speculative workspace/didChangeWorkspaceFolders capability guard
+           was tried and REVERTED (commit 4160eff): it did not stop the dart exit and
+           regressed Luau (whose server leniently accepted the notification, so the
+           baseline expected pass). No agent-lsp change is warranted for the self-exit.
     - title: Repurpose open PR
       description: |
         Open PR #22 (branch fix/luau-tier2-and-harness) contains commit e163b33, a
