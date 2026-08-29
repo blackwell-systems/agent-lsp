@@ -607,6 +607,19 @@ quality_gates:
         - type: custom
           command: GOWORK=off go test -c -o /dev/null ./test/
           required: true
+completion_reports:
+    A:
+        status: complete
+        branch: fix/luau-tier2-and-harness
+        commit: 325a13f
+        files_changed:
+            - test/gcf_decode_test.go
+        files_created:
+            - test/gcf_decode_test.go
+        tests_added:
+            - TestGcfDecodeHelpers
+        verification: PASS
+        notes: Shared GCF-decode helpers (decodeGraph, decodeGeneric, graphSymbolNames, graphEdgeCount) in package main_test for Wave 2 to consume. Wrap only gcf-go exported decoders Decode/DecodeGeneric; no hand-rolled parsing. gcfgo.Encode confirmed to return a single string (no error). Self-test round-trips a 2-symbol/1-edge payload; edge endpoints both present as symbols so edge survives decode. decodeGeneric is intentionally unused in this file (Wave 2 generic tool tests will call it); package-level func so no unused-symbol vet error. Did not touch test/multi_lang_test.go (Agent B).
 pre_mortem:
     overall_risk: medium
     rows:
@@ -760,5 +773,5 @@ critic_report:
     summary: 'All five agent briefs verified against the real codebase on branch fix/luau-tier2-and-harness. The server encode contract is accurate: internal/tools/helpers.go EncodeResult uses gcf.EncodeGraph for *gcfgo.Payload and gcf.Encode (tabular) otherwise; EncodeResultJSON (helpers.go:197) always emits JSON for WorkspaceEdit. The decodeGraph=gcfgo.Decode / decodeGeneric=gcfgo.DecodeGeneric inverse mapping matches gcf-go v1.7.1: Decode returns (*Payload,error), DecodeGeneric returns (any,error), DecodeGenericFull returns (GenericSet,string,error); Payload.Symbols/Edges and Symbol.QualifiedName exist, so Agent A''s helpers and round-trip self-test are achievable (note gcfgo.Encode returns string only, no error). All 3 arg-schema fixes correct: GetSymbolSourceArgs has Column(json:column) not character; GoToSymbolArgs has SymbolPath(symbol_path)/Language(language), no query/language_id; RestartLspArgs has only RootDir(root_dir). get_symbol_source confirmed to encode via tabular GCF (EncodeResult on a non-Payload struct), corroborating its decodeGeneric classification. All cited anchors exist and quoted blocks match verbatim; Agent B line numbers drift ~5 lines but blocks are exact. Docs anchors (README 18/83/319/423, server.go:326 instructions, server.json:4, bucket:3, FEATURES 231/299/475/510/552, language-support 40/79/120/208/212, tools.md:3000) all verified, with 30-minutes/read-only-tool/25-of-30 exclusions correctly enumerated. Both new files absent (correct for action:new); multi_lang_test.go owned by B(w2) and C(w3) in different waves (I1 satisfied); test package compiles clean at baseline. Only advisory warnings remain. Wave execution may proceed.'
     reviewed_at: "2026-08-29T18:42:31Z"
     issue_count: 4
-state: "REVIEWED"
+state: REVIEWED
 injection_method: hook

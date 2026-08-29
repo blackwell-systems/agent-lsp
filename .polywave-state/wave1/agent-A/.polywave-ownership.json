@@ -1,12 +1,9 @@
 {
   "agent": "A",
   "wave": 1,
-  "impl_doc": "/Users/dayna.blackwell/code/agent-lsp/docs/IMPL/IMPL-gcf-graph-encoding.yaml",
+  "impl_doc": "/Users/dayna/code/agent-lsp/docs/IMPL/IMPL-multilang-tier2-verification.yaml",
   "owned_files": [
-    "internal/tools/helpers_test.go",
-    "internal/encoding/gcf/graph.go",
-    "internal/encoding/gcf/graph_test.go",
-    "internal/tools/helpers.go"
+    "test/gcf_decode_test.go"
   ],
   "repo_root": "."
 }

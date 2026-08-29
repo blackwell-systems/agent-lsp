@@ -1,272 +1,151 @@
 ---
-polywave_name: '[polywave:wave1:agent-A] ## Type Mapping Layer and EncodeResult Integration'
+polywave_name: '[polywave:wave1:agent-A] Create test/gcf_decode_test.go (package main_test) with the shared GCF-decode'
 ---
 
 # Agent A Brief - Wave 1
 
-**IMPL Doc:** /Users/dayna.blackwell/code/agent-lsp/docs/IMPL/IMPL-gcf-graph-encoding.yaml
+**IMPL Doc:** /Users/dayna/code/agent-lsp/docs/IMPL/IMPL-multilang-tier2-verification.yaml
 
 ## Files Owned
 
-- `internal/encoding/gcf/graph.go`
-- `internal/encoding/gcf/graph_test.go`
-- `internal/tools/helpers.go`
-- `internal/tools/helpers_test.go`
+- `test/gcf_decode_test.go`
 
 
 ## Task
 
-## Type Mapping Layer and EncodeResult Integration
+Create test/gcf_decode_test.go (package main_test) with the shared GCF-decode
+helpers that Wave 2 will consume. This is a NEW file with no dependencies.
 
-### What to implement
+Implement exactly these unexported helpers (they live in package main_test
+alongside multi_lang_test.go, so lowercase names are fine and shared):
 
-**File 1: internal/encoding/gcf/graph.go (NEW)**
+  import gcfgo "github.com/blackwell-systems/gcf-go"
 
-Create the graph encoding bridge between agent-lsp's LSP types and gcf-go's
-Payload/Symbol/Edge types. This file provides all shared helpers that Wave 2
-tool handlers will use.
+  func decodeGraph(text string) (*gcfgo.Payload, error)
+    // return gcfgo.Decode(text)
 
-Functions to implement:
+  func decodeGeneric(text string) (any, error)
+    // return gcfgo.DecodeGeneric(text)
 
-1. `MapSymbolKind(kind types.SymbolKind) string`
-   Map LSP SymbolKind integers to gcf-go kind strings. Mapping:
-   - 1 (File) -> "file"
-   - 2 (Module) -> "package"
-   - 3 (Namespace) -> "package"
-   - 4 (Package) -> "package"
-   - 5 (Class) -> "class"
-   - 6 (Method) -> "method"
-   - 7 (Property) -> "field"
-   - 8 (Field) -> "field"
-   - 9 (Constructor) -> "method"
-   - 10 (Enum) -> "type"
-   - 11 (Interface) -> "interface"
-   - 12 (Function) -> "function"
-   - 13 (Variable) -> "var"
-   - 14 (Constant) -> "const"
-   - 15 (String) -> "const"
-   - 16 (Number) -> "const"
-   - 17 (Boolean) -> "const"
-   - 18 (Array) -> "type"
-   - 19 (Object) -> "type"
-   - 20 (Key) -> "field"
-   - 21 (Null) -> "const"
-   - 22 (EnumMember) -> "const"
-   - 23 (Struct) -> "type"
-   - 24 (Event) -> "function"
-   - 25 (Operator) -> "function"
-   - 26 (TypeParameter) -> "type"
-   - default -> "var"
+  func graphSymbolNames(p *gcfgo.Payload) []string
+    // For each s in p.Symbols, take the segment after the last '.' in
+    // s.QualifiedName (or the whole string if no '.'), return the slice.
+    // Handle nil p -> empty slice.
 
-2. `QualifiedName(filePath, symbolName string) string`
-   Derive qualified name from file path and symbol name.
-   - Extract the directory-based package path from filePath
-   - Use the two last path segments for brevity (e.g., "tools/change_impact")
-   - Format: "pkg/path.SymbolName"
-   - Handle empty filePath gracefully (return just symbolName)
+  func graphEdgeCount(p *gcfgo.Payload) int
+    // return len(p.Edges), 0 for nil p.
 
-3. `BuildGraphPayload(tool string, symbols []gcfgo.Symbol, edges []gcfgo.Edge) *gcfgo.Payload`
-   Convenience constructor. Returns:
-   ```go
-   &gcfgo.Payload{
-       Tool:    tool,
-       Symbols: symbols,
-       Edges:   edges,
-   }
-   ```
+The server-side encode contract these invert lives in
+internal/tools/helpers.go (EncodeResult) and internal/encoding/gcf/ (Encode,
+EncodeGraph). decodeGraph is the inverse of the *gcfgo.Payload branch;
+decodeGeneric is the inverse of the tabular branch. Do NOT parse GCF text by
+hand; use only the gcf-go exported decoders.
 
-4. `EncodeGraph(p *gcfgo.Payload) (string, error)`
-   Thin wrapper around `gcfgo.Encode(p)`. Returns error if p is nil.
-   ```go
-   if p == nil {
-       return "", nil
-   }
-   return gcfgo.Encode(p), nil
-   ```
-
-Import: `gcfgo "github.com/blackwell-systems/gcf-go"` and
-`"github.com/blackwell-systems/agent-lsp/internal/types"`.
-
-**File 2: internal/encoding/gcf/graph_test.go (NEW)**
-
-Test all four functions:
-- TestMapSymbolKind: verify Function(12)->\"function\", Method(6)->\"method\",
-  Class(5)->\"class\", Interface(11)->\"interface\", unknown(99)->\"var\"
-- TestQualifiedName: verify path extraction, empty path handling
-- TestBuildGraphPayload: verify all fields populated, nil symbols/edges -> empty slices
-- TestEncodeGraph: verify non-empty output for valid payload, nil returns empty string
-
-**File 3: internal/tools/helpers.go (MODIFY)**
-
-Update EncodeResult to detect *gcfgo.Payload and use graph encoding.
-
-Add import: `gcfgo "github.com/blackwell-systems/gcf-go"`
-
-In the EncodeResult function, modify the "gcf" case. Find this exact text:
-
-```go
-case "gcf":
-	encoded, err := gcf.Encode(data)
-	if err != nil {
-		// Fall back to JSON on GCF encoding failure
-		raw, _ := json.Marshal(data)
-		return types.TextResult(string(raw)), nil
-	}
-	return types.TextResult(encoded), nil
-```
-
-Replace with:
-
-```go
-case "gcf":
-	// Graph-profile: if data is already a *gcf.Payload, use graph encoding
-	if p, ok := data.(*gcfgo.Payload); ok {
-		encoded, err := gcf.EncodeGraph(p)
-		if err != nil {
-			raw, _ := json.Marshal(data)
-			return types.TextResult(string(raw)), nil
-		}
-		return types.TextResult(encoded), nil
-	}
-	// Tabular fallback for non-Payload data
-	encoded, err := gcf.Encode(data)
-	if err != nil {
-		raw, _ := json.Marshal(data)
-		return types.TextResult(string(raw)), nil
-	}
-	return types.TextResult(encoded), nil
-```
-
-**File 4: internal/tools/helpers_test.go (MODIFY)**
-
-Add test for the new Payload path in EncodeResult:
-
-```go
-func TestEncodeResult_GCF_GraphPayload(t *testing.T) {
-    ctx := ContextWithOutputFormat(context.Background(), "gcf")
-    p := &gcfgo.Payload{
-        Tool: "test_tool",
-        Symbols: []gcfgo.Symbol{
-            {QualifiedName: "pkg.Func", Kind: "function", Score: 1.0, Provenance: "lsp_resolved", Distance: 0},
-        },
-        Edges: []gcfgo.Edge{
-            {Source: "pkg.Func", Target: "pkg.Caller", EdgeType: "called_by"},
-        },
-    }
-    result, err := EncodeResult(ctx, p)
-    // verify no error, non-empty text, contains "pkg.Func"
-}
-```
-
-Add import: `gcfgo "github.com/blackwell-systems/gcf-go"` to the test file.
-
-### Interfaces
-
-- `EncodeGraph(p *gcfgo.Payload) (string, error)` in internal/encoding/gcf/graph.go
-- `MapSymbolKind(kind types.SymbolKind) string` in internal/encoding/gcf/graph.go
-- `QualifiedName(filePath, symbolName string) string` in internal/encoding/gcf/graph.go
-- `BuildGraphPayload(tool string, symbols []gcfgo.Symbol, edges []gcfgo.Edge) *gcfgo.Payload` in internal/encoding/gcf/graph.go
-
-### Tests
-
-- internal/encoding/gcf/graph_test.go: 4+ test functions covering all helpers
-- internal/tools/helpers_test.go: 1 new test for Payload-aware EncodeResult
-
-### Verification gate
-
-```bash
-GOWORK=off go build ./internal/encoding/gcf/... && \
-GOWORK=off go vet ./internal/encoding/gcf/... && \
-GOWORK=off go test ./internal/encoding/gcf/... && \
-GOWORK=off go test ./internal/tools/ -run TestEncodeResult
-```
-
-Postconditions:
-```bash
-# (a) EncodeGraph function exists
-grep -c "func EncodeGraph" internal/encoding/gcf/graph.go
-# expected: 1
-# (b) MapSymbolKind function exists
-grep -c "func MapSymbolKind" internal/encoding/gcf/graph.go
-# expected: 1
-# (c) EncodeResult handles *gcfgo.Payload
-grep -c "gcfgo.Payload" internal/tools/helpers.go
-# expected: >= 1
-```
+Add a small self-test in the same file, e.g. TestGcfDecodeHelpers, that
+round-trips a tiny payload: build a *gcfgo.Payload with one Symbol
+(QualifiedName "pkg/foo.Person", Kind "type") and one Edge, encode it via
+gcfgo.Encode, decode via decodeGraph, and assert graphSymbolNames contains
+"Person" and graphEdgeCount==1. This proves the helper works without needing a
+language server installed.
 
 ### Constraints
+- Do NOT modify test/multi_lang_test.go (owned by Agent B in Wave 2).
+- Do NOT hand-roll GCF parsing; use gcfgo.Decode / gcfgo.DecodeGeneric only.
+- Do NOT modify files not in your ownership list.
 
-- Do NOT modify internal/encoding/gcf/encode.go. The existing Encode()
-  function for tabular encoding must remain unchanged.
-- Do NOT modify any tool handler files (change_impact.go, etc.). Those
-  are owned by Wave 2 agents.
-- Do NOT add any CLI registration or server.go changes.
+### Verification gate
+- GOWORK=off go build ./...
+- GOWORK=off go vet ./test/...
+- gofmt -l test/gcf_decode_test.go   # expect empty output
+- GOWORK=off go test -run TestGcfDecodeHelpers ./test/   # must PASS (no server needed)
+- Postcondition: grep -c "func decodeGraph\|func decodeGeneric\|func graphSymbolNames\|func graphEdgeCount" test/gcf_decode_test.go  # expect 4
 
 
 
 ## Interface Contracts
 
-### EncodeGraphResult
+### decodeGraph
 
-Builds a gcf-go Payload from tool-specific symbol/edge data, then encodes
-it using gcf.Encode. Called by EncodeResult when data is *gcf.Payload.
-
-
-```
-// In internal/encoding/gcf/graph.go
-func EncodeGraph(p *gcfgo.Payload) (string, error)
-
-```
-
-### EncodeResult format awareness
-
-EncodeResult gains a type switch: if data is *gcf.Payload and format is
-"gcf", call gcf.EncodeGraph(). Otherwise fall through to existing paths.
+Decode a GCF graph-profile tool response into a *gcfgo.Payload. This is the true
+inverse of the server's EncodeResult path for *gcfgo.Payload data
+(internal/tools/helpers.go EncodeResult -> gcf.EncodeGraph -> gcfgo.Encode). Used by
+graph-shaped tools: list_symbols, find_symbol, go_to_definition, find_references,
+go_to_declaration, find_callers, go_to_symbol, type_hierarchy.
 
 
 ```
-// In internal/tools/helpers.go, updated EncodeResult:
-func EncodeResult(ctx context.Context, data any) (types.ToolResult, error)
-// When format == "gcf":
-//   if p, ok := data.(*gcfgo.Payload); ok { return gcf.EncodeGraph(p) }
-//   else { return gcf.Encode(data) }  // existing tabular fallback
+// decodeGraph decodes a GCF graph-profile response (as produced by
+// gcf.EncodeGraph on the server) into a Payload. Returns an error if the
+// text is not valid GCF graph format.
+func decodeGraph(text string) (*gcfgo.Payload, error)
+// Implementation: return gcfgo.Decode(text)
 
 ```
 
-### MapSymbolKind
+### decodeGeneric
 
-Maps LSP SymbolKind int to gcf-go kind string using KindAbbrev-compatible
-names (function, method, type, interface, class, field, var, const, etc.).
-
-
-```
-// In internal/encoding/gcf/graph.go
-func MapSymbolKind(kind types.SymbolKind) string
-
-```
-
-### QualifiedName
-
-Derives a qualified name from a file path and symbol name.
-Format: "pkg/path.SymbolName" (Go convention).
+Decode a GCF generic/tabular-profile tool response. Inverse of the server's
+gcf.Encode path (EncodeGenericChecked). Used by generic-shaped tools:
+get_completions, get_document_highlights, get_inlay_hints, get_semantic_tokens,
+get_server_capabilities, workspace folders, detect_lsp_servers, apply_edit,
+run_build, run_tests, get_tests_for_file, get_symbol_source.
 
 
 ```
-// In internal/encoding/gcf/graph.go
-func QualifiedName(filePath, symbolName string) string
+// decodeGeneric decodes a GCF generic-profile response into a Go value
+// (typically a []any of maps or a map[string]any). Returns an error if the
+// text is not valid GCF generic format.
+func decodeGeneric(text string) (any, error)
+// Implementation: return gcfgo.DecodeGeneric(text)
+// If the caller needs the raw remainder / ordered form, DecodeGenericFull is
+// available: func DecodeGenericFull(text string) (GenericSet, string, error)
 
 ```
 
-### BuildGraphPayload
+### graphSymbolNames
 
-Convenience constructor that creates a *gcf.Payload with tool name,
-symbols, and edges populated. Used by each tool handler to build
-the Payload before passing to EncodeResult.
+Extract the list of symbol names (unqualified, last dot segment of QualifiedName)
+from a decoded graph Payload, so tests can assert "symbol Person present" without
+each test reimplementing traversal.
 
 
 ```
-// In internal/encoding/gcf/graph.go
-func BuildGraphPayload(tool string, symbols []gcfgo.Symbol, edges []gcfgo.Edge) *gcfgo.Payload
+// graphSymbolNames returns the trailing name segment of every symbol's
+// QualifiedName in the payload (e.g. "tools/foo.Person" -> "Person").
+func graphSymbolNames(p *gcfgo.Payload) []string
+
+```
+
+### graphEdgeCount
+
+Return len(p.Edges) for a decoded graph Payload (used by find_references /
+find_callers style tests that assert a minimum count).
+
+
+```
+func graphEdgeCount(p *gcfgo.Payload) int
+
+```
+
+### Tier2Baseline
+
+Per-language expected-status map for Tier-2 tools. Models each tool as one of
+three expected statuses: "pass", "allowed-skip", "allowed-fail". TestMultiLanguage
+HARD-FAILS when an actual result is worse than its baseline entry (a "pass" that
+regressed to skip/fail, or an "allowed-skip" that regressed to fail). Actual
+results BETTER than baseline are fine (never fail). CRITICAL: the baseline MUST be
+DERIVED FROM REAL POST-PARSER-FIX RESULTS produced by Wave 2, not from the stale
+docs matrix, and MUST preserve legitimate per-language skips/gaps (see constraints).
+
+
+```
+// expectedTier2Status is "pass", "allowed-skip", or "allowed-fail".
+// tier2Baseline maps language name -> tool name -> expectedTier2Status.
+// A tool absent from a language's map defaults to "pass" (strict).
+var tier2Baseline map[string]map[string]string
+// assertTier2Baseline fails the subtest when any actual result is strictly
+// worse than its baseline entry. severity order: pass > skip > fail.
+func assertTier2Baseline(t *testing.T, langName string, results []toolResult)
 
 ```
 
@@ -277,6 +156,7 @@ func BuildGraphPayload(tool string, symbols []gcfgo.Symbol, edges []gcfgo.Edge) 
 Level: standard
 
 - **build**: `GOWORK=off go build ./...` (required: true)
-- **lint**: `GOWORK=off go vet ./...` (required: true)
-- **test**: `GOWORK=off go test ./internal/... ./cmd/...` (required: true)
+- **lint**: `GOWORK=off go vet ./test/...` (required: true)
+- **format**: `gofmt -l test/` (required: true)
+- **custom**: `GOWORK=off go test -c -o /dev/null ./test/` (required: true)
 
