@@ -33,6 +33,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -2512,6 +2513,134 @@ var watcherSkipDirs = map[string]bool{
 	".vscode":      true,
 }
 
+// Watcher fd-bounding limits (issue #18). On macOS the fsnotify kqueue backend
+// opens one file descriptor per file in every watched directory, so an
+// unbounded walk over a tree containing large data/cache directories (browser
+// profiles, leveldb, etc.) can peg kern.maxfilesperproc and exhaust the
+// system-wide file table. These caps skip pathologically large directories and
+// bound the total number of watched entries.
+const (
+	defaultWatchMaxDirEntries = 2048  // skip any single directory larger than this
+	defaultWatchMaxEntries    = 50000 // global budget on total watched entries (~fds on macOS)
+)
+
+// watcherLimits are the resolved fd-bounding limits for the auto-watcher.
+type watcherLimits struct {
+	maxDirEntries int
+	maxEntries    int
+}
+
+// loadWatcherLimits reads the watcher caps, allowing env overrides for power
+// users on very large source trees. A non-positive or unparseable value keeps
+// the default.
+func loadWatcherLimits() watcherLimits {
+	lim := watcherLimits{maxDirEntries: defaultWatchMaxDirEntries, maxEntries: defaultWatchMaxEntries}
+	if n, err := strconv.Atoi(os.Getenv("AGENT_LSP_WATCH_MAX_DIR_ENTRIES")); err == nil && n > 0 {
+		lim.maxDirEntries = n
+	}
+	if n, err := strconv.Atoi(os.Getenv("AGENT_LSP_WATCH_MAX_ENTRIES")); err == nil && n > 0 {
+		lim.maxEntries = n
+	}
+	return lim
+}
+
+// watcherDisabled reports whether the auto-watcher is turned off entirely via
+// AGENT_LSP_DISABLE_WATCHER (an escape hatch for workspaces where per-file
+// watching is undesirable). Clients still receive explicit did_change_watched_files.
+func watcherDisabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("AGENT_LSP_DISABLE_WATCHER"))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
+// Runtime fd guard (issue #18). The startup caps bound the initial walk, but the
+// fsnotify kqueue backend also opens an fd for each file created at runtime in an
+// already-watched directory, which the startup budget cannot see. The guard
+// measures the process's actual open-fd count on a timer and tears the watcher
+// down before fd pressure can approach the per-process limit. FSEvents would
+// avoid per-file fds entirely, but it requires cgo and would break this project's
+// CGO_ENABLED=0 cross-compiled release, so the guard is the pure-Go equivalent.
+const (
+	defaultWatchMaxFDs   = 60000            // tear the watcher down above this many process fds
+	watchFDCheckInterval = 30 * time.Second // how often the guard samples the fd count
+)
+
+// loadWatchMaxFDs returns the fd-guard threshold, allowing an env override.
+func loadWatchMaxFDs() int {
+	if n, err := strconv.Atoi(os.Getenv("AGENT_LSP_WATCH_MAX_FDS")); err == nil && n > 0 {
+		return n
+	}
+	return defaultWatchMaxFDs
+}
+
+// openFDCount returns the number of open file descriptors held by this process,
+// or -1 when it cannot be determined (e.g. Windows, where the kqueue per-file-fd
+// problem does not exist). Reading the fd directory is a cheap, pure-Go syscall
+// and the fd count is the exact resource that exhaustion consumes.
+//
+// It reads raw entry names via Readdirnames rather than os.ReadDir: on macOS
+// os.ReadDir stats every /dev/fd/N entry, and under fd pressure (exactly when
+// this guard matters) some of those stats fail, making ReadDir return an error
+// and hiding the count. Readdirnames does not stat. The directory's own read fd
+// is subtracted so the count reflects fds held before the check.
+func openFDCount() int {
+	for _, dir := range []string{"/proc/self/fd", "/dev/fd"} {
+		f, err := os.Open(dir)
+		if err != nil {
+			continue
+		}
+		names, err := f.Readdirnames(-1)
+		_ = f.Close()
+		if err != nil {
+			continue
+		}
+		if n := len(names) - 1; n >= 0 { // minus the fd opened to read the dir
+			return n
+		}
+		return 0
+	}
+	return -1
+}
+
+// addWatchedTree walks root and registers each eligible directory with w,
+// honoring watcherSkipDirs, the hidden-dir rule, and the fd-bounding limits
+// (issue #18). A directory with more than lim.maxDirEntries entries is skipped
+// along with its subtree (it would open that many kqueue fds on macOS); once the
+// running total exceeds lim.maxEntries the walk stops. startTotal carries a
+// count in from a prior root; the new running total is returned.
+func addWatchedTree(w *fsnotify.Watcher, root string, lim watcherLimits, startTotal int) int {
+	total := startTotal
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || !d.IsDir() {
+			return nil
+		}
+		name := d.Name()
+		if watcherSkipDirs[name] || (strings.HasPrefix(name, ".") && name != ".") {
+			return filepath.SkipDir
+		}
+		entries, rerr := os.ReadDir(path)
+		n := 0
+		if rerr == nil {
+			n = len(entries)
+		}
+		if n > lim.maxDirEntries {
+			logging.Log(logging.LevelWarning, fmt.Sprintf("auto-watcher: skipping large directory (%d entries > %d limit): %s", n, lim.maxDirEntries, path))
+			return filepath.SkipDir
+		}
+		if total+n > lim.maxEntries {
+			logging.Log(logging.LevelWarning, fmt.Sprintf("auto-watcher: watch budget of %d entries reached; remaining files rely on explicit did_change_watched_files (raise AGENT_LSP_WATCH_MAX_ENTRIES to extend)", lim.maxEntries))
+			return filepath.SkipAll
+		}
+		if w.Add(path) == nil {
+			total += n
+		}
+		return nil
+	})
+	return total
+}
+
 // GetDocumentHighlights returns all occurrences of the symbol at the given
 // position within the same document. Each highlight includes a range and an
 // optional kind (Text=1, Read=2, Write=3). Returns an empty slice when the
@@ -2544,6 +2673,12 @@ func (c *LSPClient) GetDocumentHighlights(ctx context.Context, uri string, pos t
 // did_change_watched_files calls. Uses a 150ms debounce to batch rapid edits.
 // A previous watcher (if any) is stopped first.
 func (c *LSPClient) startWatcher(rootDir string) {
+	if watcherDisabled() {
+		logging.Log(logging.LevelInfo, "auto-watcher: disabled via AGENT_LSP_DISABLE_WATCHER; relying on explicit did_change_watched_files")
+		return
+	}
+	lim := loadWatcherLimits()
+
 	c.watcherMu.Lock()
 	c.stopWatcherLocked()
 	stop := make(chan struct{})
@@ -2572,17 +2707,10 @@ func (c *LSPClient) startWatcher(rootDir string) {
 			c.watcherMu.Unlock()
 		}()
 
-		// Walk the workspace and add all non-excluded directories.
-		_ = filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
-			if err != nil || !d.IsDir() {
-				return nil
-			}
-			if watcherSkipDirs[d.Name()] || (strings.HasPrefix(d.Name(), ".") && d.Name() != ".") {
-				return filepath.SkipDir
-			}
-			_ = watcher.Add(path)
-			return nil
-		})
+		// Walk the workspace and add all non-excluded directories, bounded so a
+		// large data/cache tree cannot exhaust the fd table on macOS (issue #18).
+		watched := addWatchedTree(watcher, rootDir, lim, 0)
+		logging.Log(logging.LevelDebug, fmt.Sprintf("auto-watcher: watching ~%d entries under %s", watched, rootDir))
 
 		// debounce: collect events for 150ms then flush as a batch.
 		const debounce = 150 * time.Millisecond
@@ -2628,6 +2756,14 @@ func (c *LSPClient) startWatcher(rootDir string) {
 			}
 		}
 
+		// Runtime fd guard: the startup walk is bounded, but fsnotify opens a
+		// per-file fd for each file created at runtime in an already-watched
+		// directory. Sample the process fd count and tear down before it can
+		// approach the per-process limit (issue #18).
+		maxFDs := loadWatchMaxFDs()
+		fdTicker := time.NewTicker(watchFDCheckInterval)
+		defer fdTicker.Stop()
+
 		for {
 			select {
 			case <-stop:
@@ -2636,6 +2772,15 @@ func (c *LSPClient) startWatcher(rootDir string) {
 				}
 				flush()
 				return
+			case <-fdTicker.C:
+				if n := openFDCount(); n > maxFDs {
+					logging.Log(logging.LevelWarning, fmt.Sprintf("auto-watcher: process holds %d open fds (> %d limit); disabling watcher to prevent fd exhaustion (issue #18). Files now rely on explicit did_change_watched_files (raise AGENT_LSP_WATCH_MAX_FDS to extend).", n, maxFDs))
+					if timer != nil {
+						timer.Stop()
+					}
+					flush()
+					return // deferred watcher.Close() releases the leaked fds
+				}
 			case event, ok := <-watcher.Events:
 				if !ok {
 					return
@@ -2646,10 +2791,12 @@ func (c *LSPClient) startWatcher(rootDir string) {
 					continue
 				}
 				pending[event.Name] = pending[event.Name] | event.Op
-				// If a new directory was created, add it to the watcher.
+				// If a new directory was created, add it to the watcher, unless it
+				// is oversized (a runtime-created cache dir would open that many
+				// kqueue fds on macOS, issue #18).
 				if event.Op&fsnotify.Create != 0 {
-					if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-						if !watcherSkipDirs[name] {
+					if info, err := os.Stat(event.Name); err == nil && info.IsDir() && !watcherSkipDirs[name] {
+						if entries, rerr := os.ReadDir(event.Name); rerr == nil && len(entries) <= lim.maxDirEntries {
 							_ = watcher.Add(event.Name)
 						}
 					}
@@ -2695,16 +2842,9 @@ func (c *LSPClient) addWatcherRoot(path string) {
 	if w == nil {
 		return
 	}
-	_ = filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {
-		if err != nil || !d.IsDir() {
-			return nil
-		}
-		if watcherSkipDirs[d.Name()] || (strings.HasPrefix(d.Name(), ".") && d.Name() != ".") {
-			return filepath.SkipDir
-		}
-		_ = w.Add(p)
-		return nil
-	})
+	// Bounded walk so extending coverage to a new workspace folder cannot
+	// exhaust the fd table on macOS (issue #18).
+	addWatchedTree(w, path, loadWatcherLimits(), 0)
 }
 
 // GetSemanticTokenLegend returns the token type and modifier name arrays
