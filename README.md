@@ -15,7 +15,7 @@
   <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
 </p>
 
-**Code intelligence infrastructure for AI agents.** 65 tools, 30 CI-verified languages, 24 agent workflows. Single Go binary.
+**Code intelligence infrastructure for AI agents.** 65 tools, 31 CI-verified languages, 24 agent workflows. Single Go binary.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh && agent-lsp init
@@ -80,7 +80,7 @@ We asked AI agents to evaluate agent-lsp across 10 coding tasks (find callers, r
 
 Every other MCP-LSP implementation lists supported languages in a config file. None of them run the actual language server in CI to verify it works.
 
-agent-lsp CI runs **30 real language servers** against real fixture codebases on every push: Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, Clojure, Dart, Terraform, Nix, Prisma, SQL, MongoDB, and more. When we say "works with gopls," that's a verified, automated claim, not a hope.
+agent-lsp CI runs **31 real language servers** against real fixture codebases on every push: Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, Clojure, Dart, Terraform, Nix, Prisma, SQL, MongoDB, and more. When we say "works with gopls," that's a verified, automated claim, not a hope.
 
 ### Speculative execution
 
@@ -316,7 +316,7 @@ Install the servers for your stack. Common ones:
 | C / C++ | `clangd` | `apt install clangd` / `brew install llvm` |
 | Ruby | `solargraph` | `gem install solargraph` |
 
-Full list of 30 supported languages in [docs/reference/language-support.md](./docs/reference/language-support.md).
+Full list of 31 supported languages in [docs/reference/language-support.md](./docs/reference/language-support.md).
 
 ### Step 3: Verify setup
 
@@ -420,7 +420,7 @@ This is what the agent does, not something you type. Then use any of the 65 tool
 
 ## Multi-Language Support
 
-30 languages, CI-verified end-to-end against real language servers on every CI run. No other MCP-LSP implementation tests a single language in CI.
+31 languages, CI-verified end-to-end against real language servers on every CI run. No other MCP-LSP implementation tests a single language in CI.
 
 Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, Clojure, Dart, Terraform, Nix, Prisma, SQL, MongoDB, JavaScript, YAML, JSON, Dockerfile, CSS, HTML.
 
