@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [0.19.2] - 2026-09-02
+
+### Fixed
+- **Argument injection via the `detect_changes` `range` argument** ([#23](https://github.com/blackwell-systems/agent-lsp/pull/23)): the `range` argument was split on `..` and passed directly to `git diff --name-only` as revisions. Because git is executed without a shell, an option-shaped piece was interpreted as a git flag: a value like `--output=<path>..<rev>` became `git diff --name-only --output=<path> <rev>`, and git's `--output` writes to an arbitrary file. Any `range` piece that is empty or starts with `-` is now rejected before git runs. Contributed by [@Choppaaahh](https://github.com/Choppaaahh).
+
 ## [0.19.1] - 2026-08-29
 
 ### Fixed
