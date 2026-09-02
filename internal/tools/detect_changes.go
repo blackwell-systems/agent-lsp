@@ -27,7 +27,13 @@ func gitDiffArgs(scope, diffRange string) []string {
 		if diffRange != "" {
 			parts := strings.SplitN(diffRange, "..", 2)
 			if len(parts) == 2 {
+				if !safeGitRev(parts[0]) || !safeGitRev(parts[1]) {
+					return nil
+				}
 				return []string{"diff", "--name-only", parts[0], parts[1]}
+			}
+			if !safeGitRev(diffRange) {
+				return nil
 			}
 			return []string{"diff", "--name-only", diffRange + "~1", diffRange}
 		}
@@ -35,6 +41,17 @@ func gitDiffArgs(scope, diffRange string) []string {
 	default: // "unstaged" or empty
 		return []string{"diff", "--name-only"}
 	}
+}
+
+// safeGitRev reports whether s can be passed to git as a revision argument.
+// Empty pieces and pieces starting with "-" are rejected so a range value
+// cannot inject git options.
+func safeGitRev(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" || strings.HasPrefix(s, "-") {
+		return false
+	}
+	return true
 }
 
 // filterChangedFiles keeps only files that exist on disk and have a recognized
@@ -105,6 +122,9 @@ func HandleDetectChanges(ctx context.Context, client *lsp.LSPClient, args map[st
 
 	// Run git diff.
 	gitArgs := gitDiffArgs(scope, diffRange)
+	if gitArgs == nil {
+		return types.ErrorResult("invalid range: revisions must not start with -"), nil
+	}
 	cmd := exec.CommandContext(ctx, "git", gitArgs...)
 	cmd.Dir = workspaceRoot
 	var stdout, stderr bytes.Buffer
