@@ -39,6 +39,26 @@ func TestGitDiffArgs(t *testing.T) {
 	}
 }
 
+func TestGitDiffArgsRejectsLeadingDash(t *testing.T) {
+	cases := []struct {
+		scope, rng string
+		wantNil    bool
+	}{
+		{"committed", "--output=/tmp/x..HEAD", true},
+		{"committed", "HEAD..--output=/tmp/x", true},
+		{"committed", "-HEAD", true},
+		{"committed", "HEAD~1..HEAD", false},
+		{"committed", "HEAD", false},
+		{"committed", "", false},
+	}
+	for _, c := range cases {
+		got := gitDiffArgs(c.scope, c.rng)
+		if (got == nil) != c.wantNil {
+			t.Fatalf("gitDiffArgs(%q, %q) = %v, wantNil=%v", c.scope, c.rng, got, c.wantNil)
+		}
+	}
+}
+
 func TestFilterChangedFiles(t *testing.T) {
 	dir := t.TempDir()
 
