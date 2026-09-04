@@ -7,14 +7,6 @@ or email dayna@blackwell-systems.com and we'll pull it in.
 
 ## Integrations (agent-lsp as a backend / search layer)
 
-### red
-
-[red](https://github.com/codersauce/red) is a Vim-like modal text editor written in Rust
-(222 stars). Its agent layer wires agent-lsp in as an editor/dynamic tool, attaching an
-active agent-lsp session before each request so the editor's AI navigates code by symbol
-rather than by text. Declared in the project's `release/campaign.toml` and documented in
-its agent architecture docs.
-
 ### Clausura
 
 [Clausura](https://github.com/liuyanghejerry/Clausura) is a CI-native agent CLI for
