@@ -54,15 +54,26 @@ nav:
   - Getting Started:
     - Installation: getting-started/installation.md
     - Quick Start: getting-started/quickstart.md
-  - Tools: tools.md
-  - Skills: skills.md
-  - Architecture: architecture.md
-  - Speculative Execution: speculative-execution.md
-  - Phase Enforcement: phase-enforcement.md
-  - Language Support: language-support.md
-  - LSP Conformance: lsp-conformance.md
-  - Token Savings: token-savings.md
-  - Distribution: distribution.md
-  - CI Notes: ci-notes.md
+    - MCP Clients: getting-started/mcp-clients.md
+    - Troubleshooting: getting-started/troubleshooting.md
+  - Guide:
+    - Common Workflows: guide/common-workflows.md
+    - Skills: guide/skills.md
+    - Speculative Execution: guide/speculative-execution.md
+    - Phase Enforcement: guide/phase-enforcement.md
+    - Token Savings: guide/token-savings.md
+    - GCF Integration: guide/gcf-integration.md
+  - Reference:
+    - Tools: reference/tools.md
+    - Language Support: reference/language-support.md
+    - LSP Conformance: reference/lsp-conformance.md
+    - Environment Variables: reference/env-vars.md
+  - Architecture:
+    - Overview: architecture/architecture.md
+    - Distribution: architecture/distribution.md
+    - CI Notes: architecture/ci-notes.md
+    - Agent Evaluations: architecture/agent-evaluations.md
+    - Features: architecture/FEATURES.md
+    - Roadmap: architecture/roadmap.md
+  - Adopters: adopters.md
   - Changelog: changelog.md
-  - Roadmap: roadmap.md
