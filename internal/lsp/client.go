@@ -973,6 +973,14 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 				},
 				"codeAction": map[string]any{
 					"dynamicRegistration": true,
+					"codeActionLiteralSupport": map[string]any{
+						"codeActionKind": map[string]any{
+							"valueSet": []string{
+								"", "quickfix", "refactor", "refactor.extract",
+								"refactor.inline", "refactor.rewrite", "source", "source.organizeImports",
+							},
+						},
+					},
 				},
 				"signatureHelp": map[string]any{
 					"dynamicRegistration": true,
