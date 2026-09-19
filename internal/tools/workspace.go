@@ -438,8 +438,12 @@ func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string
 	oldText, hasOld := args["old_text"].(string)
 	filePath, hasPath := args["file_path"].(string)
 	if hasOld && oldText != "" && hasPath && filePath != "" {
+		validPath, err := ValidateFilePath(filePath, client.RootDir())
+		if err != nil {
+			return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): %s", err)), nil
+		}
 		newText, _ := args["new_text"].(string)
-		edit, err := textMatchApply(filePath, oldText, newText)
+		edit, err := textMatchApply(validPath, oldText, newText)
 		if err != nil {
 			return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): %s", err)), nil
 		}
