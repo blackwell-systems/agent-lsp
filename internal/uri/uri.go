@@ -1,7 +1,10 @@
 package uri
 
 import (
+	"errors"
+	"fmt"
 	"net/url"
+	"path/filepath"
 	"strings"
 
 	"github.com/blackwell-systems/agent-lsp/internal/types"
@@ -70,6 +73,42 @@ func URIToPath(uri string) string {
 
 func isASCIILetter(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
+}
+
+// ValidatePath resolves path to a clean absolute path and, when rootDir is
+// non-empty, verifies the result is within the workspace root. This prevents
+// path traversal attacks (e.g. "../../etc/passwd" or an absolute path outside
+// the workspace) from reaching a filesystem read or write.
+//
+// Symlinks are resolved before the boundary check so an in-workspace symlink
+// cannot be used to point at an out-of-workspace target. EvalSymlinks errors
+// on paths that don't exist yet (e.g. a file being created); in that case the
+// lexical path is used so validation still works for not-yet-created files.
+//
+// Canonical implementation shared by internal/tools and internal/lsp — every
+// site that turns a tool-supplied file_path or workspace-edit URI into an
+// os.ReadFile/os.WriteFile/os.Rename/os.Remove call must go through this.
+func ValidatePath(path, rootDir string) (string, error) {
+	if path == "" {
+		return "", errors.New("file_path is required")
+	}
+	clean, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("invalid file path: %w", err)
+	}
+	if resolved, evalErr := filepath.EvalSymlinks(clean); evalErr == nil {
+		clean = resolved
+	}
+	if rootDir != "" {
+		absRoot, _ := filepath.Abs(rootDir)
+		if resolvedRoot, evalErr := filepath.EvalSymlinks(absRoot); evalErr == nil {
+			absRoot = resolvedRoot
+		}
+		if clean != absRoot && !strings.HasPrefix(clean, absRoot+string(filepath.Separator)) {
+			return "", fmt.Errorf("file path %q is outside workspace root %q", clean, absRoot)
+		}
+	}
+	return clean, nil
 }
 
 // ApplyRangeEdit applies a single range edit to content in-memory and
