@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [0.19.4] - 2026-09-20
+
+### Security
+- **Workspace-root confinement on `apply_edit` and simulation/commit writes** ([#26](https://github.com/blackwell-systems/agent-lsp/pull/26)): `apply_edit` (text-match and `workspace_edit` modes) and the `simulate_edit` -> `commit_session(apply=true)` path read and wrote files from tool-supplied `file_path`/URI arguments without the workspace-root check the other file tools already apply. Since these tools are driven by an LLM agent whose input can be influenced by untrusted content, a crafted `../` or absolute path could read or overwrite files outside the workspace (for example `~/.ssh/authorized_keys`). Every such path is now validated against the workspace root (create, rename, delete, edits, the session baseline read, and the commit write). Symlinks are resolved before the boundary check, including symlinked parent directories on the create/rename path, so an in-repo symlink cannot be used to escape the root. Contributed by [@lostbean](https://github.com/lostbean).
+
+### Fixed
+- **Navigation tools returned synthetic `ref_N` placeholders** ([#27](https://github.com/blackwell-systems/agent-lsp/issues/27)): `find_references`, `go_to_definition`, `go_to_type_definition`, `go_to_implementation`, and `go_to_declaration` shared a payload builder that labeled every result with a fabricated `ref_1`/`ref_2` name (kind `var`) and dropped the file and line entirely, so a caller got a count but nothing usable to locate a reference. Locations are tabular data, not a symbol graph (a GCF graph symbol carries no position), so these tools now return the real locations (file, line, column, end_line, end_column) as a tabular payload. Reported by [@ODMerdin](https://github.com/ODMerdin).
+
 ## [0.19.3] - 2026-09-20
 
 ### Fixed
