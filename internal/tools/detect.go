@@ -58,6 +58,7 @@ var knownServers = []lspServerDef{
 	{Language: "html", Binary: "vscode-html-language-server", Args: []string{"--stdio"}, DisplayName: "vscode-html-language-server"},
 	{Language: "terraform", Binary: "terraform-ls", Args: []string{"serve"}, DisplayName: "terraform-ls"},
 	{Language: "scala", Binary: "metals", Args: nil, DisplayName: "metals"},
+	{Language: "mql", Binary: "mql-lsp-server", Args: nil, DisplayName: "mql-lsp-server"},
 }
 
 // rootMarkers maps a project root file to the language it signals.
@@ -131,6 +132,9 @@ var extLanguages = map[string]string{
 	".tfvars": "terraform",
 	".sc":     "scala",
 	".scala":  "scala",
+	".mq4":    "mql",
+	".mq5":    "mql",
+	".mqh":    "mql",
 }
 
 // skipDirs are directory names that should never be walked.

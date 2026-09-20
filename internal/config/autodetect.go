@@ -33,6 +33,11 @@ var knownServers = map[string]ServerSpec{
 	"java":       {Binary: "jdtls", Args: nil, Extensions: []string{"java"}},
 	"kotlin":     {Binary: "kotlin-language-server", Args: nil, Extensions: []string{"kt", "kts"}},
 	"php":        {Binary: "intelephense", Args: []string{"--stdio"}, Extensions: []string{"php", "phtml"}},
+	// MQL4/MQL5 via mql-language-server. LanguageID "mql" is intentionally not
+	// "mql4"/"mql5": the server treats an unrecognized languageId as unknown and
+	// resolves the dialect per file (extension, includer edges, content sniffing),
+	// so one entry covers .mq4/.mq5/.mqh without misrouting .mqh headers.
+	"mql":        {Binary: "mql-lsp-server", Args: nil, Extensions: []string{"mq4", "mq5", "mqh"}},
 }
 
 // AutodetectServers scans PATH for known language server binaries
