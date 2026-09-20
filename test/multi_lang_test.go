@@ -540,6 +540,28 @@ func testDocumentSymbols(t *testing.T, ctx context.Context, session *mcp.ClientS
 }
 
 // testGoToDefinition tests the go_to_definition tool.
+// checkLocations validates a navigation tool's response now that go_to_* and
+// find_references emit a tabular location payload (file/line/column rows) rather
+// than a symbol graph. It confirms the payload decodes, carries at least one real
+// location, and contains no synthetic "ref_N" placeholder — the regression guard
+// for issue #27, where these tools fabricated "ref_1"/"var" and dropped the
+// actual file/line.
+func checkLocations(tool, text string) toolResult {
+	if strings.Contains(text, "ref_") {
+		return toolResult{tool: tool, status: "fail",
+			detail: "synthetic ref_N placeholder in response (issue #27 regression)"}
+	}
+	v, err := decodeGeneric(text)
+	if err != nil {
+		return toolResult{tool: tool, status: "fail",
+			detail: fmt.Sprintf("failed to decode location payload: %v — raw: %.200s", err, text)}
+	}
+	if genericLen(v) < 1 {
+		return toolResult{tool: tool, status: "skip", detail: "no locations returned"}
+	}
+	return toolResult{tool: tool, status: "pass"}
+}
+
 func testGoToDefinition(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
 	t.Helper()
 	callSiteFile := lang.callSiteFile
@@ -565,21 +587,8 @@ func testGoToDefinition(t *testing.T, ctx context.Context, session *mcp.ClientSe
 			detail: fmt.Sprintf("failed to parse go_to_definition response: %v", err)}
 	}
 
-	// go_to_definition emits a GCF graph payload (one "related" symbol per
-	// location). The graph form does not carry file/line for the definition, so
-	// the ±1 line tolerance is no longer expressible here; assert instead that at
-	// least one location symbol came back (a resolved definition).
-	p, err := decodeGraph(text)
-	if err != nil {
-		return toolResult{tool: "go_to_definition", status: "fail",
-			detail: fmt.Sprintf("failed to decode go_to_definition GCF graph: %v — raw: %s", err, text)}
-	}
-	if graphSymbolCount(p) == 0 {
-		return toolResult{tool: "go_to_definition", status: "skip",
-			detail: "no definition location returned"}
-	}
-
-	return toolResult{tool: "go_to_definition", status: "pass"}
+	// go_to_definition emits a tabular location payload (file/line/column).
+	return checkLocations("go_to_definition", text)
 }
 
 // testGetReferences tests the find_references tool.
@@ -616,23 +625,8 @@ func testGetReferences(t *testing.T, ctx context.Context, session *mcp.ClientSes
 		return toolResult{tool: "find_references", status: "fail",
 			detail: fmt.Sprintf("failed to parse find_references response: %v", err)}
 	}
-	// find_references emits a GCF graph payload; each reference location is a
-	// "related" symbol, so the reference count is len(p.Symbols) (references are
-	// modeled as symbols, not edges, on this path).
-	p, err := decodeGraph(text)
-	if err != nil {
-		return toolResult{tool: "find_references", status: "fail",
-			detail: fmt.Sprintf("failed to decode find_references GCF graph: %v — raw: %s", err, text)}
-	}
-	refCount := graphSymbolCount(p)
-	// A non-empty (>=1) reference set is a pass. An empty set means the tool ran
-	// but this fixture/position yielded no usable references — a capability/fixture
-	// gap, not a harness bug — so skip.
-	if refCount < 1 {
-		return toolResult{tool: "find_references", status: "skip",
-			detail: fmt.Sprintf("no references returned (got %d)", refCount)}
-	}
-	return toolResult{tool: "find_references", status: "pass"}
+	// find_references emits a tabular location payload (file/line/column rows).
+	return checkLocations("find_references", text)
 }
 
 // testGetCompletions tests the get_completions tool.
@@ -786,19 +780,8 @@ func testGoToDeclaration(t *testing.T, ctx context.Context, session *mcp.ClientS
 			detail: fmt.Sprintf("failed to parse go_to_declaration response: %v", err)}
 	}
 
-	// go_to_declaration emits a GCF graph payload. The graph form does not carry
-	// the target file path (previously asserted to end with person.h), so assert
-	// that a declaration location resolved instead.
-	p, err := decodeGraph(text)
-	if err != nil {
-		return toolResult{tool: "go_to_declaration", status: "fail",
-			detail: fmt.Sprintf("failed to decode go_to_declaration GCF graph: %v — raw: %s", err, text)}
-	}
-	if graphSymbolCount(p) == 0 {
-		return toolResult{tool: "go_to_declaration", status: "skip",
-			detail: "no declaration location returned"}
-	}
-	return toolResult{tool: "go_to_declaration", status: "pass"}
+	// go_to_declaration emits a tabular location payload (file/line/column).
+	return checkLocations("go_to_declaration", text)
 }
 
 // testTypeHierarchy tests the type_hierarchy tool (Java and TypeScript only).
@@ -1411,10 +1394,7 @@ func testGoToTypeDefinition(t *testing.T, ctx context.Context, session *mcp.Clie
 	if err != nil {
 		return toolResult{tool: "go_to_type_definition", status: "fail", detail: err.Error()}
 	}
-	if text == "" || text == "null" || text == "[]" {
-		return toolResult{tool: "go_to_type_definition", status: "skip", detail: "empty result"}
-	}
-	return toolResult{tool: "go_to_type_definition", status: "pass"}
+	return checkLocations("go_to_type_definition", text)
 }
 
 // testGoToImplementation tests the go_to_implementation tool.
@@ -1442,10 +1422,7 @@ func testGoToImplementation(t *testing.T, ctx context.Context, session *mcp.Clie
 	if err != nil {
 		return toolResult{tool: "go_to_implementation", status: "fail", detail: err.Error()}
 	}
-	if text == "" || text == "null" || text == "[]" {
-		return toolResult{tool: "go_to_implementation", status: "skip", detail: "no implementations found"}
-	}
-	return toolResult{tool: "go_to_implementation", status: "pass"}
+	return checkLocations("go_to_implementation", text)
 }
 
 // testFormatRange tests the format_range tool over the first 5 lines of the file.

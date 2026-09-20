@@ -187,7 +187,7 @@ var tier2Baseline = map[string]map[string]expectedTier2Status{
 		"get_server_capabilities":  statusPass,
 		"workspace_folders":        statusPass,
 		"go_to_type_definition":    statusPass,
-		"go_to_implementation":     statusPass,
+		"go_to_implementation":     statusAllowedSkip, // Person is a concrete struct, no interface impls (issue #27: was a false pass on an empty graph)
 		"format_range":             statusPass,
 		"apply_edit":               statusAllowedSkip, // no edits on clean fixture / mutation sensitive
 		"detect_lsp_servers":       statusPass,
@@ -227,8 +227,8 @@ var tier2Baseline = map[string]map[string]expectedTier2Status{
 		"rename_symbol":            statusAllowedSkip, // fixture-mutation sensitive (see note)
 		"get_server_capabilities":  statusPass,
 		"workspace_folders":        statusPass,
-		"go_to_type_definition":    statusPass,
-		"go_to_implementation":     statusPass,
+		"go_to_type_definition":    statusAllowedSkip, // luau-lsp resolves no type-def at the fixture position (issue #27: was a false pass on an empty graph)
+		"go_to_implementation":     statusAllowedSkip, // no implementations for the fixture symbol (issue #27: was a false pass on an empty graph)
 		"format_range":             statusAllowedSkip, // supportsFormatting=false
 		"apply_edit":               statusAllowedSkip, // supportsFormatting=false
 		"detect_lsp_servers":       statusPass,
