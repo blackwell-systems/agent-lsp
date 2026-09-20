@@ -96,9 +96,15 @@ func ValidatePath(path, rootDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("invalid file path: %w", err)
 	}
-	if resolved, evalErr := filepath.EvalSymlinks(clean); evalErr == nil {
-		clean = resolved
-	}
+	// Resolve symlinks before the boundary check. EvalSymlinks fails when the
+	// leaf does not exist yet (a file being created); resolving only the full
+	// path and otherwise falling back to the lexical path would let a create or
+	// rename escape the root through a symlinked PARENT directory (e.g. a
+	// malicious repo shipping "<root>/link -> /etc" and creating
+	// "<root>/link/newfile"). resolveExistingAncestor closes that: it resolves
+	// the deepest existing ancestor's symlinks and re-appends the not-yet-existing
+	// tail, so a symlinked parent is followed to its real target.
+	clean = resolveExistingAncestor(clean)
 	if rootDir != "" {
 		absRoot, _ := filepath.Abs(rootDir)
 		if resolvedRoot, evalErr := filepath.EvalSymlinks(absRoot); evalErr == nil {
@@ -109,6 +115,32 @@ func ValidatePath(path, rootDir string) (string, error) {
 		}
 	}
 	return clean, nil
+}
+
+// resolveExistingAncestor returns path with symlinks resolved. If path itself
+// does not exist yet (e.g. a file about to be created), it resolves the deepest
+// existing ancestor directory and re-joins the remaining, not-yet-existing
+// components — so a symlinked parent directory is followed to its real target
+// and cannot be used to escape a workspace-root boundary check. Falls back to
+// the lexical path only if nothing along the chain resolves.
+func resolveExistingAncestor(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	rest := ""
+	dir := path
+	for {
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached the filesystem root without resolving anything.
+			return path
+		}
+		rest = filepath.Join(filepath.Base(dir), rest)
+		dir = parent
+		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+			return filepath.Join(resolved, rest)
+		}
+	}
 }
 
 // ApplyRangeEdit applies a single range edit to content in-memory and
