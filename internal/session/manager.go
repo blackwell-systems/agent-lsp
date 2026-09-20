@@ -119,6 +119,15 @@ func (m *SessionManager) ApplyEdit(ctx context.Context, sessionID, fileURI strin
 		return nil, fmt.Errorf("session %s is dirty: %w", sessionID, session.DirtyError())
 	}
 
+	// Reject any fileURI outside the session's workspace before touching the
+	// LSP server or the filesystem — this must run even on the fast path where
+	// a baseline already exists, so a first, legitimate edit can't be followed
+	// by edits to other, out-of-workspace files reusing the same session.
+	path, err := internaluri.ValidatePath(internaluri.URIToPath(fileURI), session.Workspace)
+	if err != nil {
+		return nil, fmt.Errorf("applying edit: %w", err)
+	}
+
 	// Acquire executor lock for serialized LSP access.
 	if err := m.executor.Acquire(ctx, session); err != nil {
 		return nil, fmt.Errorf("acquiring executor: %w", err)
@@ -141,7 +150,6 @@ func (m *SessionManager) ApplyEdit(ctx context.Context, sessionID, fileURI strin
 		}
 
 		// Read file content from disk.
-		path := internaluri.URIToPath(fileURI)
 		content, err := os.ReadFile(path)
 		if err != nil {
 			session.MarkDirty(fmt.Errorf("reading file %s: %w", path, err))
@@ -381,7 +389,11 @@ func (m *SessionManager) Commit(ctx context.Context, sessionID, target string, a
 	// If apply=true, write files to disk.
 	if apply {
 		for fileURI, content := range session.Contents {
-			path := internaluri.URIToPath(fileURI)
+			path, vErr := internaluri.ValidatePath(internaluri.URIToPath(fileURI), session.Workspace)
+			if vErr != nil {
+				session.MarkDirty(fmt.Errorf("committing %s: %w", fileURI, vErr))
+				return nil, fmt.Errorf("committing %s: %w", fileURI, vErr)
+			}
 			if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 				session.MarkDirty(fmt.Errorf("writing file %s: %w", path, err))
 				return nil, fmt.Errorf("writing file %s: %w", path, err)

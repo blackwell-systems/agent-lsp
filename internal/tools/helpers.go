@@ -16,7 +16,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	gcf "github.com/blackwell-systems/agent-lsp/internal/encoding/gcf"
@@ -29,30 +28,11 @@ import (
 // ValidateFilePath resolves filePath to a clean absolute path and, when rootDir
 // is non-empty, verifies the result is within the workspace root. This prevents
 // path traversal attacks (e.g. "../../etc/passwd").
+//
+// Delegates to uriPkg.ValidatePath, the canonical implementation shared with
+// internal/lsp (which cannot import this package without an import cycle).
 func ValidateFilePath(filePath, rootDir string) (string, error) {
-	if filePath == "" {
-		return "", errors.New("file_path is required")
-	}
-	clean, err := filepath.Abs(filepath.Clean(filePath))
-	if err != nil {
-		return "", fmt.Errorf("invalid file path: %w", err)
-	}
-	// L2: Resolve symlinks so in-workspace symlinks to out-of-workspace targets
-	// do not bypass the prefix check. EvalSymlinks errors on non-existent paths;
-	// fall back to lexical path to allow validation of not-yet-created files.
-	if resolved, evalErr := filepath.EvalSymlinks(clean); evalErr == nil {
-		clean = resolved
-	}
-	if rootDir != "" {
-		absRoot, _ := filepath.Abs(rootDir)
-		if resolvedRoot, evalErr := filepath.EvalSymlinks(absRoot); evalErr == nil {
-			absRoot = resolvedRoot
-		}
-		if clean != absRoot && !strings.HasPrefix(clean, absRoot+string(filepath.Separator)) {
-			return "", fmt.Errorf("file path %q is outside workspace root %q", clean, absRoot)
-		}
-	}
-	return clean, nil
+	return uriPkg.ValidatePath(filePath, rootDir)
 }
 
 // WithDocument reads filePath from disk, opens it on the LSP client, then calls cb.

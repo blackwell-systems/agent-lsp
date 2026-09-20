@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -300,6 +301,89 @@ func TestHandleApplyEdit_MissingWorkspaceEdit(t *testing.T) {
 	}
 	if !r.IsError {
 		t.Error("expected IsError=true for missing workspace_edit")
+	}
+}
+
+// TestHandleApplyEdit_TextMatch_RejectsPathOutsideRoot verifies that text-match
+// mode (file_path + old_text + new_text) refuses to read/write a file outside
+// the client's workspace root, and leaves the out-of-root file untouched.
+//
+// Regression test: apply_edit's text-match mode previously called os.ReadFile
+// on the raw file_path with no root-confinement check.
+func TestHandleApplyEdit_TextMatch_RejectsPathOutsideRoot(t *testing.T) {
+	root := t.TempDir()
+	outsideDir := t.TempDir()
+
+	secret := filepath.Join(outsideDir, "secret.txt")
+	original := "do not touch me"
+	if err := os.WriteFile(secret, []byte(original), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	client := newFakeClient()
+	client.SetRootDirForTest(root)
+
+	traversal := filepath.Join(root, "..", filepath.Base(outsideDir), "secret.txt")
+	r, err := HandleApplyEdit(context.Background(), client, map[string]any{
+		"file_path": traversal,
+		"old_text":  original,
+		"new_text":  "PWNED",
+	})
+	if err != nil {
+		t.Fatalf("unexpected Go error: %v", err)
+	}
+	if !r.IsError {
+		t.Error("expected IsError=true for a file_path outside the workspace root")
+	}
+
+	got, readErr := os.ReadFile(secret)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(got) != original {
+		t.Fatalf("file outside workspace root was modified: got %q, want unchanged %q", got, original)
+	}
+}
+
+// TestHandleApplyEdit_TextMatch_AllowsPathInsideRoot is the positive-case
+// control: a file genuinely inside the root must still be editable once root
+// confinement is enforced.
+func TestHandleApplyEdit_TextMatch_AllowsPathInsideRoot(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "main.go")
+	if err := os.WriteFile(path, []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	client := newFakeClient()
+	client.SetRootDirForTest(root)
+
+	r, err := HandleApplyEdit(context.Background(), client, map[string]any{
+		"file_path": path,
+		"old_text":  "main",
+		"new_text":  "other",
+	})
+	if err != nil {
+		t.Fatalf("unexpected Go error: %v", err)
+	}
+	// The file is written to disk before the (unstarted, fake) LSP client is
+	// notified of the change, so a "not started" error result here still means
+	// the in-root edit was allowed through path validation and applied — see
+	// isNotStartedErr in internal/lsp/apply_edit_test.go for the same pattern.
+	resultText := ""
+	if len(r.Content) > 0 {
+		resultText = r.Content[0].Text
+	}
+	if r.IsError && !strings.Contains(resultText, "not started") {
+		t.Fatalf("expected success (or a benign not-started notify error) for an in-root path, got: %+v", r)
+	}
+
+	got, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(got) != "package other\n" {
+		t.Fatalf("in-root edit did not apply: got %q", got)
 	}
 }
 
