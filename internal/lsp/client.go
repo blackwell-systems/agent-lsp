@@ -881,6 +881,13 @@ func (c *LSPClient) MarkInitializedForTest() {
 	c.initialized = true
 }
 
+// SetRootDirForTest sets the workspace root for testing, so callers in other
+// packages can exercise root-confinement behavior (e.g. ValidateFilePath via
+// RootDir) without spawning a real LSP process through Initialize.
+func (c *LSPClient) SetRootDirForTest(rootDir string) {
+	c.rootDir = rootDir
+}
+
 // isJDTLS reports whether the server binary appears to be Eclipse jdtls.
 // Checks the binary name for "jdtls" (covers /usr/local/bin/jdtls and
 // wrapper scripts named jdtls).
@@ -2254,7 +2261,10 @@ func (c *LSPClient) applyDocumentChanges(ctx context.Context, dc any) error {
 				URI string `json:"uri"`
 			}
 			if err := json.Unmarshal(entry, &op); err == nil && op.URI != "" {
-				path := uripkg.URIToPath(op.URI)
+				path, vErr := uripkg.ValidatePath(uripkg.URIToPath(op.URI), c.rootDir)
+				if vErr != nil {
+					return fmt.Errorf("applyDocumentChanges create: %w", vErr)
+				}
 				if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
 					if writeErr := os.WriteFile(path, []byte{}, 0644); writeErr != nil {
 						return fmt.Errorf("applyDocumentChanges create %s: %w", path, writeErr)
@@ -2267,8 +2277,14 @@ func (c *LSPClient) applyDocumentChanges(ctx context.Context, dc any) error {
 				NewURI string `json:"newUri"`
 			}
 			if err := json.Unmarshal(entry, &op); err == nil {
-				oldPath := uripkg.URIToPath(op.OldURI)
-				newPath := uripkg.URIToPath(op.NewURI)
+				oldPath, vErr := uripkg.ValidatePath(uripkg.URIToPath(op.OldURI), c.rootDir)
+				if vErr != nil {
+					return fmt.Errorf("applyDocumentChanges rename (old path): %w", vErr)
+				}
+				newPath, vErr := uripkg.ValidatePath(uripkg.URIToPath(op.NewURI), c.rootDir)
+				if vErr != nil {
+					return fmt.Errorf("applyDocumentChanges rename (new path): %w", vErr)
+				}
 				if renameErr := os.Rename(oldPath, newPath); renameErr != nil {
 					return fmt.Errorf("applyDocumentChanges rename %s -> %s: %w", oldPath, newPath, renameErr)
 				}
@@ -2278,7 +2294,10 @@ func (c *LSPClient) applyDocumentChanges(ctx context.Context, dc any) error {
 				URI string `json:"uri"`
 			}
 			if err := json.Unmarshal(entry, &op); err == nil && op.URI != "" {
-				path := uripkg.URIToPath(op.URI)
+				path, vErr := uripkg.ValidatePath(uripkg.URIToPath(op.URI), c.rootDir)
+				if vErr != nil {
+					return fmt.Errorf("applyDocumentChanges delete: %w", vErr)
+				}
 				if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
 					return fmt.Errorf("applyDocumentChanges delete %s: %w", path, removeErr)
 				}
@@ -2344,7 +2363,10 @@ type textEdit struct {
 
 // applyEditsToFile applies text edits in reverse order to a file and sends didChange.
 func (c *LSPClient) applyEditsToFile(ctx context.Context, uri string, edits []textEdit) error {
-	path := uripkg.URIToPath(uri)
+	path, err := uripkg.ValidatePath(uripkg.URIToPath(uri), c.rootDir)
+	if err != nil {
+		return fmt.Errorf("applyEdit: %w", err)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("applyEdit read %s: %w", path, err)
