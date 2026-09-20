@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [0.19.3] - 2026-09-20
+
+### Fixed
+- **Code actions were empty for rust-analyzer** ([#25](https://github.com/blackwell-systems/agent-lsp/pull/25)): agent-lsp omitted `codeActionLiteralSupport` from its initialize capabilities, so rust-analyzer (and other servers that gate on it) returned an empty `suggest_fixes` list. The client now advertises `codeActionLiteralSupport` with the full `codeActionKind` value set. Lazy resolution is deliberately left off, so edits still arrive inline through `suggest_fixes` without a separate `codeAction/resolve` round-trip. Contributed by [@cark](https://github.com/cark). Fixes #24.
+
+### Changed
+- **npm packages now publish via OIDC trusted publishing** instead of a long-lived `NPM_TOKEN`. npm deprecated classic tokens and is retiring 2FA-bypass tokens for publishing, so token-based releases no longer work under the account's 2FA policy. Releases are now tokenless (GitHub mints a short-lived OIDC token that npm exchanges for publish rights) and gain provenance attestation automatically. No user-facing package changes.
+
+> Note: npm skipped 0.19.2 (its publish was blocked by the token deprecation); 0.19.3 carries the 0.19.2 fixes forward, including the `detect_changes` argument-injection fix ([#23](https://github.com/blackwell-systems/agent-lsp/pull/23)).
+
 ## [0.19.2] - 2026-09-02
 
 ### Fixed
