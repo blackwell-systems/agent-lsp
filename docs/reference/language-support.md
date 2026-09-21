@@ -35,6 +35,24 @@
 | Dart | `dart language-server` | Ships with Dart SDK (`brew install dart`) |
 | MongoDB | `mongodb-language-server` | `npm i -g @mongodb-js/mongodb-language-server` |
 
+### MQL (mql-lsp-server)
+
+agent-lsp auto-detects servers on `PATH`, so installing MQL support is just
+placing the self-contained binary there — no .NET runtime required:
+
+```bash
+curl -fsSL https://github.com/davalillo/mql-language-server/releases/latest/download/mql-lsp-server-linux-x64 \
+  -o ~/.local/bin/mql-lsp-server
+chmod +x ~/.local/bin/mql-lsp-server
+mql-lsp-server --version   # verify: "MQL Language Server 2.3.0" or newer
+```
+
+Assets for other platforms are in the same release: `mql-lsp-server-win-x64.exe`
+(rename to `mql-lsp-server.exe`), `mql-lsp-server-osx-x64`,
+`mql-lsp-server-osx-arm64`. If you already have the .NET 10 SDK,
+`dotnet tool install -g mql-language-server` installs the same `mql-lsp-server`
+command. Verify with `agent-lsp doctor`.
+
 ---
 
 ## CI tool coverage matrix
