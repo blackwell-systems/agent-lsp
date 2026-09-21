@@ -1,6 +1,6 @@
 ---
 name: lsp-architecture
-description: Generate a structural architecture overview of a codebase: languages, package map, entry points, dependency graph, and hotspots. One call for the big picture.
+description: "Generate a structural architecture overview of a codebase: languages, package map, entry points, dependency graph, and hotspots. One call for the big picture."
 argument-hint: "[workspace-root-path]"
 user-invocable: true
 allowed-tools: mcp__lsp__start_lsp mcp__lsp__list_symbols mcp__lsp__blast_radius mcp__lsp__detect_lsp_servers mcp__lsp__find_symbol
