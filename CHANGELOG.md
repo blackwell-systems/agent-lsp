@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [0.19.5] - 2026-09-21
+
+### Fixed
+- **Three skill `SKILL.md` files had front-matter that broke strict YAML parsers** ([#28](https://github.com/blackwell-systems/agent-lsp/pull/28)): the `description` field in `lsp-architecture`, `lsp-understand`, and `lsp-explore` contained a `": "` that a strict YAML parser reads as a nested mapping key, rendering a red error on GitHub's file view and risking the skill being dropped by strict loaders (Claude Code's skill loader, GitHub's front-matter renderer). `lsp-architecture` and `lsp-understand` were unquoted values with an embedded colon; `lsp-explore` was double-quoted but an inner quote closed the scalar early. All three are now quoted correctly. agent-lsp's own MCP prompt loader was unaffected (it cuts on the first colon). A new `TestSkillFrontmatterYAMLSafe` walks every embedded `SKILL.md` and rejects both failure modes, with no new dependency. `lsp-architecture` contributed by [@petemounce](https://github.com/petemounce).
+
 ## [0.19.4] - 2026-09-20
 
 ### Security
