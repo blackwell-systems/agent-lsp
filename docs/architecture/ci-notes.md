@@ -26,6 +26,8 @@ Implementation details for contributors and maintainers about the language serve
 
 **Clojure (clojure-lsp), Nix (nil), Dart (dart language-server), MongoDB (mongodb-language-server):** CI-verified as of the `ci-coverage-expansion` IMPL.
 
+**MQL (mql-lsp-server):** Runs in a dedicated `multi-lang-mql` job without `continue-on-error`. The job installs the self-contained linux-x64 binary from the [davalillo/mql-language-server releases](https://github.com/davalillo/mql-language-server/releases) (resolved via the GitHub API latest tag) — no .NET runtime on the runner. Cold start is fast (no workspace indexing phase). One server entry serves `.mq4`, `.mq5`, and `.mqh`; the languageId is sent as neutral `mql` and the server resolves the MQL4/MQL5 dialect per file from extension, includer edges, and content sniffing. Known limitations: document and workspace symbols only cover opened files (a class declared in an included `.mqh` is not a workspace symbol until its includer is opened); references/rename are name-based, not type-resolved (upstream [davalillo/mql-language-server#45](https://github.com/davalillo/mql-language-server/issues/45)); formatting, semantic tokens, inlay hints, prepare-rename, and call hierarchy are skipped (pinned as `allowed-skip` in `test/tier2_baseline_test.go`, derived from a real v2.3.0 run).
+
 ## mcp-assert: protocol-level assertions
 
 mcp-assert runs two separate CI jobs against agent-lsp. Together they cover both tool correctness (does each tool return the right response through the MCP transport?) and skill protocol compliance (does an agent follow the correct tool call sequence for a given skill?).

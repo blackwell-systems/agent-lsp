@@ -96,7 +96,7 @@ Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verif
 
 Note: MQL references and rename via `mql-lsp-server` are name-based (not type-resolved). This limitation is tracked upstream ([davalillo/mql-language-server#45](https://github.com/davalillo/mql-language-server/issues/45)).
 
-See [ci-notes.md](./ci-notes.md) for per-language CI quirks.
+See [ci-notes.md](../architecture/ci-notes.md) for per-language CI quirks.
 
 ---
 
