@@ -1,6 +1,6 @@
 ---
 name: lsp-understand
-description: Deep-dive exploration of unfamiliar code — given a symbol or file, builds a complete Code Map showing type info, implementations, call hierarchy (2-level depth limit), all references, and source. Broader than lsp-explore: accepts files, synthesizes multi-symbol relationships, and produces a navigable dependency map.
+description: "Deep-dive exploration of unfamiliar code — given a symbol or file, builds a complete Code Map showing type info, implementations, call hierarchy (2-level depth limit), all references, and source. Broader than lsp-explore: accepts files, synthesizes multi-symbol relationships, and produces a navigable dependency map."
 argument-hint: "[symbol-name | file-path]"
 user-invocable: true
 allowed-tools: mcp__lsp__inspect_symbol mcp__lsp__go_to_implementation mcp__lsp__find_callers mcp__lsp__find_references mcp__lsp__get_symbol_source mcp__lsp__list_symbols mcp__lsp__open_document mcp__lsp__go_to_symbol mcp__lsp__get_server_capabilities

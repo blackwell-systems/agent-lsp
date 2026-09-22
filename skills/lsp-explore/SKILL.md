@@ -1,6 +1,6 @@
 ---
 name: lsp-explore
-description: "Tell me about this symbol": hover + implementations + call hierarchy + references in one pass — for navigating unfamiliar code.
+description: '"Tell me about this symbol": hover + implementations + call hierarchy + references in one pass — for navigating unfamiliar code.'
 argument-hint: "[symbol-name]"
 user-invocable: true
 allowed-tools: mcp__lsp__start_lsp mcp__lsp__go_to_symbol mcp__lsp__inspect_symbol mcp__lsp__go_to_implementation mcp__lsp__find_callers mcp__lsp__find_references mcp__lsp__open_document mcp__lsp__get_server_capabilities

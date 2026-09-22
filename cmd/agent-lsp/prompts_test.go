@@ -1,7 +1,12 @@
 package main
 
 import (
+	"io/fs"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/blackwell-systems/agent-lsp/skills"
 )
 
 func TestParseSkillMD(t *testing.T) {
@@ -248,4 +253,64 @@ func TestRegisterPrompts_EmbeddedSkills(t *testing.T) {
 	if count < 20 {
 		t.Errorf("only %d prompts registered, expected at least 20 (have 21 skills)", count)
 	}
+}
+
+// TestSkillFrontmatterYAMLSafe guards against SKILL.md front-matter that our
+// lenient parser accepts but strict YAML consumers (GitHub's front-matter
+// renderer, Claude Code's skill loader) reject. Two failure modes have shipped:
+// an unquoted value containing ": " (read as a nested mapping key), and a
+// double-quoted value whose inner quote closes the scalar early leaving a
+// trailing ": " (e.g. `description: "Tell me...": hover`). Both render a red
+// error on GitHub and can drop the skill from a strict loader.
+func TestSkillFrontmatterYAMLSafe(t *testing.T) {
+	_ = fs.WalkDir(skills.Files, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Base(path) != "SKILL.md" {
+			return err
+		}
+		data, readErr := skills.Files.ReadFile(path)
+		if readErr != nil {
+			t.Errorf("%s: read: %v", path, readErr)
+			return nil
+		}
+		content := string(data)
+		if !strings.HasPrefix(content, "---") {
+			t.Errorf("%s: missing front-matter", path)
+			return nil
+		}
+		fm := content[3:]
+		if idx := strings.Index(fm, "\n---"); idx >= 0 {
+			fm = fm[:idx]
+		}
+		for _, line := range strings.Split(fm, "\n") {
+			// Only top-level scalar keys (no leading whitespace) are checked;
+			// nested block keys are structural, not scalar values.
+			if line == "" || line[0] == ' ' || line[0] == '\t' {
+				continue
+			}
+			k, v, ok := strings.Cut(line, ":")
+			if !ok {
+				continue
+			}
+			k = strings.TrimSpace(k)
+			v = strings.TrimSpace(v)
+			if v == "" {
+				continue
+			}
+			switch v[0] {
+			case '"', '\'':
+				// Quoted scalar: the matching quote must be the last
+				// non-space rune, else the value closed early.
+				if len(v) < 2 || v[len(v)-1] != v[0] {
+					t.Errorf("%s: key %q: quoted value does not close cleanly, breaks strict YAML: %s", path, k, v)
+				}
+			default:
+				// Unquoted scalar: a ": " (or trailing ":") is parsed as a
+				// nested mapping and rejected by strict YAML.
+				if strings.Contains(v, ": ") || strings.HasSuffix(v, ":") {
+					t.Errorf("%s: key %q: unquoted value contains \": \", breaks strict YAML (quote it): %s", path, k, v)
+				}
+			}
+		}
+		return nil
+	})
 }
