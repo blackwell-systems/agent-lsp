@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -167,8 +168,16 @@ func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[str
 
 	// text is an optional Go-specific extension not present in the TypeScript schema.
 	// Callers may provide file content directly to avoid a disk read.
-	// If omitted or empty, the LSP server will read the file from disk on didOpen.
+	// If omitted, read the file from disk and send its real content in didOpen.
+	// Sending an empty buffer and expecting the server to read from disk is not
+	// spec-compliant (LSP clients must send the current text), and servers that
+	// take the didOpen buffer literally — e.g. mql-lsp-server, whose cross-file
+	// type resolution fails when content arrives later via didChange — misbehave.
 	text, _ := args["text"].(string)
+	text, readErr := resolveOpenText(filePath, text)
+	if readErr != nil {
+		return types.ErrorResult(readErr.Error()), nil
+	}
 	fileURI := CreateFileURI(filePath)
 
 	if err := client.OpenDocument(ctx, fileURI, text, languageID); err != nil {
@@ -181,6 +190,22 @@ func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[str
 	}
 
 	return types.TextResult(fmt.Sprintf("Document opened: %s", filePath)), nil
+}
+
+// resolveOpenText returns the text to send in textDocument/didOpen. An empty
+// text means the caller did not provide content, so the file is read from
+// disk: LSP clients are expected to send the current document text in didOpen,
+// and servers that take the buffer literally misbehave on an empty payload
+// (see HandleOpenDocument).
+func resolveOpenText(filePath, text string) (string, error) {
+	if text != "" {
+		return text, nil
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %s", err)
+	}
+	return string(data), nil
 }
 
 // HandleCloseDocument closes a document in the LSP server.
