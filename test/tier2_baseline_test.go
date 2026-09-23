@@ -350,10 +350,25 @@ var tier2Baseline = map[string]map[string]expectedTier2Status{
 
 	// --- Locally verified (real mql-lsp-server run) ---
 	// MQL: every tool has an explicit entry derived from the observed local run
-	// (AGENT_LSP_DUMP_BASELINE, PATH=mql-lsp-server v2.3.0 linux-x64 from
+	// (AGENT_LSP_DUMP_BASELINE, PATH=mql-lsp-server v2.4.1 linux-x64 from
 	// davalillo/mql-language-server releases, fixture test/fixtures/mql).
-	// rename_symbol is "allowed-skip" like Go: the harness's fixture-mutation
-	// bug makes it skip on dirty re-runs; CI checkouts are clean.
+	// Re-derived from the v2.3.0 baseline when pinning v2.4.1 (upstream #62):
+	//   - v2.3.0's "pass" on go_to_type_definition / go_to_implementation /
+	//     get_signature_help was garbage data (containing-symbol fallback), not
+	//     real capability; v2.4.1 honestly returns empty/null for them.
+	//   - go_to_implementation on a concrete class is null by design (nothing
+	//     implemented); upstream confirmed this is correct.
+	//   - get_signature_help returns the containing function's signature at a
+	//     method call (garbage) or empty; honest skip until upstream fixes it.
+	//   - go_to_type_definition races upstream: with the include graph settled
+	//     it resolves class Person cross-file into person.mqh (fix for #64),
+	//     but the resolution is timing-sensitive and frequently falls back to
+	//     the variable declaration or empty. Skip until deterministic.
+	//   - get_document_highlights now returns correct same-file occurrence
+	//     ranges (v2.3.0's pass was the wrong containing-symbol range).
+	// rename_symbol is "allowed-skip" like Go: it passes on a clean checkout
+	// but the harness's fixture-mutation bug makes it skip on dirty re-runs;
+	// pinning allowed-skip keeps local dirty re-runs from spuriously failing.
 	"MQL": {
 		"apply_edit":               statusAllowedSkip, // no formatting capability
 		"close_document":           statusPass,
@@ -370,14 +385,14 @@ var tier2Baseline = map[string]map[string]expectedTier2Status{
 		"get_inlay_hints":          statusAllowedSkip, // no inlay hints returned
 		"get_semantic_tokens":      statusAllowedSkip, // no tokens returned
 		"get_server_capabilities":  statusPass,
-		"get_signature_help":       statusPass,
+		"get_signature_help":       statusAllowedSkip, // containing-function signature garbage or empty (upstream #62)
 		"get_symbol_source":        statusPass,
 		"get_tests_for_file":       statusPass,
 		"go_to_declaration":        statusAllowedSkip, // no declaration handler response
 		"go_to_definition":         statusPass,
-		"go_to_implementation":     statusPass,
+		"go_to_implementation":     statusAllowedSkip, // null by design for a concrete class (upstream #62)
 		"go_to_symbol":             statusPass,
-		"go_to_type_definition":    statusPass,
+		"go_to_type_definition":    statusAllowedSkip, // upstream cross-file resolution races (fix for #64 non-deterministic)
 		"inspect_symbol":           statusPass,
 		"list_symbols":             statusPass,
 		"prepare_rename":           statusAllowedSkip, // no prepareRename response
