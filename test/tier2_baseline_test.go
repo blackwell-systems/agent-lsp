@@ -347,6 +347,49 @@ var tier2Baseline = map[string]map[string]expectedTier2Status{
 		"find_symbol":      statusAllowedFail,
 		"format_document":  statusAllowedFail,
 	}),
+
+	// --- Locally verified (real mql-lsp-server run) ---
+	// MQL: every tool has an explicit entry derived from the observed local run
+	// (AGENT_LSP_DUMP_BASELINE, PATH=mql-lsp-server v2.3.0 linux-x64 from
+	// davalillo/mql-language-server releases, fixture test/fixtures/mql).
+	// rename_symbol is "allowed-skip" like Go: the harness's fixture-mutation
+	// bug makes it skip on dirty re-runs; CI checkouts are clean.
+	"MQL": {
+		"apply_edit":               statusAllowedSkip, // no formatting capability
+		"close_document":           statusPass,
+		"detect_lsp_servers":       statusPass,
+		"did_change_watched_files": statusPass,
+		"execute_command":          statusAllowedSkip, // no executeCommandProvider
+		"find_callers":             statusAllowedSkip, // no call hierarchy item at position
+		"find_references":          statusPass,
+		"find_symbol":              statusPass,
+		"format_document":          statusAllowedSkip, // no formatting capability
+		"format_range":             statusAllowedSkip, // no formatting capability
+		"get_completions":          statusPass,
+		"get_document_highlights":  statusPass,
+		"get_inlay_hints":          statusAllowedSkip, // no inlay hints returned
+		"get_semantic_tokens":      statusAllowedSkip, // no tokens returned
+		"get_server_capabilities":  statusPass,
+		"get_signature_help":       statusPass,
+		"get_symbol_source":        statusPass,
+		"get_tests_for_file":       statusPass,
+		"go_to_declaration":        statusAllowedSkip, // no declaration handler response
+		"go_to_definition":         statusPass,
+		"go_to_implementation":     statusPass,
+		"go_to_symbol":             statusPass,
+		"go_to_type_definition":    statusPass,
+		"inspect_symbol":           statusPass,
+		"list_symbols":             statusPass,
+		"prepare_rename":           statusAllowedSkip, // no prepareRename response
+		"rename_symbol":            statusAllowedSkip, // passes on clean checkout; fixture-mutation bug (see Go)
+		"restart_lsp_server":       statusPass,
+		"run_build":                statusAllowedSkip, // no build dispatch for mql
+		"run_tests":                statusAllowedSkip, // no test dispatch for mql
+		"set_log_level":            statusPass,
+		"suggest_fixes":            statusPass,
+		"type_hierarchy":           statusAllowedSkip, // not configured for MQL
+		"workspace_folders":        statusPass,
+	},
 }
 
 // assertTier2Baseline fails the subtest when any actual Tier-2 result is

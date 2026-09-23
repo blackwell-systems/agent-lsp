@@ -18,6 +18,7 @@
 | C# | `csharp-ls` | `dotnet tool install -g csharp-ls` |
 | Kotlin | `kotlin-language-server` | [GitHub releases](https://github.com/fwcd/kotlin-language-server/releases) |
 | Lua | `lua-language-server` | [GitHub releases](https://github.com/LuaLS/lua-language-server/releases) |
+| MQL4 / MQL5 | `mql-lsp-server` | [GitHub releases](https://github.com/davalillo/mql-language-server/releases) |
 | Luau | `luau-lsp` | [GitHub releases](https://github.com/JohnnyMorganz/luau-lsp/releases) |
 | Swift | `sourcekit-lsp` | Ships with Xcode / Swift toolchain |
 | Zig | `zls` | [GitHub releases](https://github.com/zigtools/zls/releases) (match Zig version) |
@@ -34,11 +35,29 @@
 | Dart | `dart language-server` | Ships with Dart SDK (`brew install dart`) |
 | MongoDB | `mongodb-language-server` | `npm i -g @mongodb-js/mongodb-language-server` |
 
+### MQL (mql-lsp-server)
+
+agent-lsp auto-detects servers on `PATH`, so installing MQL support is just
+placing the self-contained binary there — no .NET runtime required:
+
+```bash
+curl -fsSL https://github.com/davalillo/mql-language-server/releases/latest/download/mql-lsp-server-linux-x64 \
+  -o ~/.local/bin/mql-lsp-server
+chmod +x ~/.local/bin/mql-lsp-server
+mql-lsp-server --version   # verify: "MQL Language Server 2.3.0" or newer
+```
+
+Assets for other platforms are in the same release: `mql-lsp-server-win-x64.exe`
+(rename to `mql-lsp-server.exe`), `mql-lsp-server-osx-x64`,
+`mql-lsp-server-osx-arm64`. If you already have the .NET 10 SDK,
+`dotnet tool install -g mql-language-server` installs the same `mql-lsp-server`
+command. Verify with `agent-lsp doctor`.
+
 ---
 
 ## CI tool coverage matrix
 
-Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verified for all 31 languages. Tier 2: 34 additional tools.
+Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verified for all 32 languages. Tier 2: 34 additional tools.
 
 | Language | Tier 1 | symbols | definition | references | completions | workspace | format | declaration | type_hierarchy | hover | call_hier | sem_tok | sig_help |
 |----------|--------|---------|------------|------------|-------------|-----------|--------|-------------|----------------|-------|-----------|---------|----------|
@@ -73,12 +92,15 @@ Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verif
 | Nix | pass | pass | — | — | pass | pass | — | — | — | pass | — | — | — |
 | Dart | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
 | MongoDB | pass | — | — | — | pass | pass | — | — | — | pass | — | — | — |
+| MQL | pass | pass | pass | pass | pass | pass | — | — | — | pass | — | — | — |
 
-See [ci-notes.md](./ci-notes.md) for per-language CI quirks.
+Note: MQL references and rename via `mql-lsp-server` are name-based (not type-resolved). This limitation is tracked upstream ([davalillo/mql-language-server#45](https://github.com/davalillo/mql-language-server/issues/45)).
+
+See [ci-notes.md](../architecture/ci-notes.md) for per-language CI quirks.
 
 ---
 
-## Current (31 languages, CI-tested)
+## Current (32 languages, CI-tested)
 
 **stable** = all Tier 1 tools pass CI. **experimental** = server works but CI results are informational.
 
@@ -115,6 +137,7 @@ See [ci-notes.md](./ci-notes.md) for per-language CI quirks.
 | Nix | nil | experimental |
 | Dart | dart language-server | stable |
 | MongoDB | mongodb-language-server | experimental |
+| MQL | mql-lsp-server | experimental (name-based references/rename) |
 
 ---
 
@@ -128,6 +151,7 @@ See [ci-notes.md](./ci-notes.md) for per-language CI quirks.
 | `multi-lang-zig` | Zig | ubuntu-latest |
 | `multi-lang-terraform` | Terraform | ubuntu-latest |
 | `multi-lang-lua` | Lua | ubuntu-latest |
+| `multi-lang-mql` | MQL | ubuntu-latest |
 | `multi-lang-luau` | Luau | ubuntu-latest |
 | `multi-lang-swift` | Swift | macos-latest |
 | `multi-lang-scala` | Scala | ubuntu-latest (continue-on-error) |
@@ -209,8 +233,8 @@ Each new language needs three things:
 
 | Tier | Languages | Count |
 |---|---|---|
-| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Luau, Swift, Zig, CSS, HTML, Terraform, Scala, Gleam, Elixir, Prisma, SQL, Clojure, Nix, Dart, MongoDB | **31** |
+| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Luau, Swift, Zig, CSS, HTML, Terraform, Scala, Gleam, Elixir, Prisma, SQL, Clojure, Nix, Dart, MongoDB, MQL | **32** |
 | Tier 3 candidates | Bash | 1 |
-| **Potential total** | | **32** |
+| **Potential total** | | **33** |
 
-The 31-language set covers systems, web, JVM, scripting, infrastructure, config, functional, schema, query, document-database, and Nix/functional-package-manager domains.
+The 32-language set covers systems, web, JVM, scripting, infrastructure, config, functional, schema, query, document-database, Nix/functional-package-manager, and MQL (MetaTrader) domains.

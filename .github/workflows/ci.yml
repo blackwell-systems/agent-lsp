@@ -267,6 +267,39 @@ jobs:
       - name: Run Lua tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Lua$" ./test/ -timeout 10m
 
+  # MQL via mql-lsp-server
+  multi-lang-mql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: GOWORK=off go build ./...
+
+      - name: Install mql-lsp-server
+        run: |
+          # Pinned to a specific tag with a checksum, not "releases/latest".
+          # The Tier-2 baseline below is a deterministic contract derived from a
+          # known server version; a floating "latest" makes CI non-reproducible
+          # and broke here once (v2.4.0 dropped get_document_highlights and made
+          # go_to_type_definition / go_to_implementation timing-sensitive on the
+          # runner). Bump both fields together after re-deriving the baseline
+          # against the new release.
+          MQL_VERSION=v2.3.0
+          MQL_SHA256=4150c46edb5219881cd996ee02ea9023d0afe9371dceb36497b12907ee583b96
+          echo "Installing mql-lsp-server ${MQL_VERSION}"
+          wget -q "https://github.com/davalillo/mql-language-server/releases/download/${MQL_VERSION}/mql-lsp-server-linux-x64" -O /tmp/mql-lsp-server
+          echo "${MQL_SHA256}  /tmp/mql-lsp-server" | sha256sum -c -
+          sudo install -m 0755 /tmp/mql-lsp-server /usr/local/bin/mql-lsp-server
+
+      - name: Run MQL tests
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^MQL$" ./test/ -timeout 10m
+
   multi-lang-luau:
     runs-on: ubuntu-latest
     steps:

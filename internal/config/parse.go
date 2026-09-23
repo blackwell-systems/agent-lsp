@@ -52,6 +52,7 @@ var extensionMap = map[string][]string{
 	"ocaml":      {"ml", "mli"},
 	"zig":        {"zig"},
 	"scala":      {"scala", "sc", "sbt"},
+	"mql":        {"mq4", "mq5", "mqh"},
 }
 
 // ParseArgs parses command-line arguments into a ParseResult.

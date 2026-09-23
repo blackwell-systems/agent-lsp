@@ -93,3 +93,8 @@ servers:
     package_manager: apt
     install_command: "apt-get update && apt-get install -y --no-install-recommends dart && rm -rf /var/lib/apt/lists/*"
     binary: dart
+  - name: mql-lsp-server
+    language: mql
+    package_manager: manual
+    install_command: "echo 'Install mql-lsp-server from https://github.com/davalillo/mql-language-server/releases and add to PATH'"
+    binary: mql-lsp-server
