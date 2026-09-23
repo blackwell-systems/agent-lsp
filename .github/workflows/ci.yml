@@ -290,12 +290,13 @@ jobs:
           # go_to_type_definition / go_to_implementation timing-sensitive on the
           # runner). Bump both fields together after re-deriving the baseline
           # against the new release.
-          # v2.4.1 fixes the v2.4.0 defects that forced the v2.3.0 pin
-          # (davalillo/mql-language-server#62): documentHighlight for builtins,
-          # cross-file typeDefinition/definition, and InvariantGlobalization
-          # (no libicu crash). The Tier-2 baseline is re-derived from v2.4.1.
-          MQL_VERSION=v2.4.1
-          MQL_SHA256=c348ac520ebb9e3d51ce7bbe0741ee5bee0bbbee517259ea7a939f938fd11aa5
+          # v2.4.2 fixes the upstream defects filed from our v2.4.1 integration:
+          # constructor-style declarations did not parse (#76, PR #80 — the root
+          # cause of the #62-era fallbacks) and signatureHelp returned the
+          # containing function's signature (#77, PR #81). Requires the
+          # open_document fix that sends real file content in didOpen (session.go).
+          MQL_VERSION=v2.4.2
+          MQL_SHA256=87fb244baac04da48d9da62507943801ebccd7adf3cb0300134070896bf87ba0
           echo "Installing mql-lsp-server ${MQL_VERSION}"
           wget -q "https://github.com/davalillo/mql-language-server/releases/download/${MQL_VERSION}/mql-lsp-server-linux-x64" -O /tmp/mql-lsp-server
           echo "${MQL_SHA256}  /tmp/mql-lsp-server" | sha256sum -c -
