@@ -1,0 +1,93 @@
+# CodeRabbit configuration for agent-lsp.
+# Schema: https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
+language: "en-US"
+early_access: false
+
+reviews:
+  # Depth over brevity: incoming contributions here tend to touch security,
+  # CI semantics, and cross-platform behavior, so surface more rather than less.
+  profile: "assertive"
+  # Advisory, not gating: never auto-request-changes and block a merge.
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: false
+  sequence_diagrams: true
+  poem: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    base_branches:
+      - "main"
+
+  path_filters:
+    - "!**/*.gz"
+    - "!.agent-lsp/**"
+    - "!dist/**"
+    - "!**/testdata/**/*.golden"
+
+  path_instructions:
+    - path: ".github/workflows/**"
+      instructions: >-
+        CI must be reproducible. Flag any download of a third-party binary or
+        language server that uses a floating ref such as "releases/latest",
+        a branch tip, or an unpinned "@latest": it must be pinned to a specific
+        tag or SHA and verified against a checksum (e.g. sha256sum -c). A
+        floating version silently breaks deterministic test baselines. Also flag
+        curl|bash or wget|bash piped straight into a shell.
+    - path: "test/tier2_baseline_test.go"
+      instructions: >-
+        This file is a deterministic contract of real language-server behavior.
+        Every tool status must reflect an actual observed run, not an assumption.
+        Flag any statusPass on a tool that could plausibly return an empty result
+        (go_to_implementation, go_to_type_definition, find_callers, highlights)
+        without evidence it was verified, and flag statusPass derived from an
+        empty or fabricated graph. New-language baselines must be pinned to the
+        same server version the CI job installs.
+    - path: "test/lang_configs_test.go"
+      instructions: >-
+        New-language test configs must exercise real cross-file navigation
+        (definition, references, rename) against a committed fixture. Flag
+        positions that look copied from another language without matching the
+        fixture, and hardcoded line/column values with no fixture backing them.
+    - path: "internal/**/*.go"
+      instructions: >-
+        Any filesystem read/write/rename/remove built from a tool-supplied
+        file_path or a workspace-edit URI MUST pass through uri.ValidatePath for
+        workspace-root confinement, including symlinked-parent cases on
+        create/rename. Flag os.ReadFile/os.WriteFile/os.Rename/os.Remove on an
+        unvalidated caller-supplied path. New tool outputs should return through
+        EncodeResult (GCF), not ad-hoc formatting.
+    - path: "skills/**/SKILL.md"
+      instructions: >-
+        Front-matter must be valid strict YAML: any description or scalar value
+        containing ": " (colon-space) or wrapping quotes must be quoted so it
+        parses as a single scalar, not a nested mapping. These are consumed by
+        strict YAML loaders (GitHub, Claude Code), not just agent-lsp's own
+        first-colon parser.
+    - path: "**/*.go"
+      instructions: >-
+        Check error wrapping (%w where the caller may inspect), nil-map and
+        nil-pointer access, unchecked type assertions, and goroutine/context
+        propagation. Prefer table-driven tests for new behavior.
+
+  tools:
+    golangci-lint:
+      enabled: true
+    actionlint:
+      enabled: true
+    shellcheck:
+      enabled: true
+    yamllint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    hadolint:
+      enabled: true
+    markdownlint:
+      enabled: true
+
+chat:
+  auto_reply: true
