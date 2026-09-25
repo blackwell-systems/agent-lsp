@@ -157,13 +157,18 @@ func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[str
 	}
 
 	// Validate path to prevent traversal attacks, consistent with WithDocument.
-	if _, err := ValidateFilePath(filePath, client.RootDir()); err != nil {
+	// Keep the validated path for every downstream use: resolveOpenText and the
+	// document URI must operate on the same file that was validated, otherwise a
+	// symlink swapped between validation and the disk read could escape the
+	// workspace (TOCTOU).
+	validatedPath, err := ValidateFilePath(filePath, client.RootDir())
+	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("invalid file_path: %s", err)), nil
 	}
 
 	languageID, _ := args["language_id"].(string)
 	if languageID == "" {
-		languageID = client.LanguageIDForFile(filePath)
+		languageID = client.LanguageIDForFile(validatedPath)
 	}
 
 	// text is an optional Go-specific extension not present in the TypeScript schema.
@@ -174,11 +179,11 @@ func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[str
 	// take the didOpen buffer literally — e.g. mql-lsp-server, whose cross-file
 	// type resolution fails when content arrives later via didChange — misbehave.
 	text, _ := args["text"].(string)
-	text, readErr := resolveOpenText(filePath, text)
+	text, readErr := resolveOpenText(validatedPath, text)
 	if readErr != nil {
 		return types.ErrorResult(readErr.Error()), nil
 	}
-	fileURI := CreateFileURI(filePath)
+	fileURI := CreateFileURI(validatedPath)
 
 	if err := client.OpenDocument(ctx, fileURI, text, languageID); err != nil {
 		return types.ErrorResult(fmt.Sprintf("failed to open document: %s", err)), nil
@@ -186,10 +191,10 @@ func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[str
 
 	// Auto-scope: shift the scope to the package containing this file.
 	if client.AutoScope() {
-		lsp.UpdateAutoScope(client, filePath, languageID)
+		lsp.UpdateAutoScope(client, validatedPath, languageID)
 	}
 
-	return types.TextResult(fmt.Sprintf("Document opened: %s", filePath)), nil
+	return types.TextResult(fmt.Sprintf("Document opened: %s", validatedPath)), nil
 }
 
 // resolveOpenText returns the text to send in textDocument/didOpen. An empty
