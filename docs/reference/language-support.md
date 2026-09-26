@@ -44,7 +44,7 @@ placing the self-contained binary there — no .NET runtime required:
 curl -fsSL https://github.com/davalillo/mql-language-server/releases/latest/download/mql-lsp-server-linux-x64 \
   -o ~/.local/bin/mql-lsp-server
 chmod +x ~/.local/bin/mql-lsp-server
-mql-lsp-server --version   # verify: "MQL Language Server 2.3.0" or newer
+mql-lsp-server --version   # verify: "MQL Language Server 2.4.2" or newer
 ```
 
 Assets for other platforms are in the same release: `mql-lsp-server-win-x64.exe`

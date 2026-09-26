@@ -350,10 +350,33 @@ var tier2Baseline = map[string]map[string]expectedTier2Status{
 
 	// --- Locally verified (real mql-lsp-server run) ---
 	// MQL: every tool has an explicit entry derived from the observed local run
-	// (AGENT_LSP_DUMP_BASELINE, PATH=mql-lsp-server v2.3.0 linux-x64 from
+	// (AGENT_LSP_DUMP_BASELINE, PATH=mql-lsp-server v2.4.2 linux-x64 from
 	// davalillo/mql-language-server releases, fixture test/fixtures/mql).
-	// rename_symbol is "allowed-skip" like Go: the harness's fixture-mutation
-	// bug makes it skip on dirty re-runs; CI checkouts are clean.
+	//
+	// History: the v2.3.0 baseline encoded garbage data (the server answered
+	// out-of-symbol positions with containing-symbol fallbacks, and the harness
+	// positions were 0-based against a 1-based MCP convention, so probes landed
+	// on braces/spaces). v2.4.2 fixes the upstream defects filed from this
+	// integration: constructor-style declarations did not parse (#76/#80) and
+	// signatureHelp returned the containing function's signature (#77/#81).
+	// With the open_document fix (real content in didOpen) and v2.4.2:
+	//   - go_to_definition / find_references resolve the class cross-file
+	//     into person.mqh correctly (no more fallback garbage).
+	//   - get_document_highlights returns correct same-file occurrence ranges.
+	//   - go_to_implementation is null by design for a concrete class
+	//     (nothing implemented); upstream confirmed this is correct.
+	//   - get_signature_help resolves builtins with callee-prefixed labels
+	//     ("Print: void Print(...)"), but user-class member calls (person.Greet()
+	//     at every position on the call) return null — honest skip until
+	//     upstream resolves member signatures through the include graph.
+	//   - go_to_type_definition resolves class Person in person.mqh on a clean
+	//     session, but any textDocument/didChange on the queried file (e.g. the
+	//     edits rename_symbol applies just before this probe in the harness
+	//     flow) degrades cross-file resolution for the rest of the session —
+	//     an upstream incremental-sync state issue. Honest skip until fixed.
+	// rename_symbol is "allowed-skip" like Go: it passes on a clean checkout
+	// but the harness's fixture-mutation bug makes it skip on dirty re-runs;
+	// pinning allowed-skip keeps local dirty re-runs from spuriously failing.
 	"MQL": {
 		"apply_edit":               statusAllowedSkip, // no formatting capability
 		"close_document":           statusPass,
@@ -370,14 +393,14 @@ var tier2Baseline = map[string]map[string]expectedTier2Status{
 		"get_inlay_hints":          statusAllowedSkip, // no inlay hints returned
 		"get_semantic_tokens":      statusAllowedSkip, // no tokens returned
 		"get_server_capabilities":  statusPass,
-		"get_signature_help":       statusPass,
+		"get_signature_help":       statusAllowedSkip, // builtins resolve; user-class member calls return null (upstream #81 residual)
 		"get_symbol_source":        statusPass,
 		"get_tests_for_file":       statusPass,
 		"go_to_declaration":        statusAllowedSkip, // no declaration handler response
 		"go_to_definition":         statusPass,
-		"go_to_implementation":     statusPass,
+		"go_to_implementation":     statusAllowedSkip, // null by design for a concrete class (upstream #62)
 		"go_to_symbol":             statusPass,
-		"go_to_type_definition":    statusPass,
+		"go_to_type_definition":    statusAllowedSkip, // resolves cross-file on a clean session; any didChange on the queried file degrades it (upstream incremental-sync state)
 		"inspect_symbol":           statusPass,
 		"list_symbols":             statusPass,
 		"prepare_rename":           statusAllowedSkip, // no prepareRename response

@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -104,5 +106,43 @@ func TestParseScopePaths_BoolType(t *testing.T) {
 	got := ParseScopePaths(true)
 	if got != nil {
 		t.Errorf("expected nil for bool, got %v", got)
+	}
+}
+
+func TestResolveOpenText_ProvidedTextWins(t *testing.T) {
+	// Caller-provided content is used verbatim, even if the file on disk differs.
+	file := filepath.Join(t.TempDir(), "main.go")
+	if err := os.WriteFile(file, []byte("disk content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := resolveOpenText(file, "caller content")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "caller content" {
+		t.Errorf("expected caller content verbatim, got %q", got)
+	}
+}
+
+func TestResolveOpenText_EmptyReadsFromDisk(t *testing.T) {
+	// Empty text means the caller omitted content: didOpen must carry the real
+	// file content instead of an empty buffer (servers are not required to read
+	// from disk, and some — mql-lsp-server — take the buffer literally).
+	file := filepath.Join(t.TempDir(), "main.go")
+	if err := os.WriteFile(file, []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := resolveOpenText(file, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "package main\n" {
+		t.Errorf("expected disk content, got %q", got)
+	}
+}
+
+func TestResolveOpenText_MissingFileErrors(t *testing.T) {
+	if _, err := resolveOpenText(filepath.Join(t.TempDir(), "missing.go"), ""); err == nil {
+		t.Error("expected error for missing file, got nil")
 	}
 }

@@ -895,9 +895,14 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			codeActionLine:     9,
 			codeActionEndLine:  14,
 		},
-		// MQL positions (0-based): main.mq5 line 7 = `   Person person("Alice", 30);` (Person at col 3),
-		// line 8 = `   string message   = person.Greet();` (person at col 22).
-		// Expected symbol is OnInit (declared in main.mq5): the server indexes symbols of opened files and Person lives in the include person.mqh.
+		// MQL positions (1-based, MCP convention): main.mq5 line 8 = `   Person person("Alice", 30);` (Person at col 4),
+		// line 9 = `   string message   = person.Greet();` (person at col 23, `(` at col 35).
+		// go_to_definition probes Person (the class usage at 8:4, not the local
+		// variable at 9:23) and must resolve cross-file into the included person.mqh
+		// — checkLocations alone would accept any nonempty location payload, so
+		// mustResolveTo pins the target file (CodeRabbit review on PR #34).
+		// get_signature_help probes the person.Greet( member call (9:35): the server
+		// returns null there (upstream #81 residual), an honest skip.
 		{
 			name:               "MQL",
 			id:                 "mql",
@@ -905,28 +910,31 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			serverArgs:         []string{},
 			fixture:            filepath.Join(fixtureBase, "mql"),
 			file:               filepath.Join(fixtureBase, "mql", "main.mq5"),
-			hoverLine:          7,
-			hoverColumn:        3,
-			definitionLine:     7,
-			definitionColumn:   3,
+			hoverLine:          8,
+			hoverColumn:        4,
+			definitionLine:     8,
+			definitionColumn:   4,
 			callSiteLine:       8,
-			callSiteColumn:     22,
+			callSiteColumn:     4,
 			callSiteFile:       filepath.Join(fixtureBase, "mql", "main.mq5"),
-			referenceLine:      7,
-			referenceColumn:    3,
-			completionLine:     7,
+			referenceLine:      8,
+			referenceColumn:    4,
+			completionLine:     8,
 			completionColumn:   4,
+			signatureHelpLine:   9,
+			signatureHelpColumn: 35,
+			mustResolveTo:       "person.mqh",
 			workspaceSymbol:    "OnInit",
 			supportsFormatting: false,
 			secondFile:         filepath.Join(fixtureBase, "mql", "person.mqh"),
 			symbolName:         "OnInit",
-			highlightLine:      7,
-			highlightColumn:    3,
-			renameSymbolLine:   7,
-			renameSymbolColumn: 3,
+			highlightLine:      8,
+			highlightColumn:    4,
+			renameSymbolLine:   8,
+			renameSymbolColumn: 4,
 			renameSymbolName:   "RenamedPerson",
-			codeActionLine:     7,
-			codeActionEndLine:  9,
+			codeActionLine:     8,
+			codeActionEndLine:  10,
 		},
 	}
 }

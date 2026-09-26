@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -156,20 +157,33 @@ func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[str
 	}
 
 	// Validate path to prevent traversal attacks, consistent with WithDocument.
-	if _, err := ValidateFilePath(filePath, client.RootDir()); err != nil {
+	// Keep the validated path for every downstream use: resolveOpenText and the
+	// document URI must operate on the same file that was validated, otherwise a
+	// symlink swapped between validation and the disk read could escape the
+	// workspace (TOCTOU).
+	validatedPath, err := ValidateFilePath(filePath, client.RootDir())
+	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("invalid file_path: %s", err)), nil
 	}
 
 	languageID, _ := args["language_id"].(string)
 	if languageID == "" {
-		languageID = client.LanguageIDForFile(filePath)
+		languageID = client.LanguageIDForFile(validatedPath)
 	}
 
 	// text is an optional Go-specific extension not present in the TypeScript schema.
 	// Callers may provide file content directly to avoid a disk read.
-	// If omitted or empty, the LSP server will read the file from disk on didOpen.
+	// If omitted, read the file from disk and send its real content in didOpen.
+	// Sending an empty buffer and expecting the server to read from disk is not
+	// spec-compliant (LSP clients must send the current text), and servers that
+	// take the didOpen buffer literally — e.g. mql-lsp-server, whose cross-file
+	// type resolution fails when content arrives later via didChange — misbehave.
 	text, _ := args["text"].(string)
-	fileURI := CreateFileURI(filePath)
+	text, readErr := resolveOpenText(validatedPath, text)
+	if readErr != nil {
+		return types.ErrorResult(readErr.Error()), nil
+	}
+	fileURI := CreateFileURI(validatedPath)
 
 	if err := client.OpenDocument(ctx, fileURI, text, languageID); err != nil {
 		return types.ErrorResult(fmt.Sprintf("failed to open document: %s", err)), nil
@@ -177,10 +191,26 @@ func HandleOpenDocument(ctx context.Context, client *lsp.LSPClient, args map[str
 
 	// Auto-scope: shift the scope to the package containing this file.
 	if client.AutoScope() {
-		lsp.UpdateAutoScope(client, filePath, languageID)
+		lsp.UpdateAutoScope(client, validatedPath, languageID)
 	}
 
-	return types.TextResult(fmt.Sprintf("Document opened: %s", filePath)), nil
+	return types.TextResult(fmt.Sprintf("Document opened: %s", validatedPath)), nil
+}
+
+// resolveOpenText returns the text to send in textDocument/didOpen. An empty
+// text means the caller did not provide content, so the file is read from
+// disk: LSP clients are expected to send the current document text in didOpen,
+// and servers that take the buffer literally misbehave on an empty payload
+// (see HandleOpenDocument).
+func resolveOpenText(filePath, text string) (string, error) {
+	if text != "" {
+		return text, nil
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %s", err)
+	}
+	return string(data), nil
 }
 
 // HandleCloseDocument closes a document in the LSP server.

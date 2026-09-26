@@ -126,6 +126,7 @@ type langConfig struct {
 	callSiteLine        int
 	callSiteColumn      int
 	callSiteFile        string // defaults to .file if empty
+	mustResolveTo       string // if set, go_to_definition response must contain this substring (e.g. target file name)
 	referenceLine       int
 	referenceColumn     int
 	completionLine      int
@@ -588,7 +589,18 @@ func testGoToDefinition(t *testing.T, ctx context.Context, session *mcp.ClientSe
 	}
 
 	// go_to_definition emits a tabular location payload (file/line/column).
-	return checkLocations("go_to_definition", text)
+	result := checkLocations("go_to_definition", text)
+	// mustResolveTo pins cross-file resolution: a nonempty payload is not
+	// enough if the probe must resolve into a specific file (e.g. MQL resolving
+	// the Person class into person.mqh). Only enforced on pass; a skip still
+	// fails the Tier-2 baseline where pass is pinned.
+	if lang.mustResolveTo != "" && result.status == "pass" &&
+		!strings.Contains(text, lang.mustResolveTo) {
+		return toolResult{tool: "go_to_definition", status: "fail",
+			detail: fmt.Sprintf("definition did not resolve into %q — raw: %.200s",
+				lang.mustResolveTo, text)}
+	}
+	return result
 }
 
 // testGetReferences tests the find_references tool.
