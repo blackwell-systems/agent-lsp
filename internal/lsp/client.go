@@ -942,6 +942,16 @@ func (c *LSPClient) RootDir() string {
 	return c.rootDir
 }
 
+// OpenDocumentCount returns how many documents the client currently holds
+// open (didOpen'ed in this session). Exported so tool handlers can compare
+// the opened set against the workspace contents when qualifying empty
+// results — some servers only index opened documents. (issue #42)
+func (c *LSPClient) OpenDocumentCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.openDocs)
+}
+
 // IsInitialized reports whether the LSP handshake has completed successfully.
 // A non-nil client is not necessarily initialized — NewLSPClient creates a
 // client object but Initialize must be called to start the process and complete
@@ -2663,6 +2673,14 @@ func mergeRegisteredCapability(existing any, capKey string, opts json.RawMessage
 		return m
 	}
 	return true
+}
+
+// HasCapability reports whether the server declared the given capability
+// (statically in initialize or via client/registerCapability). Exported so
+// tool handlers can distinguish "empty result" from "feature unavailable"
+// without reaching into the capability internals. (issue #42)
+func (c *LSPClient) HasCapability(key string) bool {
+	return c.hasCapability(key)
 }
 
 func (c *LSPClient) hasCapability(key string) bool {

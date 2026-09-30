@@ -855,3 +855,47 @@ func TestResetDiagnostics(t *testing.T) {
 		t.Error("expected normalized cached diagnostics to be removed after ResetDiagnostics")
 	}
 }
+
+// --- HasCapability / OpenDocumentCount exported wrappers (issue #42) ---
+
+func TestHasCapabilityExported(t *testing.T) {
+	c, _, _ := newTestClient(t)
+
+	if c.HasCapability("workspaceSymbolProvider") {
+		t.Fatal("expected false before any capability is registered")
+	}
+
+	// A server-declared provider can be an object, not a bool; HasCapability
+	// must accept both shapes, matching hasCapability semantics.
+	c.capsMu.Lock()
+	c.capabilities["workspaceSymbolProvider"] = map[string]any{}
+	c.capabilities["referencesProvider"] = true
+	c.capsMu.Unlock()
+
+	if !c.HasCapability("workspaceSymbolProvider") {
+		t.Error("expected true for object-valued provider")
+	}
+	if !c.HasCapability("referencesProvider") {
+		t.Error("expected true for bool-valued provider")
+	}
+	if c.HasCapability("typeHierarchyProvider") {
+		t.Error("expected false for undeclared capability")
+	}
+}
+
+func TestOpenDocumentCountExported(t *testing.T) {
+	c, _, _ := newTestClient(t)
+
+	if got := c.OpenDocumentCount(); got != 0 {
+		t.Fatalf("expected 0 opened documents on a fresh client, got %d", got)
+	}
+
+	c.mu.Lock()
+	c.openDocs["file:///a.go"] = docMeta{}
+	c.openDocs["file:///b.go"] = docMeta{}
+	c.mu.Unlock()
+
+	if got := c.OpenDocumentCount(); got != 2 {
+		t.Fatalf("expected 2 opened documents, got %d", got)
+	}
+}

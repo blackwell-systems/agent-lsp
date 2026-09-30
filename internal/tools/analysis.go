@@ -600,6 +600,15 @@ type workspaceSymbolPagination struct {
 	More   bool `json:"more"`
 }
 
+// encodeWorkspaceSymbolsResult encodes a find_symbol result honoring the
+// active output format (GCF graph payload vs JSON).
+func encodeWorkspaceSymbolsResult(ctx context.Context, symbols []types.SymbolInformation) (types.ToolResult, error) {
+	if OutputFormatFromContext(ctx) == "gcf" {
+		return EncodeResult(ctx, buildWorkspaceSymbolsPayload(symbols))
+	}
+	return EncodeResult(ctx, symbols)
+}
+
 // HandleGetWorkspaceSymbols searches for symbols across the workspace.
 //
 // detail_level controls enrichment:
@@ -632,13 +641,20 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 	}
 
 	wsSymHint := "Use inspect_symbol on a symbol for type details."
-	if detailLevel == "basic" || detailLevel == "" {
-		if OutputFormatFromContext(ctx) == "gcf" {
-			payload := buildWorkspaceSymbolsPayload(symbols)
-			encoded, _ := EncodeResult(ctx, payload)
-			return appendHint(encoded, wsSymHint), nil
+	if len(symbols) == 0 {
+		// An empty result has distinct causes; qualify it instead of
+		// presenting it as an authoritative "not found". (issue #42)
+		if !client.HasCapability("workspaceSymbolProvider") {
+			encoded, _ := encodeWorkspaceSymbolsResult(ctx, symbols)
+			return appendHint(encoded, "No matches. The server does not declare the workspaceSymbolProvider capability — workspace symbol search is unavailable for this language server."), nil
 		}
-		encoded, _ := EncodeResult(ctx, symbols)
+		if note := noteIndexCoverage(client); note != "" {
+			encoded, _ := encodeWorkspaceSymbolsResult(ctx, symbols)
+			return appendHint(encoded, "No matches. Note: "+note+"."), nil
+		}
+	}
+	if detailLevel == "basic" || detailLevel == "" {
+		encoded, _ := encodeWorkspaceSymbolsResult(ctx, symbols)
 		return appendHint(encoded, wsSymHint), nil
 	}
 
