@@ -122,6 +122,28 @@ func toolArgsToMap(v any) map[string]any {
 	return m
 }
 
+// workspaceQueryClients returns the client set for server-less workspace
+// queries (find_symbol, get_server_capabilities): the default client first,
+// then every other connected client, deduplicated by pointer. In
+// single-server mode this is exactly the old default client, so behavior is
+// unchanged; in multi-server mode workspace queries are no longer bound to
+// whatever server happens to be the default. (issue #2)
+func workspaceQueryClients(cs *clientState, resolver lsp.ClientResolver) []*lsp.LSPClient {
+	var out []*lsp.LSPClient
+	seen := map[*lsp.LSPClient]bool{}
+	if c := cs.get(); c != nil {
+		out = append(out, c)
+		seen[c] = true
+	}
+	for _, c := range resolver.AllClients() {
+		if c != nil && !seen[c] {
+			out = append(out, c)
+			seen[c] = true
+		}
+	}
+	return out
+}
+
 // addToolWithPhaseCheck wraps mcp.AddTool to insert a phase enforcement check
 // before every tool handler. If a skill is active and the tool call violates the
 // current phase's permissions, the check returns an error result without invoking

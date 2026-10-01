@@ -196,14 +196,3 @@ func TestProbeWorkspaceCoverage_CancelledYieldsUnknown(t *testing.T) {
 	}
 }
 
-func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	var b []byte
-	for i > 0 {
-		b = append([]byte{byte('0' + i%10)}, b...)
-		i /= 10
-	}
-	return string(b)
-}

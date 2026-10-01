@@ -623,6 +623,20 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
+	return HandleGetWorkspaceSymbolsMulti(ctx, []*lsp.LSPClient{client}, args)
+}
+
+// HandleGetWorkspaceSymbolsMulti is the multi-server fan-out of find_symbol
+// (issue #2): server-less workspace queries must not be bound to the default
+// server, which in auto-detect mode may not own the workspace's documents
+// (e.g. clangd answering 0 for MQL symbols). The query runs against every
+// initialized client; each symbol is tagged with the server that produced it
+// ("server" field, empty when a single server answers). Single-client sets
+// behave byte-identically to HandleGetWorkspaceSymbols.
+func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
+	if len(clients) == 0 || (len(clients) == 1 && clients[0] == nil) {
+		return types.ErrorResult("LSP client not initialized; call start_lsp first"), nil
+	}
 
 	query, _ := args["query"].(string)
 	detailLevel, _ := args["detail_level"].(string)
@@ -635,9 +649,57 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 		offset = v
 	}
 
-	symbols, err := client.GetWorkspaceSymbols(ctx, query)
-	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("find_symbol: %s", err)), nil
+	// Fan out; tag each symbol with its producing server (stable order:
+	// client list order, then server answer order).
+	type serverSymbol struct {
+		sym    types.SymbolInformation
+		client *lsp.LSPClient
+	}
+	var merged []serverSymbol
+	var firstErr error
+	errored := 0
+	anyDeclared := false
+	for clientIdx, client := range clients {
+		if client == nil || !client.IsInitialized() {
+			continue
+		}
+		if client.HasCapability("workspaceSymbolProvider") {
+			anyDeclared = true
+		}
+		syms, err := client.GetWorkspaceSymbols(ctx, query)
+		if err != nil {
+			errored++
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		serverName, _ := client.GetServerInfo()
+		if serverName == "" {
+			serverName = "server-" + itoa(clientIdx)
+		}
+		for _, s := range syms {
+			if len(clients) > 1 {
+				s.Server = serverName
+			}
+			merged = append(merged, serverSymbol{sym: s, client: client})
+		}
+	}
+	if len(merged) == 0 && firstErr != nil && errored == countInitialized(clients) {
+		return types.ErrorResult(fmt.Sprintf("find_symbol: %s", firstErr)), nil
+	}
+
+	symbols := make([]types.SymbolInformation, len(merged))
+	for i, ms := range merged {
+		symbols[i] = ms.sym
+	}
+
+	defaultClient := clients[0]
+	for _, c := range clients {
+		if c != nil && c.IsInitialized() {
+			defaultClient = c
+			break
+		}
 	}
 
 	wsSymHint := "Use inspect_symbol on a symbol for type details."
@@ -649,9 +711,12 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 	// CodeRabbit #51 thread 1)
 	emptyCause := ""
 	if len(symbols) == 0 {
-		if !client.HasCapability("workspaceSymbolProvider") {
+		if !anyDeclared {
 			emptyCause = "No matches. The server does not declare the workspaceSymbolProvider capability — workspace symbol search is unavailable for this language server."
-		} else if note := noteIndexCoverage(ctx, client); note != "" {
+			if len(clients) > 1 {
+				emptyCause = "No matches. None of the connected servers declare the workspaceSymbolProvider capability — workspace symbol search is unavailable."
+			}
+		} else if note := noteIndexCoverage(ctx, defaultClient); note != "" {
 			emptyCause = "No matches. Note: " + note + "."
 		}
 	}
@@ -660,7 +725,8 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 		return appendHint(encoded, emptyHint(emptyCause, wsSymHint)), nil
 	}
 
-	// Enrich the offset..offset+limit window with hover info.
+	// Enrich the offset..offset+limit window with hover info, using the
+	// server that owns each symbol.
 	resp := workspaceSymbolsResponse{
 		Total:   len(symbols),
 		Symbols: symbols,
@@ -668,18 +734,18 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 
 	if start, end, pg := symbolPaginationWindow(len(symbols), offset, limit); pg != nil {
 		resp.Pagination = pg
-		window := symbols[start:end]
+		window := merged[start:end]
 		enriched := make([]workspaceSymbolEnriched, len(window))
-		for i, sym := range window {
-			enriched[i] = workspaceSymbolEnriched{SymbolInformation: sym}
-			filePath, pErr := URIToFilePath(sym.Location.URI)
+		for i, ms := range window {
+			enriched[i] = workspaceSymbolEnriched{SymbolInformation: ms.sym}
+			filePath, pErr := URIToFilePath(ms.sym.Location.URI)
 			if pErr == nil {
 				pos := types.Position{
-					Line:      sym.Location.Range.Start.Line + 1,
-					Character: sym.Location.Range.Start.Character + 1,
+					Line:      ms.sym.Location.Range.Start.Line + 1,
+					Character: ms.sym.Location.Range.Start.Character + 1,
 				}
-				hoverText, hErr := WithDocument[string](ctx, client, filePath, "", func(uri string) (string, error) {
-					return client.GetInfoOnLocation(ctx, uri, pos)
+				hoverText, hErr := WithDocument[string](ctx, ms.client, filePath, "", func(uri string) (string, error) {
+					return ms.client.GetInfoOnLocation(ctx, uri, pos)
 				})
 				if hErr == nil && hoverText != "" {
 					enriched[i].Hover = hoverText
@@ -700,6 +766,30 @@ func emptyHint(cause, fallback string) string {
 		return cause
 	}
 	return fallback
+}
+
+// countInitialized counts non-nil initialized clients in the set.
+func countInitialized(clients []*lsp.LSPClient) int {
+	n := 0
+	for _, c := range clients {
+		if c != nil && c.IsInitialized() {
+			n++
+		}
+	}
+	return n
+}
+
+// itoa is a minimal integer formatter for server-N labels.
+func itoa(i int) string {
+	if i == 0 {
+		return "0"
+	}
+	var b []byte
+	for i > 0 {
+		b = append([]byte{byte('0' + i%10)}, b...)
+		i /= 10
+	}
+	return string(b)
 }
 
 // toIntOpt reads an integer argument without error — returns (value, true) if present and valid.
