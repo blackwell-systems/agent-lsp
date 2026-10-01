@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blackwell-systems/agent-lsp/internal/encoding/gcf"
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
@@ -523,11 +524,16 @@ func TestChangeImpact_EncodeResult_GCF(t *testing.T) {
 }
 
 func TestBuildChangeImpactPayload(t *testing.T) {
-	changed := []symbolRef{{Name: "Foo", File: "/src/pkg/foo.go", Line: 10}}
-	callers := []symbolRef{{Name: "Bar", File: "/src/pkg/bar.go", Line: 20}}
+	target := symbolRef{Name: "Foo", File: "/src/pkg/foo.go", Line: 10}
+	entries := []symbolWithCallers{
+		{
+			symbolRef:      target,
+			NonTestCallers: []symbolRef{{Name: "Bar", File: "/src/pkg/bar.go", Line: 20}},
+		},
+	}
 	tests := []symbolRef{{Name: "TestFoo", File: "/src/pkg/foo_test.go", Line: 5}}
 
-	p := buildChangeImpactPayload(changed, callers, tests)
+	p := buildChangeImpactPayload(entries, tests)
 
 	if p.Tool != "blast_radius" {
 		t.Errorf("wrong tool: got %q, want %q", p.Tool, "blast_radius")
@@ -554,22 +560,40 @@ func TestBuildChangeImpactPayload(t *testing.T) {
 	if p.Symbols[2].Score != 0.7 {
 		t.Errorf("test symbol score should be 0.7, got %f", p.Symbols[2].Score)
 	}
-	// Verify edges exist
+	// Verify edges exist and are REAL caller -> target edges (issue #5:
+	// the old implementation produced degenerate self-edges @N<@N).
 	if len(p.Edges) != 1 {
 		t.Errorf("expected 1 edge, got %d", len(p.Edges))
 	}
-	if len(p.Edges) > 0 && p.Edges[0].EdgeType != "calls" {
-		t.Errorf("edge type should be 'calls', got %q", p.Edges[0].EdgeType)
+	if len(p.Edges) > 0 {
+		if p.Edges[0].EdgeType != "calls" {
+			t.Errorf("edge type should be 'calls', got %q", p.Edges[0].EdgeType)
+		}
+		if p.Edges[0].Source == p.Edges[0].Target {
+			t.Errorf("degenerate self-edge: source %q == target %q", p.Edges[0].Source, p.Edges[0].Target)
+		}
+		wantTarget := gcf.QualifiedName(target.File, target.Name)
+		wantSource := gcf.QualifiedName("/src/pkg/bar.go", "Bar")
+		if p.Edges[0].Source != wantSource || p.Edges[0].Target != wantTarget {
+			t.Errorf("edge should be %q -> %q, got %q -> %q", wantSource, wantTarget, p.Edges[0].Source, p.Edges[0].Target)
+		}
 	}
 }
 
 func TestBuildChangeImpactPayload_Dedup(t *testing.T) {
-	// Duplicate callers should be deduplicated.
-	callers := []symbolRef{
-		{Name: "Bar", File: "/src/pkg/bar.go", Line: 20},
-		{Name: "Bar", File: "/src/pkg/bar.go", Line: 25},
+	// Duplicate callers should be deduplicated by qualified name.
+	caller := symbolRef{Name: "Bar", File: "/src/pkg/bar.go", Line: 20}
+	entries := []symbolWithCallers{
+		{
+			symbolRef:      symbolRef{Name: "A", File: "/src/pkg/a.go", Line: 1},
+			NonTestCallers: []symbolRef{caller, {Name: "Bar", File: "/src/pkg/bar.go", Line: 25}},
+		},
+		{
+			symbolRef:      symbolRef{Name: "B", File: "/src/pkg/b.go", Line: 2},
+			NonTestCallers: []symbolRef{{Name: "Bar", File: "/src/pkg/bar.go", Line: 30}},
+		},
 	}
-	p := buildChangeImpactPayload(nil, callers, nil)
+	p := buildChangeImpactPayload(entries, nil)
 	// Only one caller symbol should appear (deduplicated by qualified name).
 	callerCount := 0
 	for _, s := range p.Symbols {
@@ -579,5 +603,126 @@ func TestBuildChangeImpactPayload_Dedup(t *testing.T) {
 	}
 	if callerCount != 1 {
 		t.Errorf("expected 1 deduplicated caller, got %d", callerCount)
+	}
+	// But BOTH call relationships must produce caller -> target edges.
+	if len(p.Edges) != 2 {
+		t.Errorf("expected 2 caller->target edges, got %d", len(p.Edges))
+	}
+}
+
+func TestRenestFlatSymbols_FlatMQLList(t *testing.T) {
+	// Mimics mql-lsp-server v2.5.0: a FLAT documentSymbol list where the
+	// function's parameters and locals are top-level siblings carrying
+	// SymbolKind Function (12). Issue #5 live repro on riesgo_mq4.mqh.
+	flat := []types.DocumentSymbol{
+		{Name: "CalculaRiesgoTicks", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 9, Character: 0}, End: types.Position{Line: 30, Character: 4}},
+			SelectionRange: types.Range{Start: types.Position{Line: 9, Character: 7}, End: types.Position{Line: 9, Character: 25}}},
+		{Name: "tipoOrden", Kind: 13, // parameter (Variable), flat top-level
+			Range:          types.Range{Start: types.Position{Line: 9, Character: 26}, End: types.Position{Line: 9, Character: 35}},
+			SelectionRange: types.Range{Start: types.Position{Line: 9, Character: 26}, End: types.Position{Line: 9, Character: 35}}},
+		{Name: "lotaje", Kind: 13, // parameter
+			Range:          types.Range{Start: types.Position{Line: 9, Character: 37}, End: types.Position{Line: 9, Character: 43}},
+			SelectionRange: types.Range{Start: types.Position{Line: 9, Character: 37}, End: types.Position{Line: 9, Character: 43}}},
+		{Name: "cantidadTicks", Kind: 13, // local
+			Range:          types.Range{Start: types.Position{Line: 13, Character: 5}, End: types.Position{Line: 13, Character: 25}},
+			SelectionRange: types.Range{Start: types.Position{Line: 13, Character: 11}, End: types.Position{Line: 13, Character: 24}}},
+		{Name: "CalculaLotajeDesdeRiesgo", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 37, Character: 0}, End: types.Position{Line: 65, Character: 4}},
+			SelectionRange: types.Range{Start: types.Position{Line: 37, Character: 7}, End: types.Position{Line: 37, Character: 31}}},
+		{Name: "i", Kind: 13, // loop local
+			Range:          types.Range{Start: types.Position{Line: 46, Character: 2}, End: types.Position{Line: 46, Character: 10}},
+			SelectionRange: types.Range{Start: types.Position{Line: 46, Character: 6}, End: types.Position{Line: 46, Character: 7}}},
+	}
+
+	nested := renestFlatSymbols(flat)
+	if len(nested) != 2 {
+		t.Fatalf("expected 2 top-level functions after re-nesting, got %d", len(nested))
+	}
+	if len(nested[0].Children) != 3 {
+		t.Errorf("expected 3 children under CalculaRiesgoTicks, got %d", len(nested[0].Children))
+	}
+	if len(nested[1].Children) != 1 {
+		t.Errorf("expected 1 child under CalculaLotajeDesdeRiesgo, got %d", len(nested[1].Children))
+	}
+
+	// scope=exported must now exclude the params/locals (all kind 12, but
+	// nested): only the two top-level functions are targets.
+	var out []exportedSymbol
+	collectExportedSymbols(nested, "/tmp/fixture.mqh", "mql", &out, true, 0, 0)
+	if len(out) != 2 {
+		names := make([]string, 0, len(out))
+		for _, s := range out {
+			names = append(names, s.Name)
+		}
+		t.Errorf("expected 2 exported targets, got %d: %v", len(out), names)
+	}
+	for _, s := range out {
+		if s.Name != "CalculaRiesgoTicks" && s.Name != "CalculaLotajeDesdeRiesgo" {
+			t.Errorf("nested param/local %q promoted to target", s.Name)
+		}
+	}
+
+	// scope=all must still see everything (8 symbols).
+	var all []exportedSymbol
+	collectAllSymbols(nested, "/tmp/fixture.mqh", "mql", &all, true)
+	if len(all) != 6 {
+		t.Errorf("scope=all expected 6 symbols, got %d", len(all))
+	}
+}
+
+func TestRenestFlatSymbols_NestedTreeUnchanged(t *testing.T) {
+	// A properly nested tree must survive re-nesting structurally.
+	nested := []types.DocumentSymbol{
+		{Name: "Outer", Kind: 12,
+			Range: types.Range{Start: types.Position{Line: 0, Character: 0}, End: types.Position{Line: 10, Character: 0}},
+			Children: []types.DocumentSymbol{
+				{Name: "innerLocal", Kind: 13,
+					Range: types.Range{Start: types.Position{Line: 2, Character: 1}, End: types.Position{Line: 2, Character: 9}}},
+				{Name: "InnerFn", Kind: 12,
+					Range: types.Range{Start: types.Position{Line: 4, Character: 1}, End: types.Position{Line: 8, Character: 2}}},
+			}},
+		{Name: "Sibling", Kind: 12,
+			Range: types.Range{Start: types.Position{Line: 20, Character: 0}, End: types.Position{Line: 25, Character: 0}}},
+	}
+
+	got := renestFlatSymbols(nested)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 roots, got %d", len(got))
+	}
+	if len(got[0].Children) != 2 {
+		t.Fatalf("expected 2 children on Outer, got %d", len(got[0].Children))
+	}
+	// Children sorted by position: innerLocal (line 2) before InnerFn (line 4).
+	if got[0].Children[0].Name != "innerLocal" || got[0].Children[1].Name != "InnerFn" {
+		t.Errorf("unexpected children order: %q, %q", got[0].Children[0].Name, got[0].Children[1].Name)
+	}
+	if len(got[0].Children[0].Children) != 0 || len(got[0].Children[1].Children) != 0 {
+		t.Error("leaf symbols must not gain children")
+	}
+}
+
+func TestRenestFlatSymbols_EqualRangesAreSiblings(t *testing.T) {
+	// Two symbols with identical ranges must not become parent/child.
+	syms := []types.DocumentSymbol{
+		{Name: "A", Kind: 12, Range: types.Range{Start: types.Position{Line: 1, Character: 0}, End: types.Position{Line: 5, Character: 0}}},
+		{Name: "B", Kind: 12, Range: types.Range{Start: types.Position{Line: 1, Character: 0}, End: types.Position{Line: 5, Character: 0}}},
+	}
+	got := renestFlatSymbols(syms)
+	if len(got) != 2 {
+		t.Errorf("identical ranges must stay siblings, got %d roots", len(got))
+	}
+}
+
+func TestBuildChangeImpactPayload_NoSelfEdgesForSameName(t *testing.T) {
+	// A caller with the same (file, name) as the target would produce a
+	// degenerate self-edge; it must be dropped.
+	entry := symbolWithCallers{
+		symbolRef:      symbolRef{Name: "Foo", File: "/src/pkg/foo.go", Line: 10},
+		NonTestCallers: []symbolRef{{Name: "Foo", File: "/src/pkg/foo.go", Line: 12}},
+	}
+	p := buildChangeImpactPayload([]symbolWithCallers{entry}, nil)
+	if len(p.Edges) != 0 {
+		t.Errorf("expected 0 edges (self-edge dropped), got %d", len(p.Edges))
 	}
 }
