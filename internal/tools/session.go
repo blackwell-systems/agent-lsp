@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -128,21 +129,42 @@ func ParseScopePaths(raw any) []string {
 
 // HandleRestartLspServer restarts the LSP server with the given root dir.
 // root_dir is required: omitting it would construct a malformed "file://" rootURI.
+// resolveRestartRoot resolves the workspace root for restart_lsp_server.
+// The MCP schema declares root_dir optional ("If omitted, restarts with
+// current root"); when omitted, the client's current root is reused instead
+// of rejecting the call and burning an agent round-trip on the mismatch.
+// An error is returned only when neither exists. (issue #3A)
+func resolveRestartRoot(client *lsp.LSPClient, args map[string]any) (string, error) {
+	rootDir, _ := args["root_dir"].(string)
+	if rootDir == "" {
+		rootDir = client.RootDir()
+	}
+	if rootDir == "" {
+		return "", errors.New("root_dir is required for restart_lsp_server: no workspace root has been initialized yet; call start_lsp first or pass root_dir")
+	}
+	return rootDir, nil
+}
+
 func HandleRestartLspServer(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
 
-	rootDir, _ := args["root_dir"].(string)
-	if rootDir == "" {
-		return types.ErrorResult("root_dir is required for restart_lsp_server"), nil
+	rootDir, err := resolveRestartRoot(client, args)
+	if err != nil {
+		return types.ErrorResult(err.Error()), nil
 	}
-	if err := client.Restart(ctx, rootDir); err != nil {
+	reopened, err := client.Restart(ctx, rootDir)
+	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("failed to restart LSP server: %s", err)), nil
 	}
 	// M4: In multi-server configurations only the default client is restarted.
 	// Other configured servers remain running. Restart each independently if needed.
-	return types.TextResult("LSP server restarted successfully. Note: in multi-server configurations only the default server was restarted; other configured servers are unaffected."), nil
+	msg := "LSP server restarted successfully. Note: in multi-server configurations only the default server was restarted; other configured servers are unaffected."
+	if reopened > 0 {
+		msg += fmt.Sprintf(" Re-opened %d document(s) from the previous session on the fresh server.", reopened)
+	}
+	return types.TextResult(msg), nil
 }
 
 // HandleOpenDocument opens a document in the LSP server.
