@@ -158,6 +158,11 @@ type DocumentSymbol struct {
 	Range          Range            `json:"range"`
 	SelectionRange Range            `json:"selectionRange"`
 	Children       []DocumentSymbol `json:"children,omitempty"`
+
+	// Renested marks a symbol that renestFlatSymbols re-parented under an
+	// enclosing range while rebuilding a flat documentSymbol list. Internal
+	// bookkeeping for blast-radius filtering; never serialized.
+	Renested bool `json:"-"`
 }
 
 // Command is an LSP workspace command (used both standalone and embedded).
