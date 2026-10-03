@@ -335,6 +335,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		"preview edit impact -> preview_edit; " +
 		"replace a function body -> replace_symbol_body; " +
 		"delete unused code -> safe_delete_symbol; " +
+		"coordinated multi-file text replace -> replace_in_files (dry_run first, then apply all or by occurrence id); " +
 		"available quick fixes -> suggest_fixes; " +
 		"full context on a symbol -> explore_symbol (one call); " +
 		"safe edit (preview + apply) -> safe_apply_edit. " +
@@ -386,6 +387,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	registerPhaseTools(deps)
 	registerExploreTools(deps)
 	registerSafeEditTools(deps)
+	registerReplaceInFilesTool(deps)
 	registerAliasTools(deps)
 
 	// ------- Register prompts (skills as MCP prompts) -------

@@ -445,7 +445,7 @@ See [docs/reference/language-support.md](./docs/reference/language-support.md) f
 
 ## Tools
 
-65 tools covering navigation, analysis, refactoring, symbol editing, composite exploration, safe editing, speculative execution, and session lifecycle. All CI-verified.
+66 tools covering navigation, analysis, refactoring, symbol editing, composite exploration, safe editing, speculative execution, and session lifecycle. All CI-verified.
 
 See [docs/reference/tools.md](./docs/reference/tools.md) for the full reference with parameters and examples.
 
