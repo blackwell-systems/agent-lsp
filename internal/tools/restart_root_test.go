@@ -14,12 +14,22 @@ import (
 // instead of rejecting the call.
 func TestResolveRestartRoot_FallsBackToCurrentRoot(t *testing.T) {
 	client := lsp.NewLSPClient("fake", nil)
-	// RootDir is set by Initialize; simulate an initialized client by
-	// checking the fallback path through the handler-level contract instead:
-	// an empty args root_dir with an uninitialized client yields the
-	// descriptive error, and a provided root_dir wins over the default.
+	client.SetRootDirForTest("/tmp/current-ws")
 
-	// No args, no initialized root → descriptive error (not the old bare one).
+	// root_dir omitted → the client's current root is reused, matching the
+	// MCP schema contract ("If omitted, restarts with current root").
+	root, err := resolveRestartRoot(client, map[string]any{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if root != "/tmp/current-ws" {
+		t.Fatalf("expected current-root fallback, got %q", root)
+	}
+}
+
+func TestResolveRestartRoot_NoRootAnywhere(t *testing.T) {
+	client := lsp.NewLSPClient("fake", nil)
+	// No args and no initialized root → descriptive error (not the old bare one).
 	_, got := resolveRestartRoot(client, map[string]any{})
 	if got == nil || !strings.Contains(got.Error(), "call start_lsp first") {
 		t.Fatalf("expected descriptive error when no root exists, got %v", got)

@@ -164,7 +164,7 @@ func HandleRestartLspServer(ctx context.Context, client *lsp.LSPClient, args map
 	if reopened > 0 {
 		msg += fmt.Sprintf(" Re-opened %d document(s) from the previous session on the fresh server.", reopened)
 	}
-	return types.TextResult(msg), nil
+	return EncodeResult(ctx, msg)
 }
 
 // HandleOpenDocument opens a document in the LSP server.

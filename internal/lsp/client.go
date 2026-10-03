@@ -1454,14 +1454,32 @@ func (c *LSPClient) replayOpenDocuments(ctx context.Context, snapshot []docMeta,
 			logging.Log(logging.LevelDebug, "restart replay: skipping document outside new root: "+meta.filePath)
 			continue
 		}
-		data, err := os.ReadFile(meta.filePath)
+		// Re-validate against the root at replay time: withinRoot is lexical,
+		// and a tracked file can be swapped for a symlink after it was first
+		// opened, which would let os.ReadFile escape the workspace. ValidatePath
+		// resolves symlinks (leaf and ancestors) before the boundary check.
+		validatedPath, vErr := uripkg.ValidatePath(meta.filePath, rootDir)
+		if vErr != nil {
+			logging.Log(logging.LevelDebug, "restart replay: skipping unvalidated document "+meta.filePath+": "+vErr.Error())
+			continue
+		}
+		data, err := os.ReadFile(validatedPath)
 		if err != nil {
 			logging.Log(logging.LevelDebug, "restart replay: skipping unreadable document "+meta.filePath+": "+err.Error())
 			continue
 		}
-		uri := "file://" + meta.filePath
+		// PathToFileURI percent-encodes reserved characters (#, ?, %, spaces);
+		// a raw "file://"+path concatenation can truncate at fragment or query
+		// boundaries when the server decodes it back (URIToPath).
+		uri := PathToFileURI(validatedPath)
 		if err := c.OpenDocument(ctx, uri, string(data), meta.languageID); err != nil {
 			logging.Log(logging.LevelDebug, "restart replay: didOpen failed for "+meta.filePath+": "+err.Error())
+			// OpenDocument records the URI before sending didOpen; roll the
+			// entry back so a later call retries didOpen instead of sending
+			// didChange on a server that never received the notification.
+			c.mu.Lock()
+			delete(c.openDocs, uri)
+			c.mu.Unlock()
 			continue
 		}
 		replayed++
