@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -208,6 +210,19 @@ func TestHandleGetWorkspaceSymbolsMulti_FanOut(t *testing.T) {
 			wantTags:   []string{"server-1"},
 			wantInHint: []string{"1 of 2 servers failed"},
 		},
+		{
+			name: "nil member does not inflate the failure-note denominator",
+			clients: func(t *testing.T) []*lsp.LSPClient {
+				return []*lsp.LSPClient{
+					nil,
+					startFakeLSP(t, []string{"workspace/symbol"}, nil, true),
+					startFakeLSP(t, []string{"workspace/symbol"}, []any{wsymJSON("Beta")}, false),
+				}
+			},
+			wantSyms:   []string{"Beta"},
+			wantTags:   []string{"server-2"},
+			wantInHint: []string{"1 of 2 servers failed"},
+		},
 	}
 
 	for _, tc := range cases {
@@ -325,6 +340,32 @@ func TestSymbolInformation_ServerTagOmitEmpty(t *testing.T) {
 	multi, _ := json.Marshal(types.SymbolInformation{Name: "A", Server: "mql-lsp-server"})
 	if !strings.Contains(string(multi), `"server":"mql-lsp-server"`) {
 		t.Fatalf("server tag missing: %s", multi)
+	}
+}
+
+// Coverage must be established per queried client: the first server's open
+// documents say nothing about another server's index, so a fully-opened
+// default client must not suppress the caveat when another capable server
+// has unopened files. (CodeRabbit #59 re-review thread)
+func TestHandleGetWorkspaceSymbolsMulti_CoverageCheckedPerClient(t *testing.T) {
+	// Server A: no workspace root — coverage complete.
+	serverA := startFakeLSP(t, []string{"workspace/symbol"}, []any{}, false)
+	// Server B: a root with a file the session never opened — incomplete.
+	serverB := startFakeLSP(t, []string{"workspace/symbol"}, []any{}, false)
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	serverB.SetRootDirForTest(root)
+
+	r, err := HandleGetWorkspaceSymbolsMulti(context.Background(),
+		[]*lsp.LSPClient{serverA, serverB}, map[string]any{"query": "x"})
+	if err != nil {
+		t.Fatalf("unexpected Go error: %v", err)
+	}
+	all := contentText(r)
+	if !strings.Contains(all, "only index opened documents") {
+		t.Fatalf("expected index-coverage caveat when one capable server has unopened files, got %q", all)
 	}
 }
 

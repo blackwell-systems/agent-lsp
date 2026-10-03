@@ -704,21 +704,17 @@ func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClien
 		symbols[i] = ms.sym
 	}
 
-	defaultClient := clients[0]
-	for _, c := range clients {
-		if c != nil && c.IsInitialized() {
-			defaultClient = c
-			break
-		}
-	}
-
 	// Server-failure provenance is built once and appended to EVERY
 	// partial-result branch — basic, hover-enriched, and the empty-result
 	// paths — so callers can never mistake an incomplete fan-out for a
 	// complete answer. (CodeRabbit #59 thread 3)
 	failureNote := ""
 	if len(clients) > 1 && errored > 0 {
-		failureNote = fmt.Sprintf(" Note: %d of %d servers failed the query (%s).", errored, len(clients), firstErr)
+		// The denominator counts only the clients that actually ran the
+		// query: nil and uninitialized members are skipped by the loop and
+		// must not inflate the server total. (CodeRabbit #59 re-review thread
+		// — same helper supplies the all-failed check above)
+		failureNote = fmt.Sprintf(" Note: %d of %d servers failed the query (%s).", errored, countInitialized(clients), firstErr)
 	}
 
 	wsSymHint := "Use inspect_symbol on a symbol for type details."
@@ -735,7 +731,7 @@ func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClien
 			if len(clients) > 1 {
 				emptyCause = "No matches. None of the connected servers declare the workspaceSymbolProvider capability — workspace symbol search is unavailable."
 			}
-		} else if note := noteIndexCoverage(ctx, defaultClient); note != "" {
+		} else if note := noteIndexCoverageMulti(ctx, clients); note != "" {
 			emptyCause = "No matches. Note: " + note + "."
 		}
 	}

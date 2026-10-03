@@ -163,3 +163,22 @@ func openedDocumentPaths(client *lsp.LSPClient) map[string]bool {
 	}
 	return out
 }
+
+// noteIndexCoverageMulti is the multi-server variant of noteIndexCoverage.
+// Each client that will actually be queried — initialized and declaring
+// workspaceSymbolProvider — establishes coverage independently: the first
+// client's open-document set says nothing about another server's index, so
+// checking only the default client could omit the caveat when one server is
+// fully opened but another is not. The caveat shows when ANY queried client
+// has incomplete coverage. (CodeRabbit #59 re-review thread)
+func noteIndexCoverageMulti(ctx context.Context, clients []*lsp.LSPClient) string {
+	for _, c := range clients {
+		if c == nil || !c.IsInitialized() || !c.HasCapability("workspaceSymbolProvider") {
+			continue
+		}
+		if probeWorkspaceCoverage(ctx, c.RootDir(), openedDocumentPaths(c)) != coverageComplete {
+			return unopenedFilesCaveat
+		}
+	}
+	return ""
+}
