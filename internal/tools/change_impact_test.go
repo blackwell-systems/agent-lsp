@@ -663,11 +663,82 @@ func TestRenestFlatSymbols_FlatMQLList(t *testing.T) {
 		}
 	}
 
-	// scope=all must still see everything (8 symbols).
+	// scope=all must still see everything (6 symbols).
 	var all []exportedSymbol
 	collectAllSymbols(nested, "/tmp/fixture.mqh", "mql", &all, true)
 	if len(all) != 6 {
 		t.Errorf("scope=all expected 6 symbols, got %d", len(all))
+	}
+}
+
+func TestRenestFlatSymbols_FlatMQLList_Kind12Params(t *testing.T) {
+	// mql-lsp-server v2.5.0 publishes params/locals as SymbolKind Function
+	// (12), not Variable (13). After re-nesting they must not become
+	// blast-radius targets (CodeRabbit #57 thread 2), and must not win the
+	// caller-attribution race against the containing function (thread 3).
+	flat := []types.DocumentSymbol{
+		{Name: "CalculaRiesgoTicks", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 9, Character: 0}, End: types.Position{Line: 30, Character: 4}},
+			SelectionRange: types.Range{Start: types.Position{Line: 9, Character: 7}, End: types.Position{Line: 9, Character: 25}}},
+		{Name: "tipoOrden", Kind: 12, // parameter published as Function
+			Range:          types.Range{Start: types.Position{Line: 9, Character: 26}, End: types.Position{Line: 9, Character: 35}},
+			SelectionRange: types.Range{Start: types.Position{Line: 9, Character: 26}, End: types.Position{Line: 9, Character: 35}}},
+		{Name: "cantidadTicks", Kind: 12, // local published as Function
+			Range:          types.Range{Start: types.Position{Line: 13, Character: 5}, End: types.Position{Line: 13, Character: 25}},
+			SelectionRange: types.Range{Start: types.Position{Line: 13, Character: 11}, End: types.Position{Line: 13, Character: 24}}},
+		{Name: "CalculaLotajeDesdeRiesgo", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 37, Character: 0}, End: types.Position{Line: 65, Character: 4}},
+			SelectionRange: types.Range{Start: types.Position{Line: 37, Character: 7}, End: types.Position{Line: 37, Character: 31}}},
+		{Name: "i", Kind: 12, // loop local published as Function
+			Range:          types.Range{Start: types.Position{Line: 46, Character: 2}, End: types.Position{Line: 46, Character: 10}},
+			SelectionRange: types.Range{Start: types.Position{Line: 46, Character: 6}, End: types.Position{Line: 46, Character: 7}}},
+	}
+
+	nested := renestFlatSymbols(flat)
+	if len(nested) != 2 {
+		t.Fatalf("expected 2 top-level functions after re-nesting, got %d", len(nested))
+	}
+	if len(nested[0].Children) != 2 || len(nested[1].Children) != 1 {
+		t.Errorf("unexpected children: %d under CalculaRiesgoTicks, %d under CalculaLotajeDesdeRiesgo",
+			len(nested[0].Children), len(nested[1].Children))
+	}
+	// Roots unmarked, re-parented children marked.
+	if nested[0].Renested || nested[1].Renested {
+		t.Error("top-level functions must not carry the re-nesting mark")
+	}
+	for _, root := range nested {
+		for _, ch := range root.Children {
+			if !ch.Renested {
+				t.Errorf("re-parented child %q must carry the re-nesting mark", ch.Name)
+			}
+		}
+	}
+
+	// scope=exported: only the two functions are targets; kind-12
+	// params/locals must not leak through the nested filter.
+	var out []exportedSymbol
+	collectExportedSymbols(nested, "/tmp/fixture.mqh", "mql", &out, true, 0, 0)
+	if len(out) != 2 {
+		names := make([]string, 0, len(out))
+		for _, s := range out {
+			names = append(names, s.Name)
+		}
+		t.Fatalf("expected 2 exported targets, got %d: %v", len(out), names)
+	}
+	for _, s := range out {
+		if s.Name != "CalculaRiesgoTicks" && s.Name != "CalculaLotajeDesdeRiesgo" {
+			t.Errorf("re-nested param/local %q promoted to target", s.Name)
+		}
+	}
+
+	// Caller attribution: a reference on a param/local line must resolve to
+	// the containing function (same pipeline findEnclosingCaller uses).
+	cands := callerSymbolCandidates(flat)
+	if enc := findEnclosingSymbol(cands, 13); enc == nil || enc.Name != "CalculaRiesgoTicks" {
+		t.Errorf("line 13: expected caller CalculaRiesgoTicks, got %v", enc)
+	}
+	if enc := findEnclosingSymbol(cands, 46); enc == nil || enc.Name != "CalculaLotajeDesdeRiesgo" {
+		t.Errorf("line 46: expected caller CalculaLotajeDesdeRiesgo, got %v", enc)
 	}
 }
 
@@ -699,6 +770,21 @@ func TestRenestFlatSymbols_NestedTreeUnchanged(t *testing.T) {
 	}
 	if len(got[0].Children[0].Children) != 0 || len(got[0].Children[1].Children) != 0 {
 		t.Error("leaf symbols must not gain children")
+	}
+
+	// Genuinely nested children (hierarchical servers) carry no re-nesting
+	// mark: a nested function keeps qualifying as a blast-radius target.
+	if got[0].Children[1].Renested {
+		t.Error("genuinely nested InnerFn must not be marked re-nested")
+	}
+	var out []exportedSymbol
+	collectExportedSymbols(got, "/tmp/fixture.go", "go", &out, true, 0, 0)
+	names := map[string]bool{}
+	for _, s := range out {
+		names[s.Name] = true
+	}
+	if !names["InnerFn"] {
+		t.Errorf("genuinely nested function InnerFn dropped from targets: %v", names)
 	}
 }
 

@@ -391,6 +391,12 @@ func insertNested(root *types.DocumentSymbol, sym types.DocumentSymbol) (types.D
 			return *root, true
 		}
 	}
+	// Placement here is what "re-nesting" means: the symbol arrived as a
+	// top-level sibling of a flat list and is being given a synthetic parent.
+	// collectExportedSymbols and stripNonCallableSymbols use this mark to
+	// keep parameter/local shapes from becoming blast-radius targets or
+	// caller attributions.
+	sym.Renested = true
 	root.Children = append(root.Children, sym)
 	return *root, true
 }
@@ -468,6 +474,15 @@ var nestedCallableKinds = map[types.SymbolKind]bool{
 	10: true, 11: true, 12: true, 14: true, 23: true, 24: true,
 }
 
+// paramLocalKinds are the SymbolKind shapes flat servers use when publishing
+// parameters and locals as top-level entries: Function (12 — mql-lsp-server
+// v2.5.0 reports params/locals as SymbolKind Function) and Variable (13).
+// Combined with DocumentSymbol.Renested they identify re-nested parameter and
+// local shapes so they neither become blast-radius targets nor win caller
+// attribution, while genuinely nested functions (hierarchical servers,
+// unmarked) keep the existing filtering.
+var paramLocalKinds = map[types.SymbolKind]bool{12: true, 13: true}
+
 // constantContainerKinds is the set of parent SymbolKinds inside which a
 // nested Constant (14) stays a legitimate blast-radius target: class, struct,
 // enum, namespace, module, package, interface, and event bodies. A constant
@@ -506,6 +521,12 @@ func collectExportedSymbols(syms []types.DocumentSymbol, filePath, langID string
 		// WITHOUT recursing: a parameter has no callable children, so descending
 		// would only surface more noise.
 		if depth > 0 && !nestedCallableKinds[sym.Kind] {
+			continue
+		}
+		// A re-nested parameter/local shape (a flat server publishing them
+		// with a callable kind) is not an independent blast-radius target.
+		// Genuinely nested children carry no Renested mark and pass through.
+		if depth > 0 && sym.Renested && paramLocalKinds[sym.Kind] {
 			continue
 		}
 		// A nested constant stays a target only when its parent is a container
@@ -684,13 +705,14 @@ func findEnclosingTestFunction(ctx context.Context, client *lsp.LSPClient, cache
 }
 
 // stripNonCallableSymbols removes Variable (13), Field (8), and Constant (14)
-// symbols at every depth. Flat servers publish params/locals with single-line
-// ranges, and a reference sharing a line with a declaration would otherwise
-// win the smallest-enclosing-symbol race against the containing function.
+// symbols at every depth, plus re-nested parameter/local shapes (flat servers
+// publish params/locals carrying SymbolKind Function; renestFlatSymbols marks
+// them). A reference sharing a line with a declaration would otherwise win
+// the smallest-enclosing-symbol race against the containing function.
 func stripNonCallableSymbols(syms []types.DocumentSymbol) []types.DocumentSymbol {
 	out := make([]types.DocumentSymbol, 0, len(syms))
 	for _, s := range syms {
-		if s.Kind == 8 || s.Kind == 13 || s.Kind == 14 {
+		if s.Kind == 8 || s.Kind == 13 || s.Kind == 14 || (s.Renested && paramLocalKinds[s.Kind]) {
 			continue
 		}
 		s.Children = stripNonCallableSymbols(s.Children)
@@ -720,7 +742,18 @@ func findEnclosingCaller(ctx context.Context, client *lsp.LSPClient, cache *sync
 	if len(list) == 0 {
 		return nil
 	}
-	return findEnclosingSymbol(stripNonCallableSymbols(list), line)
+	// Re-nest before stripping so flat-server params/locals published with a
+	// callable kind (SymbolKind Function) are marked and cannot win the
+	// smallest-enclosing-symbol race against the containing function.
+	return findEnclosingSymbol(callerSymbolCandidates(list), line)
+}
+
+// callerSymbolCandidates builds the candidate tree for caller attribution:
+// flat lists are re-nested first (marking re-parented parameter/local
+// shapes), then non-callable symbols are stripped. Kept as a helper so tests
+// can exercise the exact findEnclosingCaller pipeline without a live client.
+func callerSymbolCandidates(list []types.DocumentSymbol) []types.DocumentSymbol {
+	return stripNonCallableSymbols(renestFlatSymbols(list))
 }
 
 // findEnclosingSymbol walks a DocumentSymbol tree and returns the smallest symbol
