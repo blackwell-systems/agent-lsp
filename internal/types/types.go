@@ -145,6 +145,10 @@ type SymbolInformation struct {
 	Deprecated    *bool       `json:"deprecated,omitempty"`
 	Location      Location    `json:"location"`
 	ContainerName *string     `json:"containerName,omitempty"`
+	// Server identifies which connected language server produced the symbol.
+	// Empty in single-server mode, so existing consumers see no change.
+	// (issue #2)
+	Server string `json:"server,omitempty"`
 }
 
 // DocumentSymbol is the hierarchical variant of a document symbol.

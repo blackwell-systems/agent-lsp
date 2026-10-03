@@ -104,7 +104,11 @@ func HandleGetReferences(ctx context.Context, client *lsp.LSPClient, args map[st
 		return res, err
 	}
 	if len(locs) == 0 {
-		return appendHint(res, referencesEmptyHint), nil
+		hint := referencesEmptyHint
+		if note := noteIndexCoverage(ctx, client); note != "" {
+			hint += " Note: " + note + "."
+		}
+		return appendHint(res, hint), nil
 	}
 	if fallbackUsed {
 		return appendHint(res, fuzzyFallbackProvenanceHint), nil
