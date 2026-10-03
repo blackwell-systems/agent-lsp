@@ -856,7 +856,7 @@ func TestResetDiagnostics(t *testing.T) {
 	}
 }
 
-// --- HasCapability / OpenDocumentCount exported wrappers (issue #42) ---
+// --- HasCapability exported wrapper (issue #42) ---
 
 func TestHasCapabilityExported(t *testing.T) {
 	c, _, _ := newTestClient(t)
@@ -880,22 +880,5 @@ func TestHasCapabilityExported(t *testing.T) {
 	}
 	if c.HasCapability("typeHierarchyProvider") {
 		t.Error("expected false for undeclared capability")
-	}
-}
-
-func TestOpenDocumentCountExported(t *testing.T) {
-	c, _, _ := newTestClient(t)
-
-	if got := c.OpenDocumentCount(); got != 0 {
-		t.Fatalf("expected 0 opened documents on a fresh client, got %d", got)
-	}
-
-	c.mu.Lock()
-	c.openDocs["file:///a.go"] = docMeta{}
-	c.openDocs["file:///b.go"] = docMeta{}
-	c.mu.Unlock()
-
-	if got := c.OpenDocumentCount(); got != 2 {
-		t.Fatalf("expected 2 opened documents, got %d", got)
 	}
 }

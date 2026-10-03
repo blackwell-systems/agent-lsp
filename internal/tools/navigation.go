@@ -105,7 +105,7 @@ func HandleGetReferences(ctx context.Context, client *lsp.LSPClient, args map[st
 	}
 	if len(locs) == 0 {
 		hint := referencesEmptyHint
-		if note := noteIndexCoverage(client); note != "" {
+		if note := noteIndexCoverage(ctx, client); note != "" {
 			hint += " Note: " + note + "."
 		}
 		return appendHint(res, hint), nil

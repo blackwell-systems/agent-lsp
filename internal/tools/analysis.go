@@ -641,21 +641,23 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 	}
 
 	wsSymHint := "Use inspect_symbol on a symbol for type details."
+	// An empty result has distinct causes; qualify it instead of presenting
+	// it as an authoritative "not found". The cause note is appended AFTER
+	// the detail-specific encoding below — not via an early return — so the
+	// response keeps its established envelope (workspaceSymbolsResponse with
+	// total/symbols for hover detail) even when empty. (issue #42;
+	// CodeRabbit #51 thread 1)
+	emptyCause := ""
 	if len(symbols) == 0 {
-		// An empty result has distinct causes; qualify it instead of
-		// presenting it as an authoritative "not found". (issue #42)
 		if !client.HasCapability("workspaceSymbolProvider") {
-			encoded, _ := encodeWorkspaceSymbolsResult(ctx, symbols)
-			return appendHint(encoded, "No matches. The server does not declare the workspaceSymbolProvider capability — workspace symbol search is unavailable for this language server."), nil
-		}
-		if note := noteIndexCoverage(client); note != "" {
-			encoded, _ := encodeWorkspaceSymbolsResult(ctx, symbols)
-			return appendHint(encoded, "No matches. Note: "+note+"."), nil
+			emptyCause = "No matches. The server does not declare the workspaceSymbolProvider capability — workspace symbol search is unavailable for this language server."
+		} else if note := noteIndexCoverage(ctx, client); note != "" {
+			emptyCause = "No matches. Note: " + note + "."
 		}
 	}
 	if detailLevel == "basic" || detailLevel == "" {
 		encoded, _ := encodeWorkspaceSymbolsResult(ctx, symbols)
-		return appendHint(encoded, wsSymHint), nil
+		return appendHint(encoded, emptyHint(emptyCause, wsSymHint)), nil
 	}
 
 	// Enrich the offset..offset+limit window with hover info.
@@ -688,7 +690,16 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 	}
 
 	encoded, _ := EncodeResult(ctx, resp)
-	return appendHint(encoded, wsSymHint), nil
+	return appendHint(encoded, emptyHint(emptyCause, wsSymHint)), nil
+}
+
+// emptyHint picks the hint for a (possibly empty) result: the empty-cause
+// note wins when present, otherwise the generic next-step hint.
+func emptyHint(cause, fallback string) string {
+	if cause != "" {
+		return cause
+	}
+	return fallback
 }
 
 // toIntOpt reads an integer argument without error — returns (value, true) if present and valid.

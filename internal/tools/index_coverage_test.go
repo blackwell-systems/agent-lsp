@@ -1,57 +1,94 @@
 package tools
 
 import (
+	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
-// --- hasUnopenedFiles (issue #42) ---
+// --- probeWorkspaceCoverage (issue #42) ---
 
-func TestHasUnopenedFiles_EmptyRoot(t *testing.T) {
+func openedSet(paths ...string) map[string]bool {
+	out := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		out[p] = true
+	}
+	return out
+}
+
+func TestProbeWorkspaceCoverage_EmptyRoot(t *testing.T) {
 	root := t.TempDir()
-	if hasUnopenedFiles(root, 0) {
-		t.Fatal("empty workspace should not report unopened files")
+	if got := probeWorkspaceCoverage(context.Background(), root, nil); got != coverageComplete {
+		t.Fatalf("empty workspace should be complete, got %v", got)
 	}
 }
 
-func TestHasUnopenedFiles_EmptyRootPath(t *testing.T) {
-	// No root (client without a workspace) — coverage cannot be established
-	// against anything, so the helper must say "no unopened files" rather
-	// than always caveating.
-	if hasUnopenedFiles("", 0) {
-		t.Fatal("empty root path should not report unopened files")
+func TestProbeWorkspaceCoverage_EmptyRootPath(t *testing.T) {
+	// No root (client without a workspace) — nothing to classify.
+	if got := probeWorkspaceCoverage(context.Background(), "", nil); got != coverageComplete {
+		t.Fatalf("empty root path should be complete, got %v", got)
 	}
 }
 
-func TestHasUnopenedFiles_AllOpened(t *testing.T) {
+func TestProbeWorkspaceCoverage_AllOpened(t *testing.T) {
 	root := t.TempDir()
+	var opened []string
 	for _, name := range []string{"a.go", "b.go"} {
-		if err := os.WriteFile(filepath.Join(root, name), []byte("x"), 0o644); err != nil {
+		p := filepath.Join(root, name)
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
+		opened = append(opened, p)
 	}
-	if hasUnopenedFiles(root, 2) {
-		t.Fatal("all files opened should not report unopened files")
+	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(opened...)); got != coverageComplete {
+		t.Fatalf("all files opened should be complete, got %v", got)
 	}
 }
 
-func TestHasUnopenedFiles_MoreFilesThanOpened(t *testing.T) {
+func TestProbeWorkspaceCoverage_MoreFilesThanOpened(t *testing.T) {
 	root := t.TempDir()
+	var opened []string
 	for _, name := range []string{"a.go", "b.go", "c.go"} {
-		if err := os.WriteFile(filepath.Join(root, name), []byte("x"), 0o644); err != nil {
+		p := filepath.Join(root, name)
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
+		if name != "c.go" {
+			opened = append(opened, p)
+		}
 	}
-	if !hasUnopenedFiles(root, 2) {
-		t.Fatal("3 files with 2 opened should report unopened files")
+	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(opened...)); got != coverageUnopened {
+		t.Fatalf("3 files with 2 opened should be unopened, got %v", got)
 	}
 }
 
-func TestHasUnopenedFiles_SkipsDotAndSkipDirs(t *testing.T) {
+func TestProbeWorkspaceCoverage_OpenedOutsideEligibleSet(t *testing.T) {
+	// Opens outside the eligible workspace set (e.g. node_modules) must not
+	// mask unopened source files — the comparison is by path set, not by
+	// open-document count. (CodeRabbit #59 thread 4)
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("x"), 0o644); err != nil {
+	src := filepath.Join(root, "a.go")
+	if err := os.WriteFile(src, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	vendored := filepath.Join(root, "node_modules", "x.js")
+	if err := os.MkdirAll(filepath.Dir(vendored), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(vendored, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The only opened document lives in a skipped directory.
+	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(vendored)); got != coverageUnopened {
+		t.Fatalf("unopened source file masked by a node_modules open: got %v, want coverageUnopened", got)
+	}
+}
+
+func TestProbeWorkspaceCoverage_SkipsDotAndSkipDirs(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "a.go")
+	if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	hidden := filepath.Join(root, ".hidden")
@@ -68,43 +105,59 @@ func TestHasUnopenedFiles_SkipsDotAndSkipDirs(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(vendored, "c.js"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// 1 real file, opened once → no unopened files despite 3 on disk.
-	if hasUnopenedFiles(root, 1) {
-		t.Fatal("hidden and skipped dirs must not count as unopened files")
+	// Only the one real file counts, and it is opened → complete.
+	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(p)); got != coverageComplete {
+		t.Fatalf("hidden and skipped dirs must not count as unopened files, got %v", got)
 	}
 }
 
-func TestHasUnopenedFiles_Recursive(t *testing.T) {
+func TestProbeWorkspaceCoverage_Recursive(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("x"), 0o644); err != nil {
+	rootFile := filepath.Join(root, "a.go")
+	if err := os.WriteFile(rootFile, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	sub := filepath.Join(root, "src")
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(sub, "b.go"), []byte("x"), 0o644); err != nil {
+	subFile := filepath.Join(sub, "b.go")
+	if err := os.WriteFile(subFile, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// 2 real files, only the sub file opened → the root-level file is unopened.
-	if !hasUnopenedFiles(root, 1) {
-		t.Fatal("files in subdirectories must count toward the workspace total")
+	// Only the sub file opened → the root-level file is unopened.
+	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(subFile)); got != coverageUnopened {
+		t.Fatalf("files in subdirectories must count toward coverage, got %v", got)
 	}
 }
 
-func TestHasUnopenedFiles_BoundedByCap(t *testing.T) {
+func TestProbeWorkspaceCoverage_CapYieldsUnknown(t *testing.T) {
+	// Budget exhaustion must report unknown coverage — which still surfaces
+	// the caveat — even when the opened set would outnumber the probe cap.
+	// (CodeRabbit #59 thread 6)
 	root := t.TempDir()
-	for i := 0; i < maxUnopenedProbeFiles+50; i++ {
-		name := filepath.Join(root, strings.Repeat("f", 1)+string(rune('a'+i%26))+itoa(i)+".go")
-		if err := os.WriteFile(name, []byte("x"), 0o644); err != nil {
+	opened := map[string]bool{}
+	for i := 0; i < maxProbeEntries+50; i++ {
+		p := filepath.Join(root, "f"+itoa(i)+".go")
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
+		opened[p] = true
 	}
-	// Even with opened >= seen at the cap boundary, exceeding the cap stops
-	// the walk and reports conservatively when seen surpassed opened — here
-	// opened=0 so it must report unopened either way.
-	if !hasUnopenedFiles(root, 0) {
-		t.Fatal("large workspace with nothing opened must report unopened files")
+	if got := probeWorkspaceCoverage(context.Background(), root, opened); got != coverageUnknown {
+		t.Fatalf("capped walk must report unknown coverage, got %v", got)
+	}
+}
+
+func TestProbeWorkspaceCoverage_UnopenedBeforeCap(t *testing.T) {
+	// The probe short-circuits on the first unopened file instead of walking
+	// the whole budget: one unopened file among many is enough.
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := probeWorkspaceCoverage(context.Background(), root, nil); got != coverageUnopened {
+		t.Fatalf("one unopened file must yield unopened coverage, got %v", got)
 	}
 }
 
