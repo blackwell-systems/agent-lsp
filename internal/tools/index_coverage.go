@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,12 @@ import (
 // instead of silently classifying a partial walk as complete. (issue #42;
 // CodeRabbit #51 thread 2, #59 threads 5-6)
 const maxProbeEntries = 2000
+
+// maxProbeBatchEntries bounds how many directory entries each File.ReadDir
+// call loads, so a single directory with a huge number of entries cannot be
+// read and sorted in full before the budget or ctx check runs.
+// (CodeRabbit #51 re-review thread 2)
+const maxProbeBatchEntries = 128
 
 // workspaceCoverage is the probe's verdict on workspace index coverage.
 type workspaceCoverage int
@@ -52,6 +59,7 @@ func probeWorkspaceCoverage(ctx context.Context, root string, opened map[string]
 	if root == "" {
 		return coverageComplete
 	}
+	root = canonicalizeIndexCoveragePath(root)
 	pending := []string{root}
 	seen := 0
 	for len(pending) > 0 {
@@ -60,35 +68,69 @@ func probeWorkspaceCoverage(ctx context.Context, root string, opened map[string]
 		}
 		dir := pending[len(pending)-1]
 		pending = pending[:len(pending)-1]
-		entries, err := os.ReadDir(dir)
+		// Read the directory in bounded batches (os.ReadDir would load and
+		// sort every entry before the budget could stop the walk) and re-check
+		// ctx and the budget between batches.
+		dirHandle, err := os.Open(dir)
 		if err != nil {
 			// This subtree could not be classified — stay conservative.
 			return coverageUnknown
 		}
-		for _, entry := range entries {
-			seen++
-			if seen > maxProbeEntries {
-				// The workspace could not be classified within the
-				// budget — unknown coverage, not a complete one.
+		for {
+			if err := ctx.Err(); err != nil {
+				dirHandle.Close()
 				return coverageUnknown
 			}
-			name := entry.Name()
-			if entry.IsDir() {
-				if strings.HasPrefix(name, ".") || skipDirs[name] {
+			entries, rerr := dirHandle.ReadDir(maxProbeBatchEntries)
+			for _, entry := range entries {
+				seen++
+				if seen > maxProbeEntries {
+					dirHandle.Close()
+					// The workspace could not be classified within the
+					// budget — unknown coverage, not a complete one.
+					return coverageUnknown
+				}
+				name := entry.Name()
+				if entry.IsDir() {
+					if strings.HasPrefix(name, ".") || skipDirs[name] {
+						continue
+					}
+					pending = append(pending, filepath.Join(dir, name))
 					continue
 				}
-				pending = append(pending, filepath.Join(dir, name))
-				continue
+				if strings.HasPrefix(name, ".") {
+					continue
+				}
+				if !opened[filepath.Join(dir, name)] {
+					dirHandle.Close()
+					return coverageUnopened
+				}
 			}
-			if strings.HasPrefix(name, ".") {
-				continue
+			if rerr == io.EOF {
+				break
 			}
-			if !opened[filepath.Join(dir, name)] {
-				return coverageUnopened
+			if rerr != nil {
+				dirHandle.Close()
+				return coverageUnknown
 			}
 		}
+		dirHandle.Close()
 	}
 	return coverageComplete
+}
+
+// canonicalizeIndexCoveragePath resolves symlinks so both sides of the
+// coverage comparison — the walk's root-prefixed paths and the URI-derived
+// opened paths — key on the same canonical form; a symlinked workspace root
+// would otherwise key the walk by the symlink path while the opened set uses
+// the resolved path, producing a spurious caveat. Falls back to the lexical
+// path when the target cannot be resolved (freshly created files).
+// (CodeRabbit #51 re-review thread 1)
+func canonicalizeIndexCoveragePath(p string) string {
+	if resolved, err := filepath.EvalSymlinks(p); err == nil {
+		return resolved
+	}
+	return p
 }
 
 // unopenedFilesCaveat is the empty-result wording for tools whose servers
@@ -116,7 +158,7 @@ func openedDocumentPaths(client *lsp.LSPClient) map[string]bool {
 	out := make(map[string]bool)
 	for _, u := range client.GetOpenDocuments() {
 		if p, err := URIToFilePath(u); err == nil {
-			out[p] = true
+			out[canonicalizeIndexCoveragePath(p)] = true
 		}
 	}
 	return out

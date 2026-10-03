@@ -161,6 +161,41 @@ func TestProbeWorkspaceCoverage_UnopenedBeforeCap(t *testing.T) {
 	}
 }
 
+// A symlinked workspace root must not produce a spurious caveat: the walk
+// keys files by root-prefixed paths and the opened set by URI-derived paths,
+// so both sides are canonicalized before comparing. (CodeRabbit #51
+// re-review thread 1)
+func TestProbeWorkspaceCoverage_SymlinkedRootCanonicalized(t *testing.T) {
+	real := t.TempDir()
+	p := filepath.Join(real, "a.go")
+	if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "root-link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	// The opened set holds the resolved path; the walk starts at the symlink.
+	if got := probeWorkspaceCoverage(context.Background(), link, openedSet(p)); got != coverageComplete {
+		t.Fatalf("symlinked root must canonicalize before comparing, got %v", got)
+	}
+}
+
+// A cancelled context must yield unknown coverage (the caveat still shows),
+// never a deceptively complete classification. (CodeRabbit #51 re-review
+// thread 2)
+func TestProbeWorkspaceCoverage_CancelledYieldsUnknown(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if got := probeWorkspaceCoverage(ctx, root, openedSet(filepath.Join(root, "a.go"))); got != coverageUnknown {
+		t.Fatalf("cancelled probe must report unknown coverage, got %v", got)
+	}
+}
+
 func itoa(i int) string {
 	if i == 0 {
 		return "0"
