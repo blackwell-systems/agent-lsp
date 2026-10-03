@@ -5,18 +5,17 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-
-	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 )
 
 // --- find_symbol empty-result qualification (issue #42) ---
 
-// A client whose server never declared workspaceSymbolProvider produces an
-// empty find_symbol result through GetWorkspaceSymbols' silent
-// capability gate. The handler must say so instead of returning a bare
-// "not found"-looking empty result.
+// An initialized server that never declares workspaceSymbolProvider: the
+// silent capability gate in GetWorkspaceSymbols produces the empty result
+// and the handler must say so instead of returning a bare
+// "not found"-looking empty result. (A fresh client is rejected earlier by
+// the initialized-client guard — CodeRabbit #59 thread 2.)
 func TestHandleGetWorkspaceSymbols_CapabilityUnavailable(t *testing.T) {
-	client := lsp.NewLSPClient("fake", nil)
+	client := startFakeLSP(t, nil, []any{}, false)
 
 	r, err := HandleGetWorkspaceSymbols(context.Background(), client, map[string]any{
 		"query": "StopLong",
@@ -57,7 +56,10 @@ func TestUnopenedFilesCaveatText(t *testing.T) {
 // workspaceSymbolsResponse object with total/symbols for hover detail), not
 // returned as a bare array instead of it. (CodeRabbit #51 thread 1)
 func TestHandleGetWorkspaceSymbols_EmptyHoverKeepsEnvelope(t *testing.T) {
-	client := lsp.NewLSPClient("fake", nil)
+	// Initialized fake server without the capability → the caveat branch;
+	// a fresh client would be rejected earlier by the initialized-client
+	// guard (CodeRabbit #59 thread 2).
+	client := startFakeLSP(t, nil, []any{}, false)
 
 	r, err := HandleGetWorkspaceSymbols(context.Background(), client, map[string]any{
 		"query": "StopLong", "detail_level": "hover",

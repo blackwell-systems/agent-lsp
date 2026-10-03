@@ -634,7 +634,17 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 // ("server" field, empty when a single server answers). Single-client sets
 // behave byte-identically to HandleGetWorkspaceSymbols.
 func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
-	if len(clients) == 0 || (len(clients) == 1 && clients[0] == nil) {
+	// At least one initialized client is required to run the query: a slice
+	// of nil or fresh clients must produce the not-initialized error, not a
+	// successful-looking "No matches" hint. (CodeRabbit #59 thread 2)
+	hasInitialized := false
+	for _, c := range clients {
+		if c != nil && c.IsInitialized() {
+			hasInitialized = true
+			break
+		}
+	}
+	if !hasInitialized {
 		return types.ErrorResult("LSP client not initialized; call start_lsp first"), nil
 	}
 
@@ -702,6 +712,15 @@ func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClien
 		}
 	}
 
+	// Server-failure provenance is built once and appended to EVERY
+	// partial-result branch — basic, hover-enriched, and the empty-result
+	// paths — so callers can never mistake an incomplete fan-out for a
+	// complete answer. (CodeRabbit #59 thread 3)
+	failureNote := ""
+	if len(clients) > 1 && errored > 0 {
+		failureNote = fmt.Sprintf(" Note: %d of %d servers failed the query (%s).", errored, len(clients), firstErr)
+	}
+
 	wsSymHint := "Use inspect_symbol on a symbol for type details."
 	// An empty result has distinct causes; qualify it instead of presenting
 	// it as an authoritative "not found". The cause note is appended AFTER
@@ -722,7 +741,7 @@ func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClien
 	}
 	if detailLevel == "basic" || detailLevel == "" {
 		encoded, _ := encodeWorkspaceSymbolsResult(ctx, symbols)
-		return appendHint(encoded, emptyHint(emptyCause, wsSymHint)), nil
+		return appendHint(encoded, emptyHint(emptyCause, wsSymHint)+failureNote), nil
 	}
 
 	// Enrich the offset..offset+limit window with hover info, using the
@@ -756,7 +775,7 @@ func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClien
 	}
 
 	encoded, _ := EncodeResult(ctx, resp)
-	return appendHint(encoded, emptyHint(emptyCause, wsSymHint)), nil
+	return appendHint(encoded, emptyHint(emptyCause, wsSymHint)+failureNote), nil
 }
 
 // emptyHint picks the hint for a (possibly empty) result: the empty-cause
@@ -970,11 +989,20 @@ func buildWorkspaceSymbolsPayload(symbols []types.SymbolInformation) *gcfgo.Payl
 	for i, sym := range symbols {
 		fp, _ := URIToFilePath(sym.Location.URI)
 		score := max(0.1, 1.0-float64(i)*0.02)
+		// Multi-server fan-out: the GCF wire format has no server field, so
+		// the producing server rides in provenance as "lsp_resolved@<server>"
+		// (an empty Server — single-server mode — keeps the plain token, so
+		// single-client wire bytes are unchanged). A dedicated source field
+		// belongs upstream in gcf-go. (CodeRabbit #59 thread 1)
+		prov := "lsp_resolved"
+		if sym.Server != "" {
+			prov += "@" + sym.Server
+		}
 		gcfSymbols = append(gcfSymbols, gcfgo.Symbol{
 			QualifiedName: gcf.QualifiedName(fp, sym.Name),
 			Kind:          gcf.MapSymbolKind(sym.Kind),
 			Score:         score,
-			Provenance:    "lsp_resolved",
+			Provenance:    prov,
 			Distance:      0,
 		})
 	}
