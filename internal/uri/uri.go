@@ -217,18 +217,12 @@ func ApplyRangeEdit(content string, rng types.Range, newText string) string {
 	before := ""
 	if startLine >= 0 && startLine < len(lines) {
 		l := lines[startLine]
-		if startChar > utf16Length(l) {
-			startChar = utf16Length(l)
-		}
 		before = l[:utf16ToByteOffset(l, startChar)]
 	}
 
 	after := ""
 	if endLine >= 0 && endLine < len(lines) {
 		l := lines[endLine]
-		if endChar > utf16Length(l) {
-			endChar = utf16Length(l)
-		}
 		after = l[utf16ToByteOffset(l, endChar):]
 	}
 
