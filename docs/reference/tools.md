@@ -1081,13 +1081,17 @@ BOM and CRLF outside edited ranges are preserved.
 |------|------|----------|-------------|
 | `needle` | string | yes | Text or regular expression to find |
 | `repl` | string | yes | Replacement text (may be empty to delete) |
+| `dry_run` | bool | yes | Preview without changing anything. Call with `true` first, then re-issue with `false` to apply |
 | `mode` | string | no | `literal` (default) or `regex` (Go RE2; use `(?s)` for multi-line) |
 | `relative_path` | string | no | File or directory (root-relative) restricting the scan |
 | `paths_include_glob` | string | no | Comma-separated include globs (e.g. `src/**/*.mqh`) |
 | `paths_exclude_glob` | string | no | Comma-separated exclude globs; a trailing `/` means "this directory" |
-| `dry_run` | bool | no | Preview without changing anything |
 | `occurrence_ids` | string[] | no | Apply only these ids from the dry-run |
 | `expected_count` | int | no | If >= 0, refuse to apply unless the match count equals this |
+
+`dry_run` is deliberately required: it forces the caller to state apply
+intent explicitly, so an agent cannot bulk-edit a workspace by accident —
+the same philosophy as the `expected_count` guard.
 
 **Example call**
 
@@ -1110,6 +1114,10 @@ BOM and CRLF outside edited ranges are preserved.
   `(?s)` for those
 - For symbol renames use `rename_symbol` (LSP-aware); this tool is for text
   patterns and coordinated multi-file edits
+- If no LSP client has been started and the MCP server was launched from the
+  project root, the language server is auto-initialized from the server's
+  working directory; otherwise the tool returns the usual
+  "call `start_lsp` first" error
 
 ---
 

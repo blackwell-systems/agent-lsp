@@ -16,15 +16,20 @@ import (
 
 // ReplaceInFilesArgs are the arguments for replace_in_files.
 type ReplaceInFilesArgs struct {
+	// Required: needle, repl and dry_run force the caller to state intent;
+	// everything else is optional (omitempty keeps them out of the generated
+	// JSON Schema "required" list, so strict clients like the pi MCP adapter
+	// do not demand them, and toolArgsToMap drops zero values so the handler
+	// defaults — Mode "literal", ExpectedCount -1 — apply).
 	Needle           string   `json:"needle" jsonschema:"Text or regular expression to find (required)"`
 	Repl             string   `json:"repl" jsonschema:"Replacement text (may be empty to delete)"`
-	Mode             string   `json:"mode" jsonschema:"How to interpret needle: literal (default) or regex (Go RE2 syntax; use (?s) for multi-line)"`
-	RelativePath     string   `json:"relative_path" jsonschema:"Optional file or directory (workspace-root relative) restricting the scan"`
-	PathsIncludeGlob string   `json:"paths_include_glob" jsonschema:"Optional comma-separated include globs, e.g. src/**/*.mqh (matched against root-relative paths; .gitignore is always honored on top)"`
-	PathsExcludeGlob string   `json:"paths_exclude_glob" jsonschema:"Optional comma-separated exclude globs"`
-	DryRun           bool     `json:"dry_run" jsonschema:"Preview every occurrence as a diff with a selectable id without changing anything"`
-	OccurrenceIds    []string `json:"occurrence_ids" jsonschema:"Apply only these occurrence ids from the dry-run; if any id is unknown or stale (file changed since the dry-run) NOTHING is changed"`
-	ExpectedCount    int      `json:"expected_count" jsonschema:"If >= 0, refuse to apply unless the match count equals this number"`
+	DryRun           bool     `json:"dry_run" jsonschema:"Preview every occurrence as a diff with a selectable id without changing anything. Call with true first; re-issue with false to apply"`
+	Mode             string   `json:"mode,omitempty" jsonschema:"How to interpret needle: literal (default) or regex (Go RE2 syntax; use (?s) for multi-line)"`
+	RelativePath     string   `json:"relative_path,omitempty" jsonschema:"Optional file or directory (workspace-root relative) restricting the scan"`
+	PathsIncludeGlob string   `json:"paths_include_glob,omitempty" jsonschema:"Optional comma-separated include globs, e.g. src/**/*.mqh (matched against root-relative paths; .gitignore is always honored on top)"`
+	PathsExcludeGlob string   `json:"paths_exclude_glob,omitempty" jsonschema:"Optional comma-separated exclude globs"`
+	OccurrenceIds    []string `json:"occurrence_ids,omitempty" jsonschema:"Apply only these occurrence ids from the dry-run; if any id is unknown or stale (file changed since the dry-run) NOTHING is changed"`
+	ExpectedCount    int      `json:"expected_count,omitempty" jsonschema:"If >= 0, refuse to apply unless the match count equals this number"`
 }
 
 // filesLineRe extracts the machine-readable "Files: a, b" line the handler
@@ -51,7 +56,15 @@ func registerReplaceInFilesTool(d toolDeps) {
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args ReplaceInFilesArgs) (*mcp.CallToolResult, any, error) {
 		startTime := time.Now()
-		r, err := tools.HandleReplaceInFiles(ctx, d.cs.get(), toolArgsToMap(args))
+		client := d.cs.get()
+		if client == nil {
+			// Workspace-level tool with no file argument, so clientForFileWithAutoInit
+			// cannot help; auto-init from the server's own working directory instead
+			// (the MCP server is typically launched from the project root). If that
+			// also fails, HandleReplaceInFiles returns its actionable start_lsp hint.
+			client = d.autoInitForWorkspace(ctx)
+		}
+		r, err := tools.HandleReplaceInFiles(ctx, client, toolArgsToMap(args))
 
 		// Audit: record the invocation with the affected files parsed from
 		// the machine-readable "Files:" line of the result text.

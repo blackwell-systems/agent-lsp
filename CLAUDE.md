@@ -1,7 +1,7 @@
 <!-- agent-lsp:rules:start -->
 ## agent-lsp Skills
 
-agent-lsp provides 66 code intelligence tools and 23 workflow skills.
+agent-lsp provides 66 code intelligence tools and 24 workflow skills.
 Prefer these tools over text search for code intelligence tasks.
 
 **Before editing code:** call `blast_radius` for blast-radius analysis.
