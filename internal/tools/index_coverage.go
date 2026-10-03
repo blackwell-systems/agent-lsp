@@ -101,7 +101,11 @@ func probeWorkspaceCoverage(ctx context.Context, root string, opened map[string]
 				if strings.HasPrefix(name, ".") {
 					continue
 				}
-				if !opened[filepath.Join(dir, name)] {
+				// Canonicalize the discovered path too: an opened file may be
+				// a symlink, whose opened-set entry resolves to the target —
+				// comparing unresolved link paths would report a false
+				// coverageUnopened. (CodeRabbit #51 re-review thread 2)
+				if !opened[canonicalizeIndexCoveragePath(filepath.Join(dir, name))] {
 					dirHandle.Close()
 					return coverageUnopened
 				}

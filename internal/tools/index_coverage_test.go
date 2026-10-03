@@ -175,9 +175,33 @@ func TestProbeWorkspaceCoverage_SymlinkedRootCanonicalized(t *testing.T) {
 	if err := os.Symlink(real, link); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	// The opened set holds the resolved path; the walk starts at the symlink.
-	if got := probeWorkspaceCoverage(context.Background(), link, openedSet(p)); got != coverageComplete {
+	// The opened set holds the canonical path; the walk starts at the symlink.
+	// t.TempDir() may itself sit under a symlinked parent (e.g. /var on
+		// macOS), so the fixture path is canonicalized the same way the probe
+	// canonicalizes both sides. (CodeRabbit #51 re-review thread 1)
+	if got := probeWorkspaceCoverage(context.Background(), link, openedSet(canonicalizeIndexCoveragePath(p))); got != coverageComplete {
 		t.Fatalf("symlinked root must canonicalize before comparing, got %v", got)
+	}
+}
+
+// An opened file that is itself a symlink must count as opened: the opened
+// set keys the resolved target, so the probe canonicalizes each discovered
+// path before the lookup. (CodeRabbit #51 re-review thread 2)
+func TestProbeWorkspaceCoverage_OpenedSymlinkedFile(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "a.go")
+	if err := os.WriteFile(target, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "link.mq4")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	// The client opened link.mq4; openedDocumentPaths canonicalizes it to the
+	// resolved target. Both the real file and the link walk to that target.
+	opened := canonicalizeIndexCoveragePath(link)
+	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(opened)); got != coverageComplete {
+		t.Fatalf("opened symlinked file must count as opened, got %v", got)
 	}
 }
 
