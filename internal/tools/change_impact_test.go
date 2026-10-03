@@ -734,11 +734,32 @@ func TestRenestFlatSymbols_FlatMQLList_Kind12Params(t *testing.T) {
 	// Caller attribution: a reference on a param/local line must resolve to
 	// the containing function (same pipeline findEnclosingCaller uses).
 	cands := callerSymbolCandidates(flat)
-	if enc := findEnclosingSymbol(cands, 13); enc == nil || enc.Name != "CalculaRiesgoTicks" {
+	if enc := findEnclosingSymbolAt(cands, types.Position{Line: 13, Character: 12}); enc == nil || enc.Name != "CalculaRiesgoTicks" {
 		t.Errorf("line 13: expected caller CalculaRiesgoTicks, got %v", enc)
 	}
-	if enc := findEnclosingSymbol(cands, 46); enc == nil || enc.Name != "CalculaLotajeDesdeRiesgo" {
+	if enc := findEnclosingSymbolAt(cands, types.Position{Line: 46, Character: 6}); enc == nil || enc.Name != "CalculaLotajeDesdeRiesgo" {
 		t.Errorf("line 46: expected caller CalculaLotajeDesdeRiesgo, got %v", enc)
+	}
+}
+
+// Two one-liner callables sharing a line: line-only containment would pick
+// the first for a reference in the second. Caller attribution must compare
+// line AND character. (CodeRabbit #57 re-review thread)
+func TestFindEnclosingSymbolAt_SameLineCallables(t *testing.T) {
+	flat := []types.DocumentSymbol{
+		{Name: "foo", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 10, Character: 0}, End: types.Position{Line: 10, Character: 40}},
+			SelectionRange: types.Range{Start: types.Position{Line: 10, Character: 4}, End: types.Position{Line: 10, Character: 7}}},
+		{Name: "baz", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 10, Character: 45}, End: types.Position{Line: 10, Character: 60}},
+			SelectionRange: types.Range{Start: types.Position{Line: 10, Character: 49}, End: types.Position{Line: 10, Character: 52}}},
+	}
+	cands := callerSymbolCandidates(flat)
+	if enc := findEnclosingSymbolAt(cands, types.Position{Line: 10, Character: 20}); enc == nil || enc.Name != "foo" {
+		t.Errorf("char 20: expected caller foo, got %v", enc)
+	}
+	if enc := findEnclosingSymbolAt(cands, types.Position{Line: 10, Character: 50}); enc == nil || enc.Name != "baz" {
+		t.Errorf("char 50: expected caller baz, got %v (line-only selection would pick foo)", enc)
 	}
 }
 

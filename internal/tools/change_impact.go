@@ -253,7 +253,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 				// it as the caller name made every caller look like the target
 				// itself (issue #5: misattributed callers + degenerate edges).
 				callerName := ref.Symbol.Name
-				if enc := findEnclosingCaller(ctx, client, testSymbolCache, refPath, loc.Range.Start.Line); enc != nil {
+				if enc := findEnclosingCaller(ctx, client, testSymbolCache, refPath, loc.Range.Start); enc != nil {
 					callerName = enc.Name
 				}
 				callerRef := symbolRef{
@@ -725,7 +725,7 @@ func stripNonCallableSymbols(syms []types.DocumentSymbol) []types.DocumentSymbol
 // location in the caller file, so caller attribution names the function that
 // contains the reference instead of repeating the queried symbol's name.
 // Shares the caller-file document-symbol cache with the test-file path.
-func findEnclosingCaller(ctx context.Context, client *lsp.LSPClient, cache *sync.Map, refPath string, line int) *types.DocumentSymbol {
+func findEnclosingCaller(ctx context.Context, client *lsp.LSPClient, cache *sync.Map, refPath string, pos types.Position) *types.DocumentSymbol {
 	syms, ok := cache.Load(refPath)
 	if !ok {
 		got, err := WithDocument[[]types.DocumentSymbol](ctx, client, refPath, client.LanguageIDForFile(refPath), func(fURI string) ([]types.DocumentSymbol, error) {
@@ -745,7 +745,7 @@ func findEnclosingCaller(ctx context.Context, client *lsp.LSPClient, cache *sync
 	// Re-nest before stripping so flat-server params/locals published with a
 	// callable kind (SymbolKind Function) are marked and cannot win the
 	// smallest-enclosing-symbol race against the containing function.
-	return findEnclosingSymbol(callerSymbolCandidates(list), line)
+	return findEnclosingSymbolAt(callerSymbolCandidates(list), pos)
 }
 
 // callerSymbolCandidates builds the candidate tree for caller attribution:
@@ -773,6 +773,58 @@ func findEnclosingSymbol(syms []types.DocumentSymbol, lineNum int) *types.Docume
 					best = child
 				}
 			}
+		}
+	}
+	return best
+}
+
+// positionInRange reports whether p lies within r (LSP ranges are inclusive
+// on both ends and compare by line, then character).
+func positionInRange(p types.Position, r types.Range) bool {
+	if p.Line < r.Start.Line || p.Line > r.End.Line {
+		return false
+	}
+	if p.Line == r.Start.Line && p.Character < r.Start.Character {
+		return false
+	}
+	if p.Line == r.End.Line && p.Character > r.End.Character {
+		return false
+	}
+	return true
+}
+
+// findEnclosingSymbolAt is the position-precise variant of
+// findEnclosingSymbol used for caller attribution: two callable symbols can
+// share a line (one-liner functions, a declaration and its initializer), and
+// a line-only comparison then selects the first symbol for a reference that
+// actually belongs to the second. Containment compares line AND character;
+// among containing symbols the smallest span wins (lines first, characters
+// as tie-break). (CodeRabbit #57 re-review thread)
+func findEnclosingSymbolAt(syms []types.DocumentSymbol, pos types.Position) *types.DocumentSymbol {
+	var best *types.DocumentSymbol
+	better := func(cand *types.DocumentSymbol) bool {
+		if best == nil {
+			return true
+		}
+		candLines := cand.Range.End.Line - cand.Range.Start.Line
+		bestLines := best.Range.End.Line - best.Range.Start.Line
+		if candLines != bestLines {
+			return candLines < bestLines
+		}
+		candChars := cand.Range.End.Character - cand.Range.Start.Character
+		bestChars := best.Range.End.Character - best.Range.Start.Character
+		return candChars < bestChars
+	}
+	for i := range syms {
+		sym := &syms[i]
+		if !positionInRange(pos, sym.Range) {
+			continue
+		}
+		if better(sym) {
+			best = sym
+		}
+		if child := findEnclosingSymbolAt(sym.Children, pos); child != nil && better(child) {
+			best = child
 		}
 	}
 	return best
