@@ -2665,6 +2665,14 @@ func mergeRegisteredCapability(existing any, capKey string, opts json.RawMessage
 	return true
 }
 
+// HasCapability reports whether the server declared the given capability
+// (statically in initialize or via client/registerCapability). Exported so
+// tool handlers can distinguish "empty result" from "feature unavailable"
+// without reaching into the capability internals. (issue #42)
+func (c *LSPClient) HasCapability(key string) bool {
+	return c.hasCapability(key)
+}
+
 func (c *LSPClient) hasCapability(key string) bool {
 	c.capsMu.RLock()
 	defer c.capsMu.RUnlock()
