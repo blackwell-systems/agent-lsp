@@ -742,6 +742,60 @@ func TestRenestFlatSymbols_FlatMQLList_Kind12Params(t *testing.T) {
 	}
 }
 
+// positionInRange boundary semantics: start inclusive, end exclusive per LSP
+// — a position equal to r.End belongs to the next symbol. (CodeRabbit #57
+// re-review thread: adjacent-range boundary case)
+func TestPositionInRange_EndExclusive(t *testing.T) {
+	r := types.Range{
+		Start: types.Position{Line: 10, Character: 5},
+		End:   types.Position{Line: 12, Character: 7},
+	}
+	cases := []struct {
+		name string
+		pos  types.Position
+		want bool
+	}{
+		{"before range", types.Position{Line: 9, Character: 0}, false},
+		{"start inclusive", types.Position{Line: 10, Character: 5}, true},
+		{"start line, before start char", types.Position{Line: 10, Character: 4}, false},
+		{"interior", types.Position{Line: 11, Character: 0}, true},
+		{"end line, before end char", types.Position{Line: 12, Character: 6}, true},
+		{"end exclusive", types.Position{Line: 12, Character: 7}, false},
+		{"end line, past end char", types.Position{Line: 12, Character: 8}, false},
+		{"after range", types.Position{Line: 13, Character: 0}, false},
+	}
+	for _, tc := range cases {
+		if got := positionInRange(tc.pos, r); got != tc.want {
+			t.Errorf("%s: positionInRange(%v) = %v, want %v", tc.name, tc.pos, got, tc.want)
+		}
+	}
+}
+
+// Two callables whose ranges are adjacent: foo ends at char 40, baz begins at
+// char 40. A reference at the boundary belongs to baz, not to foo — with an
+// inclusive-end containment test foo would swallow it. (CodeRabbit #57
+// re-review thread)
+func TestFindEnclosingSymbolAt_AdjacentRanges(t *testing.T) {
+	flat := []types.DocumentSymbol{
+		{Name: "foo", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 10, Character: 0}, End: types.Position{Line: 10, Character: 40}},
+			SelectionRange: types.Range{Start: types.Position{Line: 10, Character: 4}, End: types.Position{Line: 10, Character: 7}}},
+		{Name: "baz", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 10, Character: 40}, End: types.Position{Line: 10, Character: 60}},
+			SelectionRange: types.Range{Start: types.Position{Line: 10, Character: 44}, End: types.Position{Line: 10, Character: 47}}},
+	}
+	cands := callerSymbolCandidates(flat)
+	if enc := findEnclosingSymbolAt(cands, types.Position{Line: 10, Character: 39}); enc == nil || enc.Name != "foo" {
+		t.Errorf("char 39 (inside foo): expected foo, got %v", enc)
+	}
+	if enc := findEnclosingSymbolAt(cands, types.Position{Line: 10, Character: 40}); enc == nil || enc.Name != "baz" {
+		t.Errorf("char 40 (boundary): expected baz (exclusive-end containment), got %v", enc)
+	}
+	if enc := findEnclosingSymbolAt(cands, types.Position{Line: 10, Character: 50}); enc == nil || enc.Name != "baz" {
+		t.Errorf("char 50 (inside baz): expected baz, got %v", enc)
+	}
+}
+
 // Two one-liner callables sharing a line: line-only containment would pick
 // the first for a reference in the second. Caller attribution must compare
 // line AND character. (CodeRabbit #57 re-review thread)

@@ -778,8 +778,9 @@ func findEnclosingSymbol(syms []types.DocumentSymbol, lineNum int) *types.Docume
 	return best
 }
 
-// positionInRange reports whether p lies within r (LSP ranges are inclusive
-// on both ends and compare by line, then character).
+// positionInRange reports whether p lies within r. Per LSP, range start
+// positions are inclusive and range end positions are exclusive: a position
+// equal to r.End belongs to the *next* symbol, not to this one.
 func positionInRange(p types.Position, r types.Range) bool {
 	if p.Line < r.Start.Line || p.Line > r.End.Line {
 		return false
@@ -787,7 +788,7 @@ func positionInRange(p types.Position, r types.Range) bool {
 	if p.Line == r.Start.Line && p.Character < r.Start.Character {
 		return false
 	}
-	if p.Line == r.End.Line && p.Character > r.End.Character {
+	if p.Line == r.End.Line && p.Character >= r.End.Character {
 		return false
 	}
 	return true
