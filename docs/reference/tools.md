@@ -1070,7 +1070,7 @@ BOM and CRLF outside edited ranges are preserved.
 **Protocol**
 
 1. Call with `dry_run=true`: every occurrence is previewed as a minimal diff
-   with a stable occurrence id (`<path>:<nth>@<hash8>`).
+   with a stable occurrence id (`<path>:<nth>@<hash16>`).
 2. Re-issue with `dry_run=false`: applies all occurrences, or only those in
    `occurrence_ids`. If any id is unknown or stale (the file changed since the
    dry-run), **nothing is changed** — re-run the dry-run for fresh ids.
@@ -1082,12 +1082,12 @@ BOM and CRLF outside edited ranges are preserved.
 | `needle` | string | yes | Text or regular expression to find |
 | `repl` | string | yes | Replacement text (may be empty to delete) |
 | `dry_run` | bool | yes | Preview without changing anything. Call with `true` first, then re-issue with `false` to apply |
-| `mode` | string | no | `literal` (default) or `regex` (Go RE2; use `(?s)` for multi-line) |
+| `mode` | string | no | `literal` (default) or `regex` (Go RE2; use `(?s)` for multi-line; in regex mode `repl` is a template and may reference capture groups as `${1}` or `${name}` — braces are required when the group is followed by a word character) |
 | `relative_path` | string | no | File or directory (root-relative) restricting the scan |
 | `paths_include_glob` | string | no | Comma-separated include globs (e.g. `src/**/*.mqh`) |
 | `paths_exclude_glob` | string | no | Comma-separated exclude globs; a trailing `/` means "this directory" |
 | `occurrence_ids` | string[] | no | Apply only these ids from the dry-run |
-| `expected_count` | int | no | If >= 0, refuse to apply unless the match count equals this |
+| `expected_count` | int | no | If >= 0, refuse to apply unless the match count equals this number (0 = require zero matches) |
 
 `dry_run` is deliberately required: it forces the caller to state apply
 intent explicitly, so an agent cannot bulk-edit a workspace by accident —
@@ -1107,9 +1107,11 @@ the same philosophy as the `expected_count` guard.
 **Notes**
 
 - Scanning respects `.gitignore` (negation, directory patterns, anchoring, `**`)
-  plus hard skips for `.git` and `.agent-lsp`; binary and >8 MiB files are skipped
+  plus hard skips for `.git` and `.agent-lsp`; symlinks are never followed; binary
+  and >8 MiB files are skipped and reported in a Notes section of the result, as
+  are files that could not be read
 - Scans cap at 10,000 occurrences; above that the tool refuses and asks for a
-  narrower scope
+  narrower scope (NOTHING is changed)
 - Multi-line literal needles do not match CRLF files — use `mode: "regex"` with
   `(?s)` for those
 - For symbol renames use `rename_symbol` (LSP-aware); this tool is for text

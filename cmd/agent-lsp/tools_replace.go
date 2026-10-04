@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"regexp"
 	"strings"
 	"time"
@@ -29,7 +30,7 @@ type ReplaceInFilesArgs struct {
 	PathsIncludeGlob string   `json:"paths_include_glob,omitempty" jsonschema:"Optional comma-separated include globs, e.g. src/**/*.mqh (matched against root-relative paths; .gitignore is always honored on top)"`
 	PathsExcludeGlob string   `json:"paths_exclude_glob,omitempty" jsonschema:"Optional comma-separated exclude globs"`
 	OccurrenceIds    []string `json:"occurrence_ids,omitempty" jsonschema:"Apply only these occurrence ids from the dry-run; if any id is unknown or stale (file changed since the dry-run) NOTHING is changed"`
-	ExpectedCount    int      `json:"expected_count,omitempty" jsonschema:"If >= 0, refuse to apply unless the match count equals this number"`
+	ExpectedCount    *int     `json:"expected_count,omitempty" jsonschema:"If >= 0, refuse to apply unless the match count equals this number (0 = require zero matches)"`
 }
 
 // filesLineRe extracts the machine-readable "Files: a, b" line the handler
@@ -40,7 +41,7 @@ func registerReplaceInFilesTool(d toolDeps) {
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name: "replace_in_files",
 		Description: "Find and replace text across multiple files in one call. " +
-			"Two modes: literal (default) and regex (Go RE2; use (?s) for multi-line patterns). " +
+			"Two modes: literal (default) and regex (Go RE2; use (?s) for multi-line patterns; in regex mode repl may reference capture groups as $1 or ${name}). " +
 			"Protocol: (1) call with dry_run=true to preview every occurrence with a per-occurrence id; " +
 			"(2) re-issue with dry_run=false to apply all of them, or pass occurrence_ids to apply a chosen subset. " +
 			"If any id is unknown or stale, NOTHING is changed. " +
@@ -72,9 +73,12 @@ func registerReplaceInFilesTool(d toolDeps) {
 		success := err == nil && !r.IsError
 		if len(r.Content) > 0 {
 			if m := filesLineRe.FindStringSubmatch(r.Content[0].Text); m != nil {
-				for _, f := range strings.Split(m[1], ", ") {
-					if f = strings.TrimSpace(f); f != "" {
-						files = append(files, f)
+				if err := json.Unmarshal([]byte(m[1]), &files); err != nil {
+					// Legacy comma-separated fallback.
+					for _, f := range strings.Split(m[1], ", ") {
+						if f = strings.TrimSpace(f); f != "" {
+							files = append(files, f)
+						}
 					}
 				}
 			}

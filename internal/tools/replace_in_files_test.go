@@ -308,11 +308,173 @@ func TestParseReplaceParamsValidation(t *testing.T) {
 		t.Errorf("want mode error, got %q", errMsg)
 	}
 	// Defaults and expected_count coercion.
-	p, errMsg := parseReplaceParams(map[string]any{"needle": "foo", "repl": "bar", "expected_count": float64(3)})
+	p, errMsg := parseReplaceParams(map[string]any{"needle": "foo", "repl": "bar", "dry_run": true, "expected_count": float64(3)})
 	if errMsg != "" {
 		t.Fatalf("unexpected error: %q", errMsg)
 	}
 	if p.Mode != "literal" || p.ExpectedCount != 3 {
 		t.Errorf("defaults not applied: mode=%q count=%d", p.Mode, p.ExpectedCount)
+	}
+	// dry_run must fail closed: missing or non-boolean never defaults into
+	// apply mode on a whole-workspace tool.
+	if _, errMsg := parseReplaceParams(map[string]any{"needle": "foo", "repl": "bar"}); errMsg == "" {
+		t.Error("missing dry_run must be rejected")
+	}
+	if _, errMsg := parseReplaceParams(map[string]any{"needle": "foo", "repl": "bar", "dry_run": "true"}); errMsg == "" {
+		t.Error("non-boolean dry_run must be rejected")
+	}
+	// expected_count = 0 must survive (require zero matches).
+	p0, errMsg := parseReplaceParams(map[string]any{"needle": "foo", "repl": "bar", "dry_run": true, "expected_count": float64(0)})
+	if errMsg != "" || p0.ExpectedCount != 0 {
+		t.Errorf("expected_count 0 not preserved: err=%q count=%d", errMsg, p0.ExpectedCount)
+	}
+}
+
+// The occurrence cap must refuse the run, not silently truncate the result
+// to exactly maxReplaceOccurrences matches.
+func TestPlanReplaceCapRefuses(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"big.mqh":   strings.Repeat("hit\n", maxReplaceOccurrences+1),
+		"small.mqh": "hit\n",
+	})
+	plan := planReplaceInFiles(root, replaceParams{Needle: "hit", Repl: "x", Mode: "literal", DryRun: true, ExpectedCount: -1})
+	if !plan.IsError {
+		t.Fatalf("expected cap refusal, got %d occurrences", len(plan.Occurrences))
+	}
+	if !strings.Contains(plan.Text, "NOTHING was changed") {
+		t.Errorf("refusal text missing atomicity notice: %s", plan.Text)
+	}
+}
+
+// A scan restricted to a subdirectory must still honor the .gitignore files
+// of every ancestor directory, including the workspace root.
+func TestCollectFilesRestrictedHonorsRootGitignore(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		".gitignore":          "generated/\n",
+		"sub/keep.txt":        "hit\n",
+		"sub/generated/g.txt": "hit\n",
+	})
+	files, err := collectFilesForReplace(root, "sub", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || files[0] != "sub/keep.txt" {
+		t.Errorf("root gitignore not honored in restricted scan, got %v", files)
+	}
+}
+
+// Symlinks must be skipped, never followed: a symlinked directory would fail
+// the file scan and abort the whole run.
+func TestCollectFilesSkipsSymlinks(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"a.txt":       "hit\n",
+		"other/b.txt": "hit\n",
+	})
+	if err := os.Symlink(filepath.Join(root, "other"), filepath.Join(root, "link")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	files, err := collectFilesForReplace(root, "", nil, nil)
+	if err != nil {
+		t.Fatalf("symlinked dir must be skipped, got error: %v", err)
+	}
+	for _, f := range files {
+		if strings.HasPrefix(f, "link/") || f == "link" {
+			t.Errorf("symlink followed: %v", files)
+		}
+	}
+}
+
+// ".git" as a FILE (worktrees, submodules) must never be a scan target.
+func TestCollectFilesSkipsGitFile(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		".git":  "gitdir: /somewhere/else\n",
+		"a.txt": "hit\n",
+	})
+	plan := planReplaceInFiles(root, replaceParams{Needle: "gitdir", Repl: "x", Mode: "literal", DryRun: true, ExpectedCount: -1})
+	if plan.IsError {
+		t.Fatalf("unexpected error: %s", plan.Text)
+	}
+	if len(plan.Occurrences) != 0 {
+		t.Errorf(".git file scanned: %v", plan.Files)
+	}
+}
+
+// A gitignore pattern ending in "/" matches directories only: a file with
+// the same name must stay scannable, like git.
+func TestGitignoreDirOnlyPattern(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		".gitignore":        "assets/\n",
+		"assets/inside.txt": "hit\n",
+		"sub/assets":        "hit\n",
+	})
+	files, err := collectFilesForReplace(root, "", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || files[0] != "sub/assets" {
+		t.Errorf("dir-only pattern must ignore the dir but keep same-named files, got %v", files)
+	}
+}
+
+// Regex-mode repl is a template: capture groups ($1, ${name}) must expand
+// per occurrence in both the preview and the applied edit.
+func TestRegexCaptureExpansion(t *testing.T) {
+	root := writeTree(t, map[string]string{"a.mqh": "ab cd\n"})
+	dry := planReplaceInFiles(root, replaceParams{Needle: `(a)(b) `, Repl: `${1}x `, Mode: "regex", DryRun: true, ExpectedCount: -1})
+	if dry.IsError || len(dry.Occurrences) != 1 {
+		t.Fatalf("dry-run: err=%v occs=%d", dry.IsError, len(dry.Occurrences))
+	}
+	if got := dry.Occurrences[0].newRepl; got != "ax " {
+		t.Errorf("capture not expanded: newRepl=%q", got)
+	}
+	if !strings.Contains(dry.Text, "ax cd") {
+		t.Errorf("preview not expanded: %s", dry.Text)
+	}
+	apply := planReplaceInFiles(root, replaceParams{Needle: `(a)(b) `, Repl: `${1}x `, Mode: "regex", DryRun: false, ExpectedCount: -1})
+	if apply.IsError || len(apply.Selected) != 1 {
+		t.Fatalf("apply plan: err=%v sel=%d", apply.IsError, len(apply.Selected))
+	}
+	edit, err := buildReplaceWorkspaceEdit(root, apply.Selected, `(a)(b) `, "regex", `${1}x `)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes := edit["changes"].(map[string]any)
+	for _, edits := range changes {
+		first := edits.([]any)[0].(map[string]any)
+		if first["newText"] != "ax " {
+			t.Errorf("edit newText not expanded: %v", first["newText"])
+		}
+	}
+}
+
+// The apply result's Files line is a JSON array so filenames containing
+// ", " survive the audit round-trip.
+func TestFilesLineOfJSON(t *testing.T) {
+	text := "Replaced 2 occurrence(s) in 2 file(s).\nFiles: [\"a.go\",\"b, c.go\"]"
+	got := filesLineOf(text)
+	if len(got) != 2 || got[0] != "a.go" || got[1] != "b, c.go" {
+		t.Errorf("JSON Files line mis-parsed: %v", got)
+	}
+}
+
+// Binary and unreadable files must be surfaced as notes, not silently
+// dropped or fatal.
+func TestPlanReplaceNotesReportSkippedFiles(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"text.mqh": "hit\n",
+		"bin.dat":  "hit\x00hit\n",
+	})
+	plan := planReplaceInFiles(root, replaceParams{Needle: "hit", Repl: "x", Mode: "literal", DryRun: true, ExpectedCount: -1})
+	if plan.IsError {
+		t.Fatalf("unexpected error: %s", plan.Text)
+	}
+	if len(plan.Occurrences) != 1 {
+		t.Fatalf("binary file must not contribute occurrences, got %d", len(plan.Occurrences))
+	}
+	if !strings.Contains(plan.Text, "skipped (binary or over 8 MiB)") {
+		t.Errorf("skipped-file note missing: %s", plan.Text)
+	}
+	if len(plan.Notes) == 0 {
+		t.Error("plan.Notes must carry the skip note")
 	}
 }
