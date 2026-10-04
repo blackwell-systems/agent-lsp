@@ -17,7 +17,7 @@
   <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
 </p>
 
-**Code intelligence infrastructure for AI agents.** 65 tools, 32 CI-verified languages, 24 agent workflows. Single Go binary.
+**Code intelligence infrastructure for AI agents.** 66 tools, 32 CI-verified languages, 24 agent workflows. Single Go binary.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh && agent-lsp init
@@ -384,7 +384,7 @@ Skills are also available as **MCP prompts**: any MCP client can discover them v
 
 ### Step 6: Allow tool permissions (Claude Code)
 
-For Claude Code, add `mcp__lsp__*` to your permissions allow list so all 65 tools are available without per-tool approval prompts:
+For Claude Code, add `mcp__lsp__*` to your permissions allow list so all 66 tools are available without per-tool approval prompts:
 
 ```json
 // ~/.claude/settings.json
@@ -407,13 +407,13 @@ Your AI agent calls tools automatically. The first call initializes the workspac
 start_lsp(root_dir="/your/project")
 ```
 
-This is what the agent does, not something you type. Then use any of the 65 tools. The session stays warm; no restart needed when switching files.
+This is what the agent does, not something you type. Then use any of the 66 tools. The session stays warm; no restart needed when switching files.
 
 ## What's unique about agent-lsp
 
 | Capability | Details |
 |------------|---------|
-| Tools | **65** |
+| Tools | **66** |
 | Languages (CI-verified) | **32**, end-to-end integration tests on every push |
 | Agent workflows (skills) | **24**, named multi-step procedures, discoverable via MCP `prompts/list` |
 | Speculative execution | **8 tools**, simulate changes before writing to disk |
