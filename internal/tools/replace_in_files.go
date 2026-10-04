@@ -28,7 +28,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/pkg/types"
@@ -381,43 +380,29 @@ func scanFileOccurrences(absPath, relPath string, re *regexp.Regexp, needle, mod
 
 	var matches [][2]int
 	var subLocs [][]int // regex mode: absolute submatch index slices
-	// Collect at most (remaining budget + 1) matches: one past the global cap
-	// is enough to prove overflow, so a pathological workspace can never make
-	// the scan allocate index slices for millions of matches.
+	// Collect at most (remaining budget + 1) matches: one match past the
+	// global cap is enough to prove overflow, so a pathological workspace
+	// can never make the scan allocate submatch slices for millions of
+	// matches. Regexes always run against the full file contents, so anchors
+	// (^, \b) keep whole-file semantics; hitting the limit with zero-width
+	// matches in the mix overflows conservatively — a needless refusal is
+	// safe (nothing changed), an undercount would not be.
 	budget := maxReplaceOccurrences - *total
 	if budget < 0 {
 		budget = 0
 	}
 	overflow := false
 	if re != nil {
-		at := 0
-		for len(matches) <= budget {
-			loc := re.FindStringSubmatchIndex(src[at:])
-			if loc == nil {
-				break
+		limit := budget + 1
+		locs := re.FindAllStringSubmatchIndex(src, limit)
+		for _, loc := range locs {
+			if loc[0] == loc[1] {
+				continue // zero-width match: nothing to replace
 			}
-			s, e := at+loc[0], at+loc[1]
-			at = e
-			if s == e {
-				// zero-width match: nothing to replace; advance one rune
-				if at >= len(src) {
-					break
-				}
-				_, sz := utf8.DecodeRuneInString(src[at:])
-				at += sz
-				continue
-			}
-			abs := make([]int, len(loc))
-			for i := 0; i < len(loc); i += 2 {
-				if loc[i] < 0 {
-					abs[i], abs[i+1] = -1, -1
-				} else {
-					abs[i], abs[i+1] = s+(loc[i]-loc[0]), s+(loc[i+1]-loc[0])
-				}
-			}
-			matches = append(matches, [2]int{s, e})
-			subLocs = append(subLocs, abs)
+			matches = append(matches, [2]int{loc[0], loc[1]})
+			subLocs = append(subLocs, loc)
 		}
+		overflow = len(locs) == limit
 	} else {
 		for i := 0; len(matches) <= budget; {
 			idx := strings.Index(src[i:], needle)
@@ -428,13 +413,11 @@ func scanFileOccurrences(absPath, relPath string, re *regexp.Regexp, needle, mod
 			matches = append(matches, [2]int{start, start + len(needle)})
 			i = start + len(needle)
 		}
-	}
-	if len(matches) > budget {
-		overflow = true
+		overflow = len(matches) > budget
 	}
 	if overflow {
 		// Push total past the cap so the plan-level guard refuses the run.
-		*total += len(matches)
+		*total += len(matches) + 1
 		return occs, false, nil
 	}
 

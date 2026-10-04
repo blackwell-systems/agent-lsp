@@ -514,6 +514,34 @@ func TestPlanReplaceCapRefusesRegex(t *testing.T) {
 	}
 }
 
+// Regex matches must keep whole-file context for zero-width assertions:
+// `^foo` over "foofoo" is ONE occurrence, not two (this guards against an
+// incremental src[at:] re-anchoring regression).
+func TestRegexAnchorsFullFileContext(t *testing.T) {
+	cases := []struct {
+		name   string
+		files  map[string]string
+		needle string
+		want   int
+	}{
+		{"caret", map[string]string{"a.mqh": "foofoo\n"}, `^foo`, 1},
+		{"word-boundary", map[string]string{"a.mqh": "foo foo foofoo\n"}, `\bfoo`, 3},
+		{"dollar", map[string]string{"a.mqh": "barbar"}, `bar$`, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := writeTree(t, tc.files)
+			plan := planReplaceInFiles(root, replaceParams{Needle: tc.needle, Repl: "X", Mode: "regex", DryRun: true, ExpectedCount: -1})
+			if plan.IsError {
+				t.Fatalf("unexpected error: %s", plan.Text)
+			}
+			if len(plan.Occurrences) != tc.want {
+				t.Errorf("%s: want %d occurrences, got %d", tc.needle, tc.want, len(plan.Occurrences))
+			}
+		})
+	}
+}
+
 // Regex matches in an under-budget file keep correct submatch data: expansion
 // still references the right groups after the budget-bounded rewrite.
 func TestRegexSubmatchDataUnderBudget(t *testing.T) {
