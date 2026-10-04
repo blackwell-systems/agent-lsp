@@ -478,3 +478,53 @@ func TestPlanReplaceNotesReportSkippedFiles(t *testing.T) {
 		t.Error("plan.Notes must carry the skip note")
 	}
 }
+
+// occurrencePreviewLines must not panic when a match starts on the LF byte
+// of a CRLF pair (the displayed line trims the "\r", shifting the offsets).
+func TestOccurrencePreviewLinesCRLFMatchesOnLF(t *testing.T) {
+	src := "a\r\nb\n"
+	lineNum, matchCol, oldLine, newLine := occurrencePreviewLines(src, 2, 3, "X")
+	if lineNum != 1 || oldLine != "a" || newLine != "aX" || matchCol < 0 || matchCol > len(oldLine) {
+		t.Errorf("unexpected preview: line=%d col=%d old=%q new=%q", lineNum, matchCol, oldLine, newLine)
+	}
+}
+
+// A full plan run with a needle that lands on CRLF line feeds must complete
+// without panicking.
+func TestPlanReplaceCRLFNeedleLF(t *testing.T) {
+	root := writeTree(t, map[string]string{"crlf.txt": "a\r\nb\r\n"})
+	plan := planReplaceInFiles(root, replaceParams{Needle: "\n", Repl: "", Mode: "literal", DryRun: true, ExpectedCount: -1})
+	if plan.IsError {
+		t.Fatalf("unexpected error: %s", plan.Text)
+	}
+	if len(plan.Occurrences) != 2 {
+		t.Fatalf("want 2 LF matches, got %d", len(plan.Occurrences))
+	}
+}
+
+// The bounded collection must also work in regex mode, including the
+// submatch-index translation used by capture expansion.
+func TestPlanReplaceCapRefusesRegex(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"big.mqh": strings.Repeat("hit\n", maxReplaceOccurrences+1),
+	})
+	plan := planReplaceInFiles(root, replaceParams{Needle: `h(i)t`, Repl: "x", Mode: "regex", DryRun: true, ExpectedCount: -1})
+	if !plan.IsError {
+		t.Fatalf("expected cap refusal, got %d occurrences", len(plan.Occurrences))
+	}
+}
+
+// Regex matches in an under-budget file keep correct submatch data: expansion
+// still references the right groups after the budget-bounded rewrite.
+func TestRegexSubmatchDataUnderBudget(t *testing.T) {
+	root := writeTree(t, map[string]string{"a.mqh": "ab ab ab\n"})
+	plan := planReplaceInFiles(root, replaceParams{Needle: `(a)(b)`, Repl: `${2}${1}`, Mode: "regex", DryRun: true, ExpectedCount: -1})
+	if plan.IsError || len(plan.Occurrences) != 3 {
+		t.Fatalf("err=%v occs=%d", plan.IsError, len(plan.Occurrences))
+	}
+	for _, o := range plan.Occurrences {
+		if o.newRepl != "ba" {
+			t.Errorf("capture expansion broken: %q", o.newRepl)
+		}
+	}
+}

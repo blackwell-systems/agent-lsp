@@ -28,6 +28,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/pkg/types"
@@ -379,17 +380,46 @@ func scanFileOccurrences(absPath, relPath string, re *regexp.Regexp, needle, mod
 	src := string(data)
 
 	var matches [][2]int
-	var subLocs [][]int // regex mode: full submatch index slices for expansion
+	var subLocs [][]int // regex mode: absolute submatch index slices
+	// Collect at most (remaining budget + 1) matches: one past the global cap
+	// is enough to prove overflow, so a pathological workspace can never make
+	// the scan allocate index slices for millions of matches.
+	budget := maxReplaceOccurrences - *total
+	if budget < 0 {
+		budget = 0
+	}
+	overflow := false
 	if re != nil {
-		for _, loc := range re.FindAllStringSubmatchIndex(src, -1) {
-			if loc[0] == loc[1] {
-				continue // zero-width match: nothing to replace
+		at := 0
+		for len(matches) <= budget {
+			loc := re.FindStringSubmatchIndex(src[at:])
+			if loc == nil {
+				break
 			}
-			matches = append(matches, [2]int{loc[0], loc[1]})
-			subLocs = append(subLocs, loc)
+			s, e := at+loc[0], at+loc[1]
+			at = e
+			if s == e {
+				// zero-width match: nothing to replace; advance one rune
+				if at >= len(src) {
+					break
+				}
+				_, sz := utf8.DecodeRuneInString(src[at:])
+				at += sz
+				continue
+			}
+			abs := make([]int, len(loc))
+			for i := 0; i < len(loc); i += 2 {
+				if loc[i] < 0 {
+					abs[i], abs[i+1] = -1, -1
+				} else {
+					abs[i], abs[i+1] = s+(loc[i]-loc[0]), s+(loc[i+1]-loc[0])
+				}
+			}
+			matches = append(matches, [2]int{s, e})
+			subLocs = append(subLocs, abs)
 		}
 	} else {
-		for i := 0; ; {
+		for i := 0; len(matches) <= budget; {
 			idx := strings.Index(src[i:], needle)
 			if idx < 0 {
 				break
@@ -398,6 +428,14 @@ func scanFileOccurrences(absPath, relPath string, re *regexp.Regexp, needle, mod
 			matches = append(matches, [2]int{start, start + len(needle)})
 			i = start + len(needle)
 		}
+	}
+	if len(matches) > budget {
+		overflow = true
+	}
+	if overflow {
+		// Push total past the cap so the plan-level guard refuses the run.
+		*total += len(matches)
+		return occs, false, nil
 	}
 
 	hash := fileHash64(src, needle, mode, repl)
@@ -453,6 +491,16 @@ func occurrencePreviewLines(src string, start, end int, repl string) (lineNum, m
 	mEnd := end - lineStart
 	if mEnd > len(line) {
 		mEnd = len(line) // multi-line match: preview clamps to the first line
+	}
+	// The displayed line drops a trailing "\r" (CRLF): clamp the preview
+	// offsets to it so a match touching that byte (e.g. a needle of "\n"
+	// landing on the LF of a CRLF pair) cannot slice out of range. The real
+	// edit is computed from raw bytes and stays exact.
+	if mStart > len(line) {
+		mStart = len(line)
+	}
+	if mStart > mEnd {
+		mStart = mEnd
 	}
 	newLine = line[:mStart] + repl + line[mEnd:]
 	return lineNum, mStart, line, newLine
