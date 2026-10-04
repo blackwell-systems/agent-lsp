@@ -574,3 +574,50 @@ func TestRegexSubmatchDataUnderBudget(t *testing.T) {
 		}
 	}
 }
+
+// Repeating the same occurrence id in occurrence_ids must refuse the apply
+// instead of emitting duplicate fixed-range edits (CodeRabbit #60 round 3).
+func TestPlanReplaceRepeatedIDsRefuse(t *testing.T) {
+	root := writeTree(t, map[string]string{"a.txt": "hit hit\n"})
+	preview := planReplaceInFiles(root, replaceParams{Needle: "hit", Repl: "x", Mode: "literal", DryRun: true, ExpectedCount: -1})
+	if preview.IsError || len(preview.Occurrences) != 2 {
+		t.Fatalf("err=%v occs=%d", preview.IsError, len(preview.Occurrences))
+	}
+	id := preview.Occurrences[0].id
+	plan := planReplaceInFiles(root, replaceParams{
+		Needle: "hit", Repl: "x", Mode: "literal", DryRun: false, ExpectedCount: -1,
+		OccurrenceIDs: []string{id, id},
+	})
+	if !plan.IsError {
+		t.Fatal("repeated occurrence id must refuse the apply")
+	}
+	if !strings.Contains(plan.Text, "repeated") {
+		t.Errorf("refusal text must mention the repeated id: %s", plan.Text)
+	}
+	if !strings.Contains(plan.Text, "NOTHING was changed") {
+		t.Errorf("refusal text missing atomicity notice: %s", plan.Text)
+	}
+}
+
+// An apply with zero occurrences must surface the scan notes (skipped or
+// unreadable files) instead of a bare "nothing to replace" (CodeRabbit #60
+// round 3: empty apply concealing unscanned files).
+func TestApplyEmptySurfacesScanNotes(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"plain.txt": "no match here\n",
+		"bin.dat":   "hit\x00hit\n",
+	})
+	plan := planReplaceInFiles(root, replaceParams{Needle: "hit", Repl: "x", Mode: "literal", DryRun: false, ExpectedCount: -1})
+	if plan.IsError {
+		t.Fatalf("unexpected error: %s", plan.Text)
+	}
+	if len(plan.Selected) != 0 {
+		t.Fatalf("want 0 selected occurrences, got %d", len(plan.Selected))
+	}
+	if !strings.Contains(plan.Text, "Found 0 occurrence(s)") {
+		t.Errorf("zero-count notice missing: %s", plan.Text)
+	}
+	if !strings.Contains(plan.Text, "skipped (binary or over 8 MiB)") {
+		t.Errorf("scan notes missing from empty apply: %s", plan.Text)
+	}
+}

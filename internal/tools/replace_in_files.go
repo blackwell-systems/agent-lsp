@@ -716,25 +716,43 @@ func planReplaceInFiles(rootDir string, p replaceParams) replacePlan {
 		for _, o := range occs {
 			byID[o.id] = o
 		}
-		var missing []string
+		seenID := map[string]bool{}
+		var missing, repeated []string
 		for _, id := range p.OccurrenceIDs {
+			if seenID[id] {
+				repeated = append(repeated, id)
+				continue
+			}
+			seenID[id] = true
 			if o, ok := byID[id]; ok {
 				plan.Selected = append(plan.Selected, o)
 			} else {
 				missing = append(missing, id)
 			}
 		}
-		if len(missing) > 0 {
+		if len(missing) > 0 || len(repeated) > 0 {
 			plan.IsError = true
 			plan.Notes = notes
-			plan.Text = fmt.Sprintf("%d occurrence id(s) unknown or stale (file contents changed since the dry-run?): %s. NOTHING was changed — re-run with dry_run=true for a fresh id list.%s%s",
-				len(missing), strings.Join(missing, ", "), renderOccurrences(occs), renderNotes(notes))
+			var b strings.Builder
+			if len(missing) > 0 {
+				fmt.Fprintf(&b, "%d occurrence id(s) unknown or stale (file contents changed since the dry-run?): %s.\n", len(missing), strings.Join(missing, ", "))
+			}
+			if len(repeated) > 0 {
+				fmt.Fprintf(&b, "%d occurrence id(s) repeated in occurrence_ids: %s.\n", len(repeated), strings.Join(repeated, ", "))
+			}
+			b.WriteString("NOTHING was changed — re-run with dry_run=true for a fresh id list.")
+			plan.Text = b.String() + renderOccurrences(occs) + renderNotes(notes)
 			return plan
 		}
 	} else {
 		plan.Selected = occs
 	}
 	plan.Notes = notes
+	if len(plan.Selected) == 0 {
+		// Empty apply must not conceal files that were skipped or unreadable
+		// during the scan — surface the notes alongside the zero count.
+		plan.Text = "Found 0 occurrence(s). Nothing to replace." + renderNotes(notes)
+	}
 	return plan
 }
 
@@ -897,7 +915,7 @@ func HandleReplaceInFiles(ctx context.Context, client *lsp.LSPClient, args map[s
 		return types.TextResult(plan.Text), nil
 	}
 	if len(plan.Selected) == 0 {
-		return types.TextResult("Found 0 occurrence(s). Nothing to replace."), nil
+		return types.TextResult(plan.Text), nil
 	}
 
 	edit, err := buildReplaceWorkspaceEdit(client.RootDir(), plan.Selected, p.Needle, p.Mode, p.Repl)
