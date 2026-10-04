@@ -542,6 +542,24 @@ func TestRegexAnchorsFullFileContext(t *testing.T) {
 	}
 }
 
+// A nullable regex that fills the match limit with zero-width matches must
+// still overflow past the cap: the file's occurrences must never be dropped
+// silently while other files get applied.
+func TestRegexZeroWidthOverflowStillRefuses(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		// (?m)^ matches empty at every line start: 10002 raw matches, all
+		// zero-width, exactly filling the limit with nothing real collected.
+		"big.mqh": strings.Repeat("x\n", 10002),
+	})
+	plan := planReplaceInFiles(root, replaceParams{Needle: `(?m)^`, Repl: "X", Mode: "regex", DryRun: true, ExpectedCount: -1})
+	if !plan.IsError {
+		t.Fatalf("expected cap refusal despite zero-width-heavy matches, got %d occurrences", len(plan.Occurrences))
+	}
+	if !strings.Contains(plan.Text, "NOTHING was changed") {
+		t.Errorf("refusal text missing atomicity notice: %s", plan.Text)
+	}
+}
+
 // Regex matches in an under-budget file keep correct submatch data: expansion
 // still references the right groups after the budget-bounded rewrite.
 func TestRegexSubmatchDataUnderBudget(t *testing.T) {

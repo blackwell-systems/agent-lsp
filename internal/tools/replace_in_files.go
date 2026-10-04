@@ -416,8 +416,12 @@ func scanFileOccurrences(absPath, relPath string, re *regexp.Regexp, needle, mod
 		overflow = len(matches) > budget
 	}
 	if overflow {
-		// Push total past the cap so the plan-level guard refuses the run.
-		*total += len(matches) + 1
+		// Signal overflow past the cap so the plan-level guard refuses the
+		// run. The exact count is irrelevant (the guard only compares against
+		// the cap) and len(matches) can undercount when zero-width matches
+		// filled the limit — setting the total explicitly avoids silently
+		// dropping this file's occurrences.
+		*total = maxReplaceOccurrences + 1
 		return occs, false, nil
 	}
 
