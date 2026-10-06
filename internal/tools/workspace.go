@@ -95,7 +95,7 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 		env.Preview.FileNames = fileNames
 		env.Preview.Note = "dry_run=true: preview only, nothing written. Re-run rename_symbol without dry_run to apply."
 		// A preview carries the raw edit for inspection; it must round-trip byte-exact,
-		// so always JSON, never GCF's summary tabular form. See issue #12.
+		// so always JSON, never GCF's summary tabular form. See upstream issue blackwell-systems/agent-lsp#12.
 		encoded, _ := EncodeResultJSON(env)
 		return appendHint(encoded, "Re-run rename_symbol without dry_run to apply. Do not reconstruct this edit into apply_edit; rename_symbol applies it directly."), nil
 	}
@@ -103,7 +103,7 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 	// Apply the edit server-side, consistent with the other edit tools
 	// (replace_symbol_body, insert_*, safe_delete_symbol). The WorkspaceEdit never
 	// leaves the server as data the caller must reconstruct, which is what corrupted
-	// files under GCF (transposed range offsets, truncated newText). See issue #12.
+	// files under GCF (transposed range offsets, truncated newText). See upstream issue blackwell-systems/agent-lsp#12.
 	if err := client.ApplyWorkspaceEdit(ctx, result); err != nil {
 		return types.ErrorResult(fmt.Sprintf("rename_symbol: applying edit: %s", err)), nil
 	}

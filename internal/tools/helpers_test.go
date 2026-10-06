@@ -73,7 +73,7 @@ func TestEncodeResult_GCF(t *testing.T) {
 	// After Agent A implements gcf-go, this will return non-empty tabular output
 }
 
-// TestEncodeResultJSON_WorkspaceEditRoundTrips guards issue #12: a WorkspaceEdit
+// TestEncodeResultJSON_WorkspaceEditRoundTrips guards upstream issue blackwell-systems/agent-lsp#12: a WorkspaceEdit
 // handed back to apply_edit must serialize as self-labeling JSON that survives a
 // byte-exact round-trip, never as GCF's flattened tabular form (which LLM callers
 // corrupt by transposing range offsets and truncating a large newText).

@@ -43,7 +43,7 @@ func findGopls() string {
 	return ""
 }
 
-// TestRenameSymbol_LiveGopls is a full end-to-end regression for issue #12: it
+// TestRenameSymbol_LiveGopls is a full end-to-end regression for upstream issue blackwell-systems/agent-lsp#12: it
 // drives a real textDocument/rename through gopls and the HandleRenameSymbol
 // handler, then asserts the file on disk is renamed correctly and the tool
 // returns a summary (not a raw workspace_edit for the caller to reconstruct).

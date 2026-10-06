@@ -20,7 +20,7 @@ func isNotStartedErr(err error) bool {
 // rename (the common case: several small TextEdits over one file) and asserts the
 // file on disk is renamed correctly with no corruption. This is the path
 // rename_symbol now drives server-side instead of handing the edit back to the
-// caller. See issue #12.
+// caller. See upstream issue blackwell-systems/agent-lsp#12.
 func TestApplyWorkspaceEdit_MultiEditRename(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "main.go")
@@ -62,7 +62,7 @@ func TestApplyWorkspaceEdit_MultiEditRename(t *testing.T) {
 }
 
 // TestApplyWorkspaceEdit_SingleBigEdit reproduces the exact jdtls shape from
-// issue #12: one TextEdit whose range spans many lines and whose newText carries
+// upstream issue blackwell-systems/agent-lsp#12: one TextEdit whose range spans many lines and whose newText carries
 // the whole replaced span verbatim (newlines, quotes, and a pipe). Applying it
 // server-side must reproduce the span byte-for-byte — this is precisely the edit
 // that got transposed/truncated when the LLM had to copy it back through GCF.

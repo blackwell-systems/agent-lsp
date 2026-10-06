@@ -1178,7 +1178,7 @@ func testRenameSymbol(t *testing.T, ctx context.Context, session *mcp.ClientSess
 	// returns a plain-text summary, e.g.
 	//   Renamed to "RenamedPerson" across 4 location(s) in 2 file(s): a.go, b.go
 	// It is NOT JSON and NOT GCF (the byte-exact WorkspaceEdit only serializes as
-	// JSON on the dry_run path; see internal/tools/workspace.go and issue #12).
+	// JSON on the dry_run path; see internal/tools/workspace.go and upstream issue blackwell-systems/agent-lsp#12).
 	// Assert the summary confirms at least one renamed location.
 	if !strings.Contains(text, "Renamed to") {
 		// No rename summary means the position did not resolve to a renameable
@@ -1505,13 +1505,13 @@ func testApplyEdit(t *testing.T, ctx context.Context, session *mcp.ClientSession
 	// A non-empty edit set exists. Under GCF the server flattens each TextEdit's
 	// range into positional path columns (Range>Start>Line, ...) — a summary form
 	// that is deliberately NOT byte-exact and must not be reconstructed back into
-	// a WorkspaceEdit for apply_edit (see internal/tools/helpers.go:197, issue #12:
+	// a WorkspaceEdit for apply_edit (see internal/tools/helpers.go:197, upstream issue blackwell-systems/agent-lsp#12:
 	// reconstructing corrupts the file). Rebuilding the LSP edit from the GCF
 	// tabular here would hand-roll that unsafe round-trip, so skip the write step
 	// and record that the edit set was produced. The dedicated apply_edit unit
 	// tests cover the JSON round-trip path directly.
 	return toolResult{tool: "apply_edit", status: "skip",
-		detail: fmt.Sprintf("format produced %d edit(s) as GCF summary; write path needs byte-exact JSON edit (issue #12), not reconstructable from GCF here", genericLen(v))}
+		detail: fmt.Sprintf("format produced %d edit(s) as GCF summary; write path needs byte-exact JSON edit (upstream issue blackwell-systems/agent-lsp#12), not reconstructable from GCF here", genericLen(v))}
 }
 
 // testDetectLspServers tests the detect_lsp_servers tool against the language fixture.

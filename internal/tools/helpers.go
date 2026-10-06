@@ -173,7 +173,7 @@ func EncodeResult(ctx context.Context, data any) (types.ToolResult, error) {
 // copied verbatim out of tool output and back into a tool argument. LLM callers
 // corrupt that round-trip, transposing the range offsets and truncating a large
 // newText, which overwrites the file with a mangled edit. Edits therefore always
-// serialize as self-labeling JSON. See issue #12.
+// serialize as self-labeling JSON. See upstream issue blackwell-systems/agent-lsp#12.
 func EncodeResultJSON(data any) (types.ToolResult, error) {
 	raw, err := json.Marshal(data)
 	if err != nil {
