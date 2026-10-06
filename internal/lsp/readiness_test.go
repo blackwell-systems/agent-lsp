@@ -12,9 +12,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
+
+func contains(s, sub string) bool { return strings.Contains(s, sub) }
 
 // ---------------------------------------------------------------------------
 // Unit tests (no I/O)
@@ -119,6 +122,94 @@ func TestWaitForWorkspaceReady_NoProgress_ReturnsFastAndStaysUnloaded(t *testing
 	}
 	if c.workspaceLoaded.Load() {
 		t.Fatal("workspaceLoaded must stay false without any progress signal")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Daemon readiness gate (PR C): every tool surfaces the still-indexing error
+
+func newFakeDaemonClient(t *testing.T, info *DaemonInfo) *LSPClient {
+	t.Helper()
+	c := NewLSPClient("fake-server", nil)
+	c.isDaemon = true
+	c.daemonInfo = info
+	return c
+}
+
+func TestDaemonReadinessError_NonDaemon_Nil(t *testing.T) {
+	c := NewLSPClient("fake-server", nil)
+	if err := c.daemonReadinessError(); err != nil {
+		t.Fatalf("non-daemon client must pass the gate: %v", err)
+	}
+}
+
+func TestDaemonReadinessError_NotReady_GuidanceError(t *testing.T) {
+	c := newFakeDaemonClient(t, &DaemonInfo{
+		RootDir: t.TempDir(), LanguageID: "python", StartTime: time.Now().Add(-3 * time.Second),
+	})
+	err := c.daemonReadinessError()
+	if err == nil {
+		t.Fatal("expected still-indexing guidance error")
+	}
+	for _, want := range []string{"still being indexed", "get_daemon_status"} {
+		if !contains(err.Error(), want) {
+			t.Errorf("error %q must contain %q", err.Error(), want)
+		}
+	}
+	if c.IsReady() {
+		t.Fatal("not-ready daemon must not mark the client ready")
+	}
+}
+
+func TestDaemonReadinessError_ReadyFlag_MarksClientReady(t *testing.T) {
+	c := newFakeDaemonClient(t, &DaemonInfo{
+		RootDir: t.TempDir(), LanguageID: "python", StartTime: time.Now().Add(-time.Minute), Ready: true,
+	})
+	if err := c.daemonReadinessError(); err != nil {
+		t.Fatalf("ready daemon must pass the gate: %v", err)
+	}
+	if !c.IsReady() || !c.workspaceLoaded.Load() {
+		t.Fatal("ready daemon must mark the client ready and loaded")
+	}
+}
+
+// The broker rewrites daemon.json with ready=true once its indexing wait
+// completes; the gate must refresh the in-memory (stale) state from disk.
+func TestDaemonReadinessError_RefreshesReadyFromDisk(t *testing.T) {
+	root := t.TempDir()
+	c := newFakeDaemonClient(t, &DaemonInfo{
+		RootDir: root, LanguageID: "python", StartTime: time.Now(), Ready: false,
+	})
+	if err := c.daemonReadinessError(); err == nil {
+		t.Fatal("expected still-indexing error before the broker flags ready")
+	}
+
+	// Broker marks ready on disk.
+	info := &DaemonInfo{
+		RootDir: root, LanguageID: "python", StartTime: time.Now().Add(-time.Minute),
+		Ready: true, PID: os.Getpid(),
+	}
+	if err := WriteDaemonInfo(info); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(DaemonDir(root, "python")) })
+
+	if err := c.daemonReadinessError(); err != nil {
+		t.Fatalf("gate must refresh from disk and pass: %v", err)
+	}
+	if !c.IsReady() || !c.workspaceLoaded.Load() {
+		t.Fatal("client must become ready after the disk refresh")
+	}
+}
+
+// All read tools go through ensureWorkspaceReady, so the guidance error must
+// propagate from it.
+func TestEnsureWorkspaceReady_DaemonNotReady_PropagatesError(t *testing.T) {
+	c := newFakeDaemonClient(t, &DaemonInfo{
+		RootDir: t.TempDir(), LanguageID: "typescript", StartTime: time.Now(),
+	})
+	if err := c.ensureWorkspaceReady(context.Background()); err == nil {
+		t.Fatal("expected still-indexing error from ensureWorkspaceReady")
 	}
 }
 
