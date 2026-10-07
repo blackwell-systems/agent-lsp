@@ -3,11 +3,17 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.22.0] - 2026-10-07
 
 ### Added
 - **`get_diagnostics` now supports LSP 3.17 pull diagnostics** ([#43](https://github.com/blackwell-systems/agent-lsp/issues/43)): `get_diagnostics` consumed diagnostics only through the `textDocument/publishDiagnostics` push channel, so servers in the pull model (OmniSharp/C# servers, `mql-lsp-server`) — which never push — always returned an empty result even when they declared `diagnosticProvider` in their initialize result. The client now recognizes that capability (declared statically or through a dynamic `client/registerCapability`) and, for any document whose push channel is dead, issues a single `textDocument/diagnostic` request and merges the returned items into the result. Push-first behavior is unchanged: a document that delivered a publish notification is never pulled. The pull is defensive by design — at most one request per document, bounded by a 10-second timeout, and never retried — because at least one server's pull implementation currently hangs and can wedge the server process itself ([davalillo/mql-language-server#91](https://github.com/davalillo/mql-language-server/issues/91)); a timeout is treated as "no pull results" and the empty result keeps the honest dead-channel wording ("the server publishes none and its pull diagnostics did not respond"). The fallback shipped opt-in because the pinned mql-lsp-server v2.4.2 hung and wedged the server on the first pull ([davalillo/mql-language-server#91](https://github.com/davalillo/mql-language-server/issues/91)): the client-side timeout bounds the wait, but the wedged server then fails every subsequent request in the session. It is **enabled by default** now that the CI pin moved to v2.5.0, which fixes the wedge (verified end-to-end: `textDocument/diagnostic` answers, the server survives subsequent requests, and the MQL Tier-2 harness passes with the fallback on). Set `AGENT_LSP_PULL_DIAGNOSTICS=0` to force it off against servers whose pull implementation is still broken. The implementation and tests are verified against a fake pull-capable server, and the gate is covered by tests.
 
+### Fixed
+- **Edits corrupted lines with non-ASCII text before the edit point** ([#52](https://github.com/blackwell-systems/agent-lsp/issues/52), [#56](https://github.com/blackwell-systems/agent-lsp/pull/56)): LSP positions count UTF-16 code units, but the shared edit applier used the `character` offset as a byte index. On any line where a multi-byte character (an accented letter, `€`, CJK, an emoji, a byte-order mark) came before the edit point, the edit landed at the wrong byte and mangled the line: renaming `foo` to `bar` in `x := "€"; foo()` produced `x := "€"baroo()`. This affected every edit path: `rename_symbol`, `format_document`/`format_range`, `apply_edit` (including text-match mode), server-supplied workspace edits, and `simulate_edit`/`simulate_chain`. Offsets are now converted from UTF-16 units to bytes per line, and an offset that lands inside a surrogate pair rounds to the start of the character instead of splitting it. Contributed by [@davalillo](https://github.com/davalillo).
+- **Pull diagnostics never report an unverified document as clean**: a pull answered with no full report (`null`, an `unchanged` report, or an unknown kind) now leaves the document unverified, and a diagnostic pushed while a pull is pending is kept when the pull fails.
+
+### Changed
+- **CI pins the Rust toolchain to 1.98.1**: the 1.99.0 release shipped a rust-analyzer whose hover output no longer matched the Rust Tier-2 baseline.
 
 ## [0.21.0] - 2026-09-29
 
