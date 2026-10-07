@@ -179,8 +179,13 @@ type LSPClient struct {
 
 	// daemon mode fields
 	isDaemon   bool        // true if connected to a daemon broker (not a direct subprocess)
-	daemonInfo *DaemonInfo // metadata about the connected daemon
+	daemonInfo *DaemonInfo // metadata about the connected daemon; guarded by daemonInfoMu
 	socketConn net.Conn    // socket connection (Unix for daemon, TCP for passive; nil for subprocess)
+
+	// daemonInfoMu guards daemonInfo. daemonReadinessError refreshes the
+	// metadata from disk and is now called concurrently by every read tool,
+	// so the pointer must only be read or replaced while holding this lock.
+	daemonInfoMu sync.RWMutex
 
 	// passive mode: connected to an externally-managed language server via TCP
 	isPassive bool
@@ -393,9 +398,23 @@ func (c *LSPClient) IsDaemon() bool {
 	return c.isDaemon
 }
 
-// DaemonInfo returns the daemon metadata, or nil if not in daemon mode.
+// GetDaemonInfo returns the daemon metadata, or nil if not in daemon mode.
 func (c *LSPClient) GetDaemonInfo() *DaemonInfo {
+	return c.getDaemonInfo()
+}
+
+// getDaemonInfo returns the cached daemon metadata under the read lock.
+func (c *LSPClient) getDaemonInfo() *DaemonInfo {
+	c.daemonInfoMu.RLock()
+	defer c.daemonInfoMu.RUnlock()
 	return c.daemonInfo
+}
+
+// setDaemonInfo replaces the cached daemon metadata under the write lock.
+func (c *LSPClient) setDaemonInfo(info *DaemonInfo) {
+	c.daemonInfoMu.Lock()
+	c.daemonInfo = info
+	c.daemonInfoMu.Unlock()
 }
 
 // start spawns the subprocess and begins reading responses.
@@ -923,6 +942,13 @@ func (c *LSPClient) ensureWorkspaceReady(ctx context.Context) error {
 	if err := c.daemonReadinessError(); err != nil {
 		return err
 	}
+	// The gate may have just adopted the broker's readiness (which sets
+	// workspaceLoaded). Re-check before falling through to the progress wait:
+	// an active $/progress token can otherwise block this call for up to 60s
+	// even though the broker already declared the workspace ready.
+	if c.workspaceLoaded.Load() {
+		return nil
+	}
 	if c.HasActiveProgress() || c.hasSeenProgress.Load() {
 		// Progress-based server: wait for tokens to drain.
 		c.waitForWorkspaceReady(ctx)
@@ -942,15 +968,22 @@ func (c *LSPClient) ensureWorkspaceReady(ctx context.Context) error {
 // client ready on success. Returns nil for non-daemon clients and for ready
 // daemons; otherwise a guidance error the caller can surface to the agent.
 func (c *LSPClient) daemonReadinessError() error {
-	if !c.isDaemon || c.daemonInfo == nil {
+	if !c.isDaemon {
 		return nil
 	}
-	if !c.daemonInfo.Ready {
-		if info, _ := RefreshDaemonInfo(c.daemonInfo.RootDir, c.daemonInfo.LanguageID); info != nil {
-			c.daemonInfo = info
+	info := c.getDaemonInfo()
+	if info == nil {
+		return nil
+	}
+	if !info.Ready {
+		if refreshed, _ := RefreshDaemonInfo(info.RootDir, info.LanguageID); refreshed != nil {
+			c.setDaemonInfo(refreshed)
+			// Re-load the latest cached value for the Ready check below
+			// rather than trusting a possibly stale local snapshot.
+			info = c.getDaemonInfo()
 		}
 	}
-	if c.daemonInfo.Ready {
+	if info.Ready {
 		// Adopt the broker's readiness into all three client-side signals so
 		// subsequent calls take their fast paths.
 		c.workspaceLoaded.Store(true)
@@ -958,7 +991,7 @@ func (c *LSPClient) daemonReadinessError() error {
 		c.markReady()
 		return nil
 	}
-	elapsed := time.Since(c.daemonInfo.StartTime).Round(time.Second)
+	elapsed := time.Since(info.StartTime).Round(time.Second)
 	return fmt.Errorf("workspace is still being indexed by the daemon (started %s ago). Tools will return complete results once indexing finishes. Check status with get_daemon_status", elapsed)
 }
 

@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -132,7 +133,7 @@ func newFakeDaemonClient(t *testing.T, info *DaemonInfo) *LSPClient {
 	t.Helper()
 	c := NewLSPClient("fake-server", nil)
 	c.isDaemon = true
-	c.daemonInfo = info
+	c.setDaemonInfo(info)
 	return c
 }
 
@@ -210,6 +211,96 @@ func TestEnsureWorkspaceReady_DaemonNotReady_PropagatesError(t *testing.T) {
 	})
 	if err := c.ensureWorkspaceReady(context.Background()); err == nil {
 		t.Fatal("expected still-indexing error from ensureWorkspaceReady")
+	}
+}
+
+// Concurrency: daemonReadinessError is called by every read tool, so multiple
+// MCP tool calls can run it at once while the broker flags the daemon ready on
+// disk. This exercises the daemonInfo refresh path under -race.
+func TestDaemonReadinessError_ConcurrentRefreshRace(t *testing.T) {
+	root := t.TempDir()
+	c := newFakeDaemonClient(t, &DaemonInfo{
+		RootDir: root, LanguageID: "python", StartTime: time.Now().Add(-time.Minute),
+		Ready: false, PID: os.Getpid(),
+	})
+	t.Cleanup(func() { os.RemoveAll(DaemonDir(root, "python")) })
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+
+	// Writer: flip ready=true/false on disk continuously.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ready := false
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			_ = WriteDaemonInfo(&DaemonInfo{
+				RootDir: root, LanguageID: "python",
+				StartTime: time.Now().Add(-time.Minute), Ready: ready, PID: os.Getpid(),
+			})
+			ready = !ready
+		}
+	}()
+
+	// Readers: hammer the concurrent refresh path.
+	const readers = 8
+	var rg sync.WaitGroup
+	for i := 0; i < readers; i++ {
+		rg.Add(1)
+		go func() {
+			defer rg.Done()
+			for j := 0; j < 200; j++ {
+				_ = c.daemonReadinessError()
+			}
+		}()
+	}
+	rg.Wait()
+	close(stop)
+	wg.Wait()
+}
+
+// Regression for the redundant wait after daemon adoption: once
+// daemonReadinessError adopts the broker's readiness it sets workspaceLoaded,
+// so ensureWorkspaceReady must return immediately instead of falling into the
+// progress wait and blocking up to 60s on an active $/progress token that the
+// broker already told us to ignore.
+func TestEnsureWorkspaceReady_DaemonAdoption_SkipsProgressWait(t *testing.T) {
+	root := t.TempDir()
+	c := newFakeDaemonClient(t, &DaemonInfo{
+		RootDir: root, LanguageID: "python", StartTime: time.Now().Add(-time.Minute),
+		Ready: true, PID: os.Getpid(),
+	})
+
+	// Inject an active $/progress begin token so the pre-fix code would block in
+	// WaitForWorkspaceReadyTimeout(60s) after adoption. handleProgress is the
+	// same path the reader goroutine uses, so this is safe to call directly here.
+	c.handleProgress(json.RawMessage(`{"token":"t1","value":{"kind":"begin","title":"indexing"}}`))
+	if !c.HasActiveProgress() {
+		t.Fatal("test setup: expected an active progress token")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	done := make(chan error, 1)
+	start := time.Now()
+	go func() { done <- c.ensureWorkspaceReady(ctx) }()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("ensureWorkspaceReady after daemon adoption: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("ensureWorkspaceReady blocked after daemon adoption; the gate must skip the progress wait")
+	}
+	if elapsed := time.Since(start); elapsed >= time.Second {
+		t.Fatalf("ensureWorkspaceReady took %v; expected a fast return (<1s)", elapsed)
 	}
 }
 
