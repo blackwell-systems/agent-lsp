@@ -855,3 +855,30 @@ func TestResetDiagnostics(t *testing.T) {
 		t.Error("expected normalized cached diagnostics to be removed after ResetDiagnostics")
 	}
 }
+
+// --- HasCapability exported wrapper (issue #42) ---
+
+func TestHasCapabilityExported(t *testing.T) {
+	c, _, _ := newTestClient(t)
+
+	if c.HasCapability("workspaceSymbolProvider") {
+		t.Fatal("expected false before any capability is registered")
+	}
+
+	// A server-declared provider can be an object, not a bool; HasCapability
+	// must accept both shapes, matching hasCapability semantics.
+	c.capsMu.Lock()
+	c.capabilities["workspaceSymbolProvider"] = map[string]any{}
+	c.capabilities["referencesProvider"] = true
+	c.capsMu.Unlock()
+
+	if !c.HasCapability("workspaceSymbolProvider") {
+		t.Error("expected true for object-valued provider")
+	}
+	if !c.HasCapability("referencesProvider") {
+		t.Error("expected true for bool-valued provider")
+	}
+	if c.HasCapability("typeHierarchyProvider") {
+		t.Error("expected false for undeclared capability")
+	}
+}
