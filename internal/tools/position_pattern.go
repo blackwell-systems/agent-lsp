@@ -23,6 +23,28 @@ import (
 // utf16Offset returns the number of UTF-16 code units that precede
 // byteOffset in the UTF-8 string line, per LSP spec §3.4.
 // byteOffset must fall on a rune boundary within line.
+// byteSpanToLSPRange converts the byte span src[startByte:endByte] into a
+// 0-based LSP range. LSP characters are UTF-16 code units, not bytes: every
+// tool that turns a byte offset (from strings.Index and friends) into a
+// position must go through here or utf16Offset, or non-ASCII text earlier on
+// the line shifts the position (issue #52).
+func byteSpanToLSPRange(src string, startByte, endByte int) (startLine, startChar, endLine, endChar int) {
+	before := src[:startByte]
+	startLine = strings.Count(before, "\n")
+	startLineBegin := strings.LastIndex(before, "\n") + 1 // 0 when there is no newline
+	startChar = utf16Offset(src[startLineBegin:startByte], startByte-startLineBegin)
+
+	segment := src[startByte:endByte]
+	endLine = startLine + strings.Count(segment, "\n")
+	if lastNL := strings.LastIndex(segment, "\n"); lastNL < 0 {
+		endChar = startChar + utf16Offset(segment, len(segment))
+	} else {
+		tail := segment[lastNL+1:]
+		endChar = utf16Offset(tail, len(tail))
+	}
+	return startLine, startChar, endLine, endChar
+}
+
 func utf16Offset(line string, byteOffset int) int {
 	units := 0
 	i := 0

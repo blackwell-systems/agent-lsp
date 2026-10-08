@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
@@ -143,9 +144,61 @@ func resolveExistingAncestor(path string) string {
 	}
 }
 
+// utf16Length returns the number of UTF-16 code units needed to encode s.
+// Runes above U+FFFF (astral plane: CJK extension, emoji, …) take two
+// UTF-16 code units (a surrogate pair); everything else takes one.
+func utf16Length(s string) int {
+	n := 0
+	for _, r := range s {
+		if r > 0xFFFF {
+			n += 2
+		} else {
+			n++
+		}
+	}
+	return n
+}
+
+// utf16ToByteOffset converts a UTF-16 code-unit offset (the LSP position
+// encoding) into a byte offset within the UTF-8 string s, clamped to the
+// boundaries of s. Offsets that land in the middle of a surrogate pair are
+// resolved to the start of that rune, matching the behaviour of spec-
+// compliant servers, which never emit such positions for whole-run edits.
+// Invalid UTF-8 bytes are treated as one unit/one byte each so that
+// non-UTF-8 file content cannot panic or misalign the walk.
+func utf16ToByteOffset(s string, units int) int {
+	if units <= 0 {
+		return 0
+	}
+	acc := 0
+	off := 0
+	for off < len(s) {
+		r, size := utf8.DecodeRuneInString(s[off:])
+		w := 1
+		if r > 0xFFFF {
+			w = 2
+		}
+		if acc+w > units {
+			return off
+		}
+		acc += w
+		off += size
+		if acc == units {
+			return off
+		}
+	}
+	return len(s)
+}
+
 // ApplyRangeEdit applies a single range edit to content in-memory and
 // returns the new content string. Canonical implementation shared by
 // internal/lsp and internal/session (L5 deduplication).
+//
+// Range positions follow the LSP spec: `character` is a UTF-16 code-unit
+// offset, not a byte offset. Both offsets are converted to byte offsets
+// per line before slicing — treating UTF-16 units as byte indexes silently
+// corrupts every line containing multi-byte characters (BOM, accented
+// Latin, CJK, emoji) before the edit point.
 func ApplyRangeEdit(content string, rng types.Range, newText string) string {
 	lines := strings.Split(content, "\n")
 
@@ -164,19 +217,13 @@ func ApplyRangeEdit(content string, rng types.Range, newText string) string {
 	before := ""
 	if startLine >= 0 && startLine < len(lines) {
 		l := lines[startLine]
-		if startChar > len(l) {
-			startChar = len(l)
-		}
-		before = l[:startChar]
+		before = l[:utf16ToByteOffset(l, startChar)]
 	}
 
 	after := ""
 	if endLine >= 0 && endLine < len(lines) {
 		l := lines[endLine]
-		if endChar > len(l) {
-			endChar = len(l)
-		}
-		after = l[endChar:]
+		after = l[utf16ToByteOffset(l, endChar):]
 	}
 
 	newLines := strings.Split(newText, "\n")
