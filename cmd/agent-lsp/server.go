@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -213,6 +214,34 @@ func clientForFile(resolver lsp.ClientResolver, cs *clientState, filePath string
 	return cs.get()
 }
 
+// autoInitRootAllowed reports whether dir is an acceptable inferred root for
+// workspace-level auto-init (replace_in_files). The server's cwd is trusted
+// only as a convenience fallback for the common single-project launch; a cwd
+// equal to $HOME (directly or through a symlink, e.g. macOS /var ->
+// /private/var) is refused — a home directory that is itself a git repo
+// (dotfiles) would otherwise become the scan root of a whole-workspace write
+// tool, bounded only by the occurrence cap.
+func autoInitRootAllowed(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return true
+	}
+	if filepath.Clean(dir) == filepath.Clean(home) {
+		return false
+	}
+	// Also compare resolved paths so a symlinked cwd pointing at $HOME is
+	// refused too.
+	resolvedDir, dErr := filepath.EvalSymlinks(dir)
+	resolvedHome, hErr := filepath.EvalSymlinks(home)
+	if dErr == nil && hErr == nil && resolvedDir == resolvedHome {
+		return false
+	}
+	return true
+}
+
 // autoInitClient attempts to infer a workspace root from filePath and
 // initialize the resolver. Safe to call concurrently via initMu.
 // Returns nil if filePath is empty, inference returns no root,
@@ -335,6 +364,9 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 	autoInitForWorkspace := func(ctx context.Context) *lsp.LSPClient {
 		wd, err := os.Getwd()
 		if err != nil || wd == "" {
+			return nil
+		}
+		if !autoInitRootAllowed(wd) {
 			return nil
 		}
 		return autoInitClient(ctx, resolver, cs, &initMu, wd)

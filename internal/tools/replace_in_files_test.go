@@ -402,6 +402,28 @@ func TestReplacePartialFailureText(t *testing.T) {
 	}
 }
 
+// TestExplicitHardSkipFileRefused pins review finding 6: naming a file
+// explicitly bypasses gitignore and glob filters, but must not bypass the
+// .git/.agent-lsp hard skips — .git/hooks/* is writable and must never
+// become a replacement target.
+func TestExplicitHardSkipFileRefused(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		".git/hooks/pre-commit": "foo\n",
+		".agent-lsp/cache.json": "foo\n",
+		"src/ok.mqh":            "foo\n",
+	})
+	for _, rel := range []string{".git/hooks/pre-commit", ".agent-lsp/cache.json"} {
+		plan := planReplaceInFiles(root, replaceParams{Needle: "foo", Repl: "bar", Mode: "literal", DryRun: false, ExpectedCount: -1, RelPath: rel})
+		if !plan.IsError {
+			t.Errorf("%s: expected refusal, got plan with %d occurrence(s)", rel, len(plan.Selected))
+		}
+	}
+	ok := planReplaceInFiles(root, replaceParams{Needle: "foo", Repl: "bar", Mode: "literal", DryRun: false, ExpectedCount: -1, RelPath: "src/ok.mqh"})
+	if ok.IsError || len(ok.Selected) != 1 {
+		t.Errorf("normal explicit file should still apply: IsError=%v selected=%d (%s)", ok.IsError, len(ok.Selected), ok.Text)
+	}
+}
+
 func TestBuildReplaceWorkspaceEditMultipleSameLine(t *testing.T) {
 	root := writeTree(t, map[string]string{"a.mqh": "foo foo foo\n"})
 	dry := planReplaceInFiles(root, replaceParams{Needle: "foo", Repl: "X", Mode: "literal", DryRun: true, ExpectedCount: -1})

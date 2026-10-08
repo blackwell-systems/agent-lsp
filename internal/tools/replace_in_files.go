@@ -636,8 +636,15 @@ func planReplaceInFiles(rootDir string, p replaceParams) replacePlan {
 			return replacePlan{Text: err.Error(), IsError: true}
 		}
 		if !info.IsDir() {
-			// Explicit single file: bypass glob filters (explicit intent),
-			// keep gitignore out of the way too — the caller named the file.
+			// Explicit single file: bypass glob filters (explicit intent) and
+			// gitignore, but never the hard skips — .git/hooks/* and
+			// .agent-lsp/* must not become replacement targets just because
+			// the caller named them.
+			for _, seg := range strings.Split(filepath.ToSlash(rel), "/") {
+				if seg == ".git" || seg == ".agent-lsp" {
+					return replacePlan{Text: fmt.Sprintf("refusing to scan %s: %q is a hard-skip path (never a replacement target)", p.RelPath, seg), IsError: true}
+				}
+			}
 			candidates = []string{filepath.ToSlash(rel)}
 		} else {
 			candidates, err = collectFilesForReplace(rootDir, filepath.ToSlash(rel), includeRe, excludeRe)
