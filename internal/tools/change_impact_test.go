@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/blackwell-systems/agent-lsp/internal/encoding/gcf"
@@ -560,7 +561,7 @@ func TestBuildChangeImpactPayload(t *testing.T) {
 	if p.Symbols[2].Score != 0.7 {
 		t.Errorf("test symbol score should be 0.7, got %f", p.Symbols[2].Score)
 	}
-	// Verify edges exist and are REAL caller -> target edges (issue #5:
+	// Verify edges exist and are REAL caller -> target edges (issue #53:
 	// the old implementation produced degenerate self-edges @N<@N).
 	if len(p.Edges) != 1 {
 		t.Errorf("expected 1 edge, got %d", len(p.Edges))
@@ -613,7 +614,7 @@ func TestBuildChangeImpactPayload_Dedup(t *testing.T) {
 func TestRenestFlatSymbols_FlatMQLList(t *testing.T) {
 	// Mimics mql-lsp-server v2.5.0: a FLAT documentSymbol list where the
 	// function's parameters and locals are top-level siblings carrying
-	// SymbolKind Function (12). Issue #5 live repro on riesgo_mq4.mqh.
+	// SymbolKind Function (12). Issue #53 live repro on riesgo_mq4.mqh.
 	flat := []types.DocumentSymbol{
 		{Name: "CalculaRiesgoTicks", Kind: 12,
 			Range:          types.Range{Start: types.Position{Line: 9, Character: 0}, End: types.Position{Line: 30, Character: 4}},
@@ -885,5 +886,98 @@ func TestBuildChangeImpactPayload_NoSelfEdgesForSameName(t *testing.T) {
 	p := buildChangeImpactPayload([]symbolWithCallers{entry}, nil)
 	if len(p.Edges) != 0 {
 		t.Errorf("expected 0 edges (self-edge dropped), got %d", len(p.Edges))
+	}
+}
+
+// --- #57 review follow-ups ---
+
+// A changed symbol that also calls another changed symbol must stay a target
+// (distance 0) even when its caller entry is processed first.
+func TestBuildChangeImpactPayload_TargetsBeforeCallers(t *testing.T) {
+	entries := []symbolWithCallers{
+		{symbolRef: symbolRef{Name: "Bar", File: "/w/pkg/a.go"}, NonTestCallers: []symbolRef{{Name: "Foo", File: "/w/pkg/a.go"}}},
+		{symbolRef: symbolRef{Name: "Foo", File: "/w/pkg/a.go"}},
+	}
+	p := buildChangeImpactPayload(entries, nil)
+	fooQN := gcf.QualifiedName("/w/pkg/a.go", "Foo")
+	found := false
+	for _, s := range p.Symbols {
+		if s.QualifiedName == fooQN {
+			found = true
+			if s.Distance != 0 {
+				t.Errorf("changed symbol Foo has distance %d, want 0 (it is also a caller of Bar)", s.Distance)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("Foo missing from payload symbols")
+	}
+	if len(p.Edges) != 1 || p.Edges[0].Source != fooQN {
+		t.Errorf("edges = %+v, want one Foo -> Bar edge", p.Edges)
+	}
+}
+
+// A re-nested Function under a class or namespace is a real member, not a
+// parameter: only re-nested shapes under a callable parent are dropped.
+func TestCollectExportedSymbols_RenestedFunctionUnderClassIsKept(t *testing.T) {
+	syms := []types.DocumentSymbol{
+		{Name: "CTrade", Kind: 5, Children: []types.DocumentSymbol{
+			{Name: "Buy", Kind: 12, Renested: true},
+		}},
+		{Name: "Calc", Kind: 12, Children: []types.DocumentSymbol{
+			{Name: "lotaje", Kind: 12, Renested: true},
+		}},
+	}
+	var out []exportedSymbol
+	collectExportedSymbols(syms, "/nonexistent/x.mqh", "mql", &out, true, 0, 0)
+	got := map[string]bool{}
+	for _, e := range out {
+		got[e.Name] = true
+	}
+	if !got["Buy"] {
+		t.Errorf("member function Buy under class was dropped; got %v", got)
+	}
+	if got["lotaje"] {
+		t.Errorf("parameter lotaje under function became a target; got %v", got)
+	}
+}
+
+// SymbolInformation[] with containerName is nested by NormalizeDocumentSymbols;
+// those children must be filtered like renestFlatSymbols' output.
+func TestCollectExportedSymbols_ContainerNameParamsExcluded(t *testing.T) {
+	raw := json.RawMessage(`[
+		{"name":"Calc","kind":12,"location":{"uri":"file:///w/a.mqh","range":{"start":{"line":0,"character":0},"end":{"line":9,"character":1}}}},
+		{"name":"lotaje","kind":12,"containerName":"Calc","location":{"uri":"file:///w/a.mqh","range":{"start":{"line":0,"character":10},"end":{"line":0,"character":16}}}},
+		{"name":"perdida","kind":13,"containerName":"Calc","location":{"uri":"file:///w/a.mqh","range":{"start":{"line":2,"character":2},"end":{"line":2,"character":9}}}}
+	]`)
+	syms, err := lsp.NormalizeDocumentSymbols(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []exportedSymbol
+	collectExportedSymbols(syms, "/nonexistent/a.mqh", "mql", &out, true, 0, 0)
+	for _, e := range out {
+		if e.Name == "lotaje" || e.Name == "perdida" {
+			t.Errorf("containerName-nested parameter/local %q became a target", e.Name)
+		}
+	}
+	if len(out) != 1 || out[0].Name != "Calc" {
+		t.Errorf("targets = %+v, want only Calc", out)
+	}
+}
+
+// A reference inside a TS/JS arrow-function const has no callable ancestor; it
+// must be attributed to the const, not left unattributed (which produced a
+// fake self-edge named after the queried symbol).
+func TestFindEnclosingCaller_FallsBackToEnclosingDeclaration(t *testing.T) {
+	const refPath = "/w/app.tsx"
+	cache := &sync.Map{}
+	cache.Store(refPath, []types.DocumentSymbol{{
+		Name: "App", Kind: 13,
+		Range: types.Range{Start: types.Position{Line: 0}, End: types.Position{Line: 6, Character: 2}},
+	}})
+	got := findEnclosingCaller(context.Background(), nil, cache, refPath, types.Position{Line: 3, Character: 4})
+	if got == nil || got.Name != "App" {
+		t.Fatalf("caller = %+v, want the enclosing const App", got)
 	}
 }

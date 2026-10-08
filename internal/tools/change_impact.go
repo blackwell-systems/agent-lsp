@@ -251,7 +251,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 				// Attribute the caller to the enclosing callable in the caller
 				// file — ref.Symbol.Name is the QUERIED symbol's name, and using
 				// it as the caller name made every caller look like the target
-				// itself (issue #5: misattributed callers + degenerate edges).
+				// itself (issue #53: misattributed callers + degenerate edges).
 				callerName := ref.Symbol.Name
 				if enc := findEnclosingCaller(ctx, client, testSymbolCache, refPath, loc.Range.Start); enc != nil {
 					callerName = enc.Name
@@ -483,6 +483,12 @@ var nestedCallableKinds = map[types.SymbolKind]bool{
 // unmarked) keep the existing filtering.
 var paramLocalKinds = map[types.SymbolKind]bool{12: true, 13: true}
 
+// callableParentKinds are the parents a re-nested parameter/local shape can
+// belong to: Method (6), Constructor (9), Function (12). A re-nested Function
+// under a class, namespace, or module is a real member function, not a
+// parameter, and must stay a target and a caller candidate.
+var callableParentKinds = map[types.SymbolKind]bool{6: true, 9: true, 12: true}
+
 // constantContainerKinds is the set of parent SymbolKinds inside which a
 // nested Constant (14) stays a legitimate blast-radius target: class, struct,
 // enum, namespace, module, package, interface, and event bodies. A constant
@@ -526,7 +532,7 @@ func collectExportedSymbols(syms []types.DocumentSymbol, filePath, langID string
 		// A re-nested parameter/local shape (a flat server publishing them
 		// with a callable kind) is not an independent blast-radius target.
 		// Genuinely nested children carry no Renested mark and pass through.
-		if depth > 0 && sym.Renested && paramLocalKinds[sym.Kind] {
+		if depth > 0 && sym.Renested && paramLocalKinds[sym.Kind] && callableParentKinds[parentKind] {
 			continue
 		}
 		// A nested constant stays a target only when its parent is a container
@@ -709,13 +715,13 @@ func findEnclosingTestFunction(ctx context.Context, client *lsp.LSPClient, cache
 // publish params/locals carrying SymbolKind Function; renestFlatSymbols marks
 // them). A reference sharing a line with a declaration would otherwise win
 // the smallest-enclosing-symbol race against the containing function.
-func stripNonCallableSymbols(syms []types.DocumentSymbol) []types.DocumentSymbol {
+func stripNonCallableSymbols(syms []types.DocumentSymbol, parentKind types.SymbolKind) []types.DocumentSymbol {
 	out := make([]types.DocumentSymbol, 0, len(syms))
 	for _, s := range syms {
-		if s.Kind == 8 || s.Kind == 13 || s.Kind == 14 || (s.Renested && paramLocalKinds[s.Kind]) {
+		if s.Kind == 8 || s.Kind == 13 || s.Kind == 14 || (s.Renested && paramLocalKinds[s.Kind] && callableParentKinds[parentKind]) {
 			continue
 		}
-		s.Children = stripNonCallableSymbols(s.Children)
+		s.Children = stripNonCallableSymbols(s.Children, s.Kind)
 		out = append(out, s)
 	}
 	return out
@@ -745,7 +751,30 @@ func findEnclosingCaller(ctx context.Context, client *lsp.LSPClient, cache *sync
 	// Re-nest before stripping so flat-server params/locals published with a
 	// callable kind (SymbolKind Function) are marked and cannot win the
 	// smallest-enclosing-symbol race against the containing function.
-	return findEnclosingSymbolAt(callerSymbolCandidates(list), pos)
+	if sym := findEnclosingSymbolAt(callerSymbolCandidates(list), pos); sym != nil {
+		return sym
+	}
+	// No callable encloses the reference. In TS/JS a function is often a
+	// Variable or Constant (const App = () => {...}), which the callable
+	// candidates strip; attribute the reference to that enclosing declaration
+	// rather than to nothing, which fell back to the queried symbol's own name
+	// and produced a fake self-edge. Parameter/local shapes stay excluded.
+	return findEnclosingSymbolAt(declarationCandidates(renestFlatSymbols(list), 0), pos)
+}
+
+// declarationCandidates keeps every symbol except fields and re-nested
+// parameter/local shapes: the fallback set for findEnclosingCaller when no
+// callable symbol encloses a reference.
+func declarationCandidates(syms []types.DocumentSymbol, parentKind types.SymbolKind) []types.DocumentSymbol {
+	out := make([]types.DocumentSymbol, 0, len(syms))
+	for _, s := range syms {
+		if s.Kind == 8 || (s.Renested && paramLocalKinds[s.Kind] && callableParentKinds[parentKind]) {
+			continue
+		}
+		s.Children = declarationCandidates(s.Children, s.Kind)
+		out = append(out, s)
+	}
+	return out
 }
 
 // callerSymbolCandidates builds the candidate tree for caller attribution:
@@ -753,7 +782,7 @@ func findEnclosingCaller(ctx context.Context, client *lsp.LSPClient, cache *sync
 // shapes), then non-callable symbols are stripped. Kept as a helper so tests
 // can exercise the exact findEnclosingCaller pipeline without a live client.
 func callerSymbolCandidates(list []types.DocumentSymbol) []types.DocumentSymbol {
-	return stripNonCallableSymbols(renestFlatSymbols(list))
+	return stripNonCallableSymbols(renestFlatSymbols(list), 0)
 }
 
 // findEnclosingSymbol walks a DocumentSymbol tree and returns the smallest symbol
@@ -951,7 +980,10 @@ func buildChangeImpactPayload(symbolsWithCallers []symbolWithCallers, testFuncs 
 	seen := map[string]bool{}
 	edgeSeen := map[string]bool{}
 
-	// Target symbols (distance 0, score 1.0) and their caller edges.
+	// Every changed symbol first (distance 0, score 1.0). Adding targets and
+	// callers in one pass let a changed symbol that also calls another changed
+	// symbol be recorded as a distance-1 caller when its caller entry came
+	// first, losing its target status.
 	for _, entry := range symbolsWithCallers {
 		targetQN := gcf.QualifiedName(entry.File, entry.Name)
 		if !seen[targetQN] {
@@ -964,13 +996,17 @@ func buildChangeImpactPayload(symbolsWithCallers []symbolWithCallers, testFuncs 
 				Distance:      0,
 			})
 		}
+	}
+
+	// Then callers (distance 1) and caller -> changed-symbol edges.
+	for _, entry := range symbolsWithCallers {
+		targetQN := gcf.QualifiedName(entry.File, entry.Name)
 		for _, c := range entry.NonTestCallers {
 			qn := gcf.QualifiedName(c.File, c.Name)
 			if !seen[qn] {
 				seen[qn] = true
-				// Score decays with the flat caller index; approximate with a
-				// fixed distance-1 score — the flat list no longer reaches this
-				// function, and per-caller ranking was never meaningful.
+				// Direct callers share one distance-1 score; their order in
+				// the caller list carries no ranking information.
 				symbols = append(symbols, gcfgo.Symbol{
 					QualifiedName: qn,
 					Kind:          "function",
