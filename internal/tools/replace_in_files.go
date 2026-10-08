@@ -758,30 +758,6 @@ func planReplaceInFiles(rootDir string, p replaceParams) replacePlan {
 
 // ---- application ----
 
-// byteRangeToLSPRange converts byte offsets into an LSP range with UTF-16
-// character offsets (same conversion as textMatchApply).
-func byteRangeToLSPRange(src string, startByte, endByte int) (startLine, startChar, endLine, endChar int) {
-	before := src[:startByte]
-	startLine = strings.Count(before, "\n")
-	var lineBegin int
-	if lastNL := strings.LastIndex(before, "\n"); lastNL < 0 {
-		lineBegin = 0
-	} else {
-		lineBegin = lastNL + 1
-	}
-	startChar = utf16Offset(src[lineBegin:startByte], startByte-lineBegin)
-
-	segment := src[startByte:endByte]
-	endLine = startLine + strings.Count(segment, "\n")
-	if lastNL := strings.LastIndex(segment, "\n"); lastNL < 0 {
-		endChar = startChar + utf16Offset(segment, len(segment))
-	} else {
-		endContent := segment[lastNL+1:]
-		endChar = utf16Offset(endContent, len(endContent))
-	}
-	return
-}
-
 // buildReplaceWorkspaceEdit groups the selected occurrences per file and
 // builds a multi-file LSP WorkspaceEdit. Before building, every file is
 // re-read and its fingerprint re-verified against the occurrence ids — a
@@ -815,7 +791,7 @@ func buildReplaceWorkspaceEdit(rootDir string, occs []replaceOccurrence, needle,
 		sort.Slice(list, func(i, j int) bool { return list[i].start < list[j].start })
 		var edits []any
 		for _, o := range list {
-			sl, sc, el, ec := byteRangeToLSPRange(src, o.start, o.end)
+			sl, sc, el, ec := byteSpanToLSPRange(src, o.start, o.end)
 			edits = append(edits, map[string]any{
 				"range": map[string]any{
 					"start": map[string]any{"line": sl, "character": sc},

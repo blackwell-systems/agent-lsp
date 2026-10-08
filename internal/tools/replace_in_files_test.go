@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	uripkg "github.com/blackwell-systems/agent-lsp/internal/uri"
+	"github.com/blackwell-systems/agent-lsp/pkg/types"
 )
 
 // writeTree creates files under a temp workspace root. Keys are slash paths.
@@ -242,6 +245,82 @@ func TestBuildReplaceWorkspaceEditRangesBOMCRLF(t *testing.T) {
 	if _, err := buildReplaceWorkspaceEdit(root, dry.Occurrences, "foo", "literal", "X"); err == nil {
 		t.Error("expected staleness error after file change")
 	}
+}
+
+// TestBuildReplaceWorkspaceEditNonASCIIBytes asserts the bytes actually
+// written when the LSP ranges produced by buildReplaceWorkspaceEdit are
+// applied with the canonical uripkg.ApplyRangeEdit (the same path
+// LSPClient.applyEditsToFile uses). Non-ASCII text before the match must
+// survive byte-for-byte: LSP characters are UTF-16 code units, not bytes,
+// so the range offsets must account for multi-byte runes and the BOM.
+func TestBuildReplaceWorkspaceEditNonASCIIBytes(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string // needle "foo" appears after the non-ASCII prefix
+		want string
+	}{
+		{"accented", "é foo\n", "é bar\n"},
+		{"accented_multi", "ééé foo\n", "ééé bar\n"},
+		{"cjk", "日本語 foo\n", "日本語 bar\n"},
+		{"cjk_and_accented", "日本 é foo\n", "日本 é bar\n"},
+		{"emoji", "😀 foo\n", "😀 bar\n"},
+		{"bom", "\xef\xbb\xbfé foo\n", "\xef\xbb\xbfé bar\n"},
+		{"bom_cjk", "\xef\xbb\xbf日本語 foo\n", "\xef\xbb\xbf日本語 bar\n"},
+		{"nonascii_after_match", "foo é bar foo\n", "bar é bar bar\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := writeTree(t, map[string]string{"u.mqh": tc.src})
+			dry := planReplaceInFiles(root, replaceParams{Needle: "foo", Repl: "bar", Mode: "literal", DryRun: true, ExpectedCount: -1})
+			if len(dry.Occurrences) == 0 {
+				t.Fatalf("no occurrences found in %q", tc.src)
+			}
+			edit, err := buildReplaceWorkspaceEdit(root, dry.Occurrences, "foo", "literal", "bar")
+			if err != nil {
+				t.Fatal(err)
+			}
+			changes, ok := edit["changes"].(map[string]any)
+			if !ok || len(changes) != 1 {
+				t.Fatalf("bad edit structure: %#v", edit)
+			}
+			var decoded []textEditForTest
+			for uri, v := range changes {
+				if !strings.Contains(uri, "u.mqh") {
+					t.Fatalf("unexpected uri %q", uri)
+				}
+				for _, e := range v.([]any) {
+					m := e.(map[string]any)
+					rng := m["range"].(map[string]any)
+					s := rng["start"].(map[string]any)
+					en := rng["end"].(map[string]any)
+					decoded = append(decoded, textEditForTest{
+						sl: s["line"].(int), sc: s["character"].(int),
+						el: en["line"].(int), ec: en["character"].(int),
+						newText: m["newText"].(string),
+					})
+				}
+			}
+			// Mirror LSPClient.applyEditsToFile: apply bottom-to-top with
+			// the canonical ApplyRangeEdit, then compare written bytes.
+			content := tc.src
+			for i := len(decoded) - 1; i >= 0; i-- {
+				e := decoded[i]
+				content = uripkg.ApplyRangeEdit(content, types.Range{
+					Start: types.Position{Line: e.sl, Character: e.sc},
+					End:   types.Position{Line: e.el, Character: e.ec},
+				}, e.newText)
+			}
+			if content != tc.want {
+				t.Errorf("written bytes mismatch:\n got %q\nwant %q", content, tc.want)
+			}
+		})
+	}
+}
+
+// textEditForTest is a decoded TextEdit for byte-level assertions.
+type textEditForTest struct {
+	sl, sc, el, ec int
+	newText        string
 }
 
 func TestBuildReplaceWorkspaceEditMultipleSameLine(t *testing.T) {
