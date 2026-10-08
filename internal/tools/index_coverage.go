@@ -55,7 +55,9 @@ const (
 // excluded entries consume the budget too, ctx cancellation stops it
 // early, and any interruption yields coverageUnknown rather than a
 // deceptively complete classification.
-func probeWorkspaceCoverage(ctx context.Context, root string, opened map[string]bool) workspaceCoverage {
+// exts, when non-nil, limits eligible files to those extensions (lowercase,
+// with the dot); nil makes every non-hidden file eligible.
+func probeWorkspaceCoverage(ctx context.Context, root string, opened map[string]bool, exts map[string]bool) workspaceCoverage {
 	if root == "" {
 		return coverageComplete
 	}
@@ -101,6 +103,9 @@ func probeWorkspaceCoverage(ctx context.Context, root string, opened map[string]
 				if strings.HasPrefix(name, ".") {
 					continue
 				}
+				if exts != nil && !exts[strings.ToLower(filepath.Ext(name))] {
+					continue
+				}
 				// Canonicalize the discovered path too: an opened file may be
 				// a symlink, whose opened-set entry resolves to the target —
 				// comparing unresolved link paths would report a false
@@ -141,14 +146,49 @@ func canonicalizeIndexCoveragePath(p string) string {
 // may only index opened documents. It states the limitation and the cheap
 // recovery (open the declaring file and retry) instead of asserting a
 // "not found" the index cannot support. (issue #42)
-const unopenedFilesCaveat = "some servers only index opened documents — symbols or references in files not yet opened may be missing from this result; open the declaring file (open_document) and retry"
+const unopenedFilesCaveat = "this language server indexes only opened documents, so symbols or references in files not yet opened may be missing from this result; open the declaring file (open_document) and retry"
+
+// indexOnlyOpenedServers lists language servers verified to index only the
+// documents opened in the session, with the source extensions they serve.
+// The caveat is limited to these: whole-workspace indexers (gopls,
+// rust-analyzer, pyright, ...) answer for unopened files, so an empty result
+// from them is authoritative, and hedging it on every empty search would
+// teach agents to ignore the hint. Add a server here once its behavior is
+// observed. Matched by executable name or by the serverInfo name it reports.
+var indexOnlyOpenedServers = []struct {
+	binary, serverName string
+	exts               []string
+}{
+	// Verified on v2.4.2 through 2.5.0 (issue #42).
+	{binary: "mql-lsp-server", serverName: "MQL Language Server", exts: []string{".mq4", ".mq5", ".mqh"}},
+}
+
+// indexOnlyOpenedExtensions returns the extension set for a known
+// index-on-open server, or nil if the server is not known to behave that way.
+func indexOnlyOpenedExtensions(binary, serverName string) map[string]bool {
+	for _, s := range indexOnlyOpenedServers {
+		if (binary != "" && binary == s.binary) || (serverName != "" && strings.EqualFold(serverName, s.serverName)) {
+			exts := make(map[string]bool, len(s.exts))
+			for _, e := range s.exts {
+				exts[e] = true
+			}
+			return exts
+		}
+	}
+	return nil
+}
 
 // noteIndexCoverage returns the caveat sentence when the workspace may have
 // files the session never opened, and an empty string otherwise. Unknown
 // coverage (budget exhaustion, walk errors, cancellation) also yields the
 // caveat — it is the honest wording when coverage cannot be established.
 func noteIndexCoverage(ctx context.Context, client *lsp.LSPClient) string {
-	if probeWorkspaceCoverage(ctx, client.RootDir(), openedDocumentPaths(client)) != coverageComplete {
+	name, _ := client.GetServerInfo()
+	exts := indexOnlyOpenedExtensions(client.ServerBinary(), name)
+	if exts == nil {
+		return ""
+	}
+	if probeWorkspaceCoverage(ctx, client.RootDir(), openedDocumentPaths(client), exts) != coverageComplete {
 		return unopenedFilesCaveat
 	}
 	return ""

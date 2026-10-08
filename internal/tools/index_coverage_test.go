@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,21 +13,23 @@ import (
 func openedSet(paths ...string) map[string]bool {
 	out := make(map[string]bool, len(paths))
 	for _, p := range paths {
-		out[p] = true
+		// Key like the production opened set: symlinks resolved, so macOS
+		// temp dirs (/var -> /private/var) compare equal to the walk's paths.
+		out[canonicalizeIndexCoveragePath(p)] = true
 	}
 	return out
 }
 
 func TestProbeWorkspaceCoverage_EmptyRoot(t *testing.T) {
 	root := t.TempDir()
-	if got := probeWorkspaceCoverage(context.Background(), root, nil); got != coverageComplete {
+	if got := probeWorkspaceCoverage(context.Background(), root, nil, nil); got != coverageComplete {
 		t.Fatalf("empty workspace should be complete, got %v", got)
 	}
 }
 
 func TestProbeWorkspaceCoverage_EmptyRootPath(t *testing.T) {
 	// No root (client without a workspace) — nothing to classify.
-	if got := probeWorkspaceCoverage(context.Background(), "", nil); got != coverageComplete {
+	if got := probeWorkspaceCoverage(context.Background(), "", nil, nil); got != coverageComplete {
 		t.Fatalf("empty root path should be complete, got %v", got)
 	}
 }
@@ -41,7 +44,7 @@ func TestProbeWorkspaceCoverage_AllOpened(t *testing.T) {
 		}
 		opened = append(opened, p)
 	}
-	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(opened...)); got != coverageComplete {
+	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(opened...), nil); got != coverageComplete {
 		t.Fatalf("all files opened should be complete, got %v", got)
 	}
 }
@@ -58,7 +61,7 @@ func TestProbeWorkspaceCoverage_MoreFilesThanOpened(t *testing.T) {
 			opened = append(opened, p)
 		}
 	}
-	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(opened...)); got != coverageUnopened {
+	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(opened...), nil); got != coverageUnopened {
 		t.Fatalf("3 files with 2 opened should be unopened, got %v", got)
 	}
 }
@@ -80,7 +83,7 @@ func TestProbeWorkspaceCoverage_OpenedOutsideEligibleSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The only opened document lives in a skipped directory.
-	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(vendored)); got != coverageUnopened {
+	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(vendored), nil); got != coverageUnopened {
 		t.Fatalf("unopened source file masked by a node_modules open: got %v, want coverageUnopened", got)
 	}
 }
@@ -106,7 +109,7 @@ func TestProbeWorkspaceCoverage_SkipsDotAndSkipDirs(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Only the one real file counts, and it is opened → complete.
-	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(p)); got != coverageComplete {
+	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(p), nil); got != coverageComplete {
 		t.Fatalf("hidden and skipped dirs must not count as unopened files, got %v", got)
 	}
 }
@@ -126,7 +129,7 @@ func TestProbeWorkspaceCoverage_Recursive(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Only the sub file opened → the root-level file is unopened.
-	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(subFile)); got != coverageUnopened {
+	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(subFile), nil); got != coverageUnopened {
 		t.Fatalf("files in subdirectories must count toward coverage, got %v", got)
 	}
 }
@@ -142,9 +145,9 @@ func TestProbeWorkspaceCoverage_CapYieldsUnknown(t *testing.T) {
 		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		opened[p] = true
+		opened[canonicalizeIndexCoveragePath(p)] = true // resolved, like production (macOS /var)
 	}
-	if got := probeWorkspaceCoverage(context.Background(), root, opened); got != coverageUnknown {
+	if got := probeWorkspaceCoverage(context.Background(), root, opened, nil); got != coverageUnknown {
 		t.Fatalf("capped walk must report unknown coverage, got %v", got)
 	}
 }
@@ -156,7 +159,7 @@ func TestProbeWorkspaceCoverage_UnopenedBeforeCap(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := probeWorkspaceCoverage(context.Background(), root, nil); got != coverageUnopened {
+	if got := probeWorkspaceCoverage(context.Background(), root, nil, nil); got != coverageUnopened {
 		t.Fatalf("one unopened file must yield unopened coverage, got %v", got)
 	}
 }
@@ -177,9 +180,9 @@ func TestProbeWorkspaceCoverage_SymlinkedRootCanonicalized(t *testing.T) {
 	}
 	// The opened set holds the canonical path; the walk starts at the symlink.
 	// t.TempDir() may itself sit under a symlinked parent (e.g. /var on
-		// macOS), so the fixture path is canonicalized the same way the probe
+	// macOS), so the fixture path is canonicalized the same way the probe
 	// canonicalizes both sides. (CodeRabbit #51 re-review thread 1)
-	if got := probeWorkspaceCoverage(context.Background(), link, openedSet(canonicalizeIndexCoveragePath(p))); got != coverageComplete {
+	if got := probeWorkspaceCoverage(context.Background(), link, openedSet(canonicalizeIndexCoveragePath(p)), nil); got != coverageComplete {
 		t.Fatalf("symlinked root must canonicalize before comparing, got %v", got)
 	}
 }
@@ -200,7 +203,7 @@ func TestProbeWorkspaceCoverage_OpenedSymlinkedFile(t *testing.T) {
 	// The client opened link.mq4; openedDocumentPaths canonicalizes it to the
 	// resolved target. Both the real file and the link walk to that target.
 	opened := canonicalizeIndexCoveragePath(link)
-	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(opened)); got != coverageComplete {
+	if got := probeWorkspaceCoverage(context.Background(), root, openedSet(opened), nil); got != coverageComplete {
 		t.Fatalf("opened symlinked file must count as opened, got %v", got)
 	}
 }
@@ -215,7 +218,7 @@ func TestProbeWorkspaceCoverage_CancelledYieldsUnknown(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if got := probeWorkspaceCoverage(ctx, root, openedSet(filepath.Join(root, "a.go"))); got != coverageUnknown {
+	if got := probeWorkspaceCoverage(ctx, root, openedSet(filepath.Join(root, "a.go")), nil); got != coverageUnknown {
 		t.Fatalf("cancelled probe must report unknown coverage, got %v", got)
 	}
 }
@@ -230,4 +233,68 @@ func itoa(i int) string {
 		i /= 10
 	}
 	return string(b)
+}
+
+// --- caveat gating: only servers known to index opened documents only ---
+
+func writeFiles(t *testing.T, root string, names ...string) {
+	t.Helper()
+	for _, n := range names {
+		p := filepath.Join(root, n)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// TestNoteIndexCoverage_WholeWorkspaceIndexerGetsNoCaveat: gopls answers for
+// unopened files, so its empty result is authoritative and must not be hedged.
+func TestNoteIndexCoverage_WholeWorkspaceIndexerGetsNoCaveat(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, "main.go", "pkg/util.go", "README.md")
+	client := lsp.NewLSPClient("/usr/local/bin/gopls", nil)
+	client.SetRootDirForTest(root)
+	if note := noteIndexCoverage(context.Background(), client); note != "" {
+		t.Errorf("gopls with unopened files got caveat %q, want none", note)
+	}
+}
+
+// TestNoteIndexCoverage_OpenOnlyServerWithUnopenedSourceGetsCaveat covers the
+// case the caveat exists for (issue #42).
+func TestNoteIndexCoverage_OpenOnlyServerWithUnopenedSourceGetsCaveat(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, "Experts/ea.mq5", "Include/lib.mqh")
+	client := lsp.NewLSPClient("/opt/mql/mql-lsp-server", nil)
+	client.SetRootDirForTest(root)
+	if note := noteIndexCoverage(context.Background(), client); note != unopenedFilesCaveat {
+		t.Errorf("mql-lsp-server with unopened .mq5/.mqh got %q, want the caveat", note)
+	}
+}
+
+// TestNoteIndexCoverage_OnlyServerLanguageFilesCount: files the server does not
+// serve (docs, other languages) cannot be missing from its index, so they must
+// not trigger the caveat.
+func TestNoteIndexCoverage_OnlyServerLanguageFilesCount(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, "README.md", "tools/gen.go", "logo.png")
+	client := lsp.NewLSPClient("/opt/mql/mql-lsp-server", nil)
+	client.SetRootDirForTest(root)
+	if note := noteIndexCoverage(context.Background(), client); note != "" {
+		t.Errorf("no unopened MQL files but got caveat %q", note)
+	}
+}
+
+func TestIndexOnlyOpenedExtensions(t *testing.T) {
+	if indexOnlyOpenedExtensions("gopls", "gopls") != nil {
+		t.Error("gopls must not be treated as index-on-open")
+	}
+	if exts := indexOnlyOpenedExtensions("", "MQL Language Server"); !exts[".mqh"] {
+		t.Error("serverInfo name match (no binary, e.g. passive client) should resolve MQL extensions")
+	}
+	if exts := indexOnlyOpenedExtensions("mql-lsp-server", ""); !exts[".mq4"] || exts[".go"] {
+		t.Errorf("binary match exts = %v", exts)
+	}
 }

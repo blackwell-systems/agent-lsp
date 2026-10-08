@@ -2834,6 +2834,16 @@ func (c *LSPClient) GetCapabilities() map[string]any {
 	return out
 }
 
+// ServerBinary returns the base name of the server executable this client
+// launched, without a Windows ".exe" suffix. Empty for daemon and passive
+// clients, which connect to a server they did not start.
+func (c *LSPClient) ServerBinary() string {
+	if c.serverPath == "" {
+		return ""
+	}
+	return strings.TrimSuffix(filepath.Base(c.serverPath), ".exe")
+}
+
 // GetServerInfo returns the server name and version from the initialize response.
 // Both fields may be empty if the server did not advertise serverInfo.
 func (c *LSPClient) GetServerInfo() (name, version string) {

@@ -45,7 +45,7 @@ func TestHandleGetWorkspaceSymbols_CapabilityUnavailable(t *testing.T) {
 
 func TestUnopenedFilesCaveatText(t *testing.T) {
 	// The caveat must name the limitation and the recovery path.
-	for _, want := range []string{"only index opened documents", "open_document"} {
+	for _, want := range []string{"indexes only opened documents", "open_document"} {
 		if !strings.Contains(unopenedFilesCaveat, want) {
 			t.Errorf("caveat missing %q: %s", want, unopenedFilesCaveat)
 		}
