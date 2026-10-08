@@ -129,9 +129,9 @@ func TestHandleCallHierarchy_DirectionValidation(t *testing.T) {
 func TestHandleCallHierarchy_CrossConcurrentFlag(t *testing.T) {
 	// Test that cross_concurrent flag is accepted
 	args := map[string]any{
-		"file_path":       "/tmp/foo.go",
-		"line":            1,
-		"column":          1,
+		"file_path":        "/tmp/foo.go",
+		"line":             1,
+		"column":           1,
 		"cross_concurrent": true,
 	}
 	r, err := HandleCallHierarchy(context.Background(), newNilClient(), args)
@@ -259,7 +259,6 @@ func TestHandleExportCache_InvalidDestPathType(t *testing.T) {
 		t.Fatalf("expected IsError=true for non-string dest_path")
 	}
 }
-
 
 func TestHandleImportCache_MissingSrcPath(t *testing.T) {
 	r, err := HandleImportCache(context.Background(), newNilClient(), map[string]any{})
@@ -492,7 +491,6 @@ func TestHandleSetLogLevel_InvalidType(t *testing.T) {
 // =============================================================================
 // fuzzy.go coverage (50% -> target 70%+)
 // =============================================================================
-
 
 func TestExtractSymbolName_CodeBlock(t *testing.T) {
 	hover := "```go\nfunc DoWork() error\n```"

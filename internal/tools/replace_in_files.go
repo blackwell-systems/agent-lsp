@@ -1,0 +1,1006 @@
+// replace_in_files.go implements the replace_in_files MCP tool handler.
+//
+// Find-and-replace across multiple files with a Serena-style protocol:
+//
+//  1. Call with dry_run=true: every occurrence is previewed as a minimal diff
+//     with a stable, content-derived occurrence id. Nothing is written.
+//  2. Re-issue with dry_run=false: applies all occurrences, or only those in
+//     occurrence_ids. If ANY id is unknown or stale (file content changed
+//     since the dry-run), NOTHING is changed — the caller re-runs the dry-run.
+//
+// File discovery walks the workspace respecting .gitignore files (with
+// negation, directory patterns, anchoring and ** globs) plus hard safety
+// skips (.git, .agent-lsp). Binary files and files above 8 MiB are skipped.
+//
+// Application goes through LSPClient.ApplyWorkspaceEdit so every touched file
+// sends textDocument/didChange and the language server index stays in sync.
+// Edits are computed on raw bytes, so BOM and CRLF outside edited ranges are
+// preserved untouched.
+package tools
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"hash/fnv"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+
+	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+	uripkg "github.com/blackwell-systems/agent-lsp/internal/uri"
+	"github.com/blackwell-systems/agent-lsp/pkg/types"
+)
+
+const (
+	// maxReplaceOccurrences caps the total match count; above it the tool
+	// refuses to act (apply blindly on a 10k-match scan is never intent).
+	maxReplaceOccurrences = 10000
+	// maxReplacePreviewOccurrences bounds how many occurrences a dry-run
+	// renders into the agent's context; the rest are summarized with a hint
+	// to narrow the scan. 10k two-line previews are several MB of context.
+	maxReplacePreviewOccurrences = 200
+	// maxReplaceFileSize skips files larger than this during scan.
+	maxReplaceFileSize = 8 << 20
+	// maxPreviewLineChars bounds each rendered diff line.
+	maxPreviewLineChars = 160
+)
+
+// Scan-bound guards, vars so tests can lower the bounds.
+var (
+	// maxReplaceFiles caps the candidate file count per run; the walk itself
+	// is otherwise unbounded.
+	maxReplaceFiles = 50000
+	// maxReplaceTotalBytes caps the aggregate bytes scanned per run (per-file
+	// files are already capped at maxReplaceFileSize).
+	maxReplaceTotalBytes = int64(256 << 20)
+)
+
+// defaultSkipDirs are directory names never scanned even when .gitignore
+// would allow them: dependency caches are never the source of record and
+// would dominate unbounded scans.
+var defaultSkipDirs = map[string]bool{
+	".git":         true,
+	".agent-lsp":   true,
+	"node_modules": true,
+	"vendor":       true,
+}
+
+// replaceOccurrence is one match of the needle in one file.
+type replaceOccurrence struct {
+	relPath  string // slash-separated, relative to the workspace root
+	start    int    // byte offset of the match within the file
+	end      int    // byte offset one past the match
+	id       string // "<rel>:<nth>@<hash16>" — stable while file content is unchanged
+	lineNum  int    // 1-based line of the match start
+	matchCol int    // byte column of the match start within its line (display)
+	oldLine  string // full source line containing the match start
+	newLine  string // that line with the replacement applied (preview only)
+	newRepl  string // replacement text for THIS occurrence (regex capture expansion; == repl in literal mode)
+}
+
+// replaceParams is the validated argument set for a replace_in_files run.
+type replaceParams struct {
+	Needle        string
+	Repl          string
+	Mode          string // "literal" | "regex"
+	RelPath       string // optional file/dir restriction, root-relative
+	IncludeGlob   string // comma-separated include globs ("" = all)
+	ExcludeGlob   string // comma-separated exclude globs
+	DryRun        bool
+	OccurrenceIDs []string
+	ExpectedCount int // -1 disables the guard
+}
+
+// replacePlan is the outcome of planning a run: everything needed to render
+// the result text and, in apply mode, the selected occurrences to edit.
+type replacePlan struct {
+	Text        string
+	IsError     bool
+	Occurrences []replaceOccurrence
+	Selected    []replaceOccurrence
+	Files       []string // files with at least one occurrence, scan order
+	Notes       []string // scan caveats surfaced to the caller (skipped/unreadable files)
+}
+
+// ---- glob translation (supports ** across segments) ----
+
+// globToRegexp converts a shell-style glob into an anchored regexp matched
+// against slash-separated relative paths. "**" crosses directory segments,
+// "*" and "?" do not.
+func globToRegexp(g string) (*regexp.Regexp, error) {
+	var b strings.Builder
+	b.WriteString("^")
+	for i := 0; i < len(g); i++ {
+		switch {
+		case strings.HasPrefix(g[i:], "**/"):
+			b.WriteString("(?:.*/)?")
+			i += 2
+		case strings.HasPrefix(g[i:], "/**"):
+			b.WriteString("/.*")
+			i += 2
+		case strings.HasPrefix(g[i:], "**"):
+			b.WriteString(".*")
+			i++
+		case g[i] == '*':
+			b.WriteString("[^/]*")
+		case g[i] == '?':
+			b.WriteString("[^/]")
+		default:
+			b.WriteString(regexp.QuoteMeta(g[i : i+1]))
+		}
+	}
+	b.WriteString("$")
+	return regexp.Compile(b.String())
+}
+
+// compileGlobList splits a comma-separated glob list into regexps.
+func compileGlobList(globs string) ([]*regexp.Regexp, error) {
+	globs = strings.TrimSpace(globs)
+	if globs == "" {
+		return nil, nil
+	}
+	var out []*regexp.Regexp
+	for _, g := range strings.Split(globs, ",") {
+		g = strings.TrimSpace(g)
+		if g == "" {
+			continue
+		}
+		// Gitignore-style trailing slash means "this directory"; translate it
+		// to a glob matching everything beneath it.
+		if strings.HasSuffix(g, "/") && !strings.HasSuffix(g, "**") {
+			g = strings.TrimSuffix(g, "/") + "/**"
+		}
+		re, err := globToRegexp(g)
+		if err != nil {
+			return nil, fmt.Errorf("bad glob %q: %w", g, err)
+		}
+		out = append(out, re)
+	}
+	return out, nil
+}
+
+// ---- .gitignore engine (subset: comments, negation, dir-only, anchoring, **) ----
+
+type giRule struct {
+	re      *regexp.Regexp
+	negate  bool
+	dirOnly bool // pattern ended in "/": matches directories only, like git
+}
+
+type giSet struct {
+	dirRel string // directory containing the .gitignore, root-relative ("" = root)
+	rules  []giRule
+}
+
+// giPatternToRegexp translates one gitignore pattern body to regexp source
+// matched against paths relative to the .gitignore's directory.
+func giPatternToRegexp(pat string) string {
+	var b strings.Builder
+	i := 0
+	for i < len(pat) {
+		switch {
+		case strings.HasPrefix(pat[i:], "**/"):
+			b.WriteString("(?:.*/)?")
+			i += 3
+		case strings.HasPrefix(pat[i:], "/**"):
+			b.WriteString("/.*")
+			i += 3
+		case strings.HasPrefix(pat[i:], "**"):
+			b.WriteString(".*")
+			i += 2
+		case pat[i] == '*':
+			b.WriteString("[^/]*")
+			i++
+		case pat[i] == '?':
+			b.WriteString("[^/]")
+			i++
+		default:
+			b.WriteString(regexp.QuoteMeta(pat[i : i+1]))
+			i++
+		}
+	}
+	return b.String()
+}
+
+func compileGitignore(dirRel, content string) giSet {
+	set := giSet{dirRel: dirRel}
+	for _, raw := range strings.Split(content, "\n") {
+		line := strings.TrimRight(raw, " \t\r")
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		negate := false
+		if strings.HasPrefix(line, "!") {
+			negate = true
+			line = line[1:]
+		}
+		dirOnly := false
+		if line == "" {
+			continue
+		}
+		if strings.HasSuffix(line, "/") {
+			dirOnly = true
+			line = strings.TrimSuffix(line, "/")
+		}
+		anchored := strings.HasPrefix(line, "/")
+		line = strings.TrimPrefix(line, "/")
+		if !anchored && strings.Contains(line, "/") {
+			anchored = true // "a/b" is anchored even without a leading slash
+		}
+		body := giPatternToRegexp(line)
+		var src string
+		if anchored {
+			src = "^" + body + "$"
+		} else {
+			src = "(?:^|.*/)" + body + "$"
+		}
+		re, err := regexp.Compile(src)
+		if err != nil {
+			continue // malformed pattern: ignore, like git does for ours
+		}
+		set.rules = append(set.rules, giRule{re: re, negate: negate, dirOnly: dirOnly})
+	}
+	return set
+}
+
+// gitignoreDecides returns whether rel (root-relative, slash-separated) is
+// ignored. Deeper .gitignore sets override shallower ones; within a set the
+// last matching rule wins; no match anywhere means "not ignored".
+func gitignoreDecides(sets []giSet, rel string, isDir bool) bool {
+	verdict := false
+	for _, s := range sets {
+		relToSet := rel
+		if s.dirRel != "" {
+			if !strings.HasPrefix(rel, s.dirRel+"/") {
+				continue
+			}
+			relToSet = rel[len(s.dirRel)+1:]
+		}
+		for i := len(s.rules) - 1; i >= 0; i-- {
+			r := s.rules[i]
+			if r.dirOnly && !isDir {
+				continue
+			}
+			if r.re.MatchString(relToSet) {
+				verdict = !r.negate
+				break
+			}
+		}
+	}
+	return verdict
+}
+
+// ---- file discovery ----
+
+// collectFilesForReplace walks baseRel (root-relative, "" = whole workspace)
+// respecting .gitignore files and the include/exclude glob filters. Always
+// pruned: .git and .agent-lsp. Output is in lexical walk order.
+func collectFilesForReplace(rootDir, baseRel string, includeRe, excludeRe []*regexp.Regexp) ([]string, error) {
+	var files []string
+	// Pre-load .gitignore sets from every ancestor of baseRel up to the root
+	// so a restricted scan still honors the root's ignore rules.
+	var initialSets []giSet
+	if baseRel != "" {
+		parts := strings.Split(baseRel, "/")
+		// Ancestors of baseRel, root included (walk() loads baseRel's own
+		// .gitignore on entry).
+		for i := 0; i < len(parts); i++ {
+			dirRel := strings.Join(parts[:i], "/")
+			if data, err := os.ReadFile(filepath.Join(rootDir, filepath.FromSlash(dirRel), ".gitignore")); err == nil {
+				initialSets = append(initialSets, compileGitignore(dirRel, string(data)))
+			}
+		}
+	}
+	var walk func(dirRel string, sets []giSet) error
+	walk = func(dirRel string, sets []giSet) error {
+		dirAbs := rootDir
+		if dirRel != "" {
+			dirAbs = filepath.Join(rootDir, filepath.FromSlash(dirRel))
+		}
+		if data, err := os.ReadFile(filepath.Join(dirAbs, ".gitignore")); err == nil {
+			sets = append(sets, compileGitignore(dirRel, string(data)))
+		}
+		entries, err := os.ReadDir(dirAbs)
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			name := e.Name()
+			childRel := name
+			if dirRel != "" {
+				childRel = dirRel + "/" + name
+			}
+			if e.Type()&os.ModeSymlink != 0 {
+				// Never follow symlinks: a symlinked directory would fail the
+				// ReadFile scan ("is a directory"), and a symlinked file can
+				// point outside the workspace root.
+				continue
+			}
+			if e.IsDir() {
+				if defaultSkipDirs[name] {
+					continue
+				}
+				if gitignoreDecides(sets, childRel, true) {
+					continue
+				}
+				if err := walk(childRel, sets); err != nil {
+					return err
+				}
+				continue
+			}
+			if name == ".gitignore" || name == ".git" {
+				continue // never replace targets (.git is a file in worktrees/submodules)
+			}
+			if gitignoreDecides(sets, childRel, false) {
+				continue
+			}
+			if len(includeRe) > 0 && !matchAny(includeRe, childRel) {
+				continue
+			}
+			if matchAny(excludeRe, childRel) {
+				continue
+			}
+			files = append(files, childRel)
+		}
+		return nil
+	}
+	if err := walk(baseRel, initialSets); err != nil {
+		return nil, err
+	}
+	return files, nil
+}
+
+func matchAny(res []*regexp.Regexp, s string) bool {
+	for _, re := range res {
+		if re.MatchString(s) {
+			return true
+		}
+	}
+	return false
+}
+
+// ---- occurrence scanning ----
+
+// fileHash64 fingerprints (content, needle, mode, repl) so occurrence ids go
+// stale the moment the file or the replace intent changes. 64-bit keeps the
+// chance of a stale-id miss (an edit applied against drifted offsets)
+// negligible.
+func fileHash64(src, needle, mode, repl string) string {
+	h := fnv.New64a()
+	h.Write([]byte(src))
+	h.Write([]byte{0})
+	h.Write([]byte(needle))
+	h.Write([]byte{0})
+	h.Write([]byte(mode))
+	h.Write([]byte{0})
+	h.Write([]byte(repl))
+	return fmt.Sprintf("%016x", h.Sum64())
+}
+
+// isBinaryFile reports whether the first 8 KiB contain a NUL byte.
+func isBinaryFile(data []byte) bool {
+	head := data
+	if len(head) > 8192 {
+		head = head[:8192]
+	}
+	return strings.IndexByte(string(head), 0) >= 0
+}
+
+// scanFileOccurrences finds every non-overlapping match of needle in absPath.
+// re is the pre-compiled pattern in regex mode (nil in literal mode). Returns
+// (occurrences, false, nil) normally; skipped=true for binary/oversized
+// files; an error only for unreadable text files.
+func scanFileOccurrences(absPath, relPath string, re *regexp.Regexp, needle, mode, repl string, total *int, totalBytes *int64) (occs []replaceOccurrence, skipped bool, err error) {
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, false, err
+	}
+	*totalBytes += int64(len(data))
+	if len(data) > maxReplaceFileSize || isBinaryFile(data) {
+		return nil, true, nil
+	}
+	src := string(data)
+
+	var matches [][2]int
+	var subLocs [][]int // regex mode: absolute submatch index slices
+	// Collect at most (remaining budget + 1) matches: one match past the
+	// global cap is enough to prove overflow, so a pathological workspace
+	// can never make the scan allocate submatch slices for millions of
+	// matches. Regexes always run against the full file contents, so anchors
+	// (^, \b) keep whole-file semantics; hitting the limit with zero-width
+	// matches in the mix overflows conservatively — a needless refusal is
+	// safe (nothing changed), an undercount would not be.
+	budget := maxReplaceOccurrences - *total
+	if budget < 0 {
+		budget = 0
+	}
+	overflow := false
+	if re != nil {
+		limit := budget + 1
+		locs := re.FindAllStringSubmatchIndex(src, limit)
+		for _, loc := range locs {
+			if loc[0] == loc[1] {
+				continue // zero-width match: nothing to replace
+			}
+			matches = append(matches, [2]int{loc[0], loc[1]})
+			subLocs = append(subLocs, loc)
+		}
+		overflow = len(locs) == limit
+	} else {
+		for i := 0; len(matches) <= budget; {
+			idx := strings.Index(src[i:], needle)
+			if idx < 0 {
+				break
+			}
+			start := i + idx
+			matches = append(matches, [2]int{start, start + len(needle)})
+			i = start + len(needle)
+		}
+		overflow = len(matches) > budget
+	}
+	if overflow {
+		// Signal overflow past the cap so the plan-level guard refuses the
+		// run. The exact count is irrelevant (the guard only compares against
+		// the cap) and len(matches) can undercount when zero-width matches
+		// filled the limit — setting the total explicitly avoids silently
+		// dropping this file's occurrences.
+		*total = maxReplaceOccurrences + 1
+		return occs, false, nil
+	}
+
+	hash := fileHash64(src, needle, mode, repl)
+	for nth, m := range matches {
+		if *total >= maxReplaceOccurrences {
+			// Keep counting overflows so the caller's cap check fires instead
+			// of silently truncating the result set.
+			*total++
+			return occs, false, nil
+		}
+		*total++
+		newRepl := repl
+		if re != nil {
+			// Capture-group expansion: ${1}, ${name} (RE2 Expand semantics;
+			// braces are required when the group is followed by a word char).
+			newRepl = string(re.ExpandString(nil, repl, src, subLocs[nth]))
+		}
+		lineNum, matchCol, oldLine, newLine := occurrencePreviewLines(src, m[0], m[1], newRepl)
+		occs = append(occs, replaceOccurrence{
+			relPath:  relPath,
+			start:    m[0],
+			end:      m[1],
+			id:       fmt.Sprintf("%s:%d@%s", relPath, nth, hash),
+			lineNum:  lineNum,
+			matchCol: matchCol,
+			oldLine:  oldLine,
+			newLine:  newLine,
+			newRepl:  newRepl,
+		})
+	}
+	return occs, false, nil
+}
+
+// occurrencePreviewLines computes the 1-based line number, the full source
+// line containing the match start, and that line with the match replaced.
+// For matches spanning lines the preview keeps the first line only and
+// newLine is an approximation (the real edit is exact).
+func occurrencePreviewLines(src string, start, end int, repl string) (lineNum, matchCol int, oldLine, newLine string) {
+	lineStart := 0
+	if i := strings.LastIndex(src[:start], "\n"); i >= 0 {
+		lineStart = i + 1
+	}
+	var lineEndAbs int
+	if i := strings.Index(src[start:], "\n"); i >= 0 {
+		lineEndAbs = start + i
+	} else {
+		lineEndAbs = len(src)
+	}
+	line := strings.TrimSuffix(src[lineStart:lineEndAbs], "\r")
+	lineNum = 1 + strings.Count(src[:lineStart], "\n")
+
+	mStart := start - lineStart
+	mEnd := end - lineStart
+	if mEnd > len(line) {
+		mEnd = len(line) // multi-line match: preview clamps to the first line
+	}
+	// The displayed line drops a trailing "\r" (CRLF): clamp the preview
+	// offsets to it so a match touching that byte (e.g. a needle of "\n"
+	// landing on the LF of a CRLF pair) cannot slice out of range. The real
+	// edit is computed from raw bytes and stays exact.
+	if mStart > len(line) {
+		mStart = len(line)
+	}
+	if mStart > mEnd {
+		mStart = mEnd
+	}
+	newLine = line[:mStart] + repl + line[mEnd:]
+	return lineNum, mStart, line, newLine
+}
+
+// truncatePreview centers a long line on the match position for display.
+func truncatePreview(s string, center int) string {
+	if len(s) <= maxPreviewLineChars {
+		return s
+	}
+	lo := center - maxPreviewLineChars/2
+	if lo < 0 {
+		lo = 0
+	}
+	hi := lo + maxPreviewLineChars
+	if hi > len(s) {
+		hi = len(s)
+		lo = hi - maxPreviewLineChars
+		if lo < 0 {
+			lo = 0
+		}
+	}
+	// Snap the window to rune boundaries so the ellipses never split one.
+	for lo > 0 && !isRuneBoundary(s, lo) {
+		lo--
+	}
+	for hi < len(s) && !isRuneBoundary(s, hi) {
+		hi++
+	}
+	return "…" + s[lo:hi] + "…"
+}
+
+func isRuneBoundary(s string, i int) bool {
+	if i <= 0 || i >= len(s) {
+		return true
+	}
+	return s[i]&0xC0 != 0x80
+}
+
+// renderOccurrences produces the per-file diff block for dry-run output.
+func renderOccurrences(occs []replaceOccurrence, limit int) string {
+	var b strings.Builder
+	byFile := map[string][]replaceOccurrence{}
+	var order []string
+	for _, o := range occs {
+		if _, seen := byFile[o.relPath]; !seen {
+			order = append(order, o.relPath)
+		}
+		byFile[o.relPath] = append(byFile[o.relPath], o)
+	}
+	shown := 0
+	for _, f := range order {
+		list := byFile[f]
+		fmt.Fprintf(&b, "\n%s (%d occurrence(s)):\n", f, len(list))
+		for _, o := range list {
+			if limit > 0 && shown >= limit {
+				break
+			}
+			fmt.Fprintf(&b, "  [%s] line %d\n", o.id, o.lineNum)
+			fmt.Fprintf(&b, "    - %s\n", truncatePreview(o.oldLine, o.matchCol))
+			fmt.Fprintf(&b, "    + %s\n", truncatePreview(o.newLine, o.matchCol))
+			shown++
+		}
+	}
+	if limit > 0 && shown < len(occs) {
+		fmt.Fprintf(&b, "\n… %d more occurrence(s) not shown. Narrow the scan with relative_path or paths_include_glob/paths_exclude_glob and re-run with dry_run=true.\n", len(occs)-shown)
+	}
+	return b.String()
+}
+
+// ---- planning ----
+
+func parseReplaceParams(args map[string]any) (replaceParams, string) {
+	p := replaceParams{Mode: "literal", ExpectedCount: -1}
+	p.Needle, _ = args["needle"].(string)
+	if p.Needle == "" {
+		return p, "needle is required"
+	}
+	p.Repl, _ = args["repl"].(string)
+	if m, ok := args["mode"].(string); ok && m != "" {
+		if m != "literal" && m != "regex" {
+			return p, fmt.Sprintf("mode must be \"literal\" or \"regex\", got %q", m)
+		}
+		p.Mode = m
+	}
+	p.RelPath, _ = args["relative_path"].(string)
+	p.IncludeGlob, _ = args["paths_include_glob"].(string)
+	p.ExcludeGlob, _ = args["paths_exclude_glob"].(string)
+	// Fail closed: a missing or non-boolean dry_run must never default into
+	// apply mode on a whole-workspace tool.
+	v, ok := args["dry_run"].(bool)
+	if !ok {
+		return p, "dry_run is required and must be a boolean (true = preview, false = apply)"
+	}
+	p.DryRun = v
+	if raw, ok := args["occurrence_ids"].([]any); ok {
+		for _, v := range raw {
+			if s, ok := v.(string); ok {
+				p.OccurrenceIDs = append(p.OccurrenceIDs, s)
+			}
+		}
+	}
+	switch v := args["expected_count"].(type) {
+	case float64:
+		p.ExpectedCount = int(v)
+	case int:
+		p.ExpectedCount = v
+	}
+	return p, ""
+}
+
+// planReplaceInFiles resolves the file set, scans occurrences and, in apply
+// mode, selects the occurrences to edit. It never writes to disk. On any
+// guard failure it returns IsError with a "nothing changed" text.
+func planReplaceInFiles(rootDir string, p replaceParams) replacePlan {
+	includeRe, err := compileGlobList(p.IncludeGlob)
+	if err != nil {
+		return replacePlan{Text: err.Error(), IsError: true}
+	}
+	excludeRe, err := compileGlobList(p.ExcludeGlob)
+	if err != nil {
+		return replacePlan{Text: err.Error(), IsError: true}
+	}
+	var re *regexp.Regexp
+	if p.Mode == "regex" {
+		re, err = regexp.Compile(p.Needle)
+		if err != nil {
+			return replacePlan{Text: fmt.Sprintf("invalid regex: %s", err), IsError: true}
+		}
+	}
+
+	// Resolve the candidate file set.
+	var candidates []string
+	if p.RelPath != "" {
+		// Resolve against the workspace root, not the process cwd: the argument
+		// is documented as workspace-root relative, but ValidateFilePath
+		// absolutizes from the server's cwd, which differs from the workspace
+		// root whenever the server was started elsewhere.
+		relArg := p.RelPath
+		if !filepath.IsAbs(relArg) {
+			relArg = filepath.Join(rootDir, filepath.FromSlash(relArg))
+		}
+		abs, err := ValidateFilePath(relArg, rootDir)
+		if err != nil {
+			return replacePlan{Text: fmt.Sprintf("invalid relative_path: %s", err), IsError: true}
+		}
+		info, err := os.Stat(abs)
+		if err != nil {
+			return replacePlan{Text: fmt.Sprintf("stat %s: %s", p.RelPath, err), IsError: true}
+		}
+		rel, err := filepath.Rel(rootDir, abs)
+		if err != nil {
+			return replacePlan{Text: err.Error(), IsError: true}
+		}
+		if !info.IsDir() {
+			// Explicit single file: bypass glob filters (explicit intent) and
+			// gitignore, but never the hard skips — .git/hooks/* and
+			// .agent-lsp/* must not become replacement targets just because
+			// the caller named them.
+			for _, seg := range strings.Split(filepath.ToSlash(rel), "/") {
+				if seg == ".git" || seg == ".agent-lsp" {
+					return replacePlan{Text: fmt.Sprintf("refusing to scan %s: %q is a hard-skip path (never a replacement target)", p.RelPath, seg), IsError: true}
+				}
+			}
+			candidates = []string{filepath.ToSlash(rel)}
+		} else {
+			candidates, err = collectFilesForReplace(rootDir, filepath.ToSlash(rel), includeRe, excludeRe)
+			if err != nil {
+				return replacePlan{Text: err.Error(), IsError: true}
+			}
+		}
+	} else {
+		candidates, err = collectFilesForReplace(rootDir, "", includeRe, excludeRe)
+		if err != nil {
+			return replacePlan{Text: err.Error(), IsError: true}
+		}
+	}
+	if len(candidates) > maxReplaceFiles {
+		return replacePlan{Text: fmt.Sprintf("%d candidate file(s) exceeds the %d-file scan limit; narrow the scan with relative_path or paths_include_glob", len(candidates), maxReplaceFiles), IsError: true}
+	}
+
+	// Scan. Unreadable files are collected and reported instead of aborting
+	// the whole scan; the caller decides with full information.
+	total := 0
+	var totalBytes int64
+	skipped := 0
+	var failed []string
+	var notes []string
+	var occs []replaceOccurrence
+	fileSet := map[string]bool{}
+	for _, rel := range candidates {
+		abs := filepath.Join(rootDir, filepath.FromSlash(rel))
+		fo, sk, err := scanFileOccurrences(abs, rel, re, p.Needle, p.Mode, p.Repl, &total, &totalBytes)
+		if err != nil {
+			failed = append(failed, fmt.Sprintf("%s: %s", rel, err))
+			continue
+		}
+		if totalBytes > maxReplaceTotalBytes {
+			return replacePlan{Text: fmt.Sprintf("scan exceeded the %d MiB byte budget; NOTHING was changed. Narrow the scope with relative_path or globs and retry", maxReplaceTotalBytes>>20), IsError: true}
+		}
+		if sk {
+			skipped++
+			continue
+		}
+		if len(fo) > 0 {
+			fileSet[rel] = true
+			occs = append(occs, fo...)
+		}
+	}
+	if skipped > 0 {
+		notes = append(notes, fmt.Sprintf("%d file(s) skipped (binary or over 8 MiB); their contents were NOT scanned", skipped))
+	}
+	if len(failed) > 0 {
+		shown := failed
+		if len(shown) > 10 {
+			shown = append(shown[:10], fmt.Sprintf("… and %d more", len(failed)-10))
+		}
+		notes = append(notes, fmt.Sprintf("%d file(s) could not be read and were NOT scanned:\n  - %s", len(failed), strings.Join(shown, "\n  - ")))
+	}
+	if total > maxReplaceOccurrences {
+		return replacePlan{Text: fmt.Sprintf("found more than %d occurrences; NOTHING was changed. Narrow the scope with relative_path or globs and retry", maxReplaceOccurrences), IsError: true}
+	}
+
+	var files []string
+	for _, rel := range candidates {
+		if fileSet[rel] {
+			files = append(files, rel)
+		}
+	}
+
+	plan := replacePlan{Occurrences: occs, Files: files}
+
+	// expected_count guard.
+	if p.ExpectedCount >= 0 && len(occs) != p.ExpectedCount {
+		plan.IsError = true
+		plan.Notes = notes
+		plan.Text = fmt.Sprintf("expected_count guard: found %d occurrence(s), expected %d. NOTHING was changed.\n%s%s",
+			len(occs), p.ExpectedCount, renderOccurrences(occs, maxReplacePreviewOccurrences), renderNotes(notes))
+		return plan
+	}
+
+	if p.DryRun {
+		plan.Notes = notes
+		if len(occs) == 0 {
+			plan.Text = "Found 0 occurrence(s). DRY RUN - no changes were applied." + renderNotes(notes)
+			return plan
+		}
+		plan.Text = fmt.Sprintf("Found %d occurrence(s) in %d file(s). DRY RUN - no changes were applied.\nRe-issue with dry_run=false to apply all of them, or pass occurrence_ids with the ids of the occurrences to replace.%s%s",
+			len(occs), len(files), renderOccurrences(occs, maxReplacePreviewOccurrences), renderNotes(notes))
+		return plan
+	}
+
+	// Apply mode: select occurrences.
+	if len(p.OccurrenceIDs) > 0 {
+		byID := map[string]replaceOccurrence{}
+		for _, o := range occs {
+			byID[o.id] = o
+		}
+		seenID := map[string]bool{}
+		var missing, repeated []string
+		for _, id := range p.OccurrenceIDs {
+			if seenID[id] {
+				repeated = append(repeated, id)
+				continue
+			}
+			seenID[id] = true
+			if o, ok := byID[id]; ok {
+				plan.Selected = append(plan.Selected, o)
+			} else {
+				missing = append(missing, id)
+			}
+		}
+		if len(missing) > 0 || len(repeated) > 0 {
+			plan.IsError = true
+			plan.Notes = notes
+			var b strings.Builder
+			if len(missing) > 0 {
+				fmt.Fprintf(&b, "%d occurrence id(s) unknown or stale (file contents changed since the dry-run?): %s.\n", len(missing), strings.Join(missing, ", "))
+			}
+			if len(repeated) > 0 {
+				fmt.Fprintf(&b, "%d occurrence id(s) repeated in occurrence_ids: %s.\n", len(repeated), strings.Join(repeated, ", "))
+			}
+			b.WriteString("NOTHING was changed — re-run with dry_run=true for a fresh id list.")
+			plan.Text = b.String() + renderOccurrences(occs, maxReplacePreviewOccurrences) + renderNotes(notes)
+			return plan
+		}
+	} else {
+		plan.Selected = occs
+	}
+	plan.Notes = notes
+	if len(plan.Selected) == 0 {
+		// Empty apply must not conceal files that were skipped or unreadable
+		// during the scan — surface the notes alongside the zero count.
+		plan.Text = "Found 0 occurrence(s). Nothing to replace." + renderNotes(notes)
+	}
+	return plan
+}
+
+// ---- application ----
+
+// buildReplaceWorkspaceEdit groups the selected occurrences per file and
+// builds a multi-file LSP WorkspaceEdit. Before building, every file is
+// re-read and its fingerprint re-verified against the occurrence ids — a
+// file that changed since the scan aborts the whole build with an error.
+func buildReplaceWorkspaceEdit(rootDir string, occs []replaceOccurrence, needle, mode, repl string) (map[string]any, error) {
+	if len(occs) == 0 {
+		return nil, fmt.Errorf("no occurrences selected")
+	}
+	perFile := map[string][]replaceOccurrence{}
+	var order []string
+	for _, o := range occs {
+		if _, seen := perFile[o.relPath]; !seen {
+			order = append(order, o.relPath)
+		}
+		perFile[o.relPath] = append(perFile[o.relPath], o)
+	}
+	sort.Strings(order)
+
+	changes := map[string]any{}
+	for _, rel := range order {
+		abs := filepath.Join(rootDir, filepath.FromSlash(rel))
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			return nil, fmt.Errorf("reading %s: %w", rel, err)
+		}
+		src := string(data)
+		if fileHash64(src, needle, mode, repl) != fileIDOf(occs, rel) {
+			return nil, fmt.Errorf("%s changed since the dry-run (occurrence ids stale); nothing applied — re-run with dry_run=true", rel)
+		}
+		list := perFile[rel]
+		sort.Slice(list, func(i, j int) bool { return list[i].start < list[j].start })
+		var edits []any
+		for _, o := range list {
+			sl, sc, el, ec := byteSpanToLSPRange(src, o.start, o.end)
+			edits = append(edits, map[string]any{
+				"range": map[string]any{
+					"start": map[string]any{"line": sl, "character": sc},
+					"end":   map[string]any{"line": el, "character": ec},
+				},
+				"newText": o.newRepl,
+			})
+		}
+		changes[CreateFileURI(abs)] = edits
+	}
+	return map[string]any{"changes": changes}, nil
+}
+
+// replacePartialFailureText renders the failure result for an apply that
+// stopped mid-batch. The audit record parses the machine-readable Files: line,
+// so the files already written must appear even on the error path — a partial
+// batch failure must never leave unaccounted workspace mutations.
+func replacePartialFailureText(err error, writtenURIs []string, rootDir string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "replace_in_files: %s", err)
+	if len(writtenURIs) == 0 {
+		return b.String()
+	}
+	written := make([]string, 0, len(writtenURIs))
+	for _, u := range writtenURIs {
+		p := uripkg.URIToPath(u)
+		if rel, relErr := filepath.Rel(rootDir, p); relErr == nil {
+			written = append(written, rel)
+		} else {
+			written = append(written, p)
+		}
+	}
+	sort.Strings(written)
+	fmt.Fprintf(&b, "\n%d file(s) were already written before the failure: %s. Re-run with dry_run=true for a fresh plan.", len(written), strings.Join(written, ", "))
+	if jb, jErr := json.Marshal(written); jErr == nil {
+		fmt.Fprintf(&b, "\nFiles: %s", jb)
+	}
+	return b.String()
+}
+
+// fileIDOf returns the hash component of any occurrence belonging to rel.
+func fileIDOf(occs []replaceOccurrence, rel string) string {
+	for _, o := range occs {
+		if o.relPath == rel {
+			if at := strings.LastIndex(o.id, "@"); at >= 0 {
+				return o.id[at+1:]
+			}
+		}
+	}
+	return ""
+}
+
+// applyText renders the post-apply summary. filesLine is machine-parsed by
+// the MCP registration layer for audit records.
+func applyText(occs []replaceOccurrence) string {
+	perFile := map[string]int{}
+	var order []string
+	for _, o := range occs {
+		if _, seen := perFile[o.relPath]; !seen {
+			order = append(order, o.relPath)
+		}
+		perFile[o.relPath]++
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Replaced %d occurrence(s) in %d file(s). Verify with get_diagnostics.\n", len(occs), len(order))
+	for _, f := range order {
+		fmt.Fprintf(&b, "  %s: %d replacement(s)\n", f, perFile[f])
+	}
+	// JSON array so filenames containing ", " survive the audit round-trip.
+	if jb, err := json.Marshal(order); err == nil {
+		fmt.Fprintf(&b, "Files: %s", jb)
+	} else {
+		fmt.Fprintf(&b, "Files: %s", strings.Join(order, ", "))
+	}
+	return b.String()
+}
+
+// filesLineOf extracts the machine-readable "Files:" line from a tool result
+// text (empty string when absent, e.g. dry-run with 0 matches).
+func filesLineOf(text string) []string {
+	for _, line := range strings.Split(text, "\n") {
+		if rest, ok := strings.CutPrefix(line, "Files: "); ok {
+			var out []string
+			if err := json.Unmarshal([]byte(rest), &out); err == nil {
+				return out
+			}
+			// Legacy comma-separated format.
+			for _, f := range strings.Split(rest, ", ") {
+				if f = strings.TrimSpace(f); f != "" {
+					out = append(out, f)
+				}
+			}
+			return out
+		}
+	}
+	return nil
+}
+
+// renderNotes formats scan caveats for appending to result text.
+func renderNotes(notes []string) string {
+	if len(notes) == 0 {
+		return ""
+	}
+	return "\n\nNotes:\n- " + strings.Join(notes, "\n- ")
+}
+
+// ---- MCP handler ----
+
+// HandleReplaceInFiles is the replace_in_files tool entry point.
+// resolveReplaceRoot resolves the workspace root through any symlinks once,
+// up front. When the root is reached through a symlink (macOS /tmp ->
+// /private/tmp), scanning and building edits from the unresolved path would
+// produce occurrence ids with ../.. segments and make the ancestor
+// .gitignore lookup read outside the root.
+func resolveReplaceRoot(rootDir string) (string, error) {
+	resolved, err := filepath.EvalSymlinks(rootDir)
+	if err != nil {
+		return "", fmt.Errorf("resolving workspace root %s: %w", rootDir, err)
+	}
+	return resolved, nil
+}
+
+func HandleReplaceInFiles(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
+	if err := CheckInitialized(client); err != nil {
+		return types.ErrorResult(err.Error()), nil
+	}
+	p, errMsg := parseReplaceParams(args)
+	if errMsg != "" {
+		return types.ErrorResult(errMsg), nil
+	}
+
+	rootDir, err := resolveReplaceRoot(client.RootDir())
+	if err != nil {
+		return types.ErrorResult(err.Error()), nil
+	}
+	plan := planReplaceInFiles(rootDir, p)
+	if plan.IsError {
+		return types.ErrorResult(plan.Text), nil
+	}
+	if p.DryRun {
+		return types.TextResult(plan.Text), nil
+	}
+	if len(plan.Selected) == 0 {
+		return types.TextResult(plan.Text), nil
+	}
+
+	edit, err := buildReplaceWorkspaceEdit(rootDir, plan.Selected, p.Needle, p.Mode, p.Repl)
+	if err != nil {
+		return types.ErrorResult(err.Error()), nil
+	}
+	writtenURIs, err := client.ApplyWorkspaceEdit(ctx, edit)
+	if err != nil {
+		return types.ErrorResult(replacePartialFailureText(err, writtenURIs, rootDir)), nil
+	}
+	return types.TextResult(applyText(plan.Selected) + renderNotes(plan.Notes)), nil
+}

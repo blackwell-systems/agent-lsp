@@ -12,7 +12,7 @@ the 0-based values the LSP spec requires.
 - [Analysis tools](#analysis-tools): `get_diagnostics`, `inspect_symbol`, `get_completions`, `get_signature_help`, `suggest_fixes`, `list_symbols`, `find_symbol`, `blast_radius`, `get_cross_repo_references`, `detect_changes`
 - [Context tools](#context-tools): `get_editing_context`
 - [Composite exploration tools](#composite-exploration-tools): `explore_symbol`
-- [Safe editing tools](#safe-editing-tools): `safe_apply_edit`
+- [Safe editing tools](#safe-editing-tools): `safe_apply_edit`, `replace_in_files`
 - [Intent aliases](#intent-aliases): `blast_radius`, `callers`, `explore`, `safe_edit`
 - [Navigation tools](#navigation-tools): `find_references`, `go_to_definition`, `go_to_type_definition`, `go_to_implementation`, `go_to_declaration`
 - [Refactoring tools](#refactoring-tools): `rename_symbol`, `prepare_rename`, `format_document`, `format_range`, `apply_edit`, `execute_command`
@@ -1057,6 +1057,76 @@ returns the preview result with `applied: false` so you can decide.
 - Returns `applied: true` on success, `applied: false` with preview diagnostics when the edit would introduce errors
 - Agents skip the manual preview-then-apply two-step
 - The `safe_edit` alias provides the same functionality with a shorter name
+
+---
+
+### `replace_in_files`
+
+Find and replace text across multiple files in one call, with a
+dry-run/selective-apply protocol. Writes go through the LSP client
+(`textDocument/didChange` per touched file keeps the server index in sync);
+BOM and CRLF outside edited ranges are preserved.
+
+**Protocol**
+
+1. Call with `dry_run=true`: every occurrence is previewed as a minimal diff
+   with a stable occurrence id (`<path>:<nth>@<hash16>`).
+2. Re-issue with `dry_run=false`: applies all occurrences, or only those in
+   `occurrence_ids`. If any id is unknown or stale (the file changed since the
+   dry-run), **nothing is changed** — re-run the dry-run for fresh ids.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `needle` | string | yes | Text or regular expression to find |
+| `repl` | string | yes | Replacement text (may be empty to delete) |
+| `dry_run` | bool | yes | Preview without changing anything. Call with `true` first, then re-issue with `false` to apply |
+| `mode` | string | no | `literal` (default) or `regex` (Go RE2; use `(?s)` for multi-line; in regex mode `repl` is a template and may reference capture groups as `${1}` or `${name}` — braces are required when the group is followed by a word character) |
+| `relative_path` | string | no | File or directory (root-relative) restricting the scan |
+| `paths_include_glob` | string | no | Comma-separated include globs (e.g. `src/**/*.mqh`) |
+| `paths_exclude_glob` | string | no | Comma-separated exclude globs; a trailing `/` means "this directory" |
+| `occurrence_ids` | string[] | no | Apply only these ids from the dry-run |
+| `expected_count` | int | no | If >= 0, refuse to apply unless the match count equals this number (0 = require zero matches) |
+
+`dry_run` is deliberately required: it forces the caller to state apply
+intent explicitly, so an agent cannot bulk-edit a workspace by accident —
+the same philosophy as the `expected_count` guard.
+
+**Example call**
+
+```json
+{
+  "needle": "StopLong(Bid, stopLossPips)",
+  "repl": "StopLongPips(Bid, stopLossPips)",
+  "paths_include_glob": "src/**",
+  "dry_run": true
+}
+```
+
+**Notes**
+
+- Scanning respects `.gitignore` (negation, directory patterns, anchoring, `**`)
+  plus default skip dirs (`.git`, `.agent-lsp`, `node_modules`, `vendor`); symlinks
+  are never followed; binary and >8 MiB files are skipped and reported in a Notes
+  section of the result, as are files that could not be read
+- Scans cap at 10,000 occurrences, 50,000 candidate files, and 256 MiB of
+  aggregate scanned bytes; above any bound the tool refuses and asks for a
+  narrower scope (NOTHING is changed)
+- A dry-run renders at most 200 occurrences and summarizes the rest; narrow the
+  scan with `relative_path` or globs to see more
+- `relative_path` is resolved against the workspace root (not the server's
+  working directory); naming a file explicitly bypasses `.gitignore` and glob
+  filters but never the hard skips — an explicit `.git/...` or `.agent-lsp/...`
+  path is refused
+- Multi-line literal needles do not match CRLF files — use `mode: "regex"` with
+  `(?s)` for those
+- For symbol renames use `rename_symbol` (LSP-aware); this tool is for text
+  patterns and coordinated multi-file edits
+- If no LSP client has been started and the MCP server was launched from the
+  project root (and that root is not the user's home directory), the language
+  server is auto-initialized from the server's working directory; otherwise the
+  tool returns the usual "call `start_lsp` first" error
 
 ---
 
