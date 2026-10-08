@@ -433,7 +433,7 @@ func collectExportedSymbols(syms []types.DocumentSymbol, filePath, langID string
 			}
 			if line < len(sourceLines) {
 				if col := strings.Index(sourceLines[line], searchName); col >= 0 {
-					char = col
+					char = utf16Offset(sourceLines[line], col) // LSP columns are UTF-16, not bytes
 				}
 			}
 
@@ -477,7 +477,7 @@ func collectAllSymbols(syms []types.DocumentSymbol, filePath, langID string, out
 		}
 		if line < len(sourceLines) {
 			if col := strings.Index(sourceLines[line], searchName); col >= 0 {
-				char = col
+				char = utf16Offset(sourceLines[line], col) // LSP columns are UTF-16, not bytes
 			}
 		}
 

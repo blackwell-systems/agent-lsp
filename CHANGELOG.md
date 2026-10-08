@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+- **`safe_apply_edit` previewed the wrong span on lines with non-ASCII text**: it located `old_text` by byte offset and passed byte counts as LSP columns. That happened to agree with the simulation while the edit path also counted bytes; once [#52](https://github.com/blackwell-systems/agent-lsp/issues/52) made that path count UTF-16 units (0.22.0), a match preceded by non-ASCII text on its line was previewed at a shifted span (for example `x := "café"; y := 2` with `y := 2` replaced previewed as `...; yy := 3`), so the diagnostic gate judged an edit that was not the one requested. Files written to disk were not affected. It now shares one byte-to-UTF-16 conversion with `apply_edit`. `safe_delete_symbol` and `blast_radius` had the same byte-column mistake when locating a symbol on its declaration line, which could make the reference lookup miss when non-ASCII text preceded the name; they now convert too.
+
 ## [0.22.0] - 2026-10-07
 
 ### Added

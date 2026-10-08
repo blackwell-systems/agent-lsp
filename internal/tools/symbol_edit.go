@@ -407,7 +407,7 @@ func HandleSafeDeleteSymbol(ctx context.Context, client *lsp.LSPClient, args map
 				searchName = searchName[dotIdx+1:]
 			}
 			if col := strings.Index(lines[refPos.Line], searchName); col >= 0 {
-				refPos.Character = col
+				refPos.Character = utf16Offset(lines[refPos.Line], col) // LSP columns are UTF-16, not bytes
 			}
 		}
 	}
