@@ -1107,19 +1107,26 @@ the same philosophy as the `expected_count` guard.
 **Notes**
 
 - Scanning respects `.gitignore` (negation, directory patterns, anchoring, `**`)
-  plus hard skips for `.git` and `.agent-lsp`; symlinks are never followed; binary
-  and >8 MiB files are skipped and reported in a Notes section of the result, as
-  are files that could not be read
-- Scans cap at 10,000 occurrences; above that the tool refuses and asks for a
+  plus default skip dirs (`.git`, `.agent-lsp`, `node_modules`, `vendor`); symlinks
+  are never followed; binary and >8 MiB files are skipped and reported in a Notes
+  section of the result, as are files that could not be read
+- Scans cap at 10,000 occurrences, 50,000 candidate files, and 256 MiB of
+  aggregate scanned bytes; above any bound the tool refuses and asks for a
   narrower scope (NOTHING is changed)
+- A dry-run renders at most 200 occurrences and summarizes the rest; narrow the
+  scan with `relative_path` or globs to see more
+- `relative_path` is resolved against the workspace root (not the server's
+  working directory); naming a file explicitly bypasses `.gitignore` and glob
+  filters but never the hard skips — an explicit `.git/...` or `.agent-lsp/...`
+  path is refused
 - Multi-line literal needles do not match CRLF files — use `mode: "regex"` with
   `(?s)` for those
 - For symbol renames use `rename_symbol` (LSP-aware); this tool is for text
   patterns and coordinated multi-file edits
 - If no LSP client has been started and the MCP server was launched from the
-  project root, the language server is auto-initialized from the server's
-  working directory; otherwise the tool returns the usual
-  "call `start_lsp` first" error
+  project root (and that root is not the user's home directory), the language
+  server is auto-initialized from the server's working directory; otherwise the
+  tool returns the usual "call `start_lsp` first" error
 
 ---
 
