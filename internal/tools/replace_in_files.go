@@ -30,6 +30,7 @@ import (
 	"strings"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+	uripkg "github.com/blackwell-systems/agent-lsp/internal/uri"
 	"github.com/blackwell-systems/agent-lsp/pkg/types"
 )
 
@@ -813,6 +814,33 @@ func buildReplaceWorkspaceEdit(rootDir string, occs []replaceOccurrence, needle,
 	return map[string]any{"changes": changes}, nil
 }
 
+// replacePartialFailureText renders the failure result for an apply that
+// stopped mid-batch. The audit record parses the machine-readable Files: line,
+// so the files already written must appear even on the error path — a partial
+// batch failure must never leave unaccounted workspace mutations.
+func replacePartialFailureText(err error, writtenURIs []string, rootDir string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "replace_in_files: %s", err)
+	if len(writtenURIs) == 0 {
+		return b.String()
+	}
+	written := make([]string, 0, len(writtenURIs))
+	for _, u := range writtenURIs {
+		p := uripkg.URIToPath(u)
+		if rel, relErr := filepath.Rel(rootDir, p); relErr == nil {
+			written = append(written, rel)
+		} else {
+			written = append(written, p)
+		}
+	}
+	sort.Strings(written)
+	fmt.Fprintf(&b, "\n%d file(s) were already written before the failure: %s. Re-run with dry_run=true for a fresh plan.", len(written), strings.Join(written, ", "))
+	if jb, jErr := json.Marshal(written); jErr == nil {
+		fmt.Fprintf(&b, "\nFiles: %s", jb)
+	}
+	return b.String()
+}
+
 // fileIDOf returns the hash component of any occurrence belonging to rel.
 func fileIDOf(occs []replaceOccurrence, rel string) string {
 	for _, o := range occs {
@@ -923,8 +951,9 @@ func HandleReplaceInFiles(ctx context.Context, client *lsp.LSPClient, args map[s
 	if err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
-	if err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
-		return types.ErrorResult(fmt.Sprintf("replace_in_files: %s", err)), nil
+	writtenURIs, err := client.ApplyWorkspaceEdit(ctx, edit)
+	if err != nil {
+		return types.ErrorResult(replacePartialFailureText(err, writtenURIs, rootDir)), nil
 	}
 	return types.TextResult(applyText(plan.Selected) + renderNotes(plan.Notes)), nil
 }

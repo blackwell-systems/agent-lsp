@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -371,6 +372,33 @@ func TestResolveReplaceRootSymlinkedRoot(t *testing.T) {
 	}
 	if id := plan.Occurrences[0].id; strings.Contains(id, "..") {
 		t.Fatalf("occurrence id escapes the root: %q", id)
+	}
+}
+
+// TestReplacePartialFailureText pins the error-path audit contract: the
+// files already written must appear in the machine-readable Files: line so
+// the audit record reflects the real workspace mutations.
+func TestReplacePartialFailureText(t *testing.T) {
+	root := t.TempDir()
+	err := errors.New("applyEdit write b.mqh: permission denied")
+	got := replacePartialFailureText(err, []string{
+		CreateFileURI(filepath.Join(root, "b.mqh")),
+		CreateFileURI(filepath.Join(root, "a.mqh")),
+	}, root)
+	wantSub := "2 file(s) were already written before the failure: a.mqh, b.mqh"
+	if !strings.Contains(got, wantSub) {
+		t.Errorf("missing written-files report:\n got %q\nwant substring %q", got, wantSub)
+	}
+	if !strings.Contains(got, `Files: ["a.mqh","b.mqh"]`) {
+		t.Errorf("missing machine-readable Files line: %q", got)
+	}
+	if !strings.Contains(got, "permission denied") {
+		t.Errorf("underlying error lost: %q", got)
+	}
+	// No files written: no Files line, only the error.
+	plain := replacePartialFailureText(err, nil, root)
+	if strings.Contains(plain, "Files:") || strings.Contains(plain, "already written") {
+		t.Errorf("empty written list must not render a Files line: %q", plain)
 	}
 }
 
