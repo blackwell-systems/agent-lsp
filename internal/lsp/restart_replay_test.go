@@ -160,3 +160,32 @@ func TestWithinRoot(t *testing.T) {
 		t.Error("file outside root should not be within")
 	}
 }
+
+// TestReplayOpenDocuments_SymlinkedRoot reproduces the #58 review finding: the
+// root reached through a symlink (macOS /tmp and /var, symlinked checkouts)
+// while tracked document paths are stored resolved, as ValidatePath returns
+// them. Comparing the two unresolved made every document look outside the
+// root, and the replay silently re-opened nothing.
+func TestReplayOpenDocuments_SymlinkedRoot(t *testing.T) {
+	c, _, clientR := newTestClient(t)
+	go func() { _, _ = io.Copy(io.Discard, clientR) }()
+
+	realRoot := t.TempDir()
+	linkRoot := filepath.Join(t.TempDir(), "workspace-link")
+	if err := os.Symlink(realRoot, linkRoot); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(realRoot, "a.mq4"), []byte("// content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Stored the way tools store it: through ValidatePath, so fully resolved.
+	resolved, err := filepath.EvalSymlinks(filepath.Join(linkRoot, "a.mq4"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := []docMeta{{filePath: resolved, languageID: "mql", version: 1}}
+
+	if replayed := c.replayOpenDocuments(context.Background(), snapshot, linkRoot); replayed != 1 {
+		t.Fatalf("expected the document re-opened under a symlinked root, got %d", replayed)
+	}
+}
