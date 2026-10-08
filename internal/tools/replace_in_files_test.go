@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -421,6 +422,75 @@ func TestExplicitHardSkipFileRefused(t *testing.T) {
 	ok := planReplaceInFiles(root, replaceParams{Needle: "foo", Repl: "bar", Mode: "literal", DryRun: false, ExpectedCount: -1, RelPath: "src/ok.mqh"})
 	if ok.IsError || len(ok.Selected) != 1 {
 		t.Errorf("normal explicit file should still apply: IsError=%v selected=%d (%s)", ok.IsError, len(ok.Selected), ok.Text)
+	}
+}
+
+// TestPlanReplaceSkipsDefaultDirs pins review finding 5: node_modules and
+// vendor are never scanned, even without a .gitignore listing them.
+func TestPlanReplaceSkipsDefaultDirs(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"node_modules/pkg/x.mqh": "foo\n",
+		"vendor/lib/y.mqh":       "foo\n",
+		"src/z.mqh":              "foo\n",
+	})
+	plan := planReplaceInFiles(root, replaceParams{Needle: "foo", Repl: "bar", Mode: "literal", DryRun: true, ExpectedCount: -1})
+	if len(plan.Occurrences) != 1 || plan.Occurrences[0].relPath != "src/z.mqh" {
+		t.Fatalf("dependency dirs must be skipped, got %d occurrence(s): %s", len(plan.Occurrences), plan.Text)
+	}
+}
+
+// TestPlanReplaceFileCountRefusal pins the file-count bound.
+func TestPlanReplaceFileCountRefusal(t *testing.T) {
+	old := maxReplaceFiles
+	maxReplaceFiles = 2
+	defer func() { maxReplaceFiles = old }()
+	root := writeTree(t, map[string]string{
+		"a.mqh": "one\n", "b.mqh": "two\n", "c.mqh": "three\n",
+	})
+	// The guard fires on candidate count before any file is scanned.
+	plan := planReplaceInFiles(root, replaceParams{Needle: "o", Repl: "x", Mode: "literal", DryRun: true, ExpectedCount: -1})
+	if !plan.IsError || !strings.Contains(plan.Text, "exceeds the 2-file scan limit") {
+		t.Fatalf("expected file-count refusal, got IsError=%v text=%q", plan.IsError, plan.Text)
+	}
+}
+
+// TestPlanReplaceByteBudgetRefusal pins the aggregate byte bound.
+func TestPlanReplaceByteBudgetRefusal(t *testing.T) {
+	old := maxReplaceTotalBytes
+	maxReplaceTotalBytes = 32
+	defer func() { maxReplaceTotalBytes = old }()
+	root := writeTree(t, map[string]string{
+		"a.mqh": "this line is definitely longer than thirty-two bytes\n",
+		"b.mqh": "and this one pushes the running total past the small test budget\n",
+	})
+	plan := planReplaceInFiles(root, replaceParams{Needle: "line", Repl: "x", Mode: "literal", DryRun: true, ExpectedCount: -1})
+	if !plan.IsError || !strings.Contains(plan.Text, "byte budget") {
+		t.Fatalf("expected byte-budget refusal, got IsError=%v text=%q", plan.IsError, plan.Text)
+	}
+}
+
+// TestRenderOccurrencesLimit pins review finding 9: a dry-run renders at
+// most limit occurrences into the context and summarizes the rest.
+func TestRenderOccurrencesLimit(t *testing.T) {
+	var occs []replaceOccurrence
+	for i := 0; i < 210; i++ {
+		occs = append(occs, replaceOccurrence{
+			relPath: "a.mqh", start: i, end: i + 3,
+			id: fmt.Sprintf("a.mqh:%d@abc", i), lineNum: i + 1,
+			oldLine: "foo", newLine: "bar",
+		})
+	}
+	out := renderOccurrences(occs, maxReplacePreviewOccurrences)
+	if got := strings.Count(out, "[a.mqh:"); got != maxReplacePreviewOccurrences {
+		t.Fatalf("want %d rendered ids, got %d", maxReplacePreviewOccurrences, got)
+	}
+	if !strings.Contains(out, "10 more occurrence(s) not shown") {
+		t.Errorf("missing summary of unrendered occurrences: %q", out[len(out)-200:])
+	}
+	// Zero limit disables truncation.
+	full := renderOccurrences(occs, 0)
+	if got := strings.Count(full, "[a.mqh:"); got != 210 {
+		t.Fatalf("limit=0 must render everything, got %d", got)
 	}
 }
 

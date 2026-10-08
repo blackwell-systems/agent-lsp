@@ -41,7 +41,7 @@ func registerReplaceInFilesTool(d toolDeps) {
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name: "replace_in_files",
 		Description: "Find and replace text across multiple files in one call. " +
-			"Two modes: literal (default) and regex (Go RE2; use (?s) for multi-line patterns; in regex mode repl may reference capture groups as $1 or ${name}). " +
+			"Two modes: literal (default) and regex (Go RE2; use (?s) for multi-line patterns; in regex mode repl is a template and may reference capture groups as ${1} or ${name} — not bare $1, which expands to empty when followed by other text; $$ yields a literal dollar). " +
 			"Protocol: (1) call with dry_run=true to preview every occurrence with a per-occurrence id; " +
 			"(2) re-issue with dry_run=false to apply all of them, or pass occurrence_ids to apply a chosen subset. " +
 			"If any id is unknown or stale, NOTHING is changed. " +

@@ -38,11 +38,35 @@ const (
 	// maxReplaceOccurrences caps the total match count; above it the tool
 	// refuses to act (apply blindly on a 10k-match scan is never intent).
 	maxReplaceOccurrences = 10000
+	// maxReplacePreviewOccurrences bounds how many occurrences a dry-run
+	// renders into the agent's context; the rest are summarized with a hint
+	// to narrow the scan. 10k two-line previews are several MB of context.
+	maxReplacePreviewOccurrences = 200
 	// maxReplaceFileSize skips files larger than this during scan.
 	maxReplaceFileSize = 8 << 20
 	// maxPreviewLineChars bounds each rendered diff line.
 	maxPreviewLineChars = 160
 )
+
+// Scan-bound guards, vars so tests can lower the bounds.
+var (
+	// maxReplaceFiles caps the candidate file count per run; the walk itself
+	// is otherwise unbounded.
+	maxReplaceFiles = 50000
+	// maxReplaceTotalBytes caps the aggregate bytes scanned per run (per-file
+	// files are already capped at maxReplaceFileSize).
+	maxReplaceTotalBytes = int64(256 << 20)
+)
+
+// defaultSkipDirs are directory names never scanned even when .gitignore
+// would allow them: dependency caches are never the source of record and
+// would dominate unbounded scans.
+var defaultSkipDirs = map[string]bool{
+	".git":         true,
+	".agent-lsp":   true,
+	"node_modules": true,
+	"vendor":       true,
+}
 
 // replaceOccurrence is one match of the needle in one file.
 type replaceOccurrence struct {
@@ -296,7 +320,7 @@ func collectFilesForReplace(rootDir, baseRel string, includeRe, excludeRe []*reg
 				continue
 			}
 			if e.IsDir() {
-				if name == ".git" || name == ".agent-lsp" {
+				if defaultSkipDirs[name] {
 					continue
 				}
 				if gitignoreDecides(sets, childRel, true) {
@@ -369,11 +393,12 @@ func isBinaryFile(data []byte) bool {
 // re is the pre-compiled pattern in regex mode (nil in literal mode). Returns
 // (occurrences, false, nil) normally; skipped=true for binary/oversized
 // files; an error only for unreadable text files.
-func scanFileOccurrences(absPath, relPath string, re *regexp.Regexp, needle, mode, repl string, total *int) (occs []replaceOccurrence, skipped bool, err error) {
+func scanFileOccurrences(absPath, relPath string, re *regexp.Regexp, needle, mode, repl string, total *int, totalBytes *int64) (occs []replaceOccurrence, skipped bool, err error) {
 	data, err := os.ReadFile(absPath)
 	if err != nil {
 		return nil, false, err
 	}
+	*totalBytes += int64(len(data))
 	if len(data) > maxReplaceFileSize || isBinaryFile(data) {
 		return nil, true, nil
 	}
@@ -529,7 +554,7 @@ func isRuneBoundary(s string, i int) bool {
 }
 
 // renderOccurrences produces the per-file diff block for dry-run output.
-func renderOccurrences(occs []replaceOccurrence) string {
+func renderOccurrences(occs []replaceOccurrence, limit int) string {
 	var b strings.Builder
 	byFile := map[string][]replaceOccurrence{}
 	var order []string
@@ -539,14 +564,22 @@ func renderOccurrences(occs []replaceOccurrence) string {
 		}
 		byFile[o.relPath] = append(byFile[o.relPath], o)
 	}
+	shown := 0
 	for _, f := range order {
 		list := byFile[f]
 		fmt.Fprintf(&b, "\n%s (%d occurrence(s)):\n", f, len(list))
 		for _, o := range list {
+			if limit > 0 && shown >= limit {
+				break
+			}
 			fmt.Fprintf(&b, "  [%s] line %d\n", o.id, o.lineNum)
 			fmt.Fprintf(&b, "    - %s\n", truncatePreview(o.oldLine, o.matchCol))
 			fmt.Fprintf(&b, "    + %s\n", truncatePreview(o.newLine, o.matchCol))
+			shown++
 		}
+	}
+	if limit > 0 && shown < len(occs) {
+		fmt.Fprintf(&b, "\n… %d more occurrence(s) not shown. Narrow the scan with relative_path or paths_include_glob/paths_exclude_glob and re-run with dry_run=true.\n", len(occs)-shown)
 	}
 	return b.String()
 }
@@ -658,10 +691,14 @@ func planReplaceInFiles(rootDir string, p replaceParams) replacePlan {
 			return replacePlan{Text: err.Error(), IsError: true}
 		}
 	}
+	if len(candidates) > maxReplaceFiles {
+		return replacePlan{Text: fmt.Sprintf("%d candidate file(s) exceeds the %d-file scan limit; narrow the scan with relative_path or paths_include_glob", len(candidates), maxReplaceFiles), IsError: true}
+	}
 
 	// Scan. Unreadable files are collected and reported instead of aborting
 	// the whole scan; the caller decides with full information.
 	total := 0
+	var totalBytes int64
 	skipped := 0
 	var failed []string
 	var notes []string
@@ -669,10 +706,13 @@ func planReplaceInFiles(rootDir string, p replaceParams) replacePlan {
 	fileSet := map[string]bool{}
 	for _, rel := range candidates {
 		abs := filepath.Join(rootDir, filepath.FromSlash(rel))
-		fo, sk, err := scanFileOccurrences(abs, rel, re, p.Needle, p.Mode, p.Repl, &total)
+		fo, sk, err := scanFileOccurrences(abs, rel, re, p.Needle, p.Mode, p.Repl, &total, &totalBytes)
 		if err != nil {
 			failed = append(failed, fmt.Sprintf("%s: %s", rel, err))
 			continue
+		}
+		if totalBytes > maxReplaceTotalBytes {
+			return replacePlan{Text: fmt.Sprintf("scan exceeded the %d MiB byte budget; NOTHING was changed. Narrow the scope with relative_path or globs and retry", maxReplaceTotalBytes>>20), IsError: true}
 		}
 		if sk {
 			skipped++
@@ -711,7 +751,7 @@ func planReplaceInFiles(rootDir string, p replaceParams) replacePlan {
 		plan.IsError = true
 		plan.Notes = notes
 		plan.Text = fmt.Sprintf("expected_count guard: found %d occurrence(s), expected %d. NOTHING was changed.\n%s%s",
-			len(occs), p.ExpectedCount, renderOccurrences(occs), renderNotes(notes))
+			len(occs), p.ExpectedCount, renderOccurrences(occs, maxReplacePreviewOccurrences), renderNotes(notes))
 		return plan
 	}
 
@@ -722,7 +762,7 @@ func planReplaceInFiles(rootDir string, p replaceParams) replacePlan {
 			return plan
 		}
 		plan.Text = fmt.Sprintf("Found %d occurrence(s) in %d file(s). DRY RUN - no changes were applied.\nRe-issue with dry_run=false to apply all of them, or pass occurrence_ids with the ids of the occurrences to replace.%s%s",
-			len(occs), len(files), renderOccurrences(occs), renderNotes(notes))
+			len(occs), len(files), renderOccurrences(occs, maxReplacePreviewOccurrences), renderNotes(notes))
 		return plan
 	}
 
@@ -757,7 +797,7 @@ func planReplaceInFiles(rootDir string, p replaceParams) replacePlan {
 				fmt.Fprintf(&b, "%d occurrence id(s) repeated in occurrence_ids: %s.\n", len(repeated), strings.Join(repeated, ", "))
 			}
 			b.WriteString("NOTHING was changed — re-run with dry_run=true for a fresh id list.")
-			plan.Text = b.String() + renderOccurrences(occs) + renderNotes(notes)
+			plan.Text = b.String() + renderOccurrences(occs, maxReplacePreviewOccurrences) + renderNotes(notes)
 			return plan
 		}
 	} else {
