@@ -614,7 +614,15 @@ func planReplaceInFiles(rootDir string, p replaceParams) replacePlan {
 	// Resolve the candidate file set.
 	var candidates []string
 	if p.RelPath != "" {
-		abs, err := ValidateFilePath(p.RelPath, rootDir)
+		// Resolve against the workspace root, not the process cwd: the argument
+		// is documented as workspace-root relative, but ValidateFilePath
+		// absolutizes from the server's cwd, which differs from the workspace
+		// root whenever the server was started elsewhere.
+		relArg := p.RelPath
+		if !filepath.IsAbs(relArg) {
+			relArg = filepath.Join(rootDir, filepath.FromSlash(relArg))
+		}
+		abs, err := ValidateFilePath(relArg, rootDir)
 		if err != nil {
 			return replacePlan{Text: fmt.Sprintf("invalid relative_path: %s", err), IsError: true}
 		}
@@ -874,6 +882,19 @@ func renderNotes(notes []string) string {
 // ---- MCP handler ----
 
 // HandleReplaceInFiles is the replace_in_files tool entry point.
+// resolveReplaceRoot resolves the workspace root through any symlinks once,
+// up front. When the root is reached through a symlink (macOS /tmp ->
+// /private/tmp), scanning and building edits from the unresolved path would
+// produce occurrence ids with ../.. segments and make the ancestor
+// .gitignore lookup read outside the root.
+func resolveReplaceRoot(rootDir string) (string, error) {
+	resolved, err := filepath.EvalSymlinks(rootDir)
+	if err != nil {
+		return "", fmt.Errorf("resolving workspace root %s: %w", rootDir, err)
+	}
+	return resolved, nil
+}
+
 func HandleReplaceInFiles(ctx context.Context, client *lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
@@ -883,7 +904,11 @@ func HandleReplaceInFiles(ctx context.Context, client *lsp.LSPClient, args map[s
 		return types.ErrorResult(errMsg), nil
 	}
 
-	plan := planReplaceInFiles(client.RootDir(), p)
+	rootDir, err := resolveReplaceRoot(client.RootDir())
+	if err != nil {
+		return types.ErrorResult(err.Error()), nil
+	}
+	plan := planReplaceInFiles(rootDir, p)
 	if plan.IsError {
 		return types.ErrorResult(plan.Text), nil
 	}
@@ -894,7 +919,7 @@ func HandleReplaceInFiles(ctx context.Context, client *lsp.LSPClient, args map[s
 		return types.TextResult(plan.Text), nil
 	}
 
-	edit, err := buildReplaceWorkspaceEdit(client.RootDir(), plan.Selected, p.Needle, p.Mode, p.Repl)
+	edit, err := buildReplaceWorkspaceEdit(rootDir, plan.Selected, p.Needle, p.Mode, p.Repl)
 	if err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}

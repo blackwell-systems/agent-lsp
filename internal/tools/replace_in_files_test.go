@@ -323,6 +323,57 @@ type textEditForTest struct {
 	newText        string
 }
 
+// TestRelativePathResolvesAgainstRootNotCwd pins review finding 3:
+// relative_path is workspace-root relative. ValidateFilePath absolutizes
+// from the process cwd, so without the join onto rootDir a scan restricted
+// with relative_path breaks whenever the server cwd differs from the root.
+func TestRelativePathResolvesAgainstRootNotCwd(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"src/x.mqh": "foo\n",
+		"src/y.mqh": "foo\n",
+		"out/z.mqh": "foo\n",
+	})
+	elsewhere := t.TempDir()
+	t.Chdir(elsewhere) // server cwd differs from the workspace root
+
+	dir := planReplaceInFiles(root, replaceParams{Needle: "foo", Repl: "bar", Mode: "literal", DryRun: true, ExpectedCount: -1, RelPath: "src"})
+	if len(dir.Occurrences) != 2 {
+		t.Fatalf("relative_path=src: want 2 occurrences, got %d (%s)", len(dir.Occurrences), dir.Text)
+	}
+	file := planReplaceInFiles(root, replaceParams{Needle: "foo", Repl: "bar", Mode: "literal", DryRun: true, ExpectedCount: -1, RelPath: "src/x.mqh"})
+	if len(file.Occurrences) != 1 {
+		t.Fatalf("relative_path=src/x.mqh: want 1 occurrence, got %d (%s)", len(file.Occurrences), file.Text)
+	}
+	if file.Occurrences[0].relPath != "src/x.mqh" {
+		t.Fatalf("unexpected relPath %q", file.Occurrences[0].relPath)
+	}
+}
+
+// TestResolveReplaceRootSymlinkedRoot pins review finding 7: a root reached
+// through a symlink (macOS /tmp -> /private/tmp) must be resolved once up
+// front so occurrence ids stay root-relative and never contain ../..
+func TestResolveReplaceRootSymlinkedRoot(t *testing.T) {
+	real := writeTree(t, map[string]string{"a.mqh": "foo\n"})
+	link := filepath.Join(t.TempDir(), "rootlink")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	resolved, err := resolveReplaceRoot(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved != real {
+		t.Fatalf("resolved root %q, want %q", resolved, real)
+	}
+	plan := planReplaceInFiles(resolved, replaceParams{Needle: "foo", Repl: "bar", Mode: "literal", DryRun: true, ExpectedCount: -1})
+	if len(plan.Occurrences) != 1 {
+		t.Fatalf("want 1 occurrence, got %d (%s)", len(plan.Occurrences), plan.Text)
+	}
+	if id := plan.Occurrences[0].id; strings.Contains(id, "..") {
+		t.Fatalf("occurrence id escapes the root: %q", id)
+	}
+}
+
 func TestBuildReplaceWorkspaceEditMultipleSameLine(t *testing.T) {
 	root := writeTree(t, map[string]string{"a.mqh": "foo foo foo\n"})
 	dry := planReplaceInFiles(root, replaceParams{Needle: "foo", Repl: "X", Mode: "literal", DryRun: true, ExpectedCount: -1})
