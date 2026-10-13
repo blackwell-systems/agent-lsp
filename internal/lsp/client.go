@@ -967,6 +967,17 @@ func (c *LSPClient) SetRootDirForTest(rootDir string) {
 	c.rootDir = rootDir
 }
 
+// SetServerInfoForTest sets the server name/version reported by
+// GetServerInfo, so callers in other packages can simulate an initialize
+// response (e.g. index-on-open server matching by serverInfo name) without
+// spawning a real LSP process.
+func (c *LSPClient) SetServerInfoForTest(name, version string) {
+	c.capsMu.Lock()
+	defer c.capsMu.Unlock()
+	c.serverName = name
+	c.serverVersion = version
+}
+
 // isJDTLS reports whether the server binary appears to be Eclipse jdtls.
 // Checks the binary name for "jdtls" (covers /usr/local/bin/jdtls and
 // wrapper scripts named jdtls).

@@ -144,7 +144,13 @@ func HandleGetServerCapabilities(ctx context.Context, client *lsp.LSPClient, _ m
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
+	encoded, _ := EncodeResult(ctx, buildServerCapabilitiesResult(client))
+	return encoded, nil
+}
 
+// buildServerCapabilitiesResult derives the capability map and tool/skill
+// classification for one client. Extracted for the multi-server fan-out.
+func buildServerCapabilitiesResult(client *lsp.LSPClient) ServerCapabilitiesResult {
 	caps := client.GetCapabilities()
 	name, version := client.GetServerInfo()
 
@@ -174,8 +180,50 @@ func HandleGetServerCapabilities(ctx context.Context, client *lsp.LSPClient, _ m
 		Skills:           classifySkills(caps),
 		Capabilities:     caps,
 	}
+	return result
+}
 
-	return EncodeResult(ctx, result)
+// HandleGetServerCapabilitiesMulti is the multi-server fan-out of
+// get_server_capabilities (issue #2): the tool previously reported only the
+// default server's capability map, which in auto-detect mode may be clangd
+// even when the workspace's documents belong to another server. With more
+// than one initialized client, the response keeps the default server's
+// fields at the top level (backwards compatible) and adds an all_servers
+// array with one entry per connected server. Single-client sets behave
+// byte-identically to HandleGetServerCapabilities.
+func HandleGetServerCapabilitiesMulti(ctx context.Context, clients []*lsp.LSPClient, _ map[string]any) (types.ToolResult, error) {
+	var inited []*lsp.LSPClient
+	for _, c := range clients {
+		if c != nil && c.IsInitialized() {
+			inited = append(inited, c)
+		}
+	}
+	if len(inited) == 0 {
+		return types.ErrorResult("LSP client not initialized; call start_lsp first"), nil
+	}
+	if len(inited) == 1 {
+		return HandleGetServerCapabilities(ctx, inited[0], nil)
+	}
+	all := make([]ServerCapabilitiesResult, 0, len(inited))
+	for _, c := range inited {
+		all = append(all, buildServerCapabilitiesResult(c))
+	}
+	encoded, _ := EncodeResult(ctx, serverCapabilitiesResponse(all))
+	return encoded, nil
+}
+
+// serverCapabilitiesResponse builds the wire shape for the capability
+// report: a single result unchanged for one server, or the default server's
+// fields at the top level plus an all_servers array for several. Extracted
+// for testing. (issue #2)
+func serverCapabilitiesResponse(all []ServerCapabilitiesResult) any {
+	if len(all) == 1 {
+		return all[0]
+	}
+	return struct {
+		ServerCapabilitiesResult
+		AllServers []ServerCapabilitiesResult `json:"all_servers"`
+	}{ServerCapabilitiesResult: all[0], AllServers: all}
 }
 
 // hasCapabilityInMap checks whether a capability key is present and truthy

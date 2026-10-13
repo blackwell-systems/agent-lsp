@@ -327,7 +327,7 @@ func registerWorkspaceTools(d toolDeps) {
 			OpenWorldHint:   boolPtr(false),
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGetServerCapabilities(ctx, d.cs.get(), nil)
+		r, err := tools.HandleGetServerCapabilitiesMulti(ctx, workspaceQueryClients(d.cs, d.resolver), nil)
 		return makeCallToolResult(r), nil, err
 	})
 
