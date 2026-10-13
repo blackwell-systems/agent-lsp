@@ -652,26 +652,7 @@ func textMatchApply(filePath, oldText, newText string) (any, error) {
 		return nil, fmt.Errorf("old_text not found in %s (tried exact and whitespace-normalised line match)", filePath)
 	}
 
-	// Compute LSP range (0-based line/character) from byte offsets.
-	before := src[:startByte]
-	startLine := strings.Count(before, "\n")
-	var startLineBegin int
-	if lastNL := strings.LastIndex(before, "\n"); lastNL < 0 {
-		startLineBegin = 0
-	} else {
-		startLineBegin = lastNL + 1
-	}
-	startChar := utf16Offset(src[startLineBegin:startByte], startByte-startLineBegin)
-
-	segment := src[startByte:endByte]
-	endLine := startLine + strings.Count(segment, "\n")
-	var endChar int
-	if lastNLInSeg := strings.LastIndex(segment, "\n"); lastNLInSeg < 0 {
-		endChar = startChar + utf16Offset(segment, len(segment))
-	} else {
-		endLineContent := segment[lastNLInSeg+1:]
-		endChar = utf16Offset(endLineContent, len(endLineContent))
-	}
+	startLine, startChar, endLine, endChar := byteSpanToLSPRange(src, startByte, endByte)
 
 	fileURI := CreateFileURI(filePath)
 	edit := map[string]any{

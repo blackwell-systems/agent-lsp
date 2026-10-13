@@ -60,22 +60,11 @@ func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr 
 		return types.ErrorResult(fmt.Sprintf("old_text not found in %s", filePath)), nil
 	}
 
-	// Compute 0-based line/column from byte offset.
-	before := src[:idx]
-	startLine := strings.Count(before, "\n")
-	startCol := len(before) - strings.LastIndex(before, "\n") - 1
-	if !strings.Contains(before, "\n") {
-		startCol = len(before)
-	}
-
-	segment := src[idx : idx+len(oldText)]
-	endLine := startLine + strings.Count(segment, "\n")
-	var endCol int
-	if lastNL := strings.LastIndex(segment, "\n"); lastNL < 0 {
-		endCol = startCol + len(segment)
-	} else {
-		endCol = len(segment) - lastNL - 1
-	}
+	// 0-based line and UTF-16 column. Columns were byte counts here, which
+	// only agreed with the simulation's edit by accident before issue #52
+	// made that path UTF-16 aware; on a line with non-ASCII text before the
+	// match the preview edited the wrong span.
+	startLine, startCol, endLine, endCol := byteSpanToLSPRange(src, idx, idx+len(oldText))
 
 	// Build args for HandleSimulateEditAtomic.
 	workspaceRoot := client.RootDir()

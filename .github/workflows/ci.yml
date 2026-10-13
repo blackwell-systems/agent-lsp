@@ -64,7 +64,13 @@ jobs:
         run: npm install -g pyright
 
       - name: Install Rust toolchain + rust-analyzer
-        uses: dtolnay/rust-toolchain@stable
+        # Pinned toolchain version, not @stable: the Tier-2 baseline is derived
+        # from a specific rust-analyzer version (same contract as the MQL/KLS
+        # pins above). The 1.99.0 stable release (2026-10-01) changed
+        # rust-analyzer behavior and broke multi-lang-core on every open PR
+        # (#61). Bump the pin only after re-verifying the Rust Tier-2 baseline
+        # against the new toolchain.
+        uses: dtolnay/rust-toolchain@1.98.1
         with:
           components: rust-analyzer
 
@@ -534,7 +540,13 @@ jobs:
         run: npm install -g pyright
 
       - name: Install Rust toolchain + rust-analyzer
-        uses: dtolnay/rust-toolchain@stable
+        # Pinned toolchain version, not @stable: the Tier-2 baseline is derived
+        # from a specific rust-analyzer version (same contract as the MQL/KLS
+        # pins above). The 1.99.0 stable release (2026-10-01) changed
+        # rust-analyzer behavior and broke multi-lang-core on every open PR
+        # (#61). Bump the pin only after re-verifying the Rust Tier-2 baseline
+        # against the new toolchain.
+        uses: dtolnay/rust-toolchain@1.98.1
         with:
           components: rust-analyzer
 

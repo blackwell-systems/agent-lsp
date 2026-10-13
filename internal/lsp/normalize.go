@@ -76,7 +76,12 @@ func NormalizeDocumentSymbols(raw json.RawMessage) ([]types.DocumentSymbol, erro
 		ds := symPtrs[i]
 		if info.ContainerName != nil && *info.ContainerName != "" {
 			if parent, ok := nameByBare[*info.ContainerName]; ok {
-				parent.Children = append(parent.Children, *ds)
+				// Re-parented by us, like renestFlatSymbols: mark it so the
+				// blast_radius filters treat a parameter/local published under a
+				// function's containerName the same way. (issue #53)
+				child := *ds
+				child.Renested = true
+				parent.Children = append(parent.Children, child)
 				hasParent[i] = true
 			}
 		}

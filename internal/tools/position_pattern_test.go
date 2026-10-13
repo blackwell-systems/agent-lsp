@@ -3,7 +3,11 @@ package tools
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/blackwell-systems/agent-lsp/internal/types"
+	uriPkg "github.com/blackwell-systems/agent-lsp/internal/uri"
 )
 
 func writeTemp(t *testing.T, content string) string {
@@ -253,5 +257,60 @@ func TestExtractPositionWithPattern_LineScopeAbsent(t *testing.T) {
 	}
 	if col != 6 {
 		t.Errorf("got col %d, want 6", col)
+	}
+}
+
+// TestByteSpanToLSPRange pins the byte-to-LSP conversion shared by apply_edit
+// (text match) and safe_apply_edit. LSP characters are UTF-16 code units, so
+// any non-ASCII text before the span on its line must shift the column by its
+// UTF-16 width, not its byte width (issue #52). safe_apply_edit used byte
+// columns, which corrupted its preview once the edit path became UTF-16 aware.
+func TestByteSpanToLSPRange(t *testing.T) {
+	tests := []struct {
+		name           string
+		src, match     string
+		sl, sc, el, ec int
+	}{
+		{"ascii", "x := 1; y := 2", "y := 2", 0, 8, 0, 14},
+		{"accented before match", `x := "café"; y := 2`, "y := 2", 0, 13, 0, 19},
+		{"cjk before match", "// 日本語 foo;", "foo", 0, 7, 0, 10},
+		{"emoji is two units", "😀 foo end", "foo", 0, 3, 0, 6},
+		{"non-ascii inside match", "a é b", "é b", 0, 2, 0, 5},
+		{"second line", "first é\nlet é = foo;", "foo", 1, 8, 1, 11},
+		{"multi-line span ends on later line", "aé bc\nde fé", "bc\nde f", 0, 3, 1, 4},
+		{"crlf", "é one\r\ntwo foo\r\n", "foo", 1, 4, 1, 7},
+	}
+	for _, tt := range tests {
+		start := strings.Index(tt.src, tt.match)
+		if start < 0 {
+			t.Fatalf("%s: match not in src", tt.name)
+		}
+		sl, sc, el, ec := byteSpanToLSPRange(tt.src, start, start+len(tt.match))
+		if sl != tt.sl || sc != tt.sc || el != tt.el || ec != tt.ec {
+			t.Errorf("%s: got %d:%d-%d:%d, want %d:%d-%d:%d", tt.name, sl, sc, el, ec, tt.sl, tt.sc, tt.el, tt.ec)
+		}
+	}
+}
+
+// TestByteSpanToLSPRange_RoundTripsThroughApplyRangeEdit applies the converted
+// range with the same function the simulation preview uses, so a mismatch
+// between the two unit systems shows up as corrupted text (#56 review: with
+// byte columns, `x := "café"; y := 2` previewed as `...; yy := 3`).
+func TestByteSpanToLSPRange_RoundTripsThroughApplyRangeEdit(t *testing.T) {
+	for _, tc := range []struct{ src, old, repl string }{
+		{`x := "café"; y := 2`, "y := 2", "y := 3"},
+		{"\ufeffpackage é; foo()", "foo()", "bar()"},
+		{"😀😀 a := 1\nb := 2", "a := 1\nb", "a := 9\nc"},
+		{"// 日本語 foo;", "foo", "renamed"},
+	} {
+		start := strings.Index(tc.src, tc.old)
+		sl, sc, el, ec := byteSpanToLSPRange(tc.src, start, start+len(tc.old))
+		got := uriPkg.ApplyRangeEdit(tc.src, types.Range{
+			Start: types.Position{Line: sl, Character: sc},
+			End:   types.Position{Line: el, Character: ec},
+		}, tc.repl)
+		if want := strings.Replace(tc.src, tc.old, tc.repl, 1); got != want {
+			t.Errorf("edit of %q: got %q, want %q", tc.src, got, want)
+		}
 	}
 }

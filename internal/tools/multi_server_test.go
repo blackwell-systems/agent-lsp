@@ -70,8 +70,8 @@ func startFakeLSP(t *testing.T, declared []string, wsymResult []any, fail bool) 
 			}
 			regBody, _ := json.Marshal(map[string]any{
 				"jsonrpc": "2.0", "id": 1,
-				"method":  "client/registerCapability",
-				"params":  map[string]any{"registrations": regs},
+				"method": "client/registerCapability",
+				"params": map[string]any{"registrations": regs},
 			})
 			if _, err := conn.Write(lsp.EncodeMessage(regBody)); err != nil {
 				return
@@ -353,10 +353,16 @@ func TestHandleGetWorkspaceSymbolsMulti_CoverageCheckedPerClient(t *testing.T) {
 	// Server B: a root with a file the session never opened — incomplete.
 	serverB := startFakeLSP(t, []string{"workspace/symbol"}, []any{}, false)
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("x"), 0o644); err != nil {
+	// The probe only counts files in the server's languages; an MQL server
+	// with an unopened .mq5 has incomplete coverage.
+	if err := os.WriteFile(filepath.Join(root, "ea.mq5"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	serverB.SetRootDirForTest(root)
+	// Coverage gating only applies to servers verified to index opened
+	// documents only (same eligibility rule as noteIndexCoverage); the fake
+	// must present as one for the caveat to be reachable.
+	serverB.SetServerInfoForTest("MQL Language Server", "2.6.1")
 
 	r, err := HandleGetWorkspaceSymbolsMulti(context.Background(),
 		[]*lsp.LSPClient{serverA, serverB}, map[string]any{"query": "x"})
@@ -364,8 +370,29 @@ func TestHandleGetWorkspaceSymbolsMulti_CoverageCheckedPerClient(t *testing.T) {
 		t.Fatalf("unexpected Go error: %v", err)
 	}
 	all := contentText(r)
-	if !strings.Contains(all, "only index opened documents") {
+	if !strings.Contains(all, "indexes only opened documents") {
 		t.Fatalf("expected index-coverage caveat when one capable server has unopened files, got %q", all)
+	}
+}
+
+// The negative control of the eligibility gate: a whole-workspace indexer
+// with unopened files stays unhedged — its empty result is authoritative.
+func TestHandleGetWorkspaceSymbolsMulti_WholeWorkspaceIndexerNoCaveat(t *testing.T) {
+	server := startFakeLSP(t, []string{"workspace/symbol"}, []any{}, false)
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	server.SetRootDirForTest(root)
+	server.SetServerInfoForTest("gopls", "v0.20.0")
+
+	r, err := HandleGetWorkspaceSymbolsMulti(context.Background(),
+		[]*lsp.LSPClient{server}, map[string]any{"query": "x"})
+	if err != nil {
+		t.Fatalf("unexpected Go error: %v", err)
+	}
+	if all := contentText(r); strings.Contains(all, "indexes only opened documents") {
+		t.Fatalf("whole-workspace indexer must not get the caveat, got %q", all)
 	}
 }
 

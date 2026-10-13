@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/blackwell-systems/agent-lsp/internal/encoding/gcf"
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
@@ -523,11 +525,16 @@ func TestChangeImpact_EncodeResult_GCF(t *testing.T) {
 }
 
 func TestBuildChangeImpactPayload(t *testing.T) {
-	changed := []symbolRef{{Name: "Foo", File: "/src/pkg/foo.go", Line: 10}}
-	callers := []symbolRef{{Name: "Bar", File: "/src/pkg/bar.go", Line: 20}}
+	target := symbolRef{Name: "Foo", File: "/src/pkg/foo.go", Line: 10}
+	entries := []symbolWithCallers{
+		{
+			symbolRef:      target,
+			NonTestCallers: []symbolRef{{Name: "Bar", File: "/src/pkg/bar.go", Line: 20}},
+		},
+	}
 	tests := []symbolRef{{Name: "TestFoo", File: "/src/pkg/foo_test.go", Line: 5}}
 
-	p := buildChangeImpactPayload(changed, callers, tests)
+	p := buildChangeImpactPayload(entries, tests)
 
 	if p.Tool != "blast_radius" {
 		t.Errorf("wrong tool: got %q, want %q", p.Tool, "blast_radius")
@@ -554,22 +561,40 @@ func TestBuildChangeImpactPayload(t *testing.T) {
 	if p.Symbols[2].Score != 0.7 {
 		t.Errorf("test symbol score should be 0.7, got %f", p.Symbols[2].Score)
 	}
-	// Verify edges exist
+	// Verify edges exist and are REAL caller -> target edges (issue #53:
+	// the old implementation produced degenerate self-edges @N<@N).
 	if len(p.Edges) != 1 {
 		t.Errorf("expected 1 edge, got %d", len(p.Edges))
 	}
-	if len(p.Edges) > 0 && p.Edges[0].EdgeType != "calls" {
-		t.Errorf("edge type should be 'calls', got %q", p.Edges[0].EdgeType)
+	if len(p.Edges) > 0 {
+		if p.Edges[0].EdgeType != "calls" {
+			t.Errorf("edge type should be 'calls', got %q", p.Edges[0].EdgeType)
+		}
+		if p.Edges[0].Source == p.Edges[0].Target {
+			t.Errorf("degenerate self-edge: source %q == target %q", p.Edges[0].Source, p.Edges[0].Target)
+		}
+		wantTarget := gcf.QualifiedName(target.File, target.Name)
+		wantSource := gcf.QualifiedName("/src/pkg/bar.go", "Bar")
+		if p.Edges[0].Source != wantSource || p.Edges[0].Target != wantTarget {
+			t.Errorf("edge should be %q -> %q, got %q -> %q", wantSource, wantTarget, p.Edges[0].Source, p.Edges[0].Target)
+		}
 	}
 }
 
 func TestBuildChangeImpactPayload_Dedup(t *testing.T) {
-	// Duplicate callers should be deduplicated.
-	callers := []symbolRef{
-		{Name: "Bar", File: "/src/pkg/bar.go", Line: 20},
-		{Name: "Bar", File: "/src/pkg/bar.go", Line: 25},
+	// Duplicate callers should be deduplicated by qualified name.
+	caller := symbolRef{Name: "Bar", File: "/src/pkg/bar.go", Line: 20}
+	entries := []symbolWithCallers{
+		{
+			symbolRef:      symbolRef{Name: "A", File: "/src/pkg/a.go", Line: 1},
+			NonTestCallers: []symbolRef{caller, {Name: "Bar", File: "/src/pkg/bar.go", Line: 25}},
+		},
+		{
+			symbolRef:      symbolRef{Name: "B", File: "/src/pkg/b.go", Line: 2},
+			NonTestCallers: []symbolRef{{Name: "Bar", File: "/src/pkg/bar.go", Line: 30}},
+		},
 	}
-	p := buildChangeImpactPayload(nil, callers, nil)
+	p := buildChangeImpactPayload(entries, nil)
 	// Only one caller symbol should appear (deduplicated by qualified name).
 	callerCount := 0
 	for _, s := range p.Symbols {
@@ -579,5 +604,380 @@ func TestBuildChangeImpactPayload_Dedup(t *testing.T) {
 	}
 	if callerCount != 1 {
 		t.Errorf("expected 1 deduplicated caller, got %d", callerCount)
+	}
+	// But BOTH call relationships must produce caller -> target edges.
+	if len(p.Edges) != 2 {
+		t.Errorf("expected 2 caller->target edges, got %d", len(p.Edges))
+	}
+}
+
+func TestRenestFlatSymbols_FlatMQLList(t *testing.T) {
+	// Mimics mql-lsp-server v2.5.0: a FLAT documentSymbol list where the
+	// function's parameters and locals are top-level siblings carrying
+	// SymbolKind Function (12). Issue #53 live repro on riesgo_mq4.mqh.
+	flat := []types.DocumentSymbol{
+		{Name: "CalculaRiesgoTicks", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 9, Character: 0}, End: types.Position{Line: 30, Character: 4}},
+			SelectionRange: types.Range{Start: types.Position{Line: 9, Character: 7}, End: types.Position{Line: 9, Character: 25}}},
+		{Name: "tipoOrden", Kind: 13, // parameter (Variable), flat top-level
+			Range:          types.Range{Start: types.Position{Line: 9, Character: 26}, End: types.Position{Line: 9, Character: 35}},
+			SelectionRange: types.Range{Start: types.Position{Line: 9, Character: 26}, End: types.Position{Line: 9, Character: 35}}},
+		{Name: "lotaje", Kind: 13, // parameter
+			Range:          types.Range{Start: types.Position{Line: 9, Character: 37}, End: types.Position{Line: 9, Character: 43}},
+			SelectionRange: types.Range{Start: types.Position{Line: 9, Character: 37}, End: types.Position{Line: 9, Character: 43}}},
+		{Name: "cantidadTicks", Kind: 13, // local
+			Range:          types.Range{Start: types.Position{Line: 13, Character: 5}, End: types.Position{Line: 13, Character: 25}},
+			SelectionRange: types.Range{Start: types.Position{Line: 13, Character: 11}, End: types.Position{Line: 13, Character: 24}}},
+		{Name: "CalculaLotajeDesdeRiesgo", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 37, Character: 0}, End: types.Position{Line: 65, Character: 4}},
+			SelectionRange: types.Range{Start: types.Position{Line: 37, Character: 7}, End: types.Position{Line: 37, Character: 31}}},
+		{Name: "i", Kind: 13, // loop local
+			Range:          types.Range{Start: types.Position{Line: 46, Character: 2}, End: types.Position{Line: 46, Character: 10}},
+			SelectionRange: types.Range{Start: types.Position{Line: 46, Character: 6}, End: types.Position{Line: 46, Character: 7}}},
+	}
+
+	nested := renestFlatSymbols(flat)
+	if len(nested) != 2 {
+		t.Fatalf("expected 2 top-level functions after re-nesting, got %d", len(nested))
+	}
+	if len(nested[0].Children) != 3 {
+		t.Errorf("expected 3 children under CalculaRiesgoTicks, got %d", len(nested[0].Children))
+	}
+	if len(nested[1].Children) != 1 {
+		t.Errorf("expected 1 child under CalculaLotajeDesdeRiesgo, got %d", len(nested[1].Children))
+	}
+
+	// scope=exported must now exclude the params/locals (all kind 12, but
+	// nested): only the two top-level functions are targets.
+	var out []exportedSymbol
+	collectExportedSymbols(nested, "/tmp/fixture.mqh", "mql", &out, true, 0, 0)
+	if len(out) != 2 {
+		names := make([]string, 0, len(out))
+		for _, s := range out {
+			names = append(names, s.Name)
+		}
+		t.Errorf("expected 2 exported targets, got %d: %v", len(out), names)
+	}
+	for _, s := range out {
+		if s.Name != "CalculaRiesgoTicks" && s.Name != "CalculaLotajeDesdeRiesgo" {
+			t.Errorf("nested param/local %q promoted to target", s.Name)
+		}
+	}
+
+	// scope=all must still see everything (6 symbols).
+	var all []exportedSymbol
+	collectAllSymbols(nested, "/tmp/fixture.mqh", "mql", &all, true)
+	if len(all) != 6 {
+		t.Errorf("scope=all expected 6 symbols, got %d", len(all))
+	}
+}
+
+func TestRenestFlatSymbols_FlatMQLList_Kind12Params(t *testing.T) {
+	// mql-lsp-server v2.5.0 publishes params/locals as SymbolKind Function
+	// (12), not Variable (13). After re-nesting they must not become
+	// blast-radius targets (CodeRabbit #57 thread 2), and must not win the
+	// caller-attribution race against the containing function (thread 3).
+	flat := []types.DocumentSymbol{
+		{Name: "CalculaRiesgoTicks", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 9, Character: 0}, End: types.Position{Line: 30, Character: 4}},
+			SelectionRange: types.Range{Start: types.Position{Line: 9, Character: 7}, End: types.Position{Line: 9, Character: 25}}},
+		{Name: "tipoOrden", Kind: 12, // parameter published as Function
+			Range:          types.Range{Start: types.Position{Line: 9, Character: 26}, End: types.Position{Line: 9, Character: 35}},
+			SelectionRange: types.Range{Start: types.Position{Line: 9, Character: 26}, End: types.Position{Line: 9, Character: 35}}},
+		{Name: "cantidadTicks", Kind: 12, // local published as Function
+			Range:          types.Range{Start: types.Position{Line: 13, Character: 5}, End: types.Position{Line: 13, Character: 25}},
+			SelectionRange: types.Range{Start: types.Position{Line: 13, Character: 11}, End: types.Position{Line: 13, Character: 24}}},
+		{Name: "CalculaLotajeDesdeRiesgo", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 37, Character: 0}, End: types.Position{Line: 65, Character: 4}},
+			SelectionRange: types.Range{Start: types.Position{Line: 37, Character: 7}, End: types.Position{Line: 37, Character: 31}}},
+		{Name: "i", Kind: 12, // loop local published as Function
+			Range:          types.Range{Start: types.Position{Line: 46, Character: 2}, End: types.Position{Line: 46, Character: 10}},
+			SelectionRange: types.Range{Start: types.Position{Line: 46, Character: 6}, End: types.Position{Line: 46, Character: 7}}},
+	}
+
+	nested := renestFlatSymbols(flat)
+	if len(nested) != 2 {
+		t.Fatalf("expected 2 top-level functions after re-nesting, got %d", len(nested))
+	}
+	if len(nested[0].Children) != 2 || len(nested[1].Children) != 1 {
+		t.Errorf("unexpected children: %d under CalculaRiesgoTicks, %d under CalculaLotajeDesdeRiesgo",
+			len(nested[0].Children), len(nested[1].Children))
+	}
+	// Roots unmarked, re-parented children marked.
+	if nested[0].Renested || nested[1].Renested {
+		t.Error("top-level functions must not carry the re-nesting mark")
+	}
+	for _, root := range nested {
+		for _, ch := range root.Children {
+			if !ch.Renested {
+				t.Errorf("re-parented child %q must carry the re-nesting mark", ch.Name)
+			}
+		}
+	}
+
+	// scope=exported: only the two functions are targets; kind-12
+	// params/locals must not leak through the nested filter.
+	var out []exportedSymbol
+	collectExportedSymbols(nested, "/tmp/fixture.mqh", "mql", &out, true, 0, 0)
+	if len(out) != 2 {
+		names := make([]string, 0, len(out))
+		for _, s := range out {
+			names = append(names, s.Name)
+		}
+		t.Fatalf("expected 2 exported targets, got %d: %v", len(out), names)
+	}
+	for _, s := range out {
+		if s.Name != "CalculaRiesgoTicks" && s.Name != "CalculaLotajeDesdeRiesgo" {
+			t.Errorf("re-nested param/local %q promoted to target", s.Name)
+		}
+	}
+
+	// Caller attribution: a reference on a param/local line must resolve to
+	// the containing function (same pipeline findEnclosingCaller uses).
+	cands := callerSymbolCandidates(flat)
+	if enc := findEnclosingSymbolAt(cands, types.Position{Line: 13, Character: 12}); enc == nil || enc.Name != "CalculaRiesgoTicks" {
+		t.Errorf("line 13: expected caller CalculaRiesgoTicks, got %v", enc)
+	}
+	if enc := findEnclosingSymbolAt(cands, types.Position{Line: 46, Character: 6}); enc == nil || enc.Name != "CalculaLotajeDesdeRiesgo" {
+		t.Errorf("line 46: expected caller CalculaLotajeDesdeRiesgo, got %v", enc)
+	}
+}
+
+// positionInRange boundary semantics: start inclusive, end exclusive per LSP
+// — a position equal to r.End belongs to the next symbol. (CodeRabbit #57
+// re-review thread: adjacent-range boundary case)
+func TestPositionInRange_EndExclusive(t *testing.T) {
+	r := types.Range{
+		Start: types.Position{Line: 10, Character: 5},
+		End:   types.Position{Line: 12, Character: 7},
+	}
+	cases := []struct {
+		name string
+		pos  types.Position
+		want bool
+	}{
+		{"before range", types.Position{Line: 9, Character: 0}, false},
+		{"start inclusive", types.Position{Line: 10, Character: 5}, true},
+		{"start line, before start char", types.Position{Line: 10, Character: 4}, false},
+		{"interior", types.Position{Line: 11, Character: 0}, true},
+		{"end line, before end char", types.Position{Line: 12, Character: 6}, true},
+		{"end exclusive", types.Position{Line: 12, Character: 7}, false},
+		{"end line, past end char", types.Position{Line: 12, Character: 8}, false},
+		{"after range", types.Position{Line: 13, Character: 0}, false},
+	}
+	for _, tc := range cases {
+		if got := positionInRange(tc.pos, r); got != tc.want {
+			t.Errorf("%s: positionInRange(%v) = %v, want %v", tc.name, tc.pos, got, tc.want)
+		}
+	}
+}
+
+// Two callables whose ranges are adjacent: foo ends at char 40, baz begins at
+// char 40. A reference at the boundary belongs to baz, not to foo — with an
+// inclusive-end containment test foo would swallow it. (CodeRabbit #57
+// re-review thread)
+func TestFindEnclosingSymbolAt_AdjacentRanges(t *testing.T) {
+	flat := []types.DocumentSymbol{
+		{Name: "foo", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 10, Character: 0}, End: types.Position{Line: 10, Character: 40}},
+			SelectionRange: types.Range{Start: types.Position{Line: 10, Character: 4}, End: types.Position{Line: 10, Character: 7}}},
+		{Name: "baz", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 10, Character: 40}, End: types.Position{Line: 10, Character: 60}},
+			SelectionRange: types.Range{Start: types.Position{Line: 10, Character: 44}, End: types.Position{Line: 10, Character: 47}}},
+	}
+	cands := callerSymbolCandidates(flat)
+	if enc := findEnclosingSymbolAt(cands, types.Position{Line: 10, Character: 39}); enc == nil || enc.Name != "foo" {
+		t.Errorf("char 39 (inside foo): expected foo, got %v", enc)
+	}
+	if enc := findEnclosingSymbolAt(cands, types.Position{Line: 10, Character: 40}); enc == nil || enc.Name != "baz" {
+		t.Errorf("char 40 (boundary): expected baz (exclusive-end containment), got %v", enc)
+	}
+	if enc := findEnclosingSymbolAt(cands, types.Position{Line: 10, Character: 50}); enc == nil || enc.Name != "baz" {
+		t.Errorf("char 50 (inside baz): expected baz, got %v", enc)
+	}
+}
+
+// Two one-liner callables sharing a line: line-only containment would pick
+// the first for a reference in the second. Caller attribution must compare
+// line AND character. (CodeRabbit #57 re-review thread)
+func TestFindEnclosingSymbolAt_SameLineCallables(t *testing.T) {
+	flat := []types.DocumentSymbol{
+		{Name: "foo", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 10, Character: 0}, End: types.Position{Line: 10, Character: 40}},
+			SelectionRange: types.Range{Start: types.Position{Line: 10, Character: 4}, End: types.Position{Line: 10, Character: 7}}},
+		{Name: "baz", Kind: 12,
+			Range:          types.Range{Start: types.Position{Line: 10, Character: 45}, End: types.Position{Line: 10, Character: 60}},
+			SelectionRange: types.Range{Start: types.Position{Line: 10, Character: 49}, End: types.Position{Line: 10, Character: 52}}},
+	}
+	cands := callerSymbolCandidates(flat)
+	if enc := findEnclosingSymbolAt(cands, types.Position{Line: 10, Character: 20}); enc == nil || enc.Name != "foo" {
+		t.Errorf("char 20: expected caller foo, got %v", enc)
+	}
+	if enc := findEnclosingSymbolAt(cands, types.Position{Line: 10, Character: 50}); enc == nil || enc.Name != "baz" {
+		t.Errorf("char 50: expected caller baz, got %v (line-only selection would pick foo)", enc)
+	}
+}
+
+func TestRenestFlatSymbols_NestedTreeUnchanged(t *testing.T) {
+	// A properly nested tree must survive re-nesting structurally.
+	nested := []types.DocumentSymbol{
+		{Name: "Outer", Kind: 12,
+			Range: types.Range{Start: types.Position{Line: 0, Character: 0}, End: types.Position{Line: 10, Character: 0}},
+			Children: []types.DocumentSymbol{
+				{Name: "innerLocal", Kind: 13,
+					Range: types.Range{Start: types.Position{Line: 2, Character: 1}, End: types.Position{Line: 2, Character: 9}}},
+				{Name: "InnerFn", Kind: 12,
+					Range: types.Range{Start: types.Position{Line: 4, Character: 1}, End: types.Position{Line: 8, Character: 2}}},
+			}},
+		{Name: "Sibling", Kind: 12,
+			Range: types.Range{Start: types.Position{Line: 20, Character: 0}, End: types.Position{Line: 25, Character: 0}}},
+	}
+
+	got := renestFlatSymbols(nested)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 roots, got %d", len(got))
+	}
+	if len(got[0].Children) != 2 {
+		t.Fatalf("expected 2 children on Outer, got %d", len(got[0].Children))
+	}
+	// Children sorted by position: innerLocal (line 2) before InnerFn (line 4).
+	if got[0].Children[0].Name != "innerLocal" || got[0].Children[1].Name != "InnerFn" {
+		t.Errorf("unexpected children order: %q, %q", got[0].Children[0].Name, got[0].Children[1].Name)
+	}
+	if len(got[0].Children[0].Children) != 0 || len(got[0].Children[1].Children) != 0 {
+		t.Error("leaf symbols must not gain children")
+	}
+
+	// Genuinely nested children (hierarchical servers) carry no re-nesting
+	// mark: a nested function keeps qualifying as a blast-radius target.
+	if got[0].Children[1].Renested {
+		t.Error("genuinely nested InnerFn must not be marked re-nested")
+	}
+	var out []exportedSymbol
+	collectExportedSymbols(got, "/tmp/fixture.go", "go", &out, true, 0, 0)
+	names := map[string]bool{}
+	for _, s := range out {
+		names[s.Name] = true
+	}
+	if !names["InnerFn"] {
+		t.Errorf("genuinely nested function InnerFn dropped from targets: %v", names)
+	}
+}
+
+func TestRenestFlatSymbols_EqualRangesAreSiblings(t *testing.T) {
+	// Two symbols with identical ranges must not become parent/child.
+	syms := []types.DocumentSymbol{
+		{Name: "A", Kind: 12, Range: types.Range{Start: types.Position{Line: 1, Character: 0}, End: types.Position{Line: 5, Character: 0}}},
+		{Name: "B", Kind: 12, Range: types.Range{Start: types.Position{Line: 1, Character: 0}, End: types.Position{Line: 5, Character: 0}}},
+	}
+	got := renestFlatSymbols(syms)
+	if len(got) != 2 {
+		t.Errorf("identical ranges must stay siblings, got %d roots", len(got))
+	}
+}
+
+func TestBuildChangeImpactPayload_NoSelfEdgesForSameName(t *testing.T) {
+	// A caller with the same (file, name) as the target would produce a
+	// degenerate self-edge; it must be dropped.
+	entry := symbolWithCallers{
+		symbolRef:      symbolRef{Name: "Foo", File: "/src/pkg/foo.go", Line: 10},
+		NonTestCallers: []symbolRef{{Name: "Foo", File: "/src/pkg/foo.go", Line: 12}},
+	}
+	p := buildChangeImpactPayload([]symbolWithCallers{entry}, nil)
+	if len(p.Edges) != 0 {
+		t.Errorf("expected 0 edges (self-edge dropped), got %d", len(p.Edges))
+	}
+}
+
+// --- #57 review follow-ups ---
+
+// A changed symbol that also calls another changed symbol must stay a target
+// (distance 0) even when its caller entry is processed first.
+func TestBuildChangeImpactPayload_TargetsBeforeCallers(t *testing.T) {
+	entries := []symbolWithCallers{
+		{symbolRef: symbolRef{Name: "Bar", File: "/w/pkg/a.go"}, NonTestCallers: []symbolRef{{Name: "Foo", File: "/w/pkg/a.go"}}},
+		{symbolRef: symbolRef{Name: "Foo", File: "/w/pkg/a.go"}},
+	}
+	p := buildChangeImpactPayload(entries, nil)
+	fooQN := gcf.QualifiedName("/w/pkg/a.go", "Foo")
+	found := false
+	for _, s := range p.Symbols {
+		if s.QualifiedName == fooQN {
+			found = true
+			if s.Distance != 0 {
+				t.Errorf("changed symbol Foo has distance %d, want 0 (it is also a caller of Bar)", s.Distance)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("Foo missing from payload symbols")
+	}
+	if len(p.Edges) != 1 || p.Edges[0].Source != fooQN {
+		t.Errorf("edges = %+v, want one Foo -> Bar edge", p.Edges)
+	}
+}
+
+// A re-nested Function under a class or namespace is a real member, not a
+// parameter: only re-nested shapes under a callable parent are dropped.
+func TestCollectExportedSymbols_RenestedFunctionUnderClassIsKept(t *testing.T) {
+	syms := []types.DocumentSymbol{
+		{Name: "CTrade", Kind: 5, Children: []types.DocumentSymbol{
+			{Name: "Buy", Kind: 12, Renested: true},
+		}},
+		{Name: "Calc", Kind: 12, Children: []types.DocumentSymbol{
+			{Name: "lotaje", Kind: 12, Renested: true},
+		}},
+	}
+	var out []exportedSymbol
+	collectExportedSymbols(syms, "/nonexistent/x.mqh", "mql", &out, true, 0, 0)
+	got := map[string]bool{}
+	for _, e := range out {
+		got[e.Name] = true
+	}
+	if !got["Buy"] {
+		t.Errorf("member function Buy under class was dropped; got %v", got)
+	}
+	if got["lotaje"] {
+		t.Errorf("parameter lotaje under function became a target; got %v", got)
+	}
+}
+
+// SymbolInformation[] with containerName is nested by NormalizeDocumentSymbols;
+// those children must be filtered like renestFlatSymbols' output.
+func TestCollectExportedSymbols_ContainerNameParamsExcluded(t *testing.T) {
+	raw := json.RawMessage(`[
+		{"name":"Calc","kind":12,"location":{"uri":"file:///w/a.mqh","range":{"start":{"line":0,"character":0},"end":{"line":9,"character":1}}}},
+		{"name":"lotaje","kind":12,"containerName":"Calc","location":{"uri":"file:///w/a.mqh","range":{"start":{"line":0,"character":10},"end":{"line":0,"character":16}}}},
+		{"name":"perdida","kind":13,"containerName":"Calc","location":{"uri":"file:///w/a.mqh","range":{"start":{"line":2,"character":2},"end":{"line":2,"character":9}}}}
+	]`)
+	syms, err := lsp.NormalizeDocumentSymbols(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []exportedSymbol
+	collectExportedSymbols(syms, "/nonexistent/a.mqh", "mql", &out, true, 0, 0)
+	for _, e := range out {
+		if e.Name == "lotaje" || e.Name == "perdida" {
+			t.Errorf("containerName-nested parameter/local %q became a target", e.Name)
+		}
+	}
+	if len(out) != 1 || out[0].Name != "Calc" {
+		t.Errorf("targets = %+v, want only Calc", out)
+	}
+}
+
+// A reference inside a TS/JS arrow-function const has no callable ancestor; it
+// must be attributed to the const, not left unattributed (which produced a
+// fake self-edge named after the queried symbol).
+func TestFindEnclosingCaller_FallsBackToEnclosingDeclaration(t *testing.T) {
+	const refPath = "/w/app.tsx"
+	cache := &sync.Map{}
+	cache.Store(refPath, []types.DocumentSymbol{{
+		Name: "App", Kind: 13,
+		Range: types.Range{Start: types.Position{Line: 0}, End: types.Position{Line: 6, Character: 2}},
+	}})
+	got := findEnclosingCaller(context.Background(), nil, cache, refPath, types.Position{Line: 3, Character: 4})
+	if got == nil || got.Name != "App" {
+		t.Fatalf("caller = %+v, want the enclosing const App", got)
 	}
 }

@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strconv"
@@ -23,6 +24,12 @@ func EncodeMessage(body []byte) []byte {
 type FrameReader struct {
 	r   io.Reader
 	buf []byte
+	// scanFrom is where the next search for the header terminator starts.
+	// Searching the whole accumulated buffer on every read was O(n^2) on a
+	// large or slow stream without a terminator (10 MB in 100-byte reads took
+	// minutes; issue #65). It is the header's own index once found (the body
+	// may still be arriving) and is reset whenever buf is replaced.
+	scanFrom int
 }
 
 // NewFrameReader creates a new FrameReader wrapping r.
@@ -35,10 +42,18 @@ func NewFrameReader(r io.Reader) *FrameReader {
 func (fr *FrameReader) ReadMessage() ([]byte, error) {
 	tmp := make([]byte, 4096)
 	for {
-		// Try to parse from buffer
-		if msg, rest, ok := tryParse(fr.buf); ok {
-			fr.buf = rest
-			return msg, nil
+		// Try to parse from buffer, resuming the header search where the
+		// previous attempt stopped.
+		if idx := findHeaderEnd(fr.buf, fr.scanFrom); idx >= 0 {
+			if msg, rest, ok := parseFrame(fr.buf, idx); ok {
+				fr.buf = rest
+				fr.scanFrom = 0
+				return msg, nil
+			}
+			fr.scanFrom = idx // header complete, body still arriving
+		} else {
+			// Back off so a terminator split across reads is still found.
+			fr.scanFrom = max(0, len(fr.buf)-3)
 		}
 
 		// Read more data
@@ -48,6 +63,7 @@ func (fr *FrameReader) ReadMessage() ([]byte, error) {
 			// Overflow protection: discard entire buffer
 			if len(fr.buf) > maxBufferSize {
 				fr.buf = nil
+				fr.scanFrom = 0
 			}
 		}
 		if err != nil {
@@ -59,17 +75,31 @@ func (fr *FrameReader) ReadMessage() ([]byte, error) {
 // tryParse attempts to parse one complete Content-Length framed message from buf.
 // Returns (body, remaining, ok).
 func tryParse(buf []byte) ([]byte, []byte, bool) {
-	idx := -1
-	for i := 0; i < len(buf)-3; i++ {
-		if buf[i] == '\r' && buf[i+1] == '\n' && buf[i+2] == '\r' && buf[i+3] == '\n' {
-			idx = i
-			break
-		}
-	}
+	idx := findHeaderEnd(buf, 0)
 	if idx < 0 {
 		return nil, buf, false
 	}
+	return parseFrame(buf, idx)
+}
 
+var headerTerminator = []byte("\r\n\r\n")
+
+// findHeaderEnd returns the index of the first header terminator in buf at or
+// after from, or -1 if there is none yet.
+func findHeaderEnd(buf []byte, from int) int {
+	if from < 0 || from > len(buf) {
+		from = 0
+	}
+	if i := bytes.Index(buf[from:], headerTerminator); i >= 0 {
+		return from + i
+	}
+	return -1
+}
+
+// parseFrame parses the message whose header ends at idx (the index of its
+// terminator). Returns (body, remaining, ok); ok is false until the whole body
+// has arrived or when the header has no usable Content-Length.
+func parseFrame(buf []byte, idx int) ([]byte, []byte, bool) {
 	header := string(buf[:idx])
 	bodyStart := idx + 4
 

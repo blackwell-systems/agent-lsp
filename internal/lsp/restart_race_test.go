@@ -127,7 +127,7 @@ func TestRestart_NewServerSurvivesOldProcessExit(t *testing.T) {
 	defer client.Shutdown(context.Background())
 
 	for i := range 20 {
-		if err := client.Restart(ctx, root); err != nil {
+		if _, err := client.Restart(ctx, root); err != nil {
 			t.Fatalf("restart %d: %v", i, err)
 		}
 		// Give the previous process's exit monitor time to run, then prove the
