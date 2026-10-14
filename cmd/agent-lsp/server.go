@@ -242,6 +242,25 @@ func autoInitRootAllowed(dir string) bool {
 	return true
 }
 
+// autoInitRootFromPath infers the workspace root for path and validates it:
+// it returns "" when inference fails or the inferred root is protected. The
+// guard must run on the INFERRED root, not the caller's path — marker
+// inference walks up, so a cwd under $HOME/Documents with a git repo at
+// $HOME infers $HOME, and a write-capable tool must never auto-root there.
+// (PR #60 maintainer review)
+func autoInitRootFromPath(path string) string {
+	root, _, err := config.InferWorkspaceRoot(path)
+	if err != nil || root == "" {
+		return ""
+	}
+	if !autoInitRootAllowed(root) {
+		logging.Log(logging.LevelInfo, fmt.Sprintf(
+			"auto-init: refusing inferred workspace root %q for path %q (protected root)", root, path))
+		return ""
+	}
+	return root
+}
+
 // autoInitClient attempts to infer a workspace root from filePath and
 // initialize the resolver. Safe to call concurrently via initMu.
 // Returns nil if filePath is empty, inference returns no root,
@@ -265,8 +284,8 @@ func autoInitClient(
 		}
 	}
 
-	root, _, err := config.InferWorkspaceRoot(filePath)
-	if err != nil || root == "" {
+	root := autoInitRootFromPath(filePath)
+	if root == "" {
 		return nil
 	}
 
