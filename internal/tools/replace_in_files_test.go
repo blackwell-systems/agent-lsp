@@ -376,6 +376,70 @@ func TestResolveReplaceRootSymlinkedRoot(t *testing.T) {
 	}
 }
 
+// Maintainer review repro (PR #60): relative_path ".git" scanned VCS
+// internals and a replacement was applied into .git/config and
+// .git/hooks/pre-commit; on case-insensitive filesystems ".GIT" and
+// ".Agent-LSP" resolve to the same directories. Hard skips must hold at
+// every walk level and as relative_path components, case-insensitively.
+func TestHardSkipsCaseInsensitiveWalkAndRelativePath(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"ok.mqh":                     "needle\n",
+		".git/config":                "[core]\n",
+		".git/hooks/pre-commit":      "echo\n",
+		".GIT/config":                "[core]\n",
+		".agent-lsp/audit.jsonl":     "{}\n",
+		".Agent-LSP/audit.jsonl":     "{}\n",
+		"sub/ok.mqh":                 "needle\n",
+		"sub/.git/config":            "[core]\n",
+		"sub/.git/hooks/pre-commit":  "echo\n",
+		"sub/.GIT/config":            "[core]\n",
+		"sub/.agent-lsp/audit.jsonl": "{}\n",
+		"sub/.Agent-LSP/audit.jsonl": "{}\n",
+	})
+	plan := planReplaceInFiles(root, replaceParams{Needle: "needle", Repl: "x", Mode: "literal", DryRun: true, ExpectedCount: -1})
+	if plan.IsError {
+		t.Fatalf("plan error: %s", plan.Text)
+	}
+	if len(plan.Occurrences) != 2 {
+		t.Fatalf("want 2 occurrences (ok.mqh at root and sub/), got %d: %s", len(plan.Occurrences), plan.Text)
+	}
+	for _, occ := range plan.Occurrences {
+		if filepath.Base(occ.relPath) != "ok.mqh" {
+			t.Fatalf("unexpected relPath %q — a hard-skip path leaked into the scan", occ.relPath)
+		}
+	}
+	for _, rel := range []string{".git", ".GIT", ".git/config", ".GIT/config", ".agent-lsp", ".Agent-LSP", ".agent-lsp/audit.jsonl"} {
+		plan := planReplaceInFiles(root, replaceParams{Needle: "core", Repl: "x", Mode: "literal", DryRun: true, ExpectedCount: -1, RelPath: rel})
+		if !plan.IsError {
+			t.Fatalf("relative_path %q: want hard-skip refusal, got success: %s", rel, plan.Text)
+		}
+		if !strings.Contains(plan.Text, "hard-skip") {
+			t.Fatalf("relative_path %q: unexpected refusal text %q", rel, plan.Text)
+		}
+	}
+}
+
+// The plan path itself must resolve a symlinked root (macOS /var ->
+// /private/var): the direct-call path previously produced ids with ../..
+// segments and read ancestor .gitignore files outside the root.
+func TestPlanReplaceResolvesSymlinkedRootDirectly(t *testing.T) {
+	real := writeTree(t, map[string]string{"a.mqh": "foo\n"})
+	link := filepath.Join(t.TempDir(), "rootlink")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	plan := planReplaceInFiles(link, replaceParams{Needle: "foo", Repl: "bar", Mode: "literal", DryRun: true, ExpectedCount: -1})
+	if plan.IsError {
+		t.Fatalf("plan error: %s", plan.Text)
+	}
+	if len(plan.Occurrences) != 1 {
+		t.Fatalf("want 1 occurrence, got %d: %s", len(plan.Occurrences), plan.Text)
+	}
+	if strings.Contains(plan.Occurrences[0].id, "..") || strings.Contains(plan.Occurrences[0].relPath, "..") {
+		t.Fatalf("id escapes the root: %q", plan.Occurrences[0].id)
+	}
+}
+
 // TestReplacePartialFailureText pins the error-path audit contract: the
 // files already written must appear in the machine-readable Files: line so
 // the audit record reflects the real workspace mutations.

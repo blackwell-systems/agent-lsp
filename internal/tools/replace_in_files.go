@@ -68,6 +68,16 @@ var defaultSkipDirs = map[string]bool{
 	"vendor":       true,
 }
 
+// hardSkipDirs are skipped at every walk level and refused as relative_path
+// components, compared case-insensitively: VCS internals and the agent-lsp
+// state directory are never replacement targets, and case-insensitive
+// filesystems (the macOS and Windows defaults) treat ".GIT" as the same
+// directory as ".git". (PR #60 maintainer review)
+var hardSkipDirs = map[string]bool{
+	".git":       true,
+	".agent-lsp": true,
+}
+
 // replaceOccurrence is one match of the needle in one file.
 type replaceOccurrence struct {
 	relPath  string // slash-separated, relative to the workspace root
@@ -320,7 +330,7 @@ func collectFilesForReplace(rootDir, baseRel string, includeRe, excludeRe []*reg
 				continue
 			}
 			if e.IsDir() {
-				if defaultSkipDirs[name] {
+				if hardSkipDirs[strings.ToLower(name)] || defaultSkipDirs[name] {
 					continue
 				}
 				if gitignoreDecides(sets, childRel, true) {
@@ -331,7 +341,7 @@ func collectFilesForReplace(rootDir, baseRel string, includeRe, excludeRe []*reg
 				}
 				continue
 			}
-			if name == ".gitignore" || name == ".git" {
+			if name == ".gitignore" || hardSkipDirs[strings.ToLower(name)] {
 				continue // never replace targets (.git is a file in worktrees/submodules)
 			}
 			if gitignoreDecides(sets, childRel, false) {
@@ -629,6 +639,14 @@ func parseReplaceParams(args map[string]any) (replaceParams, string) {
 // mode, selects the occurrences to edit. It never writes to disk. On any
 // guard failure it returns IsError with a "nothing changed" text.
 func planReplaceInFiles(rootDir string, p replaceParams) replacePlan {
+	// Resolve the root through any symlink (macOS /var -> /private/var) so
+	// occurrence ids, relative paths, and ancestor .gitignore lookups stay
+	// inside the real root; fall back to the lexical path when it cannot be
+	// resolved (freshly created roots). Keeps the direct-call path consistent
+	// with the handler's resolution. (PR #60 maintainer review)
+	if resolved, err := filepath.EvalSymlinks(rootDir); err == nil {
+		rootDir = resolved
+	}
 	includeRe, err := compileGlobList(p.IncludeGlob)
 	if err != nil {
 		return replacePlan{Text: err.Error(), IsError: true}
@@ -668,16 +686,20 @@ func planReplaceInFiles(rootDir string, p replaceParams) replacePlan {
 		if err != nil {
 			return replacePlan{Text: err.Error(), IsError: true}
 		}
+		// Hard-skip components are refused for directories and files alike:
+		// relative_path ".git" would otherwise scan VCS internals (the walk's
+		// skip applies to children, not to the base itself), and on
+		// case-insensitive filesystems ".GIT" is the same directory.
+		// (PR #60 maintainer review)
+		for _, seg := range strings.Split(filepath.ToSlash(rel), "/") {
+			if hardSkipDirs[strings.ToLower(seg)] {
+				return replacePlan{Text: fmt.Sprintf("refusing to scan %s: %q is a hard-skip path (never a replacement target)", p.RelPath, seg), IsError: true}
+			}
+		}
 		if !info.IsDir() {
 			// Explicit single file: bypass glob filters (explicit intent) and
-			// gitignore, but never the hard skips — .git/hooks/* and
-			// .agent-lsp/* must not become replacement targets just because
-			// the caller named them.
-			for _, seg := range strings.Split(filepath.ToSlash(rel), "/") {
-				if seg == ".git" || seg == ".agent-lsp" {
-					return replacePlan{Text: fmt.Sprintf("refusing to scan %s: %q is a hard-skip path (never a replacement target)", p.RelPath, seg), IsError: true}
-				}
-			}
+			// gitignore, but never the hard skips — see the component refusal
+			// above.
 			candidates = []string{filepath.ToSlash(rel)}
 		} else {
 			candidates, err = collectFilesForReplace(rootDir, filepath.ToSlash(rel), includeRe, excludeRe)
