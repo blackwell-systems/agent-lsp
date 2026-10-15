@@ -442,7 +442,7 @@ func generateRulesContent(target ...rulesTarget) string {
 	claude := t == rulesTargetClaudeCode
 	var b strings.Builder
 	b.WriteString("## agent-lsp Skills\n\n")
-	b.WriteString("agent-lsp provides 66 code intelligence tools and 23 workflow skills.\n")
+	fmt.Fprintf(&b, "agent-lsp provides %d code intelligence tools and %d workflow skills.\n", advertisedToolCount, advertisedSkillCount)
 	b.WriteString("Prefer these tools over text search for code intelligence tasks.\n\n")
 	b.WriteString("**Before editing code:** call `blast_radius` for blast-radius analysis.\n")
 	b.WriteString("**Before applying edits:** call `preview_edit` to preview the diagnostic delta.\n")

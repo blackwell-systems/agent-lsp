@@ -17,12 +17,12 @@ import (
 
 // exploreResult is the JSON response structure for explore_symbol.
 type exploreResult struct {
-	TypeInfo         string              `json:"type_info"`
-	Source           *exploreSource      `json:"source,omitempty"`
-	Callers          []exploreCaller     `json:"callers"`
-	CallersCount     int                 `json:"callers_count"`
-	References       exploreReferences   `json:"references"`
-	TestCallersCount int                 `json:"test_callers_count"`
+	TypeInfo         string            `json:"type_info"`
+	Source           *exploreSource    `json:"source,omitempty"`
+	Callers          []exploreCaller   `json:"callers"`
+	CallersCount     int               `json:"callers_count"`
+	References       exploreReferences `json:"references"`
+	TestCallersCount int               `json:"test_callers_count"`
 }
 
 type exploreSource struct {

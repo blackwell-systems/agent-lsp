@@ -34,6 +34,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -616,7 +617,7 @@ func (c *LSPClient) dispatch(raw []byte) {
 				// server-initiated requests outside any client call). context.Background()
 				// is intentional — consistent with H4 pattern in server.go.
 				applyCtx, applyCancel := context.WithTimeout(context.Background(), defaultTimeout)
-				applyErr = c.ApplyWorkspaceEdit(applyCtx, p.Edit)
+				_, applyErr = c.ApplyWorkspaceEdit(applyCtx, p.Edit)
 				applyCancel()
 			}
 			result := map[string]any{"applied": applyErr == nil}
@@ -2631,38 +2632,54 @@ func (c *LSPClient) applyDocumentChanges(ctx context.Context, dc any) error {
 
 // ApplyWorkspaceEdit applies a workspace edit received from the server or a tool.
 // Supports both changes (map<uri, TextEdit[]>) and documentChanges (TextDocumentEdit[]).
-func (c *LSPClient) ApplyWorkspaceEdit(ctx context.Context, edit any) error {
+func (c *LSPClient) ApplyWorkspaceEdit(ctx context.Context, edit any) ([]string, error) {
 	editMap, ok := edit.(map[string]any)
 	if !ok {
 		// Try re-marshal/unmarshal to get a map.
 		b, err := json.Marshal(edit)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if err := json.Unmarshal(b, &editMap); err != nil {
-			return fmt.Errorf("invalid workspace edit: %w", err)
+			return nil, fmt.Errorf("invalid workspace edit: %w", err)
 		}
 	}
 
 	// Process documentChanges first if present.
 	if dc, ok := editMap["documentChanges"]; ok {
-		return c.applyDocumentChanges(ctx, dc)
+		return nil, c.applyDocumentChanges(ctx, dc)
 	}
 
-	// Fallback to changes map.
+	// Fallback to changes map. Files are applied in sorted URI order so a
+	// partial failure is reproducible (Go map iteration is randomized).
 	if changes, ok := editMap["changes"]; ok {
 		b, _ := json.Marshal(changes)
 		var changeMap map[string][]textEdit
 		if err := json.Unmarshal(b, &changeMap); err != nil {
-			return err
+			return nil, err
 		}
-		for uri, edits := range changeMap {
-			if err := c.applyEditsToFile(ctx, uri, edits); err != nil {
-				return err
+		uris := make([]string, 0, len(changeMap))
+		for uri := range changeMap {
+			uris = append(uris, uri)
+		}
+		sort.Strings(uris)
+		written := make([]string, 0, len(uris))
+		for _, uri := range uris {
+			err := c.applyEditsToFile(ctx, uri, changeMap[uri])
+			if err != nil {
+				if nwe, ok := err.(*notifyAfterWriteError); ok {
+					// Bytes written, notification failed: count the file and
+					// stop the batch there.
+					written = append(written, uri)
+					return written, nwe.err
+				}
+				return written, err
 			}
+			written = append(written, uri)
 		}
+		return written, nil
 	}
-	return nil
+	return nil, nil
 }
 
 type textEdit struct {
@@ -2703,7 +2720,7 @@ func (c *LSPClient) applyEditsToFile(ctx context.Context, uri string, edits []te
 	}
 	c.mu.Unlock()
 
-	return c.sendNotification("textDocument/didChange", map[string]any{
+	if err := c.sendNotification("textDocument/didChange", map[string]any{
 		"textDocument": map[string]any{
 			"uri":     uri,
 			"version": version,
@@ -2711,8 +2728,20 @@ func (c *LSPClient) applyEditsToFile(ctx context.Context, uri string, edits []te
 		"contentChanges": []map[string]any{
 			{"text": newContent},
 		},
-	})
+	}); err != nil {
+		// The file bytes were written; only the index notification failed.
+		// Wrap so the batch caller still counts this file as written.
+		return &notifyAfterWriteError{err: err}
+	}
+	return nil
 }
+
+// notifyAfterWriteError marks an applyEditsToFile failure that happened after
+// the file bytes were written (the trailing didChange notification). The
+// workspace mutation is real, so batch accounting must count the file.
+type notifyAfterWriteError struct{ err error }
+
+func (e *notifyAfterWriteError) Error() string { return e.err.Error() }
 
 // ---- Capability Helpers ----
 

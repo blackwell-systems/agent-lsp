@@ -267,7 +267,7 @@ func HandleReplaceSymbolBody(ctx context.Context, client *lsp.LSPClient, args ma
 		},
 	}
 
-	if err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
+	if _, err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
 		return types.ErrorResult(fmt.Sprintf("apply edit: %s", err)), nil
 	}
 
@@ -315,7 +315,7 @@ func HandleInsertAfterSymbol(ctx context.Context, client *lsp.LSPClient, args ma
 		},
 	}
 
-	if err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
+	if _, err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
 		return types.ErrorResult(fmt.Sprintf("apply edit: %s", err)), nil
 	}
 
@@ -363,7 +363,7 @@ func HandleInsertBeforeSymbol(ctx context.Context, client *lsp.LSPClient, args m
 		},
 	}
 
-	if err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
+	if _, err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
 		return types.ErrorResult(fmt.Sprintf("apply edit: %s", err)), nil
 	}
 
@@ -435,7 +435,7 @@ func HandleSafeDeleteSymbol(ctx context.Context, client *lsp.LSPClient, args map
 		},
 	}
 
-	if err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
+	if _, err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
 		return types.ErrorResult(fmt.Sprintf("apply edit: %s", err)), nil
 	}
 
