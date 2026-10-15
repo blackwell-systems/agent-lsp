@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -409,22 +410,30 @@ func isBinaryFile(data []byte) bool {
 // (occurrences, false, nil) normally; skipped=true for binary/oversized
 // files; an error only for unreadable text files.
 func scanFileOccurrences(absPath, relPath string, re *regexp.Regexp, needle, mode, repl string, total *int, totalBytes *int64) (occs []replaceOccurrence, skipped bool, err error) {
-	// Check the size before reading: a workspace can hold a multi-GB file
-	// (dataset, model, core dump) that .gitignore does not exclude, and
-	// reading it just to skip it can exhaust the server's memory. Skipped
-	// files also must not consume the scan's byte budget — they were never
-	// scanned. (CodeRabbit #60 re-review thread 1)
-	if info, err := os.Stat(absPath); err != nil {
-		return nil, false, err
-	} else if info.Size() > maxReplaceFileSize {
-		return nil, true, nil
-	}
-	data, err := os.ReadFile(absPath)
+	// Open once and stat the DESCRIPTOR, then read through a limit: a file
+	// that grows (or whose path is swapped for a bigger one) between a
+	// pre-open stat and the read would otherwise be loaded in full just to
+	// be skipped, and can exhaust the server's memory. Skipped files also
+	// must not consume the scan's byte budget — they were never scanned.
+	// (CodeRabbit #60 re-review threads 1 and follow-up)
+	f, err := os.Open(absPath)
 	if err != nil {
 		return nil, false, err
 	}
-	// Backstop for growth between Stat and ReadFile (TOCTOU): still skipped,
-	// still uncounted.
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, false, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > maxReplaceFileSize {
+		return nil, true, nil
+	}
+	data, err := io.ReadAll(io.LimitReader(f, int64(maxReplaceFileSize)+1))
+	if err != nil {
+		return nil, false, err
+	}
+	// Growth past the cap after f.Stat shows up as cap+1 bytes here (the
+	// LimitReader bound): skip it, still uncounted.
 	if len(data) > maxReplaceFileSize || isBinaryFile(data) {
 		return nil, true, nil
 	}
