@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -373,6 +374,87 @@ func TestResolveReplaceRootSymlinkedRoot(t *testing.T) {
 	}
 	if id := plan.Occurrences[0].id; strings.Contains(id, "..") {
 		t.Fatalf("occurrence id escapes the root: %q", id)
+	}
+}
+
+// CodeRabbit #60 re-review thread 1: an oversized file must be skipped
+// WITHOUT being read into memory, and its bytes must not consume the scan's
+// byte budget — files that are never scanned cannot exhaust it.
+func TestScanSkipsOversizedWithoutReading(t *testing.T) {
+	root := t.TempDir()
+	big := filepath.Join(root, "big.bin")
+	// 9 MiB — over maxReplaceFileSize (8 MiB); contains the needle so a full
+	// read would have produced occurrences had the skip not fired first.
+	if err := os.WriteFile(big, bytes.Repeat([]byte("needle"), 9<<20/6), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var total int
+	var totalBytes int64
+	occs, skipped, err := scanFileOccurrences(big, "big.bin", nil, "needle", "literal", "x", &total, &totalBytes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !skipped || len(occs) != 0 || total != 0 {
+		t.Fatalf("want skipped oversized file, got occs=%d total=%d skipped=%v", len(occs), total, skipped)
+	}
+	if totalBytes != 0 {
+		t.Fatalf("skipped file must not consume the byte budget, got %d", totalBytes)
+	}
+}
+
+// The plan-level consequence of the same finding: a workspace whose only
+// large file exceeds the (test-lowered) byte budget must still scan and
+// apply on the small file — skipped files no longer eat the budget.
+func TestPlanOversizedFileDoesNotConsumeByteBudget(t *testing.T) {
+	oldBudget := maxReplaceTotalBytes
+	maxReplaceTotalBytes = 1 << 20 // 1 MiB
+	t.Cleanup(func() { maxReplaceTotalBytes = oldBudget })
+	root := writeTree(t, map[string]string{
+		"big.bin":   strings.Repeat("needle", (9<<20)/6),
+		"small.mqh": "needle\n",
+	})
+	plan := planReplaceInFiles(root, replaceParams{Needle: "needle", Repl: "x", Mode: "literal", DryRun: true, ExpectedCount: -1})
+	if plan.IsError {
+		t.Fatalf("oversized file must be skipped, not refuse the run: %s", plan.Text)
+	}
+	if len(plan.Occurrences) != 1 {
+		t.Fatalf("want 1 occurrence from the small file, got %d: %s", len(plan.Occurrences), plan.Text)
+	}
+	if !strings.Contains(strings.Join(plan.Notes, "\n"), "skipped") {
+		t.Fatalf("expected a skipped-file note, got %v", plan.Notes)
+	}
+}
+
+// CodeRabbit #60 re-review thread 2: an explicitly supplied empty
+// occurrence_ids list on an apply request must be refused (it would
+// otherwise fall through as "apply all"), while omission still applies all
+// and the dry-run behavior is unchanged.
+func TestParseReplaceParamsEmptyOccurrenceIDsFailClosed(t *testing.T) {
+	// Explicit empty list + apply -> refused.
+	p, errMsg := parseReplaceParams(map[string]any{
+		"needle": "n", "repl": "r", "dry_run": false, "occurrence_ids": []any{},
+	})
+	if errMsg == "" || !strings.Contains(errMsg, "NOTHING was changed") {
+		t.Fatalf("empty occurrence_ids on apply must be refused, got %q", errMsg)
+	}
+	if !p.OccurrenceIDsGiven {
+		t.Fatal("given-empty must be marked as given")
+	}
+	// Non-string members only: same refusal.
+	if _, errMsg := parseReplaceParams(map[string]any{
+		"needle": "n", "repl": "r", "dry_run": false, "occurrence_ids": []any{42},
+	}); errMsg == "" || !strings.Contains(errMsg, "NOTHING was changed") {
+		t.Fatalf("non-string-only occurrence_ids on apply must be refused, got %q", errMsg)
+	}
+	// Omitted -> apply all, no error.
+	if p, errMsg := parseReplaceParams(map[string]any{"needle": "n", "repl": "r", "dry_run": false}); errMsg != "" || p.OccurrenceIDsGiven {
+		t.Fatalf("omitted occurrence_ids must apply all, got err=%q given=%v", errMsg, p.OccurrenceIDsGiven)
+	}
+	// Explicit empty list + dry_run -> allowed, no error.
+	if _, errMsg := parseReplaceParams(map[string]any{
+		"needle": "n", "repl": "r", "dry_run": true, "occurrence_ids": []any{},
+	}); errMsg != "" {
+		t.Fatalf("empty occurrence_ids on dry-run must be allowed, got %q", errMsg)
 	}
 }
 

@@ -22,15 +22,15 @@ type ReplaceInFilesArgs struct {
 	// JSON Schema "required" list, so strict clients like the pi MCP adapter
 	// do not demand them, and toolArgsToMap drops zero values so the handler
 	// defaults — Mode "literal", ExpectedCount -1 — apply).
-	Needle           string   `json:"needle" jsonschema:"Text or regular expression to find (required)"`
-	Repl             string   `json:"repl" jsonschema:"Replacement text (may be empty to delete)"`
-	DryRun           bool     `json:"dry_run" jsonschema:"Preview every occurrence as a diff with a selectable id without changing anything. Call with true first; re-issue with false to apply"`
-	Mode             string   `json:"mode,omitempty" jsonschema:"How to interpret needle: literal (default) or regex (Go RE2 syntax; use (?s) for multi-line)"`
-	RelativePath     string   `json:"relative_path,omitempty" jsonschema:"Optional file or directory (workspace-root relative) restricting the scan"`
-	PathsIncludeGlob string   `json:"paths_include_glob,omitempty" jsonschema:"Optional comma-separated include globs, e.g. src/**/*.mqh (matched against root-relative paths; .gitignore is always honored on top)"`
-	PathsExcludeGlob string   `json:"paths_exclude_glob,omitempty" jsonschema:"Optional comma-separated exclude globs"`
-	OccurrenceIds    []string `json:"occurrence_ids,omitempty" jsonschema:"Apply only these occurrence ids from the dry-run; if any id is unknown or stale (file changed since the dry-run) NOTHING is changed"`
-	ExpectedCount    *int     `json:"expected_count,omitempty" jsonschema:"If >= 0, refuse to apply unless the match count equals this number (0 = require zero matches)"`
+	Needle           string    `json:"needle" jsonschema:"Text or regular expression to find (required)"`
+	Repl             string    `json:"repl" jsonschema:"Replacement text (may be empty to delete)"`
+	DryRun           bool      `json:"dry_run" jsonschema:"Preview every occurrence as a diff with a selectable id without changing anything. Call with true first; re-issue with false to apply"`
+	Mode             string    `json:"mode,omitempty" jsonschema:"How to interpret needle: literal (default) or regex (Go RE2 syntax; use (?s) for multi-line)"`
+	RelativePath     string    `json:"relative_path,omitempty" jsonschema:"Optional file or directory (workspace-root relative) restricting the scan"`
+	PathsIncludeGlob string    `json:"paths_include_glob,omitempty" jsonschema:"Optional comma-separated include globs, e.g. src/**/*.mqh (matched against root-relative paths; .gitignore is always honored on top)"`
+	PathsExcludeGlob string    `json:"paths_exclude_glob,omitempty" jsonschema:"Optional comma-separated exclude globs"`
+	OccurrenceIds    *[]string `json:"occurrence_ids,omitempty" jsonschema:"Apply only these occurrence ids from the dry-run; if any id is unknown or stale (file changed since the dry-run) NOTHING is changed. An explicitly empty list is refused on apply (fail-closed): omit the field to apply all occurrences"`
+	ExpectedCount    *int      `json:"expected_count,omitempty" jsonschema:"If >= 0, refuse to apply unless the match count equals this number (0 = require zero matches)"`
 }
 
 // filesLineRe extracts the machine-readable "Files: a, b" line the handler

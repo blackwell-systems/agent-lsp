@@ -101,7 +101,12 @@ type replaceParams struct {
 	ExcludeGlob   string // comma-separated exclude globs
 	DryRun        bool
 	OccurrenceIDs []string
-	ExpectedCount int // -1 disables the guard
+	// OccurrenceIDsGiven distinguishes "occurrence_ids omitted" (apply all)
+	// from "explicitly given" — an explicitly given list with no valid ids is
+	// refused on apply instead of silently applying everything. (CodeRabbit
+	// #60 re-review thread 2)
+	OccurrenceIDsGiven bool
+	ExpectedCount      int // -1 disables the guard
 }
 
 // replacePlan is the outcome of planning a run: everything needed to render
@@ -404,14 +409,26 @@ func isBinaryFile(data []byte) bool {
 // (occurrences, false, nil) normally; skipped=true for binary/oversized
 // files; an error only for unreadable text files.
 func scanFileOccurrences(absPath, relPath string, re *regexp.Regexp, needle, mode, repl string, total *int, totalBytes *int64) (occs []replaceOccurrence, skipped bool, err error) {
+	// Check the size before reading: a workspace can hold a multi-GB file
+	// (dataset, model, core dump) that .gitignore does not exclude, and
+	// reading it just to skip it can exhaust the server's memory. Skipped
+	// files also must not consume the scan's byte budget — they were never
+	// scanned. (CodeRabbit #60 re-review thread 1)
+	if info, err := os.Stat(absPath); err != nil {
+		return nil, false, err
+	} else if info.Size() > maxReplaceFileSize {
+		return nil, true, nil
+	}
 	data, err := os.ReadFile(absPath)
 	if err != nil {
 		return nil, false, err
 	}
-	*totalBytes += int64(len(data))
+	// Backstop for growth between Stat and ReadFile (TOCTOU): still skipped,
+	// still uncounted.
 	if len(data) > maxReplaceFileSize || isBinaryFile(data) {
 		return nil, true, nil
 	}
+	*totalBytes += int64(len(data))
 	src := string(data)
 
 	var matches [][2]int
@@ -620,10 +637,18 @@ func parseReplaceParams(args map[string]any) (replaceParams, string) {
 	}
 	p.DryRun = v
 	if raw, ok := args["occurrence_ids"].([]any); ok {
+		p.OccurrenceIDsGiven = true
 		for _, v := range raw {
 			if s, ok := v.(string); ok {
 				p.OccurrenceIDs = append(p.OccurrenceIDs, s)
 			}
+		}
+		// Fail closed: an explicitly supplied empty (or non-string) list on an
+		// apply request would otherwise fall through as "apply all" — the
+		// opposite of the caller's filtered-to-nothing intent. (CodeRabbit #60
+		// re-review thread 2)
+		if len(p.OccurrenceIDs) == 0 && !p.DryRun {
+			return p, "occurrence_ids was given but contains no ids; NOTHING was changed (omit it to apply all occurrences)"
 		}
 	}
 	switch v := args["expected_count"].(type) {
