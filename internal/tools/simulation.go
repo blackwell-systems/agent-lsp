@@ -24,6 +24,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/blackwell-systems/agent-lsp/internal/session"
@@ -257,42 +258,47 @@ func HandleDestroySession(ctx context.Context, mgr *session.SessionManager, args
 	return EncodeResult(ctx, result)
 }
 
-// HandleSimulateEditAtomic creates a session, applies an edit, evaluates, and destroys atomically.
-func HandleSimulateEditAtomic(ctx context.Context, mgr *session.SessionManager, args map[string]any) (types.ToolResult, error) {
+// simulateEditAtomicCore runs the create-session → apply-edit → evaluate →
+// discard lifecycle and returns the evaluation result struct. It is the shared
+// seam for both consumers: HandleSimulateEditAtomic renders it for the
+// simulate_edit tool output (format-aware), and HandleSafeApplyEdit consumes
+// the struct directly, avoiding a format-dependent text round-trip. Under the
+// default GCF output format the encoded tool result is not JSON, so parsing it
+// internally always failed (davalillo/agent-lsp#12).
+func simulateEditAtomicCore(ctx context.Context, mgr *session.SessionManager, args map[string]any) (*session.EvaluationResult, error) {
 	// Extract workspace_root
 	workspaceRoot, ok := args["workspace_root"].(string)
 	if !ok || workspaceRoot == "" {
-		return types.ErrorResult("workspace_root is required"), nil
+		return nil, errors.New("workspace_root is required")
 	}
 
 	// Extract language
 	language, ok := args["language"].(string)
 	if !ok || language == "" {
-		return types.ErrorResult("language is required"), nil
+		return nil, errors.New("language is required")
 	}
 
 	// Extract file_path
 	filePath, ok := args["file_path"].(string)
 	if !ok || filePath == "" {
-		return types.ErrorResult("file_path is required"), nil
+		return nil, errors.New("file_path is required")
 	}
 
 	// Validate file path
-	_, err := ValidateFilePath(filePath, "")
-	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("invalid file_path: %s", err)), nil
+	if _, err := ValidateFilePath(filePath, ""); err != nil {
+		return nil, fmt.Errorf("invalid file_path: %s", err)
 	}
 
 	// Extract range
 	rng, err := extractRange(args)
 	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("invalid range: %s", err)), nil
+		return nil, fmt.Errorf("invalid range: %s", err)
 	}
 
 	// Extract new_text
 	newText, ok := args["new_text"].(string)
 	if !ok {
-		return types.ErrorResult("new_text is required"), nil
+		return nil, errors.New("new_text is required")
 	}
 
 	// Optional scope and timeout
@@ -311,15 +317,14 @@ func HandleSimulateEditAtomic(ctx context.Context, mgr *session.SessionManager, 
 	// Create session
 	sessionID, err := mgr.CreateSession(ctx, workspaceRoot, language)
 	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("create_session failed: %s", err)), nil
+		return nil, fmt.Errorf("create_session failed: %s", err)
 	}
 	defer mgr.Destroy(ctx, sessionID)
 
 	// Apply edit
 	fileURI := CreateFileURI(filePath)
-	_, err = mgr.ApplyEdit(ctx, sessionID, fileURI, rng, newText)
-	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("apply_edit failed: %s", err)), nil
+	if _, err := mgr.ApplyEdit(ctx, sessionID, fileURI, rng, newText); err != nil {
+		return nil, fmt.Errorf("apply_edit failed: %s", err)
 	}
 
 	// Evaluate
@@ -328,15 +333,25 @@ func HandleSimulateEditAtomic(ctx context.Context, mgr *session.SessionManager, 
 		// Discard before returning to revert LSP in-memory state; Destroy
 		// (registered as defer above) does not revert LSP document content.
 		if discardErr := mgr.Discard(ctx, sessionID); discardErr != nil {
-			return types.ErrorResult(fmt.Sprintf("evaluate failed: %s; LSP state revert also failed: %s", err, discardErr)), nil
+			return nil, fmt.Errorf("evaluate failed: %s; LSP state revert also failed: %s", err, discardErr)
 		}
-		return types.ErrorResult(fmt.Sprintf("evaluate failed: %s", err)), nil
+		return nil, fmt.Errorf("evaluate failed: %s", err)
 	}
 
 	// Discard to revert LSP state before Destroy — ensures gopls sees clean
 	// file content for subsequent calls, not the modified in-memory version.
 	if discardErr := mgr.Discard(ctx, sessionID); discardErr != nil {
-		return types.ErrorResult(fmt.Sprintf("LSP state revert failed: %s", discardErr)), nil
+		return nil, fmt.Errorf("LSP state revert failed: %s", discardErr)
+	}
+
+	return evalResult, nil
+}
+
+// HandleSimulateEditAtomic creates a session, applies an edit, evaluates, and destroys atomically.
+func HandleSimulateEditAtomic(ctx context.Context, mgr *session.SessionManager, args map[string]any) (types.ToolResult, error) {
+	evalResult, err := simulateEditAtomicCore(ctx, mgr, args)
+	if err != nil {
+		return types.ErrorResult(err.Error()), nil
 	}
 
 	simHint := "Safe to apply. Use apply_edit to write to disk."
