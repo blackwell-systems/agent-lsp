@@ -218,20 +218,10 @@ func GetReferencesWithWarmup(ctx context.Context, client *LSPClient, uri string,
 	}
 
 	// For daemon clients, check readiness without blocking on standard waits.
+	// Shared with ensureWorkspaceReady so every tool reports the same guidance.
 	if client.isDaemon {
-		// Refresh readiness from disk.
-		if client.daemonInfo != nil && !client.daemonInfo.Ready {
-			info, _ := RefreshDaemonInfo(client.daemonInfo.RootDir, client.daemonInfo.LanguageID)
-			if info != nil {
-				client.daemonInfo = info
-				if info.Ready {
-					client.warmup.MarkReady()
-				}
-			}
-		}
-		if client.daemonInfo != nil && !client.daemonInfo.Ready {
-			elapsed := time.Since(client.daemonInfo.StartTime).Round(time.Second)
-			return nil, fmt.Errorf("workspace is still being indexed by the daemon (started %s ago). References will be available once indexing completes. Other tools (hover, diagnostics, symbols) work immediately. Check status with get_daemon_status", elapsed)
+		if err := client.daemonReadinessError(); err != nil {
+			return nil, err
 		}
 	} else {
 		// Direct mode: run standard waits.
