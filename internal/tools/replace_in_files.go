@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -56,6 +57,9 @@ var (
 	// maxReplaceTotalBytes caps the aggregate bytes scanned per run (per-file
 	// files are already capped at maxReplaceFileSize).
 	maxReplaceTotalBytes = int64(256 << 20)
+	// maxApplyFileSummaryLines bounds the human per-file summary in the apply
+	// result; the machine-parsed "Files:" JSON line always stays complete.
+	maxApplyFileSummaryLines = 50
 )
 
 // defaultSkipDirs are directory names never scanned even when .gitignore
@@ -409,22 +413,30 @@ func isBinaryFile(data []byte) bool {
 // (occurrences, false, nil) normally; skipped=true for binary/oversized
 // files; an error only for unreadable text files.
 func scanFileOccurrences(absPath, relPath string, re *regexp.Regexp, needle, mode, repl string, total *int, totalBytes *int64) (occs []replaceOccurrence, skipped bool, err error) {
-	// Check the size before reading: a workspace can hold a multi-GB file
-	// (dataset, model, core dump) that .gitignore does not exclude, and
-	// reading it just to skip it can exhaust the server's memory. Skipped
-	// files also must not consume the scan's byte budget — they were never
-	// scanned. (CodeRabbit #60 re-review thread 1)
-	if info, err := os.Stat(absPath); err != nil {
-		return nil, false, err
-	} else if info.Size() > maxReplaceFileSize {
-		return nil, true, nil
-	}
-	data, err := os.ReadFile(absPath)
+	// Open once and stat the DESCRIPTOR, then read through a limit: a file
+	// that grows (or whose path is swapped for a bigger one) between a
+	// pre-open stat and the read would otherwise be loaded in full just to
+	// be skipped, and can exhaust the server's memory. Skipped files also
+	// must not consume the scan's byte budget — they were never scanned.
+	// (CodeRabbit #60 re-review threads 1 and follow-up)
+	f, err := os.Open(absPath)
 	if err != nil {
 		return nil, false, err
 	}
-	// Backstop for growth between Stat and ReadFile (TOCTOU): still skipped,
-	// still uncounted.
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, false, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > maxReplaceFileSize {
+		return nil, true, nil
+	}
+	data, err := io.ReadAll(io.LimitReader(f, int64(maxReplaceFileSize)+1))
+	if err != nil {
+		return nil, false, err
+	}
+	// Growth past the cap after f.Stat shows up as cap+1 bytes here (the
+	// LimitReader bound): skip it, still uncounted.
 	if len(data) > maxReplaceFileSize || isBinaryFile(data) {
 		return nil, true, nil
 	}
@@ -593,6 +605,12 @@ func renderOccurrences(occs []replaceOccurrence, limit int) string {
 	}
 	shown := 0
 	for _, f := range order {
+		if limit > 0 && shown >= limit {
+			// Render budget spent: further per-file headers would be empty
+			// noise (thousands of one-match files ⇒ thousands of orphan
+			// headers past the cap). The summary below reports the count.
+			break
+		}
 		list := byFile[f]
 		fmt.Fprintf(&b, "\n%s (%d occurrence(s)):\n", f, len(list))
 		for _, o := range list {
@@ -960,8 +978,18 @@ func applyText(occs []replaceOccurrence) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Replaced %d occurrence(s) in %d file(s). Verify with get_diagnostics.\n", len(occs), len(order))
-	for _, f := range order {
+	// Cap the human per-file lines: a workspace-wide replace can touch
+	// thousands of files and the full machine-readable list follows in the
+	// Files: line below (PR #60 review follow-up).
+	shownFiles := order
+	if maxApplyFileSummaryLines > 0 && len(shownFiles) > maxApplyFileSummaryLines {
+		shownFiles = shownFiles[:maxApplyFileSummaryLines]
+	}
+	for _, f := range shownFiles {
 		fmt.Fprintf(&b, "  %s: %d replacement(s)\n", f, perFile[f])
+	}
+	if len(shownFiles) < len(order) {
+		fmt.Fprintf(&b, "  … and %d more file(s) (complete list in the Files line).\n", len(order)-len(shownFiles))
 	}
 	// JSON array so filenames containing ", " survive the audit round-trip.
 	if jb, err := json.Marshal(order); err == nil {
