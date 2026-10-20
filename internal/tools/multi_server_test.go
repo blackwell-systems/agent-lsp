@@ -364,3 +364,104 @@ func contentText(r types.ToolResult) string {
 	}
 	return s
 }
+
+// --- get_server_capabilities multi-server response shape (issue #2) ---
+
+func TestServerCapabilitiesResponse_Single(t *testing.T) {
+	single := ServerCapabilitiesResult{ServerName: "gopls"}
+	resp := serverCapabilitiesResponse([]ServerCapabilitiesResult{single})
+	out, _ := json.Marshal(resp)
+	if strings.Contains(string(out), "all_servers") {
+		t.Fatalf("single-server response must not carry all_servers: %s", out)
+	}
+	if !strings.Contains(string(out), `"server_name":"gopls"`) {
+		t.Fatalf("expected flattened single result, got %s", out)
+	}
+}
+
+func TestServerCapabilitiesResponse_Multi(t *testing.T) {
+	resp := serverCapabilitiesResponse([]ServerCapabilitiesResult{
+		{ServerName: "clangd"},
+		{ServerName: "mql-lsp-server"},
+	})
+	out, _ := json.Marshal(resp)
+	var m map[string]any
+	if err := json.Unmarshal(out, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["server_name"] != "clangd" {
+		t.Errorf("top-level server_name must remain the default server, got %v", m["server_name"])
+	}
+	arr, ok := m["all_servers"].([]any)
+	if !ok || len(arr) != 2 {
+		t.Fatalf("expected all_servers with 2 entries, got %v", m["all_servers"])
+	}
+	first := arr[0].(map[string]any)
+	if first["server_name"] != "clangd" {
+		t.Errorf("all_servers[0] should be clangd, got %v", first["server_name"])
+	}
+}
+
+// TestServerCapabilitiesResponse_Multi_GCFShapeIsBackwardsCompatible pins the
+// GCF (default output format) wire shape: the multi-server response must keep
+// the single-server top-level sections and only add "## AllServers". An
+// embedded wrapper struct would demote the default server's sections under a
+// "## ServerCapabilitiesResult" heading because GCF does not promote embedded
+// fields. (PR #59 review, item 3)
+func TestServerCapabilitiesResponse_Multi_GCFShapeIsBackwardsCompatible(t *testing.T) {
+	single := ServerCapabilitiesResult{
+		ServerName:       "clangd",
+		ServerVersion:    "17",
+		SupportedTools:   []string{"find_symbol"},
+		UnsupportedTools: []string{"run_build"},
+		Skills:           []SkillStatus{{Name: "lsp-understand"}},
+		Capabilities:     map[string]any{"hoverProvider": true},
+	}
+	multiResp := serverCapabilitiesResponse([]ServerCapabilitiesResult{single, {ServerName: "mql-lsp-server"}})
+
+	singleGCF, err := gcf.Encode(single)
+	if err != nil {
+		t.Fatal(err)
+	}
+	multiGCF, err := gcf.Encode(multiResp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Collect top-level GCF sections (## headers at column 0).
+	topSections := func(out string) []string {
+		var sections []string
+		for _, line := range strings.Split(out, "\n") {
+			if strings.HasPrefix(line, "## ") {
+				sections = append(sections, strings.TrimSpace(line))
+			}
+		}
+		return sections
+	}
+
+	multiSections := topSections(multiGCF)
+	if strings.Contains(multiGCF, "## ServerCapabilitiesResult") {
+		t.Fatalf("multi GCF output must not nest the default server under a wrapper section:\n%s", multiGCF)
+	}
+	for _, s := range topSections(singleGCF) {
+		found := false
+		for _, m := range multiSections {
+			if m == s {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("multi GCF output lost the single-server top-level section %q\nsingle:\n%s\nmulti:\n%s", s, singleGCF, multiGCF)
+		}
+	}
+	if !strings.Contains(multiGCF, "## AllServers") {
+		t.Errorf("multi GCF output must add the AllServers section:\n%s", multiGCF)
+	}
+
+	// The default server's scalar fields stay at the top level, readable the
+	// same way as the single-server output.
+	if !strings.Contains(multiGCF, "ServerName=clangd") {
+		t.Errorf("multi GCF output must keep the default server's ServerName at the top level:\n%s", multiGCF)
+	}
+}
