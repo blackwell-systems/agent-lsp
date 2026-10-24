@@ -206,7 +206,13 @@ func registerAnalysisTools(d toolDeps) {
 			OpenWorldHint:   boolPtr(false),
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetWorkspaceSymbolsArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGetWorkspaceSymbols(ctx, d.cs.get(), toolArgsToMap(args))
+		// find_symbol is a workspace-level query: fan it out to every connected
+		// server, not just the default client. Routing it to d.cs.get() alone
+		// was the blocking review finding on upstream PR #59 — an MQL workspace
+		// with clangd as the default server returned false empty results
+		// (upstream issue #55). The Multi handler tags symbols with their
+		// producing server and qualifies empty/partial results per server.
+		r, err := tools.HandleGetWorkspaceSymbolsMulti(ctx, workspaceQueryClients(d.cs, d.resolver), toolArgsToMap(args))
 		r = tools.AppendIndexedField(r, d.cs.get())
 		return makeCallToolResult(r), nil, err
 	})
