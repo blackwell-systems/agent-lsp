@@ -20,16 +20,6 @@ import (
 	"unicode/utf8"
 )
 
-// utf8BOM is the UTF-8 byte-order mark. It is not a character of the file
-// content: LSP positions (and every other agent-lsp position computation)
-// count from after the BOM, so it must not inflate line-1 columns.
-const utf8BOM = "\uFEFF"
-
-// stripBOM removes a leading UTF-8 BOM from content, if present.
-func stripBOM(content string) string {
-	return strings.TrimPrefix(content, utf8BOM)
-}
-
 // utf16Offset returns the number of UTF-16 code units that precede
 // byteOffset in the UTF-8 string line, per LSP spec §3.4.
 // byteOffset must fall on a rune boundary within line.
@@ -80,8 +70,9 @@ func utf16Offset(line string, byteOffset int) int {
 //   - "@@text@@" (double marker): the text between the markers is the search
 //     text; the cursor position is the end of the match.
 //
-// A leading UTF-8 BOM in the file is ignored for position purposes (LSP
-// positions count from after the BOM).
+// A leading UTF-8 BOM counts as one UTF-16 unit on line 1: agent-lsp sends the
+// file to the server with its BOM, and servers (gopls, typescript-language-
+// server, pyright) count it, as byteSpanToLSPRange does.
 func ResolvePositionPattern(filePath, pattern string) (line, col int, err error) {
 	if !strings.Contains(pattern, "@@") {
 		return 0, 0, fmt.Errorf("position_pattern must contain @@ marker")
@@ -90,7 +81,7 @@ func ResolvePositionPattern(filePath, pattern string) (line, col int, err error)
 	if err != nil {
 		return 0, 0, fmt.Errorf("reading file %s: %w", filePath, err)
 	}
-	return resolveInContent(stripBOM(string(contentBytes)), pattern)
+	return resolveInContent(string(contentBytes), pattern)
 }
 
 // resolveInContent finds the @@ marker position within content (already loaded).
@@ -167,7 +158,7 @@ func ResolvePositionPatternInRange(filePath, pattern string, startLine, endLine 
 	if err != nil {
 		return 0, 0, fmt.Errorf("reading file %s: %w", filePath, err)
 	}
-	fileContent := stripBOM(string(contentBytes))
+	fileContent := string(contentBytes)
 
 	// When no range restriction, delegate to existing full-file logic.
 	if startLine == 0 && endLine == 0 {

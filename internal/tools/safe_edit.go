@@ -90,7 +90,7 @@ func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr 
 	// Previously this parsed the format-aware tool output of
 	// HandleSimulateEditAtomic, which is GCF (not JSON) under the default
 	// output format, so the parse always failed with "failed to parse preview
-	// result" (davalillo/agent-lsp#12).
+	// result".
 	previewJSON := map[string]any{}
 	if raw, marshalErr := json.Marshal(evalResult); marshalErr == nil {
 		_ = json.Unmarshal(raw, &previewJSON)
@@ -104,11 +104,10 @@ func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr 
 		netDelta = int(nd)
 	}
 
-	if netDelta > 0 {
-		// Unsafe: return preview result with applied=false.
+	if blocked, hint := previewBlocksApply(netDelta, previewJSON); blocked {
 		previewJSON["applied"] = false
 		encoded, _ := EncodeResult(ctx, previewJSON)
-		return appendHint(encoded, "Edit would introduce errors. Review diagnostics before applying."), nil
+		return appendHint(encoded, hint), nil
 	}
 
 	// Safe: apply the edit.
@@ -129,4 +128,22 @@ func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr 
 	previewJSON["applied"] = true
 	encoded, _ := EncodeResult(ctx, previewJSON)
 	return appendHint(encoded, "Edit applied successfully (net_delta == 0)."), nil
+}
+
+// previewBlocksApply decides whether a safe_apply_edit preview permits writing
+// the edit. Only a verified result does: net_delta must not be positive, and the
+// diagnostics must have settled. A timed-out wait (confidence "partial") or a
+// server that was still indexing (confidence "low") reports net_delta 0 because
+// nothing was checked, and applying then would claim a safety the preview never
+// established. A cold gopls was observed to apply a type error this way.
+func previewBlocksApply(netDelta int, preview map[string]any) (bool, string) {
+	if netDelta > 0 {
+		return true, "Edit would introduce errors. Review diagnostics before applying."
+	}
+	confidence, _ := preview["confidence"].(string)
+	timedOut, _ := preview["timeout"].(bool)
+	if timedOut || confidence == string(session.ConfidencePartial) || confidence == string(session.ConfidenceLow) {
+		return true, "Not applied: the diagnostics did not settle (the language server timed out or is still indexing), so the edit could not be verified as safe. Retry once the server is ready, or use apply_edit to write it without verification."
+	}
+	return false, ""
 }

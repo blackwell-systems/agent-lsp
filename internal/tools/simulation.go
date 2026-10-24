@@ -264,7 +264,7 @@ func HandleDestroySession(ctx context.Context, mgr *session.SessionManager, args
 // simulate_edit tool output (format-aware), and HandleSafeApplyEdit consumes
 // the struct directly, avoiding a format-dependent text round-trip. Under the
 // default GCF output format the encoded tool result is not JSON, so parsing it
-// internally always failed (davalillo/agent-lsp#12).
+// internally always failed.
 func simulateEditAtomicCore(ctx context.Context, mgr *session.SessionManager, args map[string]any) (*session.EvaluationResult, error) {
 	// Extract workspace_root
 	workspaceRoot, ok := args["workspace_root"].(string)

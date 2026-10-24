@@ -1,7 +1,7 @@
-// position_pattern_double_marker_test.go — regression tests for
-// davalillo/agent-lsp#13: the double-marker form "@@text@@" never matched
-// because SplitN(n=2) left the closing marker inside the search text, and a
-// leading UTF-8 BOM inflated line-1 columns.
+// position_pattern_double_marker_test.go — regression tests for the
+// double-marker form "@@text@@", which never matched because SplitN(n=2) left
+// the closing marker inside the search text, and for line-1 columns in files
+// that start with a UTF-8 BOM.
 package tools
 
 import (
@@ -86,9 +86,11 @@ func TestResolvePositionPattern_DoubleMarker_InRange(t *testing.T) {
 	}
 }
 
-func TestResolvePositionPattern_Bom_Line1ColumnsUnaffected(t *testing.T) {
-	// UTF-8 BOM + CRLF file (the incident's file shape). The BOM must not
-	// count towards line-1 columns: "func foo" ends at col 9.
+// A leading BOM counts as one UTF-16 unit on line 1. agent-lsp sends the file
+// to the server with its BOM, and gopls, typescript-language-server and pyright
+// all count it; stripping it before resolving moved line-1 positions one column
+// left of the server's view.
+func TestResolvePositionPattern_Bom_CountsAsOneUnit(t *testing.T) {
 	content := "\uFEFFfunc foo() {}\r\nnext line\r\n"
 	path := writeTemp(t, content)
 
@@ -96,27 +98,32 @@ func TestResolvePositionPattern_Bom_Line1ColumnsUnaffected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BOM'd file must resolve: %v", err)
 	}
-	if line != 1 {
-		t.Errorf("got line %d, want 1", line)
+	// "func foo" ends at UTF-16 offset 9 counting the BOM: 1-based col 10.
+	if line != 1 || col != 10 {
+		t.Errorf("got %d:%d, want 1:10 (BOM counted)", line, col)
 	}
-	if col != 9 {
-		t.Errorf("got col %d, want 9 (BOM must not inflate line-1 column)", col)
-	}
-}
 
-func TestResolvePositionPattern_Bom_SingleMarker(t *testing.T) {
-	content := "\uFEFFdouble CalculaRi(int tipoOrden) {\r\n"
-	path := writeTemp(t, content)
-
-	// Single-marker form on line 1 of a BOM'd file must also be correct.
-	line, col, err := ResolvePositionPattern(path, "double@@ CalculaRi")
+	line, col, err = ResolvePositionPattern(writeTemp(t, "\uFEFFdouble CalculaRi(int tipoOrden) {\r\n"), "double@@ CalculaRi")
 	if err != nil {
 		t.Fatalf("BOM'd file must resolve: %v", err)
 	}
-	if line != 1 {
-		t.Errorf("got line %d, want 1", line)
+	if line != 1 || col != 8 {
+		t.Errorf("single marker: got %d:%d, want 1:8 (after 'double', BOM counted)", line, col)
 	}
-	if col != 7 {
-		t.Errorf("got col %d, want 7 (after 'double')", col)
+}
+
+// position_pattern and the byte-span conversion used by apply_edit and
+// safe_apply_edit must agree on a BOM line, or two tools address different
+// characters for the same text.
+func TestResolvePositionPattern_AgreesWithByteSpanOnBomLine(t *testing.T) {
+	content := "\uFEFFpackage main\n"
+	_, col, err := ResolvePositionPattern(writeTemp(t, content), "package @@main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx := strings.Index(content, "main")
+	_, startChar, _, _ := byteSpanToLSPRange(content, idx, idx+len("main"))
+	if col-1 != startChar {
+		t.Errorf("position_pattern column %d (0-based %d) != byteSpanToLSPRange %d", col, col-1, startChar)
 	}
 }
