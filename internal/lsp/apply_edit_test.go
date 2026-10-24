@@ -44,7 +44,7 @@ func TestApplyWorkspaceEdit_MultiEditRename(t *testing.T) {
 	}
 
 	client := NewLSPClient("/bin/echo", nil)
-	if err := client.ApplyWorkspaceEdit(context.Background(), edit); err != nil && !isNotStartedErr(err) {
+	if _, err := client.ApplyWorkspaceEdit(context.Background(), edit); err != nil && !isNotStartedErr(err) {
 		t.Fatalf("ApplyWorkspaceEdit: unexpected error: %v", err)
 	}
 
@@ -95,7 +95,7 @@ func TestApplyWorkspaceEdit_SingleBigEdit(t *testing.T) {
 	}
 
 	client := NewLSPClient("/bin/echo", nil)
-	if err := client.ApplyWorkspaceEdit(context.Background(), edit); err != nil && !isNotStartedErr(err) {
+	if _, err := client.ApplyWorkspaceEdit(context.Background(), edit); err != nil && !isNotStartedErr(err) {
 		t.Fatalf("ApplyWorkspaceEdit: unexpected error: %v", err)
 	}
 
@@ -115,6 +115,94 @@ func TestApplyWorkspaceEdit_SingleBigEdit(t *testing.T) {
 	// The verbatim newText (newlines, pipe) must survive intact.
 	if !strings.Contains(string(got), "a > 0 | a < 10") || !strings.Contains(string(got), "return a * 2;") {
 		t.Errorf("verbatim newText not preserved: %q", string(got))
+	}
+}
+
+// TestApplyWorkspaceEdit_SortedOrderAndWrittenOnPartialFailure pins review
+// #60 finding 2: files in a changes map are applied in sorted URI order (Go
+// map iteration is randomized) and a mid-batch failure reports what was
+// written instead of dropping the information.
+func TestApplyWorkspaceEdit_SortedOrderAndWrittenOnPartialFailure(t *testing.T) {
+	dir := t.TempDir()
+	// a.mqh is a directory where a file is expected: reading it fails
+	// deterministically BEFORE anything is written, proving it is processed
+	// first under sorted order. With randomized map iteration b.mqh would go
+	// first about half the time and its trailing didChange error ("not
+	// started") would surface instead.
+	aPath := filepath.Join(dir, "a.mqh")
+	if err := os.Mkdir(aPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bPath := filepath.Join(dir, "b.mqh")
+	if err := os.WriteFile(bPath, []byte("foo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	edit := map[string]any{
+		"changes": map[string]any{
+			PathToFileURI(bPath): []any{textEditJSON(0, 0, 0, 3, "bar")},
+			PathToFileURI(aPath): []any{textEditJSON(0, 0, 0, 3, "bar")},
+		},
+	}
+	client := NewLSPClient("/bin/echo", nil)
+	written, err := client.ApplyWorkspaceEdit(context.Background(), edit)
+	if err == nil {
+		t.Fatal("expected error from the unreadable sorted-first file")
+	}
+	if !strings.Contains(err.Error(), "is a directory") {
+		t.Fatalf("expected the sorted-first file (directory) to fail the batch, got: %v", err)
+	}
+	if len(written) != 0 {
+		t.Fatalf("nothing reported written before the failure, got %v", written)
+	}
+	got, err := os.ReadFile(bPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "foo\n" {
+		t.Fatalf("later file must be untouched after mid-batch failure: %q", got)
+	}
+}
+
+// TestApplyWorkspaceEdit_WrittenReportedAfterNotifyError pins the accounting
+// semantics: a file whose bytes were written but whose trailing didChange
+// notification failed (unstarted test client) still counts as written, and
+// the batch stops there — later files stay untouched.
+func TestApplyWorkspaceEdit_WrittenReportedAfterNotifyError(t *testing.T) {
+	dir := t.TempDir()
+	aPath := filepath.Join(dir, "a.mqh")
+	bPath := filepath.Join(dir, "b.mqh")
+	for _, p := range []string{aPath, bPath} {
+		if err := os.WriteFile(p, []byte("foo\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	edit := map[string]any{
+		"changes": map[string]any{
+			PathToFileURI(bPath): []any{textEditJSON(0, 0, 0, 3, "bar")},
+			PathToFileURI(aPath): []any{textEditJSON(0, 0, 0, 3, "bar")},
+		},
+	}
+	client := NewLSPClient("/bin/echo", nil)
+	written, err := client.ApplyWorkspaceEdit(context.Background(), edit)
+	if err == nil {
+		t.Fatal("expected the trailing didChange error from the unstarted client")
+	}
+	if len(written) != 1 || !strings.HasSuffix(written[0], "/a.mqh") {
+		t.Fatalf("expected exactly a.mqh reported written, got %v", written)
+	}
+	got, err := os.ReadFile(aPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "bar\n" {
+		t.Fatalf("reported-written file must hold the new bytes: %q", got)
+	}
+	gotB, err := os.ReadFile(bPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotB) != "foo\n" {
+		t.Fatalf("later file must be untouched after mid-batch failure: %q", gotB)
 	}
 }
 

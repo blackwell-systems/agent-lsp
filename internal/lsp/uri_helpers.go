@@ -3,7 +3,7 @@
 //
 // Background — agent-lsp 0.11.2 had multiple call sites doing
 //
-//     (&url.URL{Scheme: "file", Path: somePath}).String()
+//	(&url.URL{Scheme: "file", Path: somePath}).String()
 //
 // which on Windows produced strings of the form `file://S:/Source/...`.
 // Go's url.URL formatter treats anything before the first `/` of Path

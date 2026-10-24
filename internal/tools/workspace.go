@@ -104,7 +104,7 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 	// (replace_symbol_body, insert_*, safe_delete_symbol). The WorkspaceEdit never
 	// leaves the server as data the caller must reconstruct, which is what corrupted
 	// files under GCF (transposed range offsets, truncated newText). See issue #12.
-	if err := client.ApplyWorkspaceEdit(ctx, result); err != nil {
+	if _, err := client.ApplyWorkspaceEdit(ctx, result); err != nil {
 		return types.ErrorResult(fmt.Sprintf("rename_symbol: applying edit: %s", err)), nil
 	}
 
@@ -617,7 +617,7 @@ func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string
 		if err != nil {
 			return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): %s", err)), nil
 		}
-		if err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
+		if _, err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
 			return types.ErrorResult(fmt.Sprintf("apply_edit: %s", err)), nil
 		}
 		return types.TextResult("Edit applied successfully"), nil
@@ -629,7 +629,7 @@ func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string
 		return types.ErrorResult("workspace_edit is required (or supply file_path + old_text + new_text for text-match mode)"), nil
 	}
 
-	if err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
+	if _, err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
 		return types.ErrorResult(fmt.Sprintf("apply_edit: %s", err)), nil
 	}
 	return types.TextResult("Edit applied successfully"), nil

@@ -42,7 +42,7 @@ func TestApplyWorkspaceEdit_RejectsPathOutsideRoot(t *testing.T) {
 		},
 	}
 
-	err := client.ApplyWorkspaceEdit(context.Background(), edit)
+	_, err := client.ApplyWorkspaceEdit(context.Background(), edit)
 	if err == nil {
 		t.Fatal("expected ApplyWorkspaceEdit to reject a path outside the workspace root, got nil error")
 	}
@@ -78,7 +78,7 @@ func TestApplyWorkspaceEdit_DocumentChanges_RejectsCreateOutsideRoot(t *testing.
 		},
 	}
 
-	err := client.ApplyWorkspaceEdit(context.Background(), edit)
+	_, err := client.ApplyWorkspaceEdit(context.Background(), edit)
 	if err == nil {
 		t.Fatal("expected ApplyWorkspaceEdit to reject a create outside the workspace root, got nil error")
 	}
@@ -110,7 +110,7 @@ func TestApplyWorkspaceEdit_AllowsPathInsideRoot(t *testing.T) {
 		},
 	}
 
-	if err := client.ApplyWorkspaceEdit(context.Background(), edit); err != nil && !isNotStartedErr(err) {
+	if _, err := client.ApplyWorkspaceEdit(context.Background(), edit); err != nil && !isNotStartedErr(err) {
 		t.Fatalf("ApplyWorkspaceEdit: unexpected error for in-root path: %v", err)
 	}
 

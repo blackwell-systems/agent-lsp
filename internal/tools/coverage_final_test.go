@@ -259,7 +259,6 @@ func TestHandleRenameSymbol_InvalidPosition(t *testing.T) {
 	}
 }
 
-
 func TestHandleFormatRange_MissingRange(t *testing.T) {
 	args := map[string]any{
 		"file_path": "/tmp/foo.go",
@@ -336,7 +335,6 @@ func TestHandleTypeHierarchy_InvalidPosition(t *testing.T) {
 		t.Fatalf("expected IsError=true for invalid column")
 	}
 }
-
 
 func TestHandleCallHierarchy_InvalidPosition(t *testing.T) {
 	args := map[string]any{

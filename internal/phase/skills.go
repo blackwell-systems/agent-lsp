@@ -40,6 +40,7 @@ func skillRename() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"apply_edit",
+					"replace_in_files",
 					"Edit",
 					"Write",
 				},
@@ -51,6 +52,7 @@ func skillRename() *SkillPhaseConfig {
 					"get_diagnostics",
 					"rename_symbol", // dry_run=false
 					"apply_edit",
+					"replace_in_files",
 				},
 				Forbidden: []string{
 					"simulate_*",
@@ -81,6 +83,7 @@ func skillRefactor() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"apply_edit",
+					"replace_in_files",
 					"simulate_*",
 					"preview_edit",
 					"Edit",
@@ -98,6 +101,7 @@ func skillRefactor() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"apply_edit",
+					"replace_in_files",
 					"Edit",
 					"Write",
 				},
@@ -107,6 +111,7 @@ func skillRefactor() *SkillPhaseConfig {
 				Description: "Phase 3: write changes to disk and format",
 				Allowed: []string{
 					"apply_edit",
+					"replace_in_files",
 					"format_document",
 					"Edit",
 					"Write",
@@ -126,6 +131,7 @@ func skillRefactor() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"apply_edit",
+					"replace_in_files",
 					"Edit",
 					"Write",
 				},
@@ -139,6 +145,7 @@ func skillRefactor() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"apply_edit",
+					"replace_in_files",
 					"Edit",
 					"Write",
 				},
@@ -165,6 +172,7 @@ func skillSafeEdit() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"apply_edit",
+					"replace_in_files",
 					"Edit",
 					"Write",
 				},
@@ -178,6 +186,7 @@ func skillSafeEdit() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"apply_edit",
+					"replace_in_files",
 					"Edit",
 					"Write",
 				},
@@ -187,6 +196,7 @@ func skillSafeEdit() *SkillPhaseConfig {
 				Description: "Write the change to disk",
 				Allowed: []string{
 					"apply_edit",
+					"replace_in_files",
 					"Edit",
 					"Write",
 				},
@@ -232,6 +242,7 @@ func skillVerify() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"apply_edit",
+					"replace_in_files",
 					"Edit",
 					"Write",
 				},
@@ -245,6 +256,7 @@ func skillVerify() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"apply_edit",
+					"replace_in_files",
 					"Edit",
 					"Write",
 				},
@@ -257,6 +269,7 @@ func skillVerify() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"apply_edit",
+					"replace_in_files",
 					"Edit",
 					"Write",
 				},
@@ -270,6 +283,7 @@ func skillVerify() *SkillPhaseConfig {
 				},
 				Forbidden: []string{
 					"apply_edit",
+					"replace_in_files",
 					"Edit",
 					"Write",
 				},
@@ -280,6 +294,7 @@ func skillVerify() *SkillPhaseConfig {
 				Allowed: []string{
 					"suggest_fixes",
 					"apply_edit",
+					"replace_in_files",
 					"format_document",
 					"get_diagnostics", // re-check after fixes
 				},

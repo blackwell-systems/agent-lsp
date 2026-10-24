@@ -33,7 +33,6 @@ func TestHandleGetDiagnostics_MissingFilePath(t *testing.T) {
 	}
 }
 
-
 func TestHandleGetCompletions_NilClient(t *testing.T) {
 	args := map[string]any{
 		"file_path": "/tmp/foo.go",
@@ -229,8 +228,6 @@ func TestHandleExecuteCommand_EmptyCommand(t *testing.T) {
 		t.Fatalf("expected IsError=true for empty command")
 	}
 }
-
-
 
 // =============================================================================
 // symbol_edit.go (getDiagnosticsForFile) additional coverage
