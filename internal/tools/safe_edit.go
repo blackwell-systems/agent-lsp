@@ -81,29 +81,22 @@ func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr 
 		"new_text":       newText,
 	}
 
-	simResult, err := HandleSimulateEditAtomic(ctx, sessionMgr, simArgs)
+	evalResult, err := simulateEditAtomicCore(ctx, sessionMgr, simArgs)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("preview failed: %s", err)), nil
 	}
-	if simResult.IsError {
-		return simResult, nil
-	}
 
-	// Parse the preview result to extract net_delta.
-	var previewJSON map[string]any
-	if len(simResult.Content) > 0 {
-		// The content text may have an appended hint line; parse only the JSON portion.
-		text := simResult.Content[0].Text
-		if err := json.Unmarshal([]byte(text), &previewJSON); err != nil {
-			// Try to find the JSON object boundary (ignore trailing hint text).
-			if braceIdx := strings.LastIndex(text, "}"); braceIdx >= 0 {
-				_ = json.Unmarshal([]byte(text[:braceIdx+1]), &previewJSON)
-			}
-		}
+	// In-memory JSON round-trip of the evaluation struct — format-independent.
+	// Previously this parsed the format-aware tool output of
+	// HandleSimulateEditAtomic, which is GCF (not JSON) under the default
+	// output format, so the parse always failed with "failed to parse preview
+	// result" (davalillo/agent-lsp#12).
+	previewJSON := map[string]any{}
+	if raw, marshalErr := json.Marshal(evalResult); marshalErr == nil {
+		_ = json.Unmarshal(raw, &previewJSON)
 	}
-
 	if previewJSON == nil {
-		return types.ErrorResult("failed to parse preview result"), nil
+		previewJSON = map[string]any{}
 	}
 
 	netDelta := 0

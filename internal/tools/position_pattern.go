@@ -20,6 +20,16 @@ import (
 	"unicode/utf8"
 )
 
+// utf8BOM is the UTF-8 byte-order mark. It is not a character of the file
+// content: LSP positions (and every other agent-lsp position computation)
+// count from after the BOM, so it must not inflate line-1 columns.
+const utf8BOM = "\uFEFF"
+
+// stripBOM removes a leading UTF-8 BOM from content, if present.
+func stripBOM(content string) string {
+	return strings.TrimPrefix(content, utf8BOM)
+}
+
 // utf16Offset returns the number of UTF-16 code units that precede
 // byteOffset in the UTF-8 string line, per LSP spec §3.4.
 // byteOffset must fall on a rune boundary within line.
@@ -63,9 +73,15 @@ func utf16Offset(line string, byteOffset int) int {
 // ResolvePositionPattern resolves a "@@" cursor marker in a text pattern to
 // a 1-indexed line and column in the given file.
 //
-// The pattern must contain exactly one "@@" marker. The text before and after
-// "@@" is joined to form the search text. The cursor position is the character
-// immediately following "@@" in the file.
+// Two pattern forms are supported:
+//   - "prefix@@suffix" (exactly one marker): the text before and after "@@"
+//     is joined to form the search text; the cursor position is the character
+//     immediately following "@@" in the file.
+//   - "@@text@@" (double marker): the text between the markers is the search
+//     text; the cursor position is the end of the match.
+//
+// A leading UTF-8 BOM in the file is ignored for position purposes (LSP
+// positions count from after the BOM).
 func ResolvePositionPattern(filePath, pattern string) (line, col int, err error) {
 	if !strings.Contains(pattern, "@@") {
 		return 0, 0, fmt.Errorf("position_pattern must contain @@ marker")
@@ -74,24 +90,51 @@ func ResolvePositionPattern(filePath, pattern string) (line, col int, err error)
 	if err != nil {
 		return 0, 0, fmt.Errorf("reading file %s: %w", filePath, err)
 	}
-	return resolveInContent(string(contentBytes), pattern)
+	return resolveInContent(stripBOM(string(contentBytes)), pattern)
 }
 
 // resolveInContent finds the @@ marker position within content (already loaded).
 // content is the raw file text or a line-sliced subset.
+//
+// Supported pattern forms:
+//   - "prefix@@suffix" (exactly one marker): matches prefix+suffix, cursor at
+//     the @@ position (where prefix ends within the match).
+//   - "@@text@@" (double marker enclosing the text): matches text, cursor at
+//     the end of the match. This is the natural form agents write.
+//   - anything else (0 markers or ambiguous marker placement) is rejected
+//     with an error naming the valid forms.
 func resolveInContent(content, pattern string) (line, col int, err error) {
-	parts := strings.SplitN(pattern, "@@", 2)
-	prefix := parts[0]
-	suffix := parts[1]
-	searchText := prefix + suffix
+	markerCount := strings.Count(pattern, "@@")
+	if markerCount == 0 {
+		return 0, 0, fmt.Errorf("position_pattern must contain @@ marker")
+	}
+
+	var searchText string
+	var cursorWithinMatch int // byte offset of the cursor within the matched text
+	switch {
+	case markerCount == 1:
+		parts := strings.SplitN(pattern, "@@", 2)
+		searchText = parts[0] + parts[1]
+		cursorWithinMatch = len(parts[0])
+	case markerCount == 2 && strings.HasPrefix(pattern, "@@") && strings.HasSuffix(pattern, "@@") && len(pattern) >= 5:
+		// Double-marker form: match the text between the markers.
+		searchText = pattern[2 : len(pattern)-2]
+		cursorWithinMatch = len(searchText)
+	default:
+		return 0, 0, fmt.Errorf("position_pattern must contain exactly one @@ marker (\"prefix@@suffix\") or enclose the text (\"@@text@@\"); got %q with %d @@ markers", pattern, markerCount)
+	}
+
+	if searchText == "" {
+		return 0, 0, fmt.Errorf("position_pattern %q resolves to empty search text", pattern)
+	}
 
 	matchStart := strings.Index(content, searchText)
 	if matchStart < 0 {
 		return 0, 0, fmt.Errorf("position_pattern not found in file: %q", pattern)
 	}
 
-	// offset is the byte position of the character immediately after "@@"
-	offset := matchStart + len(prefix)
+	// offset is the byte position of the cursor within content
+	offset := matchStart + cursorWithinMatch
 
 	// line is 1-indexed: count newlines before offset
 	line = strings.Count(content[:offset], "\n") + 1
@@ -124,7 +167,7 @@ func ResolvePositionPatternInRange(filePath, pattern string, startLine, endLine 
 	if err != nil {
 		return 0, 0, fmt.Errorf("reading file %s: %w", filePath, err)
 	}
-	fileContent := string(contentBytes)
+	fileContent := stripBOM(string(contentBytes))
 
 	// When no range restriction, delegate to existing full-file logic.
 	if startLine == 0 && endLine == 0 {
