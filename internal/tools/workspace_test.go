@@ -9,10 +9,13 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
+	"github.com/blackwell-systems/agent-lsp/internal/types"
+	"github.com/blackwell-systems/agent-lsp/internal/uri"
 )
 
 // newFakeClient returns a non-nil *lsp.LSPClient that passes CheckInitialized
@@ -591,6 +594,311 @@ func TestTextMatchApply_NotFound(t *testing.T) {
 	_, err = textMatchApply(f.Name(), "func Missing() {}", "func Missing() error {}")
 	if err == nil {
 		t.Error("expected error for missing old_text")
+	}
+}
+
+// --- issue #18 regression tests (davalillo/agent-lsp#18) ---
+
+// textEditFromTextMatchEdit decodes the single text edit of a textMatchApply
+// WorkspaceEdit for assertion.
+func textEditFromTextMatchEdit(t *testing.T, edit any) (newText string, rng types.Range) {
+	t.Helper()
+	m, ok := edit.(map[string]any)
+	if !ok {
+		t.Fatal("edit is not map[string]any")
+	}
+	changes, ok := m["changes"].(map[string]any)
+	if !ok || len(changes) != 1 {
+		t.Fatalf("expected 1 file in changes, got %#v", m["changes"])
+	}
+	for _, v := range changes {
+		edits, ok := v.([]any)
+		if !ok || len(edits) != 1 {
+			t.Fatal("expected 1 text edit")
+		}
+		te := edits[0].(map[string]any)
+		raw, err := json.Marshal(te["range"])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(raw, &rng); err != nil {
+			t.Fatal(err)
+		}
+		newText, _ = te["newText"].(string)
+	}
+	return newText, rng
+}
+
+// writeTextMatchFixture writes content to a temp file and returns its path.
+func writeTextMatchFixture(t *testing.T, content string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "fixture.txt")
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// TestTextMatchApply_OldTextTrailingNewlinePreserved verifies issue #18 fix 4:
+// when old_text ends with a newline and new_text does not, the newline that
+// separates the matched block from the following line is preserved instead of
+// fusing the next line onto the last line of the replacement (tail-merge).
+func TestTextMatchApply_OldTextTrailingNewlinePreserved(t *testing.T) {
+	p := writeTextMatchFixture(t, "package main\n\nfunc Foo() {\n\treturn\n}\n\nfunc Bar() {}\n")
+
+	edit, err := textMatchApply(p, "func Foo() {\n\treturn\n}\n", "func Foo() error {\n\treturn nil\n}")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	newText, _ := textEditFromTextMatchEdit(t, edit)
+	if !strings.HasSuffix(newText, "\n") {
+		t.Errorf("expected replacement to re-attach the trailing newline, got %q", newText)
+	}
+}
+
+// TestTextMatchApply_NewTextTrailingNewlineNotDuplicated verifies the inverse
+// parity rule of issue #18 fix 4: when new_text ends with a newline that the
+// matched old_text span does not include, it is trimmed so no blank line is
+// inserted.
+func TestTextMatchApply_NewTextTrailingNewlineNotDuplicated(t *testing.T) {
+	content := "package main\n\nfunc Foo() {}\n\nfunc Bar() {}\n"
+	p := writeTextMatchFixture(t, content)
+
+	edit, err := textMatchApply(p, "func Foo() {}", "func Foo() error {}\n")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	newText, rng := textEditFromTextMatchEdit(t, edit)
+	if strings.HasSuffix(newText, "\n") {
+		t.Errorf("expected trailing newline of new_text to be trimmed, got %q", newText)
+	}
+	// Splicing the produced edit into the file must not insert a blank line.
+	if got := uri.ApplyRangeEdit(content, rng, newText); got != "package main\n\nfunc Foo() error {}\n\nfunc Bar() {}\n" {
+		t.Errorf("unexpected spliced content: %q", got)
+	}
+}
+
+// TestTextMatchApply_CRLFExactMatch verifies issue #18 fix 4: an old_text
+// written with LF endings matches a CRLF region, the file's CRLF endings are
+// preserved in the replacement, and the produced range applies cleanly.
+func TestTextMatchApply_CRLFExactMatch(t *testing.T) {
+	content := "package main\r\n\r\nfunc Foo() {\r\n\treturn\r\n}\r\n\r\nfunc Bar() {}\r\n"
+	p := writeTextMatchFixture(t, content)
+
+	edit, err := textMatchApply(p, "func Foo() {\n\treturn\n}", "func Foo() error {\n\treturn nil\n}")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	newText, rng := textEditFromTextMatchEdit(t, edit)
+	got := uri.ApplyRangeEdit(content, rng, newText)
+	want := "package main\r\n\r\nfunc Foo() error {\r\n\treturn nil\r\n}\r\n\r\nfunc Bar() {}\r\n"
+	if got != want {
+		t.Errorf("CRLF endings corrupted:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestTextMatchApply_BOMDoesNotShiftOffsets verifies issue #18 fix 4: a
+// leading UTF-8 BOM is part of src, so strings.Index and byteSpanToLSPRange
+// agree and the edit lands at the intended site rather than being shifted.
+func TestTextMatchApply_BOMDoesNotShiftOffsets(t *testing.T) {
+	content := "\xef\xbb\xbfpackage main\n\nfunc Foo() {\n\treturn\n}\n"
+	p := writeTextMatchFixture(t, content)
+
+	edit, err := textMatchApply(p, "func Foo() {", "func Foo() error {")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	newText, rng := textEditFromTextMatchEdit(t, edit)
+	if newText != "func Foo() error {" {
+		t.Errorf("got newText %q", newText)
+	}
+	if rng.Start.Line != 2 || rng.Start.Character != 0 || rng.End.Line != 2 || rng.End.Character != 12 {
+		t.Errorf("unexpected range: %#v", rng)
+	}
+	if got := uri.ApplyRangeEdit(content, rng, newText); got != "\xef\xbb\xbfpackage main\n\nfunc Foo() error {\n\treturn\n}\n" {
+		t.Errorf("edit shifted by BOM:\n got %q", got)
+	}
+}
+
+// fakeTextMatchApplyFn returns an applier that mimics LSPClient.ApplyWorkspaceEdit
+// for one file: it re-reads the file from disk, splices the edit's LSP ranges
+// with the canonical uri.ApplyRangeEdit (the same path applyEditsToFile uses),
+// and writes the result back — without any language server.
+func fakeTextMatchApplyFn(filePath string) func(context.Context, any) error {
+	return func(_ context.Context, edit any) error {
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return err
+		}
+		content := string(data)
+		m, ok := edit.(map[string]any)
+		if !ok {
+			return fmt.Errorf("edit is not map[string]any")
+		}
+		changes, ok := m["changes"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("edit is missing changes")
+		}
+		for u, v := range changes {
+			p, err := URIToFilePath(u)
+			if err != nil {
+				return err
+			}
+			if p != filePath {
+				return fmt.Errorf("unexpected edit uri %q", u)
+			}
+			edits, ok := v.([]any)
+			if !ok {
+				return fmt.Errorf("changes[%q] is not a list", u)
+			}
+			for _, e := range edits {
+				te, ok := e.(map[string]any)
+				if !ok {
+					return fmt.Errorf("text edit is not map[string]any")
+				}
+				raw, err := json.Marshal(te["range"])
+				if err != nil {
+					return err
+				}
+				var rng types.Range
+				if err := json.Unmarshal(raw, &rng); err != nil {
+					return err
+				}
+				nt, _ := te["newText"].(string)
+				content = uri.ApplyRangeEdit(content, rng, nt)
+			}
+		}
+		return os.WriteFile(filePath, []byte(content), 0o644)
+	}
+}
+
+// concatResultText concatenates the text content of a tool result.
+func concatResultText(r types.ToolResult) string {
+	var b strings.Builder
+	for _, c := range r.Content {
+		b.WriteString(c.Text)
+	}
+	return b.String()
+}
+
+// TestApplyTextMatchEdit_ConcurrentAppliesLandAtIntendedSites verifies issue
+// #18 fix 2: two concurrent text-match applies to the SAME file must both land
+// at their intended sites, instead of the second one applying a range computed
+// against the pre-edit disk snapshot (observed: it replaced the file's first
+// two lines). Run with -race.
+func TestApplyTextMatchEdit_ConcurrentAppliesLandAtIntendedSites(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "shared.go")
+	src := "alpha one\nmiddle\nomega one\n"
+	for i := 0; i < 25; i++ {
+		if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var wg sync.WaitGroup
+		errs := make([]error, 2)
+		start := make(chan struct{})
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			<-start
+			_, err := applyTextMatchEdit(context.Background(), p, "alpha one", "alpha TWO", fakeTextMatchApplyFn(p))
+			errs[0] = err
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			_, err := applyTextMatchEdit(context.Background(), p, "omega one", "omega TWO", fakeTextMatchApplyFn(p))
+			errs[1] = err
+		}()
+		close(start)
+		wg.Wait()
+		for j, err := range errs {
+			if err != nil {
+				t.Fatalf("iteration %d goroutine %d: %v", i, j, err)
+			}
+		}
+		got, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "alpha TWO\nmiddle\nomega TWO\n"; string(got) != want {
+			t.Fatalf("iteration %d: concurrent applies mis-located:\n got %q\nwant %q", i, got, want)
+		}
+	}
+}
+
+// TestApplyTextMatchEdit_VerificationFailureNamesFile verifies issue #18 fix 3:
+// when the file on disk does not contain the replacement at the intended site
+// after the apply step, the tool fails with an error naming the file (which
+// HandleApplyEdit converts into an error result) instead of a bare success.
+func TestApplyTextMatchEdit_VerificationFailureNamesFile(t *testing.T) {
+	p := writeTextMatchFixture(t, "package main\n\nfunc Foo() {\n}\n")
+	// An applier that reports success but writes nothing: the post-apply
+	// verification must catch that the replacement never landed.
+	noop := func(context.Context, any) error { return nil }
+	_, err := applyTextMatchEdit(context.Background(), p, "func Foo() {", "func Foo() error {", noop)
+	if err == nil {
+		t.Fatal("expected an error when post-apply verification fails")
+	}
+	if !strings.Contains(err.Error(), p) {
+		t.Errorf("error should name the file %s, got %q", p, err.Error())
+	}
+}
+
+// TestApplyTextMatchEdit_ReplacementEmbedsOldText verifies that a replacement
+// which legitimately contains the old text (e.g. "return nil" ->
+// "return nil // guard") is not falsely rejected by the post-apply
+// verification: the absence check must exclude the applied site.
+func TestApplyTextMatchEdit_ReplacementEmbedsOldText(t *testing.T) {
+	p := writeTextMatchFixture(t, "package main\n\nfunc Foo() error {\n\treturn nil\n}\n")
+
+	res, err := applyTextMatchEdit(context.Background(), p, "return nil", "return nil // guard", fakeTextMatchApplyFn(p))
+	if err != nil {
+		t.Fatalf("unexpected Go error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("verification falsely rejected an embedded replacement: %s", concatResultText(res))
+	}
+	got, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "package main\n\nfunc Foo() error {\n\treturn nil // guard\n}\n"; string(got) != want {
+		t.Errorf("unexpected file content:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestApplyTextMatchEdit_SuccessResultIncludesSite verifies issue #18 fix 3:
+// the success result keeps the "Edit applied successfully" prefix (existing
+// callers) and adds the file path plus the byte range where new_text now
+// lives.
+func TestApplyTextMatchEdit_SuccessResultIncludesSite(t *testing.T) {
+	p := writeTextMatchFixture(t, "package main\n\nfunc Foo() {\n\treturn\n}\n")
+
+	res, err := applyTextMatchEdit(context.Background(), p, "func Foo() {\n\treturn\n}\n", "func Foo() error {\n\treturn nil\n}", fakeTextMatchApplyFn(p))
+	if err != nil {
+		t.Fatalf("unexpected Go error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error result: %s", concatResultText(res))
+	}
+	got, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "package main\n\nfunc Foo() error {\n\treturn nil\n}\n"; string(got) != want {
+		t.Errorf("unexpected file content:\n got %q\nwant %q", got, want)
+	}
+	text := concatResultText(res)
+	if !strings.Contains(text, "Edit applied successfully") {
+		t.Errorf("success prefix missing: %q", text)
+	}
+	if !strings.Contains(text, p) {
+		t.Errorf("file path missing: %q", text)
+	}
+	// Match starts at byte 14 (after "package main\n\n") and the balanced
+	// replacement is 33 bytes long, so the site is bytes 14-47.
+	if !strings.Contains(text, "bytes 14-47") {
+		t.Errorf("byte range missing: %q", text)
 	}
 }
 

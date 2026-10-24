@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
@@ -613,14 +614,20 @@ func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string
 			return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): %s", err)), nil
 		}
 		newText, _ := args["new_text"].(string)
-		edit, err := textMatchApply(validPath, oldText, newText)
+		absPath, absErr := filepath.Abs(validPath)
+		if absErr != nil {
+			absPath = validPath
+		}
+		// The full read→find→apply→verify sequence holds the per-file lock so
+		// two concurrent text-match applies to the same file cannot both
+		// compute their ranges against the same disk snapshot (issue #18).
+		result, err := applyTextMatchEdit(ctx, absPath, oldText, newText, func(ctx context.Context, edit any) error {
+			return client.ApplyWorkspaceEdit(ctx, edit)
+		})
 		if err != nil {
 			return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): %s", err)), nil
 		}
-		if err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
-			return types.ErrorResult(fmt.Sprintf("apply_edit: %s", err)), nil
-		}
-		return types.TextResult("Edit applied successfully"), nil
+		return result, nil
 	}
 
 	// WorkspaceEdit mode.
@@ -636,26 +643,167 @@ func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string
 }
 
 // textMatchApply constructs a WorkspaceEdit by locating oldText in the file at
-// filePath and replacing it with newText. It tries an exact byte match first;
-// if that fails it falls back to a line-by-line whitespace-normalised match
-// (each line compared after strings.TrimSpace). The normalised match replaces
-// full lines, so newText should include the desired indentation for those lines.
+// filePath and replacing it with newText. It tries an exact byte match first
+// (tolerating an old_text written with LF endings against a CRLF region and
+// balancing trailing newlines, issue #18); if that fails it falls back to a
+// line-by-line whitespace-normalised match (each line compared after
+// strings.TrimSpace). The normalised match replaces full lines, so newText
+// should include the desired indentation for those lines.
 func textMatchApply(filePath, oldText, newText string) (any, error) {
+	plan, err := buildTextMatchPlan(filePath, oldText, newText)
+	if err != nil {
+		return nil, err
+	}
+	return plan.edit, nil
+}
+
+// textMatchFileLocks serializes the text-match apply sequence per absolute
+// file path (issue #18 fix 2): without it, two concurrent text-match applies
+// to the same file both computed their ranges against the same disk snapshot
+// and the second landed at a stale position. Entries are never removed; the
+// map is bounded by the number of distinct files edited in the process
+// lifetime.
+var (
+	textMatchFileLocksMu sync.Mutex
+	textMatchFileLocks   = map[string]*sync.Mutex{}
+)
+
+// lockTextMatchFile acquires the per-file mutex for absPath and returns the
+// corresponding unlock function.
+func lockTextMatchFile(absPath string) func() {
+	textMatchFileLocksMu.Lock()
+	mu := textMatchFileLocks[absPath]
+	if mu == nil {
+		mu = &sync.Mutex{}
+		textMatchFileLocks[absPath] = mu
+	}
+	textMatchFileLocksMu.Unlock()
+	mu.Lock()
+	return mu.Unlock
+}
+
+// workspaceEditApplier applies a constructed WorkspaceEdit. HandleApplyEdit
+// wires it to LSPClient.ApplyWorkspaceEdit; tests inject a splicing fake.
+type workspaceEditApplier func(ctx context.Context, edit any) error
+
+// applyTextMatchEdit runs the full serialized text-match apply sequence for
+// one file: read → findText → build edit → apply → post-apply verification
+// (issue #18 fixes 2 and 3). The whole sequence holds the per-file lock so a
+// concurrent apply to the same file cannot invalidate the computed range
+// between the read and the write. The WorkspaceEdit (positional) mode of
+// apply_edit is not serialized.
+func applyTextMatchEdit(ctx context.Context, filePath, oldText, newText string, applyFn workspaceEditApplier) (types.ToolResult, error) {
+	unlock := lockTextMatchFile(filePath)
+	defer unlock()
+
+	plan, err := buildTextMatchPlan(filePath, oldText, newText)
+	if err != nil {
+		return types.ToolResult{}, err
+	}
+	if err := applyFn(ctx, plan.edit); err != nil {
+		return types.ToolResult{}, err
+	}
+
+	// Post-apply verification (issue #18 fix 3): re-read the file and confirm
+	// the replacement actually landed at the intended site. A precomputed
+	// range applied against a stale snapshot used to mis-locate silently.
+	after, err := os.ReadFile(filePath)
+	if err != nil {
+		return types.ToolResult{}, fmt.Errorf("post-apply verification: reading %s: %w", filePath, err)
+	}
+	if !verifyTextMatchApplied(string(after), plan) {
+		return types.ToolResult{}, fmt.Errorf("post-apply verification failed for %s: the replacement is not present at the intended site (the edit may have been computed against a stale file snapshot); re-run apply_edit against the current file contents", filePath)
+	}
+	return textMatchSuccessResult(plan, string(after)), nil
+}
+
+// verifyTextMatchApplied checks that a text-match edit landed where it was
+// computed to land: the replacement text is present in the file and occupies
+// exactly the byte span the matched span was replaced by, and — when the
+// matched text was unique in the pre-edit snapshot — the matched text is gone
+// from the file. The site check, not a whole-file absence check, carries the
+// concurrency guarantee: old_text may legitimately occur again elsewhere in
+// the file (strings.Index replaces the first occurrence).
+func verifyTextMatchApplied(after string, plan textMatchPlan) bool {
+	siteEnd := plan.startByte + len(plan.replacement)
+	if siteEnd > len(after) || after[plan.startByte:siteEnd] != plan.replacement {
+		return false
+	}
+	// When the matched text was unique before the edit, it must not survive
+	// anywhere outside the applied site: the replacement may legitimately
+	// embed the old text (e.g. "return nil" -> "return nil // guard"), so
+	// the absence check excludes the replaced span instead of the whole file.
+	if strings.Count(plan.src, plan.spanText) == 1 {
+		outside := after[:plan.startByte] + after[siteEnd:]
+		if strings.Contains(outside, plan.spanText) {
+			return false
+		}
+	}
+	return true
+}
+
+// textMatchSuccessResult reports the applied site: file path plus the byte
+// range and LSP 0-based line span where new_text now lives (issue #18 fix 3).
+// The "Edit applied successfully" prefix is kept so existing callers that
+// match on it are unaffected.
+func textMatchSuccessResult(plan textMatchPlan, after string) types.ToolResult {
+	siteEnd := plan.startByte + len(plan.replacement)
+	startLine, _, endLine, _ := byteSpanToLSPRange(after, plan.startByte, siteEnd)
+	return types.TextResult(fmt.Sprintf("Edit applied successfully: %s bytes %d-%d (lines %d-%d, LSP 0-based)",
+		plan.filePath, plan.startByte, siteEnd, startLine, endLine))
+}
+
+// textMatchPlan is the outcome of locating oldText in a file and preparing
+// the replacement: the WorkspaceEdit to apply, the exact bytes removed, the
+// final replacement bytes (after EOL balancing), and the pre-edit snapshot
+// used for post-apply verification.
+type textMatchPlan struct {
+	filePath    string
+	src         string
+	startByte   int
+	spanText    string
+	replacement string
+	edit        any
+}
+
+// buildTextMatchPlan locates oldText in the file at filePath and prepares the
+// replacement WorkspaceEdit. The exact match path is CRLF-tolerant and
+// balances trailing newlines (issue #18 fix 4); the whitespace-normalised
+// fallback keeps its existing semantics.
+func buildTextMatchPlan(filePath, oldText, newText string) (textMatchPlan, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", filePath, err)
+		return textMatchPlan{}, fmt.Errorf("reading %s: %w", filePath, err)
 	}
 	src := string(content)
 
-	startByte, endByte, ok := findText(src, oldText)
-	if !ok {
-		return nil, fmt.Errorf("old_text not found in %s (tried exact and whitespace-normalised line match)", filePath)
+	var plan textMatchPlan
+	if start, end, ok := findTextExact(src, oldText); ok {
+		spanText := src[start:end]
+		replacement := newText
+		if strings.Contains(spanText, "\r\n") {
+			// The matched region uses CRLF endings: preserve them in the
+			// replacement even when old_text/new_text were written with LF
+			// (issue #18 fix 4).
+			replacement = toCRLF(newText)
+		}
+		replacement = balanceTrailingEOL(spanText, replacement)
+		plan = textMatchPlan{filePath: filePath, src: src, startByte: start, spanText: spanText, replacement: replacement}
+	} else {
+		start, end, ok := findTextNormalized(src, oldText)
+		if !ok {
+			return textMatchPlan{}, fmt.Errorf("old_text not found in %s (tried exact and whitespace-normalised line match)", filePath)
+		}
+		plan = textMatchPlan{filePath: filePath, src: src, startByte: start, spanText: src[start:end], replacement: newText}
 	}
 
-	startLine, startChar, endLine, endChar := byteSpanToLSPRange(src, startByte, endByte)
-
+	startLine, startChar, endLine, endChar := byteSpanToLSPRange(src, plan.startByte, plan.startByte+len(plan.spanText))
+	// A leading UTF-8 BOM is part of src, so the strings.Index byte offsets
+	// and the byteSpanToLSPRange positions agree by construction — the same
+	// convention as buildReplaceWorkspaceEdit — and the BOM must not shift
+	// the computed range (issue #18 fix 4).
 	fileURI := CreateFileURI(filePath)
-	edit := map[string]any{
+	plan.edit = map[string]any{
 		"changes": map[string]any{
 			fileURI: []any{
 				map[string]any{
@@ -663,25 +811,101 @@ func textMatchApply(filePath, oldText, newText string) (any, error) {
 						"start": map[string]any{"line": startLine, "character": startChar},
 						"end":   map[string]any{"line": endLine, "character": endChar},
 					},
-					"newText": newText,
+					"newText": plan.replacement,
 				},
 			},
 		},
 	}
-	return edit, nil
+	return plan, nil
 }
 
-// findText returns the byte range [start, end) of oldText within src.
-// It first tries an exact bytes match; on failure it attempts a line-by-line
-// comparison where each line is stripped of leading/trailing whitespace before
-// comparison. The normalised match returns the byte range of the full matched
-// lines (including their original indentation) so callers replace complete lines.
-func findText(src, oldText string) (start, end int, found bool) {
-	// Exact match.
+// findTextExact returns the byte span [start, end) of the first exact
+// occurrence of oldText within src, tolerating an old_text written with LF
+// line endings that targets a CRLF region (issue #18 fix 4): when the literal
+// search fails, the LF endings of oldText are retried as CRLF.
+func findTextExact(src, oldText string) (start, end int, found bool) {
 	if idx := strings.Index(src, oldText); idx >= 0 {
 		return idx, idx + len(oldText), true
 	}
+	if strings.Contains(oldText, "\n") && strings.Contains(src, "\r\n") {
+		crlfOld := strings.ReplaceAll(oldText, "\n", "\r\n")
+		if idx := strings.Index(src, crlfOld); idx >= 0 {
+			return idx, idx + len(crlfOld), true
+		}
+	}
+	return 0, 0, false
+}
 
+// balanceTrailingEOL preserves line structure across a text-match replacement
+// (issue #18 fix 4): when the matched span includes a trailing newline that
+// the replacement does not provide, the span's EOL is re-attached so the
+// following line does not fuse onto the last line of the replacement
+// (tail-merge); conversely, when the replacement ends with an EOL the span
+// does not include, that EOL is trimmed so no blank line is inserted. A
+// mismatched EOL style (CRLF vs LF) on either side is aligned to the span's
+// style. An empty replacement is a deletion of the whole matched span and is
+// left untouched.
+func balanceTrailingEOL(spanText, replacement string) string {
+	if replacement == "" {
+		return replacement
+	}
+	var spanEOL string
+	switch {
+	case strings.HasSuffix(spanText, "\r\n"):
+		spanEOL = "\r\n"
+	case strings.HasSuffix(spanText, "\n"):
+		spanEOL = "\n"
+	}
+	var replEOL string
+	switch {
+	case strings.HasSuffix(replacement, "\r\n"):
+		replEOL = "\r\n"
+	case strings.HasSuffix(replacement, "\n"):
+		replEOL = "\n"
+	}
+	switch {
+	case spanEOL == "" && replEOL != "":
+		// The span does not consume a newline; the replacement must not
+		// insert one.
+		return strings.TrimSuffix(replacement, replEOL)
+	case spanEOL != "" && replEOL != spanEOL:
+		// The span consumes a newline the replacement does not provide (or
+		// provides in the wrong style): re-attach the span's EOL.
+		if replEOL != "" {
+			replacement = strings.TrimSuffix(replacement, replEOL)
+		}
+		return replacement + spanEOL
+	default:
+		return replacement
+	}
+}
+
+// toCRLF converts every LF line ending in s to CRLF (idempotent), preserving
+// a CRLF file's line endings in a replacement whose text was written with LF.
+func toCRLF(s string) string {
+	if !strings.Contains(s, "\n") {
+		return s
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\n", "\r\n")
+}
+
+// findText returns the byte range [start, end) of oldText within src.
+// It first tries an exact bytes match (CRLF-tolerant); on failure it attempts
+// a line-by-line comparison where each line is stripped of leading/trailing
+// whitespace before comparison. The normalised match returns the byte range of
+// the full matched lines (including their original indentation) so callers
+// replace complete lines.
+func findText(src, oldText string) (start, end int, found bool) {
+	if s, e, ok := findTextExact(src, oldText); ok {
+		return s, e, true
+	}
+	return findTextNormalized(src, oldText)
+}
+
+// findTextNormalized locates oldText by line-by-line whitespace-normalised
+// comparison and returns the byte range of the full matched lines (including
+// their original indentation and trailing newline, if any).
+func findTextNormalized(src, oldText string) (start, end int, found bool) {
 	// Whitespace-normalised line match.
 	srcLines := strings.Split(src, "\n")
 	patLines := strings.Split(oldText, "\n")
