@@ -534,6 +534,40 @@ func TestLSPClient_GetOpenDocuments(t *testing.T) {
 	}
 }
 
+// TestLSPClient_OpenDocument_JSXLanguageID verifies that JSX documents are
+// opened with their own LSP language identifiers, not their language family.
+func TestLSPClient_OpenDocument_JSXLanguageID(t *testing.T) {
+	c, _, clientR := newTestClient(t)
+
+	ctx := context.Background()
+	tests := []struct {
+		uri, languageID, want string
+	}{
+		{"file:///project/app.tsx", "typescript", "typescriptreact"},
+		{"file:///project/APP.TSX", "typescript", "typescriptreact"},
+		{"file:///project/app.jsx", "javascript", "javascriptreact"},
+		{"file:///project/app.ts", "typescript", "typescript"},
+		{"file:///project/app.js", "javascript", "javascript"},
+		{"file:///project/view.tsx", "typescriptreact", "typescriptreact"},
+		{"file:///project/notes.tsx", "plaintext", "plaintext"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.uri, func(t *testing.T) {
+			done := make(chan error, 1)
+			go func() { done <- c.OpenDocument(ctx, tt.uri, "", tt.languageID) }()
+			msg := readNextMsg(t, clientR)
+			if err := <-done; err != nil {
+				t.Fatalf("OpenDocument: %v", err)
+			}
+			params, _ := msg["params"].(map[string]any)
+			doc, _ := params["textDocument"].(map[string]any)
+			if msg["method"] != "textDocument/didOpen" || doc["languageId"] != tt.want {
+				t.Fatalf("didOpen = %v, want languageId %q", msg, tt.want)
+			}
+		})
+	}
+}
+
 // TestLSPClient_LanguageIDForFile_KnownExtension tests that LanguageIDForFile
 // delegates to languageIDFromPath for known extensions.
 func TestLSPClient_LanguageIDForFile_KnownExtension(t *testing.T) {
