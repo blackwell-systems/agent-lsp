@@ -57,6 +57,9 @@ var (
 	// maxReplaceTotalBytes caps the aggregate bytes scanned per run (per-file
 	// files are already capped at maxReplaceFileSize).
 	maxReplaceTotalBytes = int64(256 << 20)
+	// maxApplyFileSummaryLines bounds the human per-file summary in the apply
+	// result; the machine-parsed "Files:" JSON line always stays complete.
+	maxApplyFileSummaryLines = 50
 )
 
 // defaultSkipDirs are directory names never scanned even when .gitignore
@@ -602,6 +605,12 @@ func renderOccurrences(occs []replaceOccurrence, limit int) string {
 	}
 	shown := 0
 	for _, f := range order {
+		if limit > 0 && shown >= limit {
+			// Render budget spent: further per-file headers would be empty
+			// noise (thousands of one-match files ⇒ thousands of orphan
+			// headers past the cap). The summary below reports the count.
+			break
+		}
 		list := byFile[f]
 		fmt.Fprintf(&b, "\n%s (%d occurrence(s)):\n", f, len(list))
 		for _, o := range list {
@@ -969,8 +978,18 @@ func applyText(occs []replaceOccurrence) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Replaced %d occurrence(s) in %d file(s). Verify with get_diagnostics.\n", len(occs), len(order))
-	for _, f := range order {
+	// Cap the human per-file lines: a workspace-wide replace can touch
+	// thousands of files and the full machine-readable list follows in the
+	// Files: line below (PR #60 review follow-up).
+	shownFiles := order
+	if maxApplyFileSummaryLines > 0 && len(shownFiles) > maxApplyFileSummaryLines {
+		shownFiles = shownFiles[:maxApplyFileSummaryLines]
+	}
+	for _, f := range shownFiles {
 		fmt.Fprintf(&b, "  %s: %d replacement(s)\n", f, perFile[f])
+	}
+	if len(shownFiles) < len(order) {
+		fmt.Fprintf(&b, "  … and %d more file(s) (complete list in the Files line).\n", len(order)-len(shownFiles))
 	}
 	// JSON array so filenames containing ", " survive the audit round-trip.
 	if jb, err := json.Marshal(order); err == nil {
