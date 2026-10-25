@@ -357,6 +357,12 @@ func TestRelativePathResolvesAgainstRootNotCwd(t *testing.T) {
 // front so occurrence ids stay root-relative and never contain ../..
 func TestResolveReplaceRootSymlinkedRoot(t *testing.T) {
 	real := writeTree(t, map[string]string{"a.mqh": "foo\n"})
+	// t.TempDir() is under /var on macOS, itself a symlink to /private/var;
+	// resolve the expectation so the comparison is against the canonical root
+	// resolveReplaceRoot returns. (PR #60 maintainer review, round 3)
+	if realResolved, err := filepath.EvalSymlinks(real); err == nil {
+		real = realResolved
+	}
 	link := filepath.Join(t.TempDir(), "rootlink")
 	if err := os.Symlink(real, link); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
@@ -497,6 +503,43 @@ func TestHardSkipsCaseInsensitiveWalkAndRelativePath(t *testing.T) {
 		}
 		if !strings.Contains(plan.Text, "hard-skip") {
 			t.Fatalf("relative_path %q: unexpected refusal text %q", rel, plan.Text)
+		}
+	}
+}
+
+// TestHardSkipCaseFoldFoldsLongS pins maintainer review round 3: the hard
+// skips must compare with Unicode case folding. strings.ToLower leaves the
+// long s ſ (U+017F) unchanged, so on case-folding filesystems (APFS, NTFS)
+// ".agent-lſp" IS the real ".agent-lsp" and a ToLower guard let a replacement
+// write PWNED into audit.jsonl. On case-sensitive filesystems the directory
+// is distinct, which pins the fold itself: neither the walk nor a
+// relative_path may ever target it.
+func TestHardSkipCaseFoldFoldsLongS(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"ok.mqh":                 "needle\n",
+		".agent-lsp/audit.jsonl": "{}\n",
+		".agent-lſp/audit.jsonl": "needle\n",
+	})
+	plan := planReplaceInFiles(root, replaceParams{Needle: "needle", Repl: "x", Mode: "literal", DryRun: true, ExpectedCount: -1})
+	if plan.IsError {
+		t.Fatalf("plan error: %s", plan.Text)
+	}
+	for _, occ := range plan.Occurrences {
+		if filepath.Base(occ.relPath) != "ok.mqh" {
+			t.Fatalf("case-folded hard skip leaked into the scan: %q", occ.relPath)
+		}
+	}
+	// Direct fold unit checks: every Unicode case-fold variant of the two
+	// hard-skip names must be refused regardless of what the filesystem does.
+	for _, name := range []string{".agent-lſp", ".AGENT-LSP", ".Agent-Lſp", ".AGENT-LſP", ".GIT", ".Git"} {
+		if !hardSkipName(name) {
+			t.Fatalf("hardSkipName(%q) = false, want true (must fold)", name)
+		}
+	}
+	for _, rel := range []string{".agent-lſp", ".agent-lſp/audit.jsonl"} {
+		plan := planReplaceInFiles(root, replaceParams{Needle: "needle", Repl: "x", Mode: "literal", DryRun: true, ExpectedCount: -1, RelPath: rel})
+		if !plan.IsError || !strings.Contains(plan.Text, "hard-skip") {
+			t.Fatalf("relative_path %q: want hard-skip refusal, got: %s", rel, plan.Text)
 		}
 	}
 }

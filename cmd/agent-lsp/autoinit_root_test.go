@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -42,6 +43,25 @@ func TestAutoInitRootAllowed(t *testing.T) {
 // marker inference walks up, so a cwd under $HOME/Documents with a git repo
 // at $HOME infers $HOME — the exact root a write tool must never auto-root
 // at. (PR #60 maintainer review, finding 3)
+// A root that is an ANCESTOR of $HOME is refused too: marker inference walks
+// up, so a stray .git above $HOME (e.g. one at /Users) infers that ancestor,
+// and every file under $HOME is then inside the scan.
+// (PR #60 maintainer review, round 3, finding 4)
+func TestAutoInitRootAllowedRefusesHomeAncestor(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("path-ancestor reasoning differs on drive-letter roots")
+	}
+	ancestor := t.TempDir()
+	home := filepath.Join(ancestor, "user", "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	if autoInitRootAllowed(ancestor) {
+		t.Errorf("inferred root %q (ancestor of $HOME %q) must be refused", ancestor, home)
+	}
+}
+
 func TestAutoInitRootFromPathRefusesInferredHome(t *testing.T) {
 	home := t.TempDir()
 	// $HOME is itself a git repo (dotfiles).

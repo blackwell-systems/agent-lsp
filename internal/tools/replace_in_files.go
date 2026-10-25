@@ -82,6 +82,21 @@ var hardSkipDirs = map[string]bool{
 	".agent-lsp": true,
 }
 
+// hardSkipName reports whether name is a hard-skip directory compared with
+// Unicode simple case folding: strings.ToLower leaves the long s ſ (U+017F)
+// unchanged, so on case-folding filesystems (APFS, NTFS) ".agent-lſp" is the
+// real ".agent-lsp" and a ToLower guard lets a replacement write into it.
+// strings.EqualFold folds ſ (and ẛ and K) to their ASCII forms.
+// (PR #60 maintainer review, round 3)
+func hardSkipName(name string) bool {
+	for skip := range hardSkipDirs {
+		if strings.EqualFold(skip, name) {
+			return true
+		}
+	}
+	return false
+}
+
 // replaceOccurrence is one match of the needle in one file.
 type replaceOccurrence struct {
 	relPath  string // slash-separated, relative to the workspace root
@@ -339,7 +354,7 @@ func collectFilesForReplace(rootDir, baseRel string, includeRe, excludeRe []*reg
 				continue
 			}
 			if e.IsDir() {
-				if hardSkipDirs[strings.ToLower(name)] || defaultSkipDirs[name] {
+				if hardSkipName(name) || defaultSkipDirs[name] {
 					continue
 				}
 				if gitignoreDecides(sets, childRel, true) {
@@ -350,7 +365,7 @@ func collectFilesForReplace(rootDir, baseRel string, includeRe, excludeRe []*reg
 				}
 				continue
 			}
-			if name == ".gitignore" || hardSkipDirs[strings.ToLower(name)] {
+			if name == ".gitignore" || hardSkipName(name) {
 				continue // never replace targets (.git is a file in worktrees/submodules)
 			}
 			if gitignoreDecides(sets, childRel, false) {
@@ -735,7 +750,7 @@ func planReplaceInFiles(rootDir string, p replaceParams) replacePlan {
 		// case-insensitive filesystems ".GIT" is the same directory.
 		// (PR #60 maintainer review)
 		for _, seg := range strings.Split(filepath.ToSlash(rel), "/") {
-			if hardSkipDirs[strings.ToLower(seg)] {
+			if hardSkipName(seg) {
 				return replacePlan{Text: fmt.Sprintf("refusing to scan %s: %q is a hard-skip path (never a replacement target)", p.RelPath, seg), IsError: true}
 			}
 		}

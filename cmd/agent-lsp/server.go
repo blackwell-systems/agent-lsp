@@ -221,6 +221,11 @@ func clientForFile(resolver lsp.ClientResolver, cs *clientState, filePath string
 // /private/var) is refused — a home directory that is itself a git repo
 // (dotfiles) would otherwise become the scan root of a whole-workspace write
 // tool, bounded only by the occurrence cap.
+//
+// A root that is an ANCESTOR of $HOME is refused too: marker inference walks
+// up, so a stray .git above $HOME (e.g. one at /Users) infers that ancestor
+// as the root, and every file under $HOME is then inside the scan. Only a
+// root strictly inside $HOME is accepted. (PR #60 maintainer review, round 3)
 func autoInitRootAllowed(dir string) bool {
 	if dir == "" {
 		return false
@@ -232,11 +237,26 @@ func autoInitRootAllowed(dir string) bool {
 	if filepath.Clean(dir) == filepath.Clean(home) {
 		return false
 	}
-	// Also compare resolved paths so a symlinked cwd pointing at $HOME is
-	// refused too.
+	// Also compare resolved paths so a symlinked dir pointing at $HOME is
+	// refused too, and so the ancestor check sees canonical paths even when
+	// dir or home is reached through a symlink.
 	resolvedDir, dErr := filepath.EvalSymlinks(dir)
 	resolvedHome, hErr := filepath.EvalSymlinks(home)
-	if dErr == nil && hErr == nil && resolvedDir == resolvedHome {
+	if dErr == nil && hErr == nil {
+		dir, home = resolvedDir, resolvedHome
+	}
+	if dir == home {
+		return false
+	}
+	// home inside dir (dir is an ancestor of $HOME, e.g. a stray .git above
+	// the home directory) — never accept it as the scan root. A dir strictly
+	// INSIDE home (Rel starts with "..") is the normal ~/project case and
+	// stays allowed.
+	rel, err := filepath.Rel(dir, home)
+	if err != nil {
+		return true // incomparable (Windows cross-volume): dir cannot contain home
+	}
+	if rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return false
 	}
 	return true
