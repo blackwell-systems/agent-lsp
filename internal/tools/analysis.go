@@ -648,12 +648,15 @@ func isQueryCapExpiry(err error) bool {
 }
 
 // HandleGetWorkspaceSymbolsMulti is the multi-server fan-out of find_symbol
-// (issue #2): server-less workspace queries must not be bound to the default
+// (issue #55): server-less workspace queries must not be bound to the default
 // server, which in auto-detect mode may not own the workspace's documents
 // (e.g. clangd answering 0 for MQL symbols). The query runs against every
 // initialized client; each symbol is tagged with the server that produced it
 // ("server" field, empty when a single server answers). Single-client sets
-// behave byte-identically to HandleGetWorkspaceSymbols.
+// behave byte-identically to HandleGetWorkspaceSymbols in JSON and in basic
+// GCF; hover-detail GCF gains one empty "Server" column on single-server
+// output because gcf-go's tabular encoder ignores omitempty (upstream
+// gcf-go limitation, not reproduced by JSON or the basic graph encoding).
 func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	// At least one initialized client is required to run the query: a slice
 	// of nil or fresh clients must produce the not-initialized error, not a
@@ -781,6 +784,23 @@ func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClien
 	var firstErr error
 	errored, timedOut := 0, 0
 	var failedBy, unansweredBy []string
+
+	// A cancelled or expired CALLER context is not a per-server cap expiry:
+	// surface the caller's own error instead of the aggregate "did not answer
+	// within <cap>" wording — the single-server path runs with no cap at all,
+	// so any ctx error there is the caller's, and a caller deadline shorter
+	// than the cap would otherwise be misreported as a cap timeout.
+	// (PR #71 maintainer review)
+	if err := ctx.Err(); err != nil {
+		return types.ErrorResult(fmt.Sprintf("find_symbol: %s", err)), nil
+	}
+
+	// Multi-server output mode counts INITIALIZED clients, not slice length:
+	// one initialized plus one stale client is a single-server answer and
+	// must not gain "server" tags, @server provenance, or multi-server
+	// wording. (PR #71 maintainer review; mirrors HandleGetServerCapabilities)
+	initializedCount := countInitialized(clients)
+
 	for _, out := range outcomes {
 		if out == nil {
 			continue
@@ -797,7 +817,7 @@ func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClien
 			}
 		default:
 			for _, s := range out.syms {
-				if len(clients) > 1 {
+				if initializedCount > 1 {
 					s.Server = out.name
 				}
 				merged = append(merged, serverSymbol{sym: s, client: out.client})
@@ -824,7 +844,7 @@ func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClien
 	// the same server are that server's own answer and stay. Single-server
 	// sets are untouched: every entry shares one contributor.
 	// (CodeRabbit #59 review thread 6)
-	if len(clients) > 1 {
+	if initializedCount > 1 {
 		type symKey struct {
 			name    string
 			uri     string
@@ -868,13 +888,28 @@ func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClien
 	// servers: a bare count does not tell the caller which server to
 	// restart or re-query. (CodeRabbit #59 review thread 6)
 	failureNote := ""
-	if len(clients) > 1 && (errored > 0 || timedOut > 0) {
+	// Skipped servers are surfaced too: a crashed or uninitialized member
+	// of the fan-out is silently dropped by the query loop, and an empty
+	// aggregate over such a set would otherwise look like an authoritative
+	// "not found" (the false empty result upstream issue #55 reported).
+	// (PR #71 maintainer review)
+	skipped, skippedBy := 0, []string(nil)
+	for idx, client := range clients {
+		if client == nil || !client.IsInitialized() {
+			skipped++
+			skippedBy = append(skippedBy, fmt.Sprintf("server-%d", idx))
+		}
+	}
+	if len(clients) > 1 && (errored > 0 || timedOut > 0 || skipped > 0) {
 		var clauses []string
 		if errored > 0 {
 			clauses = append(clauses, fmt.Sprintf("%d of %d servers failed the query (%s)", errored, queriedServers, strings.Join(failedBy, "; ")))
 		}
 		if timedOut > 0 {
 			clauses = append(clauses, fmt.Sprintf("%s did not answer within %s", strings.Join(unansweredBy, ", "), perServerQueryTimeout))
+		}
+		if skipped > 0 {
+			clauses = append(clauses, fmt.Sprintf("%d of %d connected servers were not initialized and were skipped (%s)", skipped, len(clients), strings.Join(skippedBy, ", ")))
 		}
 		failureNote = " Note: " + strings.Join(clauses, "; ") + "."
 	}
@@ -890,7 +925,7 @@ func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClien
 	if len(symbols) == 0 {
 		if !anyDeclared {
 			emptyCause = "No matches. The server does not declare the workspaceSymbolProvider capability — workspace symbol search is unavailable for this language server."
-			if len(clients) > 1 {
+			if initializedCount > 1 {
 				emptyCause = "No matches. None of the connected servers declare the workspaceSymbolProvider capability — workspace symbol search is unavailable."
 			}
 		} else if note := noteIndexCoverageMulti(ctx, clients); note != "" {

@@ -19,7 +19,7 @@ func (s *stubResolver) DefaultClient() *lsp.LSPClient            { return s.defa
 func (s *stubResolver) AllClients() []*lsp.LSPClient             { return s.all }
 func (s *stubResolver) Shutdown(ctx context.Context) error       { return nil }
 
-// --- workspaceQueryClients (issue #2) ---
+// --- workspaceQueryClients (issue #55) ---
 
 // Server-less workspace queries use the default client first plus every
 // other connected client, deduplicated. In single-server mode this is just

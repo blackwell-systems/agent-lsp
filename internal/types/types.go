@@ -147,7 +147,7 @@ type SymbolInformation struct {
 	ContainerName *string     `json:"containerName,omitempty"`
 	// Server identifies which connected language server produced the symbol.
 	// Empty in single-server mode, so existing consumers see no change.
-	// (issue #2)
+	// (issue #55)
 	Server string `json:"server,omitempty"`
 }
 

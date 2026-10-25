@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -162,7 +161,15 @@ func TestFindSymbolHandler_FansOutToAllServers(t *testing.T) {
 	if !strings.Contains(got, "FromMQLServer") {
 		t.Errorf("result missing the second server's hit — find_symbol did not fan out to every connected server:\n%s", got)
 	}
-	if !strings.Contains(got, fmt.Sprintf("%d", 2)) {
-		t.Errorf("expected the fan-out result to report more than one server's symbols:\n%s", got)
+	// The result is a JSON array of symbols in basic detail (an agent hint is
+	// appended after the JSON), so decode the first value and require BOTH
+	// servers' hits — a plain strings.Contains(got, "2") was vacuous
+	// ("kind":12 contains a 2). (PR #71 maintainer review / CodeRabbit)
+	var gotSymbols []map[string]any
+	if err := json.NewDecoder(strings.NewReader(got)).Decode(&gotSymbols); err != nil {
+		t.Fatalf("find_symbol result does not start with a JSON symbol array: %v\n%s", err, got)
+	}
+	if len(gotSymbols) != 2 {
+		t.Errorf("want 2 symbols (one per server), got %d:\n%s", len(gotSymbols), got)
 	}
 }

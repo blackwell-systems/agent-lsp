@@ -127,7 +127,7 @@ func toolArgsToMap(v any) map[string]any {
 // then every other connected client, deduplicated by pointer. In
 // single-server mode this is exactly the old default client, so behavior is
 // unchanged; in multi-server mode workspace queries are no longer bound to
-// whatever server happens to be the default. (issue #2)
+// whatever server happens to be the default. (issue #55)
 func workspaceQueryClients(cs *clientState, resolver lsp.ClientResolver) []*lsp.LSPClient {
 	var out []*lsp.LSPClient
 	seen := map[*lsp.LSPClient]bool{}

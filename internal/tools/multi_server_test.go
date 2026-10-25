@@ -16,7 +16,7 @@ import (
 	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
 
-// --- find_symbol multi-server fan-out (issue #2) ---
+// --- find_symbol multi-server fan-out (issue #55) ---
 
 // Client sets with no initialized client must produce the standard
 // not-initialized error, never a successful-looking "No matches" hint.
@@ -143,6 +143,15 @@ func startFakeLSP(t *testing.T, declared []string, wsymResult []any, fail bool) 
 			}
 			time.Sleep(2 * time.Millisecond)
 		}
+		// A registration that never lands is a broken fake, not a legitimate
+		// test condition: fail instead of letting the silent capability gate
+		// return an empty result that makes the test pass for the wrong
+		// reason. (PR #71 maintainer review / CodeRabbit)
+		for k := range want {
+			if !client.HasCapability(k) {
+				t.Fatalf("fake server capability %q never registered", k)
+			}
+		}
 	}
 	return client
 }
@@ -259,6 +268,67 @@ func TestHandleGetWorkspaceSymbolsMulti_FanOut(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A cancelled or expired CALLER context is not a per-server cap expiry: the
+// handler must surface the caller's own error ("context canceled"), never the
+// aggregate "all N connected servers did not answer within 30s" wording —
+// which is doubly wrong on the single-server path, where no cap applies, and
+// for a caller deadline shorter than the cap. (PR #71 maintainer review)
+func TestHandleGetWorkspaceSymbolsMulti_CancelledCallerContext(t *testing.T) {
+	for _, n := range []int{1, 2} {
+		clients := make([]*lsp.LSPClient, n)
+		for i := range clients {
+			clients[i] = startFakeLSP(t, []string{"workspace/symbol"}, []any{wsymJSON("Alpha")}, false)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		r, err := HandleGetWorkspaceSymbolsMulti(ctx, clients, map[string]any{"query": "x"})
+		if err != nil {
+			t.Fatalf("%d client(s): unexpected Go error: %v", n, err)
+		}
+		if !r.IsError {
+			t.Fatalf("%d client(s): want error result, got %v", n, r.Content)
+		}
+		all := contentText(r)
+		if strings.Contains(all, "did not answer within") {
+			t.Errorf("%d client(s): cancelled caller context misreported as cap expiry: %q", n, all)
+		}
+		if !strings.Contains(all, "context canceled") {
+			t.Errorf("%d client(s): want the caller's own error, got %q", n, all)
+		}
+	}
+}
+
+// Output mode counts INITIALIZED clients: one live server plus one stale
+// (never-initialized) client is a single-server answer — no "server" tags,
+// no @server provenance — while the skipped stale server is still surfaced
+// in a note instead of vanishing silently (the false empty result upstream
+// issue #55 reported). (PR #71 maintainer review)
+func TestHandleGetWorkspaceSymbolsMulti_ModeCountsInitializedClients(t *testing.T) {
+	live := startFakeLSP(t, []string{"workspace/symbol"}, []any{wsymJSON("Alpha")}, false)
+	stale := lsp.NewLSPClient("stale-fake", nil) // never initialized
+	r, err := HandleGetWorkspaceSymbolsMulti(context.Background(), []*lsp.LSPClient{live, stale}, map[string]any{"query": "x"})
+	if err != nil {
+		t.Fatalf("unexpected Go error: %v", err)
+	}
+	if r.IsError {
+		t.Fatalf("unexpected error result: %v", r.Content)
+	}
+	all := contentText(r)
+	var syms []map[string]any
+	if err := json.Unmarshal([]byte(r.Content[0].Text), &syms); err != nil {
+		t.Fatalf("payload is not a symbol array: %v (%q)", err, r.Content[0].Text)
+	}
+	if len(syms) != 1 || syms[0]["name"] != "Alpha" {
+		t.Fatalf("want one symbol from the live server, got %v", syms)
+	}
+	if _, hasServer := syms[0]["server"]; hasServer {
+		t.Errorf("single-initialized-server answer must not carry a server tag: %v", syms[0])
+	}
+	if !strings.Contains(all, "were not initialized and were skipped") {
+		t.Errorf("skipped stale server must be surfaced in the note, got %q", all)
 	}
 }
 
