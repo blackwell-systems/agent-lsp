@@ -383,6 +383,32 @@ func TestResolveReplaceRootSymlinkedRoot(t *testing.T) {
 	}
 }
 
+// CodeRabbit #60, "Open scan candidates through a root handle": a candidate
+// that became a symlink pointing outside the workspace must fail the scan
+// instead of being read — f.Stat() validates only the opened object, not
+// containment. The root handle enforces it.
+func TestScanRefusesSymlinkEscapeThroughRootHandle(t *testing.T) {
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("needle\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	root := writeTree(t, map[string]string{"ok.mqh": "needle\n"})
+	if err := os.Symlink(filepath.Join(outside, "secret.txt"), filepath.Join(root, "link.mqh")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	rh, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rh.Close()
+	var total int
+	var totalBytes int64
+	_, _, err = scanFileOccurrences(rh, filepath.Join(root, "link.mqh"), "link.mqh", nil, "needle", "literal", "x", &total, &totalBytes)
+	if err == nil {
+		t.Fatal("scan through a root handle must refuse a symlink escaping the workspace")
+	}
+}
+
 // CodeRabbit #60 re-review thread 1: an oversized file must be skipped
 // WITHOUT being read into memory, and its bytes must not consume the scan's
 // byte budget — files that are never scanned cannot exhaust it.
@@ -396,7 +422,7 @@ func TestScanSkipsOversizedWithoutReading(t *testing.T) {
 	}
 	var total int
 	var totalBytes int64
-	occs, skipped, err := scanFileOccurrences(big, "big.bin", nil, "needle", "literal", "x", &total, &totalBytes)
+	occs, skipped, err := scanFileOccurrences(nil, big, "big.bin", nil, "needle", "literal", "x", &total, &totalBytes)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

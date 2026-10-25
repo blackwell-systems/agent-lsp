@@ -427,14 +427,24 @@ func isBinaryFile(data []byte) bool {
 // re is the pre-compiled pattern in regex mode (nil in literal mode). Returns
 // (occurrences, false, nil) normally; skipped=true for binary/oversized
 // files; an error only for unreadable text files.
-func scanFileOccurrences(absPath, relPath string, re *regexp.Regexp, needle, mode, repl string, total *int, totalBytes *int64) (occs []replaceOccurrence, skipped bool, err error) {
+// rh is the workspace root handle: when non-nil, the candidate is opened
+// THROUGH it (root.Open(relPath)), so a candidate swapped for a symlink
+// between the walk and the open can no longer make the scan read outside the
+// workspace — f.Stat() validates only the opened object, not containment.
+// (CodeRabbit #60, "Open scan candidates through a root handle")
+func scanFileOccurrences(rh *os.Root, absPath, relPath string, re *regexp.Regexp, needle, mode, repl string, total *int, totalBytes *int64) (occs []replaceOccurrence, skipped bool, err error) {
 	// Open once and stat the DESCRIPTOR, then read through a limit: a file
 	// that grows (or whose path is swapped for a bigger one) between a
 	// pre-open stat and the read would otherwise be loaded in full just to
 	// be skipped, and can exhaust the server's memory. Skipped files also
 	// must not consume the scan's byte budget — they were never scanned.
 	// (CodeRabbit #60 re-review threads 1 and follow-up)
-	f, err := os.Open(absPath)
+	var f *os.File
+	if rh != nil {
+		f, err = rh.Open(relPath)
+	} else {
+		f, err = os.Open(absPath)
+	}
 	if err != nil {
 		return nil, false, err
 	}
@@ -784,9 +794,16 @@ func planReplaceInFiles(rootDir string, p replaceParams) replacePlan {
 	var notes []string
 	var occs []replaceOccurrence
 	fileSet := map[string]bool{}
+	// All candidates are opened through one root handle so a symlink swap
+	// between the walk and the open cannot escape the workspace.
+	rootHandle, rhErr := os.OpenRoot(rootDir)
+	if rhErr != nil {
+		return replacePlan{Text: rhErr.Error(), IsError: true}
+	}
+	defer rootHandle.Close()
 	for _, rel := range candidates {
 		abs := filepath.Join(rootDir, filepath.FromSlash(rel))
-		fo, sk, err := scanFileOccurrences(abs, rel, re, p.Needle, p.Mode, p.Repl, &total, &totalBytes)
+		fo, sk, err := scanFileOccurrences(rootHandle, abs, rel, re, p.Needle, p.Mode, p.Repl, &total, &totalBytes)
 		if err != nil {
 			failed = append(failed, fmt.Sprintf("%s: %s", rel, err))
 			continue
