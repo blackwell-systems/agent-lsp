@@ -81,29 +81,22 @@ func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr 
 		"new_text":       newText,
 	}
 
-	simResult, err := HandleSimulateEditAtomic(ctx, sessionMgr, simArgs)
+	evalResult, err := simulateEditAtomicCore(ctx, sessionMgr, simArgs)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("preview failed: %s", err)), nil
 	}
-	if simResult.IsError {
-		return simResult, nil
-	}
 
-	// Parse the preview result to extract net_delta.
-	var previewJSON map[string]any
-	if len(simResult.Content) > 0 {
-		// The content text may have an appended hint line; parse only the JSON portion.
-		text := simResult.Content[0].Text
-		if err := json.Unmarshal([]byte(text), &previewJSON); err != nil {
-			// Try to find the JSON object boundary (ignore trailing hint text).
-			if braceIdx := strings.LastIndex(text, "}"); braceIdx >= 0 {
-				_ = json.Unmarshal([]byte(text[:braceIdx+1]), &previewJSON)
-			}
-		}
+	// In-memory JSON round-trip of the evaluation struct — format-independent.
+	// Previously this parsed the format-aware tool output of
+	// HandleSimulateEditAtomic, which is GCF (not JSON) under the default
+	// output format, so the parse always failed with "failed to parse preview
+	// result".
+	previewJSON := map[string]any{}
+	if raw, marshalErr := json.Marshal(evalResult); marshalErr == nil {
+		_ = json.Unmarshal(raw, &previewJSON)
 	}
-
 	if previewJSON == nil {
-		return types.ErrorResult("failed to parse preview result"), nil
+		previewJSON = map[string]any{}
 	}
 
 	netDelta := 0
@@ -111,11 +104,10 @@ func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr 
 		netDelta = int(nd)
 	}
 
-	if netDelta > 0 {
-		// Unsafe: return preview result with applied=false.
+	if blocked, hint := previewBlocksApply(netDelta, previewJSON); blocked {
 		previewJSON["applied"] = false
 		encoded, _ := EncodeResult(ctx, previewJSON)
-		return appendHint(encoded, "Edit would introduce errors. Review diagnostics before applying."), nil
+		return appendHint(encoded, hint), nil
 	}
 
 	// Safe: apply the edit.
@@ -136,4 +128,22 @@ func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr 
 	previewJSON["applied"] = true
 	encoded, _ := EncodeResult(ctx, previewJSON)
 	return appendHint(encoded, "Edit applied successfully (net_delta == 0)."), nil
+}
+
+// previewBlocksApply decides whether a safe_apply_edit preview permits writing
+// the edit. Only a verified result does: net_delta must not be positive, and the
+// diagnostics must have settled. A timed-out wait (confidence "partial") or a
+// server that was still indexing (confidence "low") reports net_delta 0 because
+// nothing was checked, and applying then would claim a safety the preview never
+// established. A cold gopls was observed to apply a type error this way.
+func previewBlocksApply(netDelta int, preview map[string]any) (bool, string) {
+	if netDelta > 0 {
+		return true, "Edit would introduce errors. Review diagnostics before applying."
+	}
+	confidence, _ := preview["confidence"].(string)
+	timedOut, _ := preview["timeout"].(bool)
+	if timedOut || confidence == string(session.ConfidencePartial) || confidence == string(session.ConfidenceLow) {
+		return true, "Not applied: the diagnostics did not settle (the language server timed out or is still indexing), so the edit could not be verified as safe. Retry once the server is ready, or use apply_edit to write it without verification."
+	}
+	return false, ""
 }
