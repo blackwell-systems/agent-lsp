@@ -1546,6 +1546,25 @@ func withinRoot(path, rootDir string) bool {
 	return rel == "." || (!strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel))
 }
 
+// documentLanguageID returns the didOpen languageId for a document. Callers pass
+// the language family that routes to a server ("typescript", "javascript"), but
+// LSP gives JSX files their own identifiers. typescript-language-server parses a
+// .tsx file opened as "typescript" as plain TypeScript and reports every JSX
+// element as a syntax error.
+func documentLanguageID(filePath, languageID string) string {
+	switch strings.ToLower(filepath.Ext(filePath)) {
+	case ".tsx":
+		if languageID == "typescript" {
+			return "typescriptreact"
+		}
+	case ".jsx":
+		if languageID == "javascript" {
+			return "javascriptreact"
+		}
+	}
+	return languageID
+}
+
 // OpenDocument sends textDocument/didOpen or didChange if already open.
 func (c *LSPClient) OpenDocument(ctx context.Context, uri, text, languageID string) error {
 	c.mu.Lock()
@@ -1569,9 +1588,11 @@ func (c *LSPClient) OpenDocument(ctx context.Context, uri, text, languageID stri
 		})
 	}
 
+	filePath := uripkg.URIToPath(uri)
+	languageID = documentLanguageID(filePath, languageID)
 	c.mu.Lock()
 	c.openDocs[uri] = docMeta{
-		filePath:   uripkg.URIToPath(uri),
+		filePath:   filePath,
 		languageID: languageID,
 		version:    1,
 	}

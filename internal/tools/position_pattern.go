@@ -63,9 +63,16 @@ func utf16Offset(line string, byteOffset int) int {
 // ResolvePositionPattern resolves a "@@" cursor marker in a text pattern to
 // a 1-indexed line and column in the given file.
 //
-// The pattern must contain exactly one "@@" marker. The text before and after
-// "@@" is joined to form the search text. The cursor position is the character
-// immediately following "@@" in the file.
+// Two pattern forms are supported:
+//   - "prefix@@suffix" (exactly one marker): the text before and after "@@"
+//     is joined to form the search text; the cursor position is the character
+//     immediately following "@@" in the file.
+//   - "@@text@@" (double marker): the text between the markers is the search
+//     text; the cursor position is the end of the match.
+//
+// A leading UTF-8 BOM counts as one UTF-16 unit on line 1: agent-lsp sends the
+// file to the server with its BOM, and servers (gopls, typescript-language-
+// server, pyright) count it, as byteSpanToLSPRange does.
 func ResolvePositionPattern(filePath, pattern string) (line, col int, err error) {
 	if !strings.Contains(pattern, "@@") {
 		return 0, 0, fmt.Errorf("position_pattern must contain @@ marker")
@@ -79,19 +86,46 @@ func ResolvePositionPattern(filePath, pattern string) (line, col int, err error)
 
 // resolveInContent finds the @@ marker position within content (already loaded).
 // content is the raw file text or a line-sliced subset.
+//
+// Supported pattern forms:
+//   - "prefix@@suffix" (exactly one marker): matches prefix+suffix, cursor at
+//     the @@ position (where prefix ends within the match).
+//   - "@@text@@" (double marker enclosing the text): matches text, cursor at
+//     the end of the match. This is the natural form agents write.
+//   - anything else (0 markers or ambiguous marker placement) is rejected
+//     with an error naming the valid forms.
 func resolveInContent(content, pattern string) (line, col int, err error) {
-	parts := strings.SplitN(pattern, "@@", 2)
-	prefix := parts[0]
-	suffix := parts[1]
-	searchText := prefix + suffix
+	markerCount := strings.Count(pattern, "@@")
+	if markerCount == 0 {
+		return 0, 0, fmt.Errorf("position_pattern must contain @@ marker")
+	}
+
+	var searchText string
+	var cursorWithinMatch int // byte offset of the cursor within the matched text
+	switch {
+	case markerCount == 1:
+		parts := strings.SplitN(pattern, "@@", 2)
+		searchText = parts[0] + parts[1]
+		cursorWithinMatch = len(parts[0])
+	case markerCount == 2 && strings.HasPrefix(pattern, "@@") && strings.HasSuffix(pattern, "@@") && len(pattern) >= 5:
+		// Double-marker form: match the text between the markers.
+		searchText = pattern[2 : len(pattern)-2]
+		cursorWithinMatch = len(searchText)
+	default:
+		return 0, 0, fmt.Errorf("position_pattern must contain exactly one @@ marker (\"prefix@@suffix\") or enclose the text (\"@@text@@\"); got %q with %d @@ markers", pattern, markerCount)
+	}
+
+	if searchText == "" {
+		return 0, 0, fmt.Errorf("position_pattern %q resolves to empty search text", pattern)
+	}
 
 	matchStart := strings.Index(content, searchText)
 	if matchStart < 0 {
 		return 0, 0, fmt.Errorf("position_pattern not found in file: %q", pattern)
 	}
 
-	// offset is the byte position of the character immediately after "@@"
-	offset := matchStart + len(prefix)
+	// offset is the byte position of the cursor within content
+	offset := matchStart + cursorWithinMatch
 
 	// line is 1-indexed: count newlines before offset
 	line = strings.Count(content[:offset], "\n") + 1
