@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.23.3] - 2026-10-26
 
 ### Fixed
 - **`apply_edit` in text-match mode could corrupt a file that changed during the edit** ([#76](https://github.com/blackwell-systems/agent-lsp/issues/76)): the match position was computed from one read of the file and spliced into a second read, so a write landing in between (an editor save, a formatter, another tool) made the edit land at a stale offset and lose bytes. The edit is now written only if the file still holds the content the match was computed from; otherwise nothing is written and the error asks to re-run the edit. `safe_apply_edit` also writes only the content its preview checked, so a file that changes after the preview is no longer written unverified. A writer landing in the instant between the final read and the write can still be overwritten, since other processes do not share a lock.
