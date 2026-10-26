@@ -47,49 +47,50 @@ func HandleGetDiagnostics(ctx context.Context, client *lsp.LSPClient, args map[s
 	filePath, _ := args["file_path"].(string)
 
 	var diagMap map[string][]types.LSPDiagnostic
-	// queriedURIs is the set of documents whose diagnostics channel we must
-	// classify (live vs dead) to decide whether an empty result is trustworthy.
+	// Mark before reopening: a publication racing didOpen must count as fresh,
+	// while cached diagnostics for the previous version must not verify it.
+	marks := make(map[string]lsp.DiagnosticsMark)
 	var queriedURIs []string
-
 	if filePath != "" {
 		cleanPath, err := ValidateFilePath(filePath, client.RootDir())
 		if err != nil {
 			return types.ErrorResult(fmt.Sprintf("invalid file path: %s", err)), nil
 		}
-		fileURI := CreateFileURI(cleanPath)
-		if err := client.ReopenDocument(ctx, fileURI); err != nil {
+		uri := CreateFileURI(cleanPath)
+		queriedURIs = []string{uri}
+		marks[uri] = client.MarkDiagnostics(uri)
+		if err := client.ReopenDocument(ctx, uri); err != nil {
 			return types.ErrorResult(fmt.Sprintf("failed to reopen document: %s", err)), nil
 		}
-		if err := lsp.WaitForDiagnostics(ctx, client, []string{fileURI}, 25000); err != nil {
-			return types.ErrorResult(fmt.Sprintf("waiting for diagnostics: %s", err)), nil
-		}
-		diags := client.GetDiagnostics(fileURI)
-		diagMap = map[string][]types.LSPDiagnostic{fileURI: diags}
-		queriedURIs = []string{fileURI}
 	} else {
+		queriedURIs = client.GetOpenDocuments()
+		for _, uri := range queriedURIs {
+			marks[uri] = client.MarkDiagnostics(uri)
+		}
 		if err := client.ReopenAllDocuments(ctx); err != nil {
 			return types.ErrorResult(fmt.Sprintf("failed to reopen documents: %s", err)), nil
 		}
-		openURIs := client.GetOpenDocuments()
-		if err := lsp.WaitForDiagnostics(ctx, client, openURIs, 25000); err != nil {
-			return types.ErrorResult(fmt.Sprintf("waiting for diagnostics: %s", err)), nil
-		}
+	}
+	for _, uri := range queriedURIs {
+		mark := marks[uri]
+		mark.Version, _ = client.DocumentVersion(uri)
+		marks[uri] = mark
+	}
+	settled, err := lsp.WaitForDiagnosticsSettled(ctx, client, queriedURIs, marks, 25000)
+	if err != nil {
+		return types.ErrorResult(fmt.Sprintf("waiting for diagnostics: %s", err)), nil
+	}
+	if filePath != "" {
+		uri := queriedURIs[0]
+		diagMap = map[string][]types.LSPDiagnostic{uri: client.GetDiagnostics(uri)}
+	} else {
 		all := client.GetAllDiagnostics()
-		// Filter to only open documents.
-		openSet := make(map[string]bool, len(openURIs))
-		for _, u := range openURIs {
-			openSet[u] = true
-		}
 		diagMap = make(map[string][]types.LSPDiagnostic)
-		for uri, diags := range all {
-			if openSet[uri] {
+		for _, uri := range queriedURIs {
+			if diags, ok := all[uri]; ok {
 				diagMap[uri] = diags
 			}
 		}
-		// A document that never received a publish is absent from GetOpenDocuments'
-		// diagnostics entirely, so the queried set must be the open documents, not
-		// the (possibly smaller) key set of diagMap.
-		queriedURIs = openURIs
 	}
 
 	// Push-first: a document that already received a publishDiagnostics
@@ -126,19 +127,33 @@ func HandleGetDiagnostics(ctx context.Context, client *lsp.LSPClient, args map[s
 		}
 	}
 
+	hint := diagnosticsHint(hasErrors, deadURIs, liveCount, pullDead, pullSkipped)
+	if !settled {
+		var unverified []string
+		for _, uri := range queriedURIs {
+			if !pulledLive[uri] && !client.DiagnosticsCover(uri, marks[uri]) {
+				unverified = append(unverified, uri)
+			}
+		}
+		if len(unverified) > 0 {
+			sort.Strings(unverified)
+			hint = "Diagnostics did not settle for the current versions of: " + strings.Join(unverified, ", ") + ". Returned diagnostics are not confirmed current."
+		}
+	}
+
 	// group_by=symbol: group diagnostics under their owning symbol.
 	groupBy, _ := args["group_by"].(string)
 	if groupBy == "symbol" && filePath != "" {
 		result, gErr := groupDiagnosticsBySymbol(ctx, client, filePath, diagMap)
 		if gErr == nil {
 			encoded, _ := EncodeResult(ctx, result)
-			return appendHint(encoded, diagnosticsHint(hasErrors, deadURIs, liveCount, pullDead, pullSkipped)), nil
+			return appendHint(encoded, hint), nil
 		}
 		// Fall through to ungrouped if symbol grouping fails.
 	}
 
 	encoded, _ := EncodeResult(ctx, diagMap)
-	return appendHint(encoded, diagnosticsHint(hasErrors, deadURIs, liveCount, pullDead, pullSkipped)), nil
+	return appendHint(encoded, hint), nil
 }
 
 // diagnosticsHint builds the next-step hint for a get_diagnostics result.

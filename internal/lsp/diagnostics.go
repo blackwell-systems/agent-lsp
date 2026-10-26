@@ -51,6 +51,13 @@ func diagnosticsCoverage(client *LSPClient, uri string, mark DiagnosticsMark) co
 	return covered
 }
 
+// DiagnosticsCover reports whether the latest published diagnostics cover
+// mark. Use after an unsettled wait to distinguish verified documents from
+// those still holding a cached or stale publication.
+func (c *LSPClient) DiagnosticsCover(uri string, mark DiagnosticsMark) bool {
+	return diagnosticsCoverage(c, uri, mark) == covered
+}
+
 // WaitForDiagnostics waits for fresh diagnostics for every uri followed by a
 // 500ms quiet window. It returns nil on timeout; callers that must know whether
 // the diagnostics settled use WaitForDiagnosticsSettled.
