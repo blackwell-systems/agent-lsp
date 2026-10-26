@@ -193,9 +193,23 @@ type LSPClient struct {
 	openDocs map[string]docMeta // uri -> meta
 
 	// diagnostics
-	diagMu   sync.RWMutex
-	diags    map[string][]types.LSPDiagnostic
-	diagSubs []types.DiagnosticUpdateCallback
+	diagMu sync.RWMutex
+	diags  map[string][]types.LSPDiagnostic
+	// diagGen counts publishDiagnostics notifications per normalized URI and
+	// diagVersion holds the document version the last one reported (absent
+	// when the server sent none). WaitForDiagnosticsSettled uses them to tell
+	// a publication that arrived during the wait, or that covers the edited
+	// document version, from a cached or stale one. Guarded by diagMu.
+	diagGen     map[string]uint64
+	diagVersion map[string]int
+	// republishesUnchanged is true when the server publishes diagnostics for
+	// every document version, even when they did not change, so that a missing
+	// publication means the edit has not been analysed. Only gopls is known to:
+	// typescript-language-server, rust-analyzer and the Dart server stay silent
+	// when a clean edit leaves the diagnostics as they were, and clangd skips a
+	// version whose text matches one it already analysed. Set at construction.
+	republishesUnchanged bool
+	diagSubs             []types.DiagnosticUpdateCallback
 
 	// workspace readiness ($/progress)
 	progressMu     sync.Mutex
@@ -246,14 +260,17 @@ type LSPClient struct {
 // NewLSPClient creates a new, unstarted LSP client.
 func NewLSPClient(serverPath string, serverArgs []string) *LSPClient {
 	c := &LSPClient{
-		serverPath:     serverPath,
-		serverArgs:     serverArgs,
-		pending:        make(map[int]*pendingRequest),
-		openDocs:       make(map[string]docMeta),
-		diags:          make(map[string][]types.LSPDiagnostic),
-		progressTokens: make(map[any]struct{}),
-		capabilities:   make(map[string]any),
-		warmup:         newWarmupState(),
+		serverPath: serverPath,
+		serverArgs: serverArgs,
+		// gopls publishes for every document version, so a missing
+		// publication means it has not caught up yet.
+		republishesUnchanged: strings.TrimSuffix(filepath.Base(serverPath), ".exe") == "gopls",
+		pending:              make(map[int]*pendingRequest),
+		openDocs:             make(map[string]docMeta),
+		diags:                make(map[string][]types.LSPDiagnostic),
+		progressTokens:       make(map[any]struct{}),
+		capabilities:         make(map[string]any),
+		warmup:               newWarmupState(),
 	}
 	c.nextID.Store(0)
 	c.progressCond = sync.NewCond(&c.progressMu)
@@ -688,6 +705,7 @@ func (c *LSPClient) sendResponse(id json.RawMessage, result any) {
 func (c *LSPClient) handlePublishDiagnostics(params json.RawMessage) {
 	var p struct {
 		URI         string                `json:"uri"`
+		Version     *int                  `json:"version"`
 		Diagnostics []types.LSPDiagnostic `json:"diagnostics"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -697,8 +715,19 @@ func (c *LSPClient) handlePublishDiagnostics(params json.RawMessage) {
 	// Notify warmup gate that diagnostics have arrived.
 	c.warmup.NotifyDiagnostic()
 
+	key := NormalizeFileURI(p.URI)
 	c.diagMu.Lock()
-	c.diags[NormalizeFileURI(p.URI)] = p.Diagnostics
+	c.diags[key] = p.Diagnostics
+	if c.diagGen == nil {
+		c.diagGen = make(map[string]uint64)
+		c.diagVersion = make(map[string]int)
+	}
+	c.diagGen[key]++
+	if p.Version != nil {
+		c.diagVersion[key] = *p.Version
+	} else {
+		delete(c.diagVersion, key)
+	}
 	subs := make([]types.DiagnosticUpdateCallback, len(c.diagSubs))
 	copy(subs, c.diagSubs)
 	c.diagMu.Unlock()
@@ -1429,6 +1458,9 @@ func (c *LSPClient) Restart(ctx context.Context, rootDir string) (int, error) {
 	c.mu.Unlock()
 	c.diagMu.Lock()
 	c.diags = make(map[string][]types.LSPDiagnostic)
+	// Document versions restart at 1 on the fresh server; a version recorded
+	// from the previous process must not satisfy a later wait.
+	c.diagVersion = make(map[string]int)
 	c.diagMu.Unlock()
 	c.legendMu.Lock()
 	c.legendTypes = nil
@@ -1674,6 +1706,40 @@ func (c *LSPClient) ResetDiagnostics(uri string) {
 	c.diagMu.Lock()
 	defer c.diagMu.Unlock()
 	delete(c.diags, NormalizeFileURI(uri))
+	delete(c.diagVersion, NormalizeFileURI(uri))
+}
+
+// RepublishesUnchangedDiagnostics reports whether the server is known to
+// publish diagnostics after every change, including unchanged ones.
+func (c *LSPClient) RepublishesUnchangedDiagnostics() bool {
+	c.diagMu.RLock()
+	defer c.diagMu.RUnlock()
+	return c.republishesUnchanged
+}
+
+// diagnosticsState reports how many publishDiagnostics notifications have
+// arrived for uri and the document version the last one carried (hasVersion
+// is false when the server sent none or none has arrived).
+func (c *LSPClient) diagnosticsState(uri string) (gen uint64, version int, hasVersion bool) {
+	key := NormalizeFileURI(uri)
+	c.diagMu.RLock()
+	defer c.diagMu.RUnlock()
+	version, hasVersion = c.diagVersion[key]
+	return c.diagGen[key], version, hasVersion
+}
+
+// DocumentVersion returns the version agent-lsp last sent to the server for an
+// open document (didOpen sends 1, each didChange increments it).
+func (c *LSPClient) DocumentVersion(uri string) (int, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if meta, ok := c.openDocs[uri]; ok {
+		return meta.version, true
+	}
+	if meta, ok := c.openDocs[NormalizeFileURI(uri)]; ok {
+		return meta.version, true
+	}
+	return 0, false
 }
 
 // GetAllDiagnostics returns a copy of all diagnostics.

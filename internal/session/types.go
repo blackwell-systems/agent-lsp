@@ -125,10 +125,13 @@ type SimulationSession struct {
 	Versions         map[string]int
 	Contents         map[string]string // per-file current content (in-memory)
 	OriginalContents map[string]string // per-file content at baseline time (for Discard)
-	Workspace        string
-	Language         string
-	DirtyErr         error
-	mu               sync.Mutex
+	// DiagMarks records, per file, where its diagnostics stood when the last
+	// edit was sent; Evaluate waits for diagnostics that cover that edit.
+	DiagMarks map[string]lsp.DiagnosticsMark
+	Workspace string
+	Language  string
+	DirtyErr  error
+	mu        sync.Mutex
 }
 
 // MarkDirty sets the session to dirty state with the given error.

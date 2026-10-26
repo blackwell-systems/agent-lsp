@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+- **`safe_apply_edit` could still apply an unverified edit with gopls**: the 0.23.1 refusal of timed-out previews never fired, because the diagnostics wait reported a timeout as success. When gopls had not yet published diagnostics for the edit, the preview compared the pre-edit diagnostics with themselves, reported `net_delta: 0` with `confidence: high`, and the edit was applied. The wait also discarded the first publication for a document that had none cached, mistaking it for a cached replay. The preview now waits for diagnostics that cover the edited document version (servers report it in `publishDiagnostics`) and reports `timeout: true` with `confidence: partial` when they do not arrive, which `safe_apply_edit` refuses. A publication for an older version never counts. Servers that publish nothing when an edit leaves the diagnostics unchanged (typescript-language-server, rust-analyzer, Dart, and clangd for text it already analysed) keep the previous behavior, since for them silence is the normal result of a clean edit; gopls publishes for every version, so silence from it means the edit was not checked.
+
 ## [0.23.1] - 2026-10-23
 
 ### Fixed

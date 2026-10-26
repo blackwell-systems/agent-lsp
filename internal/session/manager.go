@@ -175,11 +175,22 @@ func (m *SessionManager) ApplyEdit(ctx context.Context, sessionID, fileURI strin
 	// Apply range edit in-memory.
 	session.Contents[fileURI] = applyRangeEdit(session.Contents[fileURI], rng, newText)
 
+	// Mark the diagnostics before the change goes out, so Evaluate can tell a
+	// publication for this edit from the ones already cached.
+	mark := session.Client.MarkDiagnostics(fileURI)
+
 	// Send to LSP via OpenDocument (which sends didChange when already open).
 	if err := session.Client.OpenDocument(ctx, fileURI, session.Contents[fileURI], session.Language); err != nil {
 		session.MarkDirty(fmt.Errorf("sending didChange for %s: %w", fileURI, err))
 		return nil, fmt.Errorf("sending didChange for %s: %w", fileURI, err)
 	}
+	if v, ok := session.Client.DocumentVersion(fileURI); ok {
+		mark.Version = v
+	}
+	if session.DiagMarks == nil {
+		session.DiagMarks = make(map[string]lsp.DiagnosticsMark)
+	}
+	session.DiagMarks[fileURI] = mark
 
 	// Record edit.
 	session.Edits = append(session.Edits, AppliedEdit{
@@ -250,10 +261,16 @@ func (m *SessionManager) Evaluate(ctx context.Context, sessionID, scope string, 
 		uris = append(uris, uri)
 	}
 
-	// Wait for diagnostics to stabilize.
-	if err := lsp.WaitForDiagnostics(ctx, session.Client, uris, timeoutMs); err != nil {
-		logging.Log(logging.LevelWarning, fmt.Sprintf("session.evaluate_timeout: %s", sessionID))
-		timedOut = true
+	// Wait for diagnostics that cover the last edit to each file. A wait that
+	// ends without them must count as a timeout: the cache may still hold the
+	// pre-edit diagnostics, which would read as net_delta 0 with high
+	// confidence and let safe_apply_edit write an unverified edit.
+	if len(uris) > 0 {
+		settled, err := lsp.WaitForDiagnosticsSettled(ctx, session.Client, uris, session.DiagMarks, timeoutMs)
+		if err != nil || !settled {
+			logging.Log(logging.LevelWarning, fmt.Sprintf("session.evaluate_timeout: %s", sessionID))
+			timedOut = true
+		}
 	}
 
 	// For each file in baselines, compute diff.
