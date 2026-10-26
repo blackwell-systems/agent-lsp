@@ -184,7 +184,7 @@ func buildServerCapabilitiesResult(client *lsp.LSPClient) ServerCapabilitiesResu
 }
 
 // HandleGetServerCapabilitiesMulti is the multi-server fan-out of
-// get_server_capabilities (issue #2): the tool previously reported only the
+// get_server_capabilities (issue #55): the tool previously reported only the
 // default server's capability map, which in auto-detect mode may be clangd
 // even when the workspace's documents belong to another server. With more
 // than one initialized client, the response keeps the default server's
@@ -215,7 +215,7 @@ func HandleGetServerCapabilitiesMulti(ctx context.Context, clients []*lsp.LSPCli
 // serverCapabilitiesResponse builds the wire shape for the capability
 // report: a single result unchanged for one server, or the default server's
 // fields at the top level plus an all_servers array for several. Extracted
-// for testing. (issue #2)
+// for testing. (issue #55)
 //
 // The multi-server shape repeats the default server's fields flat (same Go
 // field names and JSON tags as ServerCapabilitiesResult) instead of embedding
