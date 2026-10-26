@@ -537,60 +537,22 @@ func TestFindText_NotFound(t *testing.T) {
 	}
 }
 
-// --- textMatchApply ---
+// --- textMatchRange ---
 
-// TestTextMatchApply_ExactMatch verifies that exact-match mode produces a
-// WorkspaceEdit with the correct newText.
-func TestTextMatchApply_ExactMatch(t *testing.T) {
-	f, err := os.CreateTemp(t.TempDir(), "*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	content := "package main\n\nfunc Foo() {\n\treturn\n}\n"
-	if _, err := f.WriteString(content); err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-
-	edit, err := textMatchApply(f.Name(), "func Foo() {", "func Foo() error {")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	m, ok := edit.(map[string]any)
+func TestTextMatchRange_ExactMatch(t *testing.T) {
+	src := "package main\n\nfunc Foo() {\n\treturn\n}\n"
+	rng, ok := textMatchRange(src, "func Foo() {")
 	if !ok {
-		t.Fatal("edit is not map[string]interface{}")
+		t.Fatal("not found")
 	}
-	changes, ok := m["changes"].(map[string]any)
-	if !ok {
-		t.Fatal("missing changes key")
-	}
-	if len(changes) != 1 {
-		t.Fatalf("expected 1 file in changes, got %d", len(changes))
-	}
-	for _, v := range changes {
-		edits, ok := v.([]any)
-		if !ok || len(edits) != 1 {
-			t.Fatal("expected 1 text edit")
-		}
-		te := edits[0].(map[string]any)
-		if te["newText"] != "func Foo() error {" {
-			t.Errorf("got newText %q", te["newText"])
-		}
+	if rng.Start.Line != 2 || rng.Start.Character != 0 || rng.End.Line != 2 || rng.End.Character != 12 {
+		t.Errorf("range = %+v, want 2:0-2:12", rng)
 	}
 }
 
-// TestTextMatchApply_NotFound verifies an error is returned when old_text is absent.
-func TestTextMatchApply_NotFound(t *testing.T) {
-	f, err := os.CreateTemp(t.TempDir(), "*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.WriteString("package main\n")
-	f.Close()
-
-	_, err = textMatchApply(f.Name(), "func Missing() {}", "func Missing() error {}")
-	if err == nil {
-		t.Error("expected error for missing old_text")
+func TestTextMatchRange_NotFound(t *testing.T) {
+	if _, ok := textMatchRange("package main\n", "func Missing() {}"); ok {
+		t.Error("expected not found")
 	}
 }
 

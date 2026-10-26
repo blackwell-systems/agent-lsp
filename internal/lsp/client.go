@@ -23,6 +23,7 @@
 package lsp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -2757,8 +2758,31 @@ type textEdit struct {
 	NewText string      `json:"newText"`
 }
 
+// ErrFileChanged reports that a file no longer holds the content an edit was
+// computed against, so the edit was not written.
+var ErrFileChanged = errors.New("the file changed after the edit was planned; nothing was written, re-run the edit against the current content")
+
+// ApplyTextEditIfUnchanged replaces rng in the file at uri with newText, but
+// only while the file still holds exactly expected: the bytes rng was computed
+// from. A positional edit applied to content that has since changed would land
+// at a stale offset and corrupt the file (issue #76), so a mismatch returns
+// ErrFileChanged and writes nothing.
+//
+// The comparison is made on the same read the edit is spliced into, which
+// leaves only the moment between that read and the write: a writer landing
+// there is still overwritten, since other processes do not share a lock.
+func (c *LSPClient) ApplyTextEditIfUnchanged(ctx context.Context, uri string, expected []byte, rng types.Range, newText string) error {
+	return c.applyEditsToFileExpecting(ctx, uri, []textEdit{{Range: rng, NewText: newText}}, expected, true)
+}
+
 // applyEditsToFile applies text edits in reverse order to a file and sends didChange.
 func (c *LSPClient) applyEditsToFile(ctx context.Context, uri string, edits []textEdit) error {
+	return c.applyEditsToFileExpecting(ctx, uri, edits, nil, false)
+}
+
+// applyEditsToFileExpecting is applyEditsToFile with an optional precondition:
+// when check is set, the file must hold exactly expected or nothing is written.
+func (c *LSPClient) applyEditsToFileExpecting(ctx context.Context, uri string, edits []textEdit, expected []byte, check bool) error {
 	path, err := uripkg.ValidatePath(uripkg.URIToPath(uri), c.rootDir)
 	if err != nil {
 		return fmt.Errorf("applyEdit: %w", err)
@@ -2766,6 +2790,9 @@ func (c *LSPClient) applyEditsToFile(ctx context.Context, uri string, edits []te
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("applyEdit read %s: %w", path, err)
+	}
+	if check && !bytes.Equal(data, expected) {
+		return fmt.Errorf("applyEdit %s: %w", path, ErrFileChanged)
 	}
 
 	// Apply edits in reverse order (bottom-to-top) using the canonical

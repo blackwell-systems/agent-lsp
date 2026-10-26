@@ -10,6 +10,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -613,14 +614,7 @@ func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string
 			return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): %s", err)), nil
 		}
 		newText, _ := args["new_text"].(string)
-		edit, err := textMatchApply(validPath, oldText, newText)
-		if err != nil {
-			return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): %s", err)), nil
-		}
-		if err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
-			return types.ErrorResult(fmt.Sprintf("apply_edit: %s", err)), nil
-		}
-		return types.TextResult("Edit applied successfully"), nil
+		return applyTextMatch(ctx, client, validPath, oldText, newText, nil), nil
 	}
 
 	// WorkspaceEdit mode.
@@ -635,40 +629,50 @@ func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string
 	return types.TextResult("Edit applied successfully"), nil
 }
 
-// textMatchApply constructs a WorkspaceEdit by locating oldText in the file at
-// filePath and replacing it with newText. It tries an exact byte match first;
-// if that fails it falls back to a line-by-line whitespace-normalised match
-// (each line compared after strings.TrimSpace). The normalised match replaces
-// full lines, so newText should include the desired indentation for those lines.
-func textMatchApply(filePath, oldText, newText string) (any, error) {
-	content, err := os.ReadFile(filePath)
+// applyTextMatch replaces the first match of oldText in the file at path
+// (already validated) with newText. The match position is computed from one
+// read of the file, and the write is refused if the file changed after that
+// read, so a concurrent writer cannot make the edit land at a stale offset
+// (issue #76). When expected is non-nil, the file must also still hold exactly
+// those bytes: safe_apply_edit passes the content it previewed, so an edit is
+// never written over content its preview did not check.
+func applyTextMatch(ctx context.Context, client *lsp.LSPClient, path, oldText, newText string, expected []byte) types.ToolResult {
+	content, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", filePath, err)
+		return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): reading %s: %s", path, err))
 	}
-	src := string(content)
+	if expected != nil && !bytes.Equal(content, expected) {
+		return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): %s: %s", path, lsp.ErrFileChanged))
+	}
+	rng, ok := textMatchRange(string(content), oldText)
+	if !ok {
+		return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): old_text not found in %s (tried exact and whitespace-normalised line match)", path))
+	}
+	if textMatchBeforeApply != nil {
+		textMatchBeforeApply(path)
+	}
+	if err := client.ApplyTextEditIfUnchanged(ctx, CreateFileURI(path), content, rng, newText); err != nil {
+		return types.ErrorResult(fmt.Sprintf("apply_edit: %s", err))
+	}
+	return types.TextResult("Edit applied successfully")
+}
 
+// textMatchBeforeApply, when set by a test, runs between planning a text-match
+// edit and applying it, to simulate a concurrent writer.
+var textMatchBeforeApply func(path string)
+
+// textMatchRange returns the LSP range of the first match of oldText in src
+// (exact first, then whitespace-normalised lines; see findText).
+func textMatchRange(src, oldText string) (types.Range, bool) {
 	startByte, endByte, ok := findText(src, oldText)
 	if !ok {
-		return nil, fmt.Errorf("old_text not found in %s (tried exact and whitespace-normalised line match)", filePath)
+		return types.Range{}, false
 	}
-
 	startLine, startChar, endLine, endChar := byteSpanToLSPRange(src, startByte, endByte)
-
-	fileURI := CreateFileURI(filePath)
-	edit := map[string]any{
-		"changes": map[string]any{
-			fileURI: []any{
-				map[string]any{
-					"range": map[string]any{
-						"start": map[string]any{"line": startLine, "character": startChar},
-						"end":   map[string]any{"line": endLine, "character": endChar},
-					},
-					"newText": newText,
-				},
-			},
-		},
-	}
-	return edit, nil
+	return types.Range{
+		Start: types.Position{Line: startLine, Character: startChar},
+		End:   types.Position{Line: endLine, Character: endChar},
+	}, true
 }
 
 // findText returns the byte range [start, end) of oldText within src.
