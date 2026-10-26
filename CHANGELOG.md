@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.23.4] - 2026-10-26
 
 ### Fixed
 - **`start_lsp` with `connect` always failed** ([#74](https://github.com/blackwell-systems/agent-lsp/issues/74)): connecting to an already-running language server over TCP returned "passive initialize failed: start process: exec: no command", because `Initialize` tried to spawn a server process even for a client that was already connected over a socket. It now runs the handshake over the existing connection.
