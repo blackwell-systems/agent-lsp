@@ -227,7 +227,7 @@ type LSPClient struct {
 	// progress stay unloaded and rely on the event-driven ready channel below.
 	workspaceLoaded atomic.Bool
 
-	// Event-driven readiness (readiness semaphore, issue #11). ready is closed
+	// Event-driven readiness (readiness semaphore, upstream issue #77). ready is closed
 	// exactly once by markReady when the first readiness signal fires:
 	//   1. $/progress drained (all workspace indexing tokens completed)
 	//   2. first publishDiagnostics notification
@@ -242,9 +242,26 @@ type LSPClient struct {
 	// from "server never emits progress", keeping workspaceLoaded truthful.
 	hasSeenProgress atomic.Bool
 
-	// probing guards the liveness-probe loop so concurrent awaiters do not
-	// pile up redundant probe goroutines.
-	probing atomic.Bool
+	// readinessWaitExhausted latches a readiness wait that ran to its cap
+	// without a signal: the wait is surfaced to the agent ONCE, and later
+	// calls proceed instead of paying the same wait again. (PR #69 maintainer
+	// review: never re-pay a timed-out wait on later calls)
+	readinessWaitExhausted atomic.Bool
+
+	// Per-client probe knob overrides (atomic nanoseconds; 0 = package
+	// default). Tests shrink them without racing a running probe goroutine.
+	probeIntervalNs atomic.Int64
+	probeTimeoutNs  atomic.Int64
+
+	// probeState shares ONE liveness-probe loop among all AwaitReady callers:
+	// its lifetime is bound to the waiter count, not to an individual
+	// caller's context — a cancelled caller must not take the shared probe
+	// loop down while another waiter still needs it. (PR #69 maintainer
+	// review / CodeRabbit: B waited its full cap although the server had
+	// answered, because A's ctx ended and the probe loop with it)
+	probeMu      sync.Mutex
+	probeWaiters int
+	probeCancel  context.CancelFunc
 
 	// server capabilities and identity (from initialize response)
 	capsMu           sync.RWMutex
@@ -819,7 +836,7 @@ func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
 		// wait also avoids paying the grace period idly on every call.
 		return
 	}
-	c.WaitForWorkspaceReadyTimeout(ctx, 60*time.Second)
+	c.WaitForWorkspaceReadyTimeout(ctx, workspaceProgressWait)
 	// Truthful semantics: only claim loaded when progress was actually
 	// observed and has drained. Servers that never emit $/progress stay
 	// unloaded so callers fall back to the event-driven AwaitReady.
@@ -862,7 +879,8 @@ func (c *LSPClient) AwaitReady(ctx context.Context, maxWait time.Duration) error
 		ctx, cancel = context.WithTimeout(ctx, maxWait)
 		defer cancel()
 	}
-	go c.probeUntilReady(ctx)
+	c.probeAdopt()
+	defer c.probeRelease()
 	select {
 	case <-c.ready:
 		return nil
@@ -871,22 +889,72 @@ func (c *LSPClient) AwaitReady(ctx context.Context, maxWait time.Duration) error
 	}
 }
 
+// probe caps. Package-level defaults; a client can override them per
+// instance with atomic nanosecond knobs so tests can shrink them without
+// racing a running probe goroutine.
 const (
-	probeInterval = 5 * time.Second
-	probeTimeout  = 4 * time.Second
+	defaultProbeInterval = 5 * time.Second
+	defaultProbeTimeout  = 4 * time.Second
 )
 
-// probeUntilReady sends a liveness probe every probeInterval until the
-// client becomes ready or ctx is done. A single-client guard prevents
-// concurrent awaiters from piling up redundant probe loops.
-func (c *LSPClient) probeUntilReady(ctx context.Context) {
-	if !c.probing.CompareAndSwap(false, true) {
-		return
+func (c *LSPClient) probeIntervalValue() time.Duration {
+	if v := c.probeIntervalNs.Load(); v > 0 {
+		return time.Duration(v)
 	}
-	defer c.probing.Store(false)
+	return defaultProbeInterval
+}
 
+func (c *LSPClient) probeTimeoutValue() time.Duration {
+	if v := c.probeTimeoutNs.Load(); v > 0 {
+		return time.Duration(v)
+	}
+	return defaultProbeTimeout
+}
+
+// Wait caps read synchronously by the gating caller (never by a background
+// goroutine), so tests may shrink them.
+var (
+	// workspaceProgressWait bounds waitForWorkspaceReady's wait for active
+	// $/progress tokens to drain.
+	workspaceProgressWait = 60 * time.Second
+	// readinessWaitCap bounds ensureWorkspaceReady's fallback wait on the
+	// event-driven readiness channel (servers whose progress never drains).
+	readinessWaitCap = 120 * time.Second
+)
+
+// probeAdopt joins (or starts) the shared liveness-probe loop. The loop's
+// lifetime follows the WAITER COUNT: the first waiter starts it with a
+// client-owned context, the last to leave cancels it. A caller's own context
+// never controls the loop.
+func (c *LSPClient) probeAdopt() {
+	c.probeMu.Lock()
+	defer c.probeMu.Unlock()
+	c.probeWaiters++
+	if c.probeWaiters == 1 && !c.IsReady() {
+		pctx, cancel := context.WithCancel(context.Background())
+		c.probeCancel = cancel
+		go c.probeUntilReady(pctx)
+	}
+}
+
+// probeRelease leaves the shared loop; the last leaver cancels it.
+func (c *LSPClient) probeRelease() {
+	c.probeMu.Lock()
+	defer c.probeMu.Unlock()
+	c.probeWaiters--
+	if c.probeWaiters <= 0 && c.probeCancel != nil {
+		c.probeCancel()
+		c.probeCancel = nil
+	}
+}
+
+// probeUntilReady sends a liveness probe every probeInterval until the
+// client becomes ready or its (client-owned, waiter-scoped) context is done.
+// Caller contexts never reach it: AwaitReady adopts/releases the loop through
+// the waiter count instead.
+func (c *LSPClient) probeUntilReady(ctx context.Context) {
 	c.probeOnce(ctx)
-	ticker := time.NewTicker(probeInterval)
+	ticker := time.NewTicker(c.probeIntervalValue())
 	defer ticker.Stop()
 	for {
 		select {
@@ -908,7 +976,7 @@ func (c *LSPClient) probeUntilReady(ctx context.Context) {
 // (including silent drops from servers in their lazy-init window) are
 // ignored: the loop simply retries.
 func (c *LSPClient) probeOnce(ctx context.Context) {
-	pctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	pctx, cancel := context.WithTimeout(ctx, c.probeTimeoutValue())
 	defer cancel()
 	if uris := c.GetOpenDocuments(); len(uris) > 0 {
 		_, _ = c.sendRequest(pctx, "textDocument/hover", map[string]any{
@@ -949,17 +1017,46 @@ func (c *LSPClient) ensureWorkspaceReady(ctx context.Context) error {
 	if c.workspaceLoaded.Load() {
 		return nil
 	}
-	if c.HasActiveProgress() || c.hasSeenProgress.Load() {
-		// Progress-based server: wait for tokens to drain.
-		c.waitForWorkspaceReady(ctx)
-		if c.workspaceLoaded.Load() {
-			return nil
-		}
+	if !c.HasActiveProgress() && !c.hasSeenProgress.Load() {
+		// The server has never emitted $/progress and none is active: there
+		// is nothing to wait for. The gate must stay OFF the hot path here —
+		// waiting would cost every query seconds on servers that will never
+		// signal readiness (measured: 0-2 ms -> 15 s per GetReferences).
+		// Latch loaded and fire the readiness event so IsWorkspaceLoaded and
+		// workspace_ready are truthful on every server, not only on
+		// progress-emitting ones. (PR #69 maintainer review, direction 1)
+		c.workspaceLoaded.Store(true)
+		c.markReady()
+		return nil
 	}
-	// No usable $/progress signal (or it never drained): block on the
-	// event-driven readiness channel with liveness probing.
-	_ = c.AwaitReady(ctx, 120*time.Second)
-	return nil
+	// Progress-based server: wait for the tokens to drain.
+	c.waitForWorkspaceReady(ctx)
+	if c.workspaceLoaded.Load() {
+		return nil
+	}
+	// Progress was seen but never drained. A previous call may already have
+	// paid the readiness wait to its cap: never re-pay it on later calls —
+	// the first caller's error told the agent the wait timed out.
+	// (PR #69 maintainer review, direction 2)
+	if c.readinessWaitExhausted.Load() {
+		return nil
+	}
+	// Block on the event-driven readiness channel with liveness probing,
+	// once: a wait that runs to the cap is surfaced to the agent (never
+	// discarded) and latched so later calls proceed without paying again.
+	// (PR #69 maintainer review, direction 3)
+	err := c.AwaitReady(ctx, readinessWaitCap)
+	if err == nil {
+		return nil
+	}
+	if ctx.Err() != nil {
+		// The CALLER's context ended (cancelled or its own deadline): surface
+		// that error verbatim and leave the latch untouched — this call made
+		// no readiness verdict.
+		return err
+	}
+	c.readinessWaitExhausted.Store(true)
+	return fmt.Errorf("workspace readiness wait timed out after %s without a readiness signal from the server ($/progress never drained); results may be incomplete while the server is still indexing — retry to proceed without waiting", readinessWaitCap)
 }
 
 // daemonReadinessError reports whether a daemon-owned workspace is ready for
@@ -1014,7 +1111,7 @@ func (c *LSPClient) WaitForWorkspaceReadyTimeout(ctx context.Context, timeout ti
 	// Grace period: if no progress tokens yet, none were ever seen, and the
 	// caller requested a long wait (>=60s), wait briefly for the first token.
 	// default-timeout callers (GetReferences, etc.) on servers that never emit progress.
-	if len(c.progressTokens) == 0 && !c.hasSeenProgress.Load() && timeout >= 60*time.Second {
+	if len(c.progressTokens) == 0 && !c.hasSeenProgress.Load() && timeout > 60*time.Second {
 		grace := make(chan struct{})
 		go func() {
 			select {
@@ -1633,7 +1730,7 @@ func (c *LSPClient) Restart(ctx context.Context, rootDir string) (int, error) {
 	// can be brought back to the same state. Some servers (mql-lsp-server)
 	// drive their workspace symbol index from opened documents only — without
 	// the replay, workspace queries return empty until a document is reopened
-	// by hand. (issue #3B)
+	// by hand. (upstream issue #54)
 	c.mu.Lock()
 	snapshot := make([]docMeta, 0, len(c.openDocs))
 	for _, meta := range c.openDocs {
@@ -1653,10 +1750,19 @@ func (c *LSPClient) Restart(ctx context.Context, rootDir string) (int, error) {
 	c.pendingMu.Unlock()
 	c.progressMu.Lock()
 	c.progressTokens = make(map[any]struct{})
+	c.hasSeenProgress.Store(false)
 	c.progressMu.Unlock()
 	c.capsMu.Lock()
 	c.capabilities = make(map[string]any)
 	c.capsMu.Unlock()
+	// The readiness state belongs to the OUTGOING server session: a fresh
+	// process has emitted no progress and produced no responses, so the new
+	// session must start unready — otherwise every gated query treats the
+	// cold server as ready at once. (PR #69 maintainer review / CodeRabbit)
+	c.workspaceLoaded.Store(false)
+	c.readinessWaitExhausted.Store(false)
+	c.readyOnce = sync.Once{}
+	c.ready = make(chan struct{})
 
 	// C1: clear per-session state so the fresh server receives didOpen
 	// (not didChange) for all documents and serves no stale diagnostics.
@@ -1682,7 +1788,7 @@ func (c *LSPClient) Restart(ctx context.Context, rootDir string) (int, error) {
 // (the server must receive real content — see the open_document didOpen
 // fix). Documents missing on disk or outside the new workspace root are
 // skipped; replay failures are logged and never fail the restart.
-// Returns the number of documents successfully re-opened. (issue #3B)
+// Returns the number of documents successfully re-opened. (upstream issue #54)
 func (c *LSPClient) replayOpenDocuments(ctx context.Context, snapshot []docMeta, rootDir string) int {
 	replayed := 0
 	// Anchor the reads to the workspace root: ValidatePath returns a pathname,

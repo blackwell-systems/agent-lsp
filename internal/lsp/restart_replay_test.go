@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// --- Restart document replay (issue #3B) ---
+// --- Restart document replay (upstream issue #54) ---
 
 // After a restart the fresh server must be brought back to the previous
 // session's open-document state: servers like mql-lsp-server drive their

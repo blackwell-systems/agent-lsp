@@ -1,4 +1,4 @@
-// readiness_test.go covers the event-driven readiness semaphore (issue #11):
+// readiness_test.go covers the event-driven readiness semaphore (upstream issue #77):
 // markReady/AwaitReady primitives, the readiness producers ($/progress drain,
 // first publishDiagnostics, first server response after the handshake), the
 // truthful workspaceLoaded semantics, and the grace-period boundary fix.
@@ -417,11 +417,147 @@ func TestEnsureWorkspaceReady_SilentWindow_UnblocksOnFirstResponse(t *testing.T)
 // a late-emitting begin token must extend the wait instead of returning
 // immediately. The server pushes begin right after the handshake and end
 // 600ms later.
-func TestWaitForWorkspaceReadyTimeout_GraceAppliesAtExactly60s(t *testing.T) {
+// TestEnsureWorkspaceReady_NoProgressServer_ImmediateHotPath pins review
+// direction 1: on a server that never emits $/progress, the gate must stay
+// off the hot path (0-2 ms, like main) AND latch the truthful readiness
+// state — workspaceLoaded true and the readiness event fired, so
+// IsWorkspaceLoaded and workspace_ready work on every server.
+func TestEnsureWorkspaceReady_NoProgressServer_ImmediateHotPath(t *testing.T) {
+	c := newReadinessServerClient(t, "silent") // answers but never signals readiness
+	start := time.Now()
+	if err := c.ensureWorkspaceReady(context.Background()); err != nil {
+		t.Fatalf("ensureWorkspaceReady: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("gate took %v on a progress-less server; it must not wait on the hot path", elapsed)
+	}
+	if !c.workspaceLoaded.Load() {
+		t.Fatal("workspaceLoaded must latch true for a progress-less server")
+	}
+	if !c.IsReady() {
+		t.Fatal("the readiness event must fire for a progress-less server")
+	}
+	if !c.IsWorkspaceLoaded() {
+		t.Fatal("IsWorkspaceLoaded must report true after the gate")
+	}
+}
+
+// TestEnsureWorkspaceReady_TimedOutWaitSurfacedAndLatched pins review
+// directions 2 and 3: a readiness wait that runs to its cap is surfaced to
+// the agent as an error (never discarded with _ =) and latched, so later
+// calls proceed instead of paying the same wait again.
+func TestEnsureWorkspaceReady_TimedOutWaitSurfacedAndLatched(t *testing.T) {
+	c := NewLSPClient("fake-server", nil) // never started: no signals, no probes
+	old := readinessWaitCap
+	readinessWaitCap = 80 * time.Millisecond
+	t.Cleanup(func() { readinessWaitCap = old })
+
+	// Simulate a progress server whose token was seen and never drained:
+	// the progress wait runs, leaves the workspace unloaded, and the
+	// fallback wait then runs to its (shrunk) cap.
+	c.hasSeenProgress.Store(true)
+	c.progressMu.Lock()
+	c.progressTokens["stuck-token"] = struct{}{}
+	c.progressMu.Unlock()
+	oldWait := workspaceProgressWait
+	workspaceProgressWait = 20 * time.Millisecond
+	t.Cleanup(func() { workspaceProgressWait = oldWait })
+	start := time.Now()
+	err := c.ensureWorkspaceReady(context.Background())
+	if err == nil {
+		t.Fatal("the capped readiness wait must surface an error to the agent")
+	}
+	if !strings.Contains(err.Error(), "timed out after") {
+		t.Errorf("the surfaced error must name the timeout, got: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("first wait took %v; it must end at the (shrunk) cap", elapsed)
+	}
+	if !c.readinessWaitExhausted.Load() {
+		t.Fatal("the timed-out wait must latch readinessWaitExhausted")
+	}
+	// Later calls never re-pay it.
+	start = time.Now()
+	if err := c.ensureWorkspaceReady(context.Background()); err != nil {
+		t.Fatalf("later calls must proceed without waiting: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("later calls re-paid the wait (%v)", elapsed)
+	}
+	// A caller whose OWN context ends gets its error verbatim and no latch:
+	// same stuck-token setup, but the ctx is cancelled up front.
+	c2 := NewLSPClient("fake-server", nil)
+	c2.hasSeenProgress.Store(true)
+	c2.progressMu.Lock()
+	c2.progressTokens["stuck-token"] = struct{}{}
+	c2.progressMu.Unlock()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := c2.ensureWorkspaceReady(ctx); err == nil || !strings.Contains(err.Error(), "context canceled") {
+		t.Errorf("a cancelled caller must see its own error, got: %v", err)
+	}
+	if c2.readinessWaitExhausted.Load() {
+		t.Error("a caller-caused cancellation must not latch the readiness verdict")
+	}
+}
+
+// TestAwaitReady_ProbeServesLaterWaiters pins the shared-probe fix: the
+// probe loop's lifetime follows the waiter count, not one caller's context —
+// when the first waiter's ctx ends, the second waiter must still get probes
+// and finish as soon as the server answers.
+func TestAwaitReady_ProbeServesLaterWaiters(t *testing.T) {
+	c := newReadinessServerClient(t, "silent") // answers probes, never signals passively
+	c.probeIntervalNs.Store(int64(100 * time.Millisecond))
+	c.probeTimeoutNs.Store(int64(500 * time.Millisecond))
+
+	// A: waits briefly with a short cap, leaving the loop (its ctx dies).
+	ctxA, cancelA := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancelA()
+	_ = c.AwaitReady(ctxA, 40*time.Millisecond)
+	// A's cancellation must not stop the probe loop for B.
+	done := make(chan error, 1)
+	go func() { done <- c.AwaitReady(context.Background(), 5*time.Second) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("B must be unblocked by the probe's answer: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("B waited without probes after A left — the probe loop died with A's context")
+	}
+}
+
+// TestRestartResetsReadinessState pins the CodeRabbit finding: the readiness
+// state belongs to the outgoing server session. After Restart the client must
+// be unready (fresh process, no signals yet) — not treated as ready at once.
+func TestRestartResetsReadinessState(t *testing.T) {
+	c := newReadinessServerClient(t, "progress")
+	c.markReady()
+	c.workspaceLoaded.Store(true)
+	c.hasSeenProgress.Store(true)
+	c.readinessWaitExhausted.Store(true)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if _, err := c.Restart(ctx, c.RootDir()); err != nil {
+		t.Fatalf("restart: %v", err)
+	}
+	if c.IsReady() {
+		t.Error("after a restart the client must be unready until the new process signals")
+	}
+	if c.workspaceLoaded.Load() || c.hasSeenProgress.Load() || c.readinessWaitExhausted.Load() {
+		t.Error("readiness state must reset with the process")
+	}
+}
+
+func TestWaitForWorkspaceReadyTimeout_GraceAppliesBeyond60s(t *testing.T) {
 	c := newReadinessServerClient(t, "progress")
 
+	// The 10 s grace for a late begin token applies only to callers requesting
+	// MORE than 60 s: at exactly 60 s (the gate's own wait) the grace no
+	// longer applies, so callers passing 60 do not pay it. (PR #69 maintainer
+	// review, Minor)
 	start := time.Now()
-	c.WaitForWorkspaceReadyTimeout(context.Background(), 60*time.Second)
+	c.WaitForWorkspaceReadyTimeout(context.Background(), 61*time.Second)
 	elapsed := time.Since(start)
 	if elapsed < 500*time.Millisecond {
 		t.Fatalf("returned after %v; grace should have waited for the late begin token", elapsed)
@@ -431,5 +567,18 @@ func TestWaitForWorkspaceReadyTimeout_GraceAppliesAtExactly60s(t *testing.T) {
 	}
 	if !c.workspaceLoaded.Load() {
 		t.Fatal("workspaceLoaded must be true after progress drained")
+	}
+
+	// At exactly 60 s no grace: the wait returns at once when no tokens are
+	// active and none were ever seen.
+	c2 := newReadinessServerClient(t, "progress")
+	c2.progressMu.Lock()
+	c2.progressTokens = make(map[any]struct{})
+	c2.hasSeenProgress.Store(false)
+	c2.progressMu.Unlock()
+	start = time.Now()
+	c2.WaitForWorkspaceReadyTimeout(context.Background(), 60*time.Second)
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("exactly-60s wait took %v; the grace period must not apply at 60s", elapsed)
 	}
 }

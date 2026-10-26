@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+- **Workspace-readiness gating no longer stalls tools on servers that never emit `$/progress`** ([#77](https://github.com/blackwell-systems/agent-lsp/issues/77)): the event-driven readiness gate treated "no progress signal" as "still indexing", so on servers that never emit progress (gopls in many flows) every gated query — `find_references`, `explore`, `get_change_impact`, `get_cross_repo_references`, the symbol edit tools — paid a 15 s liveness-probe wait (up to 120 s when nothing responded; 60 s on every call for a stuck progress token), `IsWorkspaceLoaded` stayed false forever, and `workspace_ready` never fired. A server with no progress signal and none active is now treated as ready after the handshake: the gate returns in microseconds and the loaded/readiness state is latched truthfully. For servers that DO emit progress, a readiness wait that runs to its cap is now surfaced to the agent as an error instead of being discarded silently, and later calls proceed without paying the same wait again. The shared liveness-probe loop now follows the waiter count rather than one caller's context, so a cancelled caller no longer leaves the next waiter without probes, and `restart_lsp_server` resets the readiness state with the process, so a fresh server is no longer treated as ready at once. The 10 s late-token grace period applies only to callers requesting more than 60 s. Contributed by [@davalillo](https://github.com/davalillo).
+
 ## [0.23.1] - 2026-10-23
 
 ### Fixed
