@@ -997,6 +997,17 @@ func (c *LSPClient) SetRootDirForTest(rootDir string) {
 	c.rootDir = rootDir
 }
 
+// DiscardOutputForTest makes the client send its messages nowhere, so tests in
+// other packages can run paths that notify the server (such as a file edit's
+// didChange) without spawning a process.
+func (c *LSPClient) DiscardOutputForTest() {
+	c.stdin = discardWriteCloser{io.Discard}
+}
+
+type discardWriteCloser struct{ io.Writer }
+
+func (discardWriteCloser) Close() error { return nil }
+
 // isJDTLS reports whether the server binary appears to be Eclipse jdtls.
 // Checks the binary name for "jdtls" (covers /usr/local/bin/jdtls and
 // wrapper scripts named jdtls).

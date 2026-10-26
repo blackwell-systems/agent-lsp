@@ -29,7 +29,7 @@ func TestApplyTextMatch_ConcurrentWriteRefused(t *testing.T) {
 	}
 	t.Cleanup(func() { textMatchBeforeApply = nil })
 
-	res := applyTextMatch(context.Background(), client, path, "TARGET", "REPLACED", nil)
+	res, _ := applyTextMatch(context.Background(), client, path, "TARGET", "REPLACED", nil)
 	if !res.IsError || !strings.Contains(res.Content[0].Text, "changed after the edit was planned") {
 		t.Fatalf("result = %+v, want a file-changed refusal", res)
 	}
@@ -51,7 +51,7 @@ func TestApplyTextMatch_RefusesContentOtherThanPreviewed(t *testing.T) {
 	client := lsp.NewLSPClient("/bin/echo", nil)
 	client.SetRootDirForTest(root)
 
-	res := applyTextMatch(context.Background(), client, path, "y := 2", "y := 3", []byte("y := 2\n"))
+	res, _ := applyTextMatch(context.Background(), client, path, "y := 2", "y := 3", []byte("y := 2\n"))
 	if !res.IsError {
 		t.Fatalf("result = %+v, want a refusal", res)
 	}

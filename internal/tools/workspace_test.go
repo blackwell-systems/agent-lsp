@@ -537,21 +537,21 @@ func TestFindText_NotFound(t *testing.T) {
 	}
 }
 
-// --- textMatchRange ---
+// --- planTextMatch ---
 
-func TestTextMatchRange_ExactMatch(t *testing.T) {
+func TestPlanTextMatch_ExactMatch(t *testing.T) {
 	src := "package main\n\nfunc Foo() {\n\treturn\n}\n"
-	rng, ok := textMatchRange(src, "func Foo() {")
-	if !ok {
-		t.Fatal("not found")
+	rng, repl, unchanged, ok := planTextMatch(src, "func Foo() {", "func Foo() error {")
+	if !ok || unchanged || repl != "func Foo() error {" {
+		t.Fatalf("ok=%v unchanged=%v repl=%q", ok, unchanged, repl)
 	}
 	if rng.Start.Line != 2 || rng.Start.Character != 0 || rng.End.Line != 2 || rng.End.Character != 12 {
 		t.Errorf("range = %+v, want 2:0-2:12", rng)
 	}
 }
 
-func TestTextMatchRange_NotFound(t *testing.T) {
-	if _, ok := textMatchRange("package main\n", "func Missing() {}"); ok {
+func TestPlanTextMatch_NotFound(t *testing.T) {
+	if _, _, _, ok := planTextMatch("package main\n", "func Missing() {}", "x"); ok {
 		t.Error("expected not found")
 	}
 }

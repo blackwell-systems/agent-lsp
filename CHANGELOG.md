@@ -7,6 +7,11 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ### Fixed
 - **`apply_edit` in text-match mode could corrupt a file that changed during the edit** ([#76](https://github.com/blackwell-systems/agent-lsp/issues/76)): the match position was computed from one read of the file and spliced into a second read, so a write landing in between (an editor save, a formatter, another tool) made the edit land at a stale offset and lose bytes. The edit is now written only if the file still holds the content the match was computed from; otherwise nothing is written and the error asks to re-run the edit. `safe_apply_edit` also writes only the content its preview checked, so a file that changes after the preview is no longer written unverified. A writer landing in the instant between the final read and the write can still be overwritten, since other processes do not share a lock.
+- **`apply_edit` in text-match mode joined the next line onto a whitespace-tolerant replacement**: when `old_text` matched only after ignoring indentation, the replaced span took in the line break after the match, so a `new_text` without a trailing newline fused the following line onto it (`"  foo()"` replaced with `"\t\tbar()"` produced `\t\tbar()\treturn`). The line break is now part of the span only when `old_text` ends with one, as with an exact match, and in a CRLF file the replacement keeps CRLF line endings. Found in the review of [#68](https://github.com/blackwell-systems/agent-lsp/pull/68) by [@davalillo](https://github.com/davalillo).
+- **A text-match edit that changed nothing reported success**: when `new_text` equals the matched text, `apply_edit` and `safe_apply_edit` now report "No change applied" (with `applied: false`) and write nothing.
+
+### Changed
+- **Text-match edits say when they remove or add a trailing line break**: an exact match is still applied verbatim, but when `old_text` ends with a newline and `new_text` does not (or the reverse), the result notes that the following line was joined onto the replacement (or a line break was added), so an accidental line join no longer reads as plain success.
 
 ## [0.23.2] - 2026-10-25
 
