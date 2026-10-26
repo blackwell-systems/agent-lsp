@@ -265,7 +265,7 @@ func NewLSPClient(serverPath string, serverArgs []string) *LSPClient {
 		serverArgs: serverArgs,
 		// gopls publishes for every document version, so a missing
 		// publication means it has not caught up yet.
-		republishesUnchanged: strings.TrimSuffix(filepath.Base(serverPath), ".exe") == "gopls",
+		republishesUnchanged: isGoplsPath(serverPath),
 		pending:              make(map[int]*pendingRequest),
 		openDocs:             make(map[string]docMeta),
 		diags:                make(map[string][]types.LSPDiagnostic),
@@ -1016,6 +1016,15 @@ func (c *LSPClient) isJDTLS() bool {
 	return strings.Contains(strings.ToLower(base), "jdtls")
 }
 
+// isGopls reports whether the server binary is gopls.
+func (c *LSPClient) isGopls() bool {
+	return isGoplsPath(c.serverPath)
+}
+
+func isGoplsPath(serverPath string) bool {
+	return strings.TrimSuffix(filepath.Base(serverPath), ".exe") == "gopls"
+}
+
 // Initialize starts the LSP process and performs the LSP handshake.
 func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	c.rootDir = rootDir
@@ -1169,6 +1178,15 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 		"workspaceFolders": []map[string]any{
 			{"uri": rootURI, "name": rootDir},
 		},
+	}
+
+	// gopls publishes diagnostics for an edit in stages (an early set without
+	// type errors, then the type-check results), so a wait on the push stream
+	// cannot know when it has the final answer. Its pull mode answers for the
+	// current document version synchronously; safe_apply_edit's preview uses
+	// it (see PrefersPullDiagnostics). gopls keeps publishing as before.
+	if c.isGopls() {
+		initParams["initializationOptions"] = map[string]any{"pullDiagnostics": true}
 	}
 
 	// jdtls (Java) needs initializationOptions with settings and
@@ -1826,6 +1844,10 @@ func (c *LSPClient) PullDiagnostics(ctx context.Context, uri string) ([]types.LS
 	var report documentDiagnosticReport
 	if err := json.Unmarshal(result, &report); err != nil {
 		return nil, err
+	}
+	// gopls (as of v0.23) leaves kind empty on its full reports.
+	if report.Kind == "" && c.isGopls() {
+		report.Kind = "full"
 	}
 	if report.Kind != "full" {
 		// Returning an empty list here would read as "verified clean" to the
@@ -2944,6 +2966,16 @@ func (c *LSPClient) hasCapability(key string) bool {
 // (issue #43)
 func (c *LSPClient) SupportsPullDiagnostics() bool {
 	return c.hasCapability("diagnosticProvider")
+}
+
+// PrefersPullDiagnostics reports whether a pull gives this server's final
+// diagnostics for the current document version, so a caller that must know
+// the result for an edit (the speculative-session preview) should pull rather
+// than wait on the push stream. Only gopls qualifies: its pushes arrive in
+// stages, and its pull is synchronous. Pull is not used for other servers
+// here, since at least one known implementation hangs (see requestTimeouts).
+func (c *LSPClient) PrefersPullDiagnostics() bool {
+	return c.isGopls() && c.SupportsPullDiagnostics()
 }
 
 func (c *LSPClient) getCapabilityRaw(key string) any {
