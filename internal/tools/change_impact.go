@@ -134,6 +134,13 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 		filter = v
 	}
 
+	capabilities := client.GetCapabilities()
+	for _, required := range []string{"documentSymbolProvider", "referencesProvider"} {
+		if !hasCapabilityInMap(capabilities, required) {
+			return types.ErrorResult("blast_radius requires " + required + "; inspect get_server_capabilities for supported operations"), nil
+		}
+	}
+
 	// Phase 1: Collect all exported symbols from all changed files.
 	// Only collects top-level exports (functions, types, variables, constants).
 	// Struct fields are excluded: they aren't independently callable and their

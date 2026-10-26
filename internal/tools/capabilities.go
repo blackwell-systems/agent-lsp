@@ -171,6 +171,12 @@ func buildServerCapabilitiesResult(client *lsp.LSPClient) ServerCapabilitiesResu
 		}
 	}
 
+	if hasCapabilityInMap(caps, "documentSymbolProvider") && hasCapabilityInMap(caps, "referencesProvider") {
+		supported = append(supported, "blast_radius")
+	} else {
+		unsupported = append(unsupported, "blast_radius")
+	}
+
 	sort.Strings(supported)
 	sort.Strings(unsupported)
 
