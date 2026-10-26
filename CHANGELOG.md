@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+- **A language server progress report that never ended cost every `find_references` 60 seconds**: `find_references` (and the tools built on it) waits for active `$/progress` work before querying, and unlike the other tools it repeated that wait on every call, so a token that never ended (a server bug or a hung task) made each call take the full 60 s. A token that has already made a wait time out is now skipped by later waits, so it costs one wait; new progress is still waited on. Explicit long waits (the jdtls import, `start_lsp`'s `ready_timeout_seconds`, the daemon) still wait on every token. The wait also no longer risks sleeping past its deadline when its wake-up timer fired just before it.
+- **`indexed=true` while the language server was still indexing**: a server that starts its initial load shortly after startup (rust-analyzer, jdtls) could be marked loaded by a query that ran before its first progress report, so tools stopped waiting and reported `indexed=true` during indexing. The server's first progress report now clears that mark, so tools wait for the load and `indexed` is accurate; later background work (such as cargo check) does not. `restart_lsp_server` also reset nothing here, so `indexed` stayed true while the new server indexed; it is now reset with the server. Found in the review of [#69](https://github.com/blackwell-systems/agent-lsp/pull/69) ([#77](https://github.com/blackwell-systems/agent-lsp/issues/77)).
+
 ## [0.23.4] - 2026-10-26
 
 ### Fixed

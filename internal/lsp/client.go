@@ -216,6 +216,14 @@ type LSPClient struct {
 	progressMu     sync.Mutex
 	progressTokens map[any]struct{} // active begin tokens
 	progressCond   *sync.Cond       // signalled when progressTokens becomes empty
+	// staleProgress holds tokens that already made a readiness wait time out:
+	// a token that never ends (a server bug or a hung task) would otherwise
+	// cost every later find_references the full 60s wait. Later default waits
+	// ignore them; a fresh begin or an end for the token clears it.
+	staleProgress map[any]struct{}
+	// seenProgress records that the server has sent at least one progress
+	// begin. Guarded by progressMu.
+	seenProgress bool
 
 	// workspace scoping (generated config for large repos)
 	scopeConfig  *ScopeConfig
@@ -754,14 +762,42 @@ func (c *LSPClient) handleProgress(params json.RawMessage) {
 	switch p.Value.Kind {
 	case "begin":
 		c.progressTokens[p.Token] = struct{}{}
+		delete(c.staleProgress, p.Token)
+		if !c.seenProgress {
+			// The server's first progress is its initial load. A readiness
+			// wait that ran before it began (servers such as rust-analyzer and
+			// jdtls start a few hundred milliseconds after initialize) saw no
+			// progress and marked the workspace loaded; undo that, so tools
+			// wait for the load and indexed is not reported true while the
+			// server is still indexing.
+			c.seenProgress = true
+			c.workspaceLoaded.Store(false)
+		}
 	case "report":
 		logging.Log(logging.LevelDebug, fmt.Sprintf("$/progress report token=%v", p.Token))
 	case "end":
 		delete(c.progressTokens, p.Token)
-		if len(c.progressTokens) == 0 {
+		delete(c.staleProgress, p.Token)
+		if c.pendingProgressLocked(true) == 0 {
 			c.progressCond.Broadcast()
 		}
 	}
+}
+
+// pendingProgressLocked counts the active progress tokens a readiness wait
+// should block on: all of them, or with skipStale only those that have not
+// already made a wait time out. The caller holds progressMu.
+func (c *LSPClient) pendingProgressLocked(skipStale bool) int {
+	if !skipStale {
+		return len(c.progressTokens)
+	}
+	n := 0
+	for tok := range c.progressTokens {
+		if _, stale := c.staleProgress[tok]; !stale {
+			n++
+		}
+	}
+	return n
 }
 
 // HasActiveProgress reports whether the server currently has open $/progress
@@ -775,12 +811,16 @@ func (c *LSPClient) HasActiveProgress() bool {
 	return len(c.progressTokens) > 0
 }
 
+// defaultReadinessWait caps the readiness wait that queries run before talking
+// to the server. A variable so tests can shorten it.
+var defaultReadinessWait = 60 * time.Second
+
 // waitForWorkspaceReady blocks until activeProgressTokens is empty or 60s
 // elapses. Uses a condition variable so handleProgress can signal immediately.
 // A timer goroutine guarantees the deadline fires even if gopls never emits
 // a matching "end" progress token (preventing an indefinite block).
 func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
-	c.WaitForWorkspaceReadyTimeout(ctx, 60*time.Second)
+	c.waitForProgress(ctx, defaultReadinessWait, true)
 	c.workspaceLoaded.Store(true)
 }
 
@@ -801,14 +841,26 @@ func (c *LSPClient) ensureWorkspaceReady(ctx context.Context) {
 // $/progress begin to arrive. Servers like jdtls emit progress tokens
 // asynchronously after initialize — without this grace period, the wait
 // returns immediately before indexing has even started.
+//
+// It waits on every active token, including ones an earlier default wait gave
+// up on: callers that pass a long timeout (the jdtls import, start_lsp's
+// ready_timeout_seconds, the daemon) mean to wait for a long-running load.
 func (c *LSPClient) WaitForWorkspaceReadyTimeout(ctx context.Context, timeout time.Duration) {
+	c.waitForProgress(ctx, timeout, false)
+}
+
+// waitForProgress implements the readiness waits. With skipStale, tokens that
+// already made a wait time out are ignored, and a wait that times out marks
+// the tokens still active as stale, so a token that never ends is waited on
+// once rather than on every call.
+func (c *LSPClient) waitForProgress(ctx context.Context, timeout time.Duration, skipStale bool) {
 	c.progressMu.Lock()
 	defer c.progressMu.Unlock()
 
 	// Grace period: if no progress tokens yet and caller requested an extended
 	// wait (>60s), wait briefly for the first token. Avoids 10s delay for
 	// default-timeout callers (GetReferences, etc.) on servers that never emit progress.
-	if len(c.progressTokens) == 0 && timeout > 60*time.Second {
+	if c.pendingProgressLocked(skipStale) == 0 && timeout > 60*time.Second {
 		grace := make(chan struct{})
 		go func() {
 			select {
@@ -820,7 +872,7 @@ func (c *LSPClient) WaitForWorkspaceReadyTimeout(ctx context.Context, timeout ti
 			}
 		}()
 		graceDeadline := time.Now().Add(10 * time.Second)
-		for len(c.progressTokens) == 0 {
+		for c.pendingProgressLocked(skipStale) == 0 {
 			if time.Now().After(graceDeadline) || ctx.Err() != nil {
 				close(grace)
 				return
@@ -831,12 +883,16 @@ func (c *LSPClient) WaitForWorkspaceReadyTimeout(ctx context.Context, timeout ti
 	}
 
 	// Guarantee a wakeup at the deadline so the cond var doesn't block forever
-	// if the server emits a begin token without a corresponding end token.
+	// if the server emits a begin token without a corresponding end token. The
+	// deadline is fixed before the timer starts: a timer started first could
+	// fire just before the deadline, and the loop would wait again with
+	// nothing left to wake it.
+	deadline := time.Now().Add(timeout)
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
 		select {
-		case <-time.After(timeout):
+		case <-time.After(time.Until(deadline) + time.Millisecond):
 			c.progressCond.Broadcast()
 		case <-ctx.Done():
 			c.progressCond.Broadcast()
@@ -844,9 +900,20 @@ func (c *LSPClient) WaitForWorkspaceReadyTimeout(ctx context.Context, timeout ti
 		}
 	}()
 
-	deadline := time.Now().Add(timeout)
-	for len(c.progressTokens) > 0 {
-		if time.Now().After(deadline) || ctx.Err() != nil {
+	for c.pendingProgressLocked(skipStale) > 0 {
+		if ctx.Err() != nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			if skipStale {
+				if c.staleProgress == nil {
+					c.staleProgress = make(map[any]struct{})
+				}
+				for tok := range c.progressTokens {
+					c.staleProgress[tok] = struct{}{}
+				}
+				logging.Log(logging.LevelWarning, fmt.Sprintf("readiness wait timed out after %s with %d progress token(s) still active; later waits will not block on them", timeout, len(c.progressTokens)))
+			}
 			return
 		}
 		c.progressCond.Wait()
@@ -1481,7 +1548,12 @@ func (c *LSPClient) Restart(ctx context.Context, rootDir string) (int, error) {
 	c.pendingMu.Unlock()
 	c.progressMu.Lock()
 	c.progressTokens = make(map[any]struct{})
+	c.staleProgress = nil
+	c.seenProgress = false
 	c.progressMu.Unlock()
+	// The fresh server has loaded nothing yet; indexed must not stay true
+	// from the previous process.
+	c.workspaceLoaded.Store(false)
 	c.capsMu.Lock()
 	c.capabilities = make(map[string]any)
 	c.capsMu.Unlock()
