@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -639,11 +640,13 @@ func writeTextMatchFixture(t *testing.T, content string) string {
 	return p
 }
 
-// TestTextMatchApply_OldTextTrailingNewlinePreserved verifies issue #18 fix 4:
-// when old_text ends with a newline and new_text does not, the newline that
-// separates the matched block from the following line is preserved instead of
-// fusing the next line onto the last line of the replacement (tail-merge).
-func TestTextMatchApply_OldTextTrailingNewlinePreserved(t *testing.T) {
+// TestTextMatchApply_ExactMatchReplacementIsVerbatim pins the PR #68
+// maintainer-review policy change: on the exact-match path the replacement is
+// applied VERBATIM — balancing used to re-attach the span's trailing newline
+// (or trim the replacement's), which silently rewrote intended newline
+// changes into no-ops that still reported success. An old_text ending in a
+// newline replaced by a new_text without one is the caller's ask.
+func TestTextMatchApply_ExactMatchReplacementIsVerbatim(t *testing.T) {
 	p := writeTextMatchFixture(t, "package main\n\nfunc Foo() {\n\treturn\n}\n\nfunc Bar() {}\n")
 
 	edit, err := textMatchApply(p, "func Foo() {\n\treturn\n}\n", "func Foo() error {\n\treturn nil\n}")
@@ -651,16 +654,17 @@ func TestTextMatchApply_OldTextTrailingNewlinePreserved(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	newText, _ := textEditFromTextMatchEdit(t, edit)
-	if !strings.HasSuffix(newText, "\n") {
-		t.Errorf("expected replacement to re-attach the trailing newline, got %q", newText)
+	if want := "func Foo() error {\n\treturn nil\n}"; newText != want {
+		t.Errorf("exact-match replacement must be verbatim:\n got %q\nwant %q", newText, want)
 	}
 }
 
-// TestTextMatchApply_NewTextTrailingNewlineNotDuplicated verifies the inverse
-// parity rule of issue #18 fix 4: when new_text ends with a newline that the
-// matched old_text span does not include, it is trimmed so no blank line is
-// inserted.
-func TestTextMatchApply_NewTextTrailingNewlineNotDuplicated(t *testing.T) {
+// TestTextMatchApply_NewTextTrailingNewlineApplied verifies the verbatim
+// policy on the exact-match path (PR #68 maintainer review): a new_text that
+// ends with a newline the old_text span does not include is applied as asked
+// — the caller explicitly requested the extra line break — and the splice
+// inserts it.
+func TestTextMatchApply_NewTextTrailingNewlineApplied(t *testing.T) {
 	content := "package main\n\nfunc Foo() {}\n\nfunc Bar() {}\n"
 	p := writeTextMatchFixture(t, content)
 
@@ -669,11 +673,33 @@ func TestTextMatchApply_NewTextTrailingNewlineNotDuplicated(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	newText, rng := textEditFromTextMatchEdit(t, edit)
-	if strings.HasSuffix(newText, "\n") {
-		t.Errorf("expected trailing newline of new_text to be trimmed, got %q", newText)
+	if want := "func Foo() error {}\n"; newText != want {
+		t.Errorf("new_text trailing newline must not be trimmed:\n got %q\nwant %q", newText, want)
 	}
-	// Splicing the produced edit into the file must not insert a blank line.
-	if got := uri.ApplyRangeEdit(content, rng, newText); got != "package main\n\nfunc Foo() error {}\n\nfunc Bar() {}\n" {
+	if got := uri.ApplyRangeEdit(content, rng, newText); got != "package main\n\nfunc Foo() error {}\n\n\nfunc Bar() {}\n" {
+		t.Errorf("unexpected spliced content: %q", got)
+	}
+}
+
+// The FALLBACK path keeps the opposite rule: its span is the full matched
+// lines (including their trailing newline), which is NOT what the caller
+// quoted, so the replacement is EOL-balanced against the span and the next
+// line must not fuse onto the replacement (the original issue #18 bug).
+func TestTextMatchApply_NormalizedFallbackBalancesTrailingEOL(t *testing.T) {
+	content := "package main\n\n  foo()\n\treturn\n"
+	p := writeTextMatchFixture(t, content)
+
+	// "    foo()" (wrong indentation, not an exact substring) only matches the
+	// whitespace-normalised full-line path, whose span is "  foo()\n".
+	edit, err := textMatchApply(p, "    foo()", "\t\tbar()")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	newText, rng := textEditFromTextMatchEdit(t, edit)
+	if want := "\t\tbar()\n"; newText != want {
+		t.Errorf("fallback replacement must re-attach the span's newline:\n got %q\nwant %q", newText, want)
+	}
+	if got := uri.ApplyRangeEdit(content, rng, newText); got != "package main\n\n\t\tbar()\n\treturn\n" {
 		t.Errorf("unexpected spliced content: %q", got)
 	}
 }
@@ -721,11 +747,15 @@ func TestTextMatchApply_BOMDoesNotShiftOffsets(t *testing.T) {
 }
 
 // fakeTextMatchApplyFn returns an applier that mimics LSPClient.ApplyWorkspaceEdit
-// for one file: it re-reads the file from disk, splices the edit's LSP ranges
-// with the canonical uri.ApplyRangeEdit (the same path applyEditsToFile uses),
-// and writes the result back — without any language server.
-func fakeTextMatchApplyFn(filePath string) func(context.Context, any) error {
-	return func(_ context.Context, edit any) error {
+// for one file: it re-reads the file from disk, refuses the write when the
+// content no longer matches the edit's x-expected-snapshot precondition (the
+// same compare-and-swap applyEditsToFile now performs), splices the edit's
+// LSP ranges with the canonical uri.ApplyRangeEdit (the same path
+// applyEditsToFile uses), and writes the result back — without any language
+// server.
+func fakeTextMatchApplyFn(filePath string) func(context.Context, textMatchPlan) error {
+	return func(_ context.Context, plan textMatchPlan) error {
+		edit := plan.edit
 		data, err := os.ReadFile(filePath)
 		if err != nil {
 			return err
@@ -734,6 +764,10 @@ func fakeTextMatchApplyFn(filePath string) func(context.Context, any) error {
 		m, ok := edit.(map[string]any)
 		if !ok {
 			return fmt.Errorf("edit is not map[string]any")
+		}
+		// Compare-and-swap precondition, mirroring applyEditsToFile.
+		if snap, _ := m["x-expected-snapshot"].(string); snap != "" && snap != content {
+			return fmt.Errorf("applyEdit: %s changed since the edit was computed (concurrent modification); NOTHING was written — re-run against the current file contents", filePath)
 		}
 		changes, ok := m["changes"].(map[string]any)
 		if !ok {
@@ -834,7 +868,7 @@ func TestApplyTextMatchEdit_VerificationFailureNamesFile(t *testing.T) {
 	p := writeTextMatchFixture(t, "package main\n\nfunc Foo() {\n}\n")
 	// An applier that reports success but writes nothing: the post-apply
 	// verification must catch that the replacement never landed.
-	noop := func(context.Context, any) error { return nil }
+	noop := func(context.Context, textMatchPlan) error { return nil }
 	_, err := applyTextMatchEdit(context.Background(), p, "func Foo() {", "func Foo() error {", noop)
 	if err == nil {
 		t.Fatal("expected an error when post-apply verification fails")
@@ -885,7 +919,7 @@ func TestApplyTextMatchEdit_SuccessResultIncludesSite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "package main\n\nfunc Foo() error {\n\treturn nil\n}\n"; string(got) != want {
+	if want := "package main\n\nfunc Foo() error {\n\treturn nil\n}"; string(got) != want {
 		t.Errorf("unexpected file content:\n got %q\nwant %q", got, want)
 	}
 	text := concatResultText(res)
@@ -895,10 +929,192 @@ func TestApplyTextMatchEdit_SuccessResultIncludesSite(t *testing.T) {
 	if !strings.Contains(text, p) {
 		t.Errorf("file path missing: %q", text)
 	}
-	// Match starts at byte 14 (after "package main\n\n") and the balanced
-	// replacement is 33 bytes long, so the site is bytes 14-47.
-	if !strings.Contains(text, "bytes 14-47") {
+	// The exact-match replacement is verbatim (PR #68 policy change): the
+	// caller's new_text has no trailing newline, so the site is bytes 14-46
+	// ("package main\n\n" is 14 bytes; the replacement is 32 bytes long).
+	if !strings.Contains(text, "bytes 14-46") {
 		t.Errorf("byte range missing: %q", text)
+	}
+}
+
+// TestApplyTextMatchEdit_NoChangeReportedNotSuccess pins the PR #68
+// maintainer-review rule: when EOL handling makes the replacement
+// byte-identical to the matched span (here the normalised full-line span is
+// restored by balancing), the tool must say NOTHING changed instead of
+// reporting "Edit applied successfully" over an untouched file.
+func TestApplyTextMatchEdit_NoChangeReportedNotSuccess(t *testing.T) {
+	p := writeTextMatchFixture(t, "package main\n\n  foo()\n\treturn\n")
+	applied := false
+	res, err := applyTextMatchEdit(context.Background(), p, "    foo()", "  foo()", func(context.Context, textMatchPlan) error {
+		applied = true
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected Go error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("a no-op must not be an error result: %s", concatResultText(res))
+	}
+	if applied {
+		t.Errorf("the edit must not be applied when the replacement is byte-identical to the span")
+	}
+	text := concatResultText(res)
+	if !strings.Contains(text, "No change applied") {
+		t.Errorf("no-change result missing: %q", text)
+	}
+	if strings.Contains(text, "Edit applied successfully") {
+		t.Errorf("a no-op must not report success: %q", text)
+	}
+}
+
+// TestApplyTextMatchEdit_ConcurrentWriterRefusedByCAS pins the PR #68
+// maintainer-review fix: a writer outside the per-file lock landing between
+// the plan's read and the apply must NOT corrupt the file. The applier here
+// simulates the external write and then performs the same
+// compare-against-snapshot the real applyEditsToFile does: the write is
+// refused and the external writer's content survives intact.
+func TestApplyTextMatchEdit_ConcurrentWriterRefusedByCAS(t *testing.T) {
+	p := writeTextMatchFixture(t, "line1\nTARGET\nline3\nline4\n")
+	src, _ := os.ReadFile(p)
+	externalWrite := []byte("INSERTED\nDONE\nline2\nTARGET\nline4\n")
+	_, err := applyTextMatchEdit(context.Background(), p, "TARGET", "REPLACED", func(_ context.Context, plan textMatchPlan) error {
+		// The concurrent writer lands here, between the plan's read and the
+		// apply.
+		if wErr := os.WriteFile(p, externalWrite, 0o644); wErr != nil {
+			return wErr
+		}
+		// The real client's CAS: read once, refuse unless it still matches
+		// the plan's snapshot.
+		cur, rErr := os.ReadFile(p)
+		if rErr != nil {
+			return rErr
+		}
+		if string(cur) != plan.src {
+			return fmt.Errorf("applyEdit: %s changed since the edit was computed (concurrent modification); NOTHING was written — re-run against the current file contents", p)
+		}
+		return nil
+	})
+	if err == nil {
+		t.Fatal("the CAS precondition must refuse the stale edit")
+	}
+	if !strings.Contains(err.Error(), "changed since the edit was computed") {
+		t.Errorf("unexpected refusal error: %v", err)
+	}
+	after, _ := os.ReadFile(p)
+	if string(after) != string(externalWrite) {
+		t.Errorf("the refused edit must leave the concurrent writer's content intact, got %q", after)
+	}
+	if bytes.Contains(after, []byte("REPLACED")) {
+		t.Errorf("the refused edit must not splice anything, got %q", after)
+	}
+	_ = src
+}
+
+// TestApplyWorkspaceEditCASRefusesChangedFile exercises the real client-side
+// precondition: ApplyWorkspaceEdit with an x-expected-snapshot must refuse
+// (and write nothing) when the file changed since the edit was computed.
+func TestApplyWorkspaceEditCASRefusesChangedFile(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "a.txt")
+	if err := os.WriteFile(p, []byte("original\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := lsp.NewLSPClient("fake", nil)
+	c.SetRootDirForTest(root)
+	edit := map[string]any{
+		"changes": map[string]any{
+			CreateFileURI(p): []any{
+				map[string]any{
+					"range": map[string]any{
+						"start": map[string]any{"line": 0, "character": 0},
+						"end":   map[string]any{"line": 0, "character": 8},
+					},
+					"newText": "REPLACED",
+				},
+			},
+		},
+		"x-expected-snapshot": "original\n",
+	}
+	// The file changes after the plan was computed.
+	if err := os.WriteFile(p, []byte("modified by someone else\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.ApplyWorkspaceEdit(context.Background(), edit); err == nil {
+		t.Fatal("ApplyWorkspaceEdit must refuse a stale snapshot")
+	} else if !strings.Contains(err.Error(), "changed since the edit was computed") {
+		t.Errorf("unexpected error: %v", err)
+	}
+	got, _ := os.ReadFile(p)
+	if string(got) != "modified by someone else\n" {
+		t.Errorf("the refused edit must write nothing, got %q", got)
+	}
+
+	// Matching snapshot: the edit applies.
+	if err := os.WriteFile(p, []byte("original\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Matching snapshot: the edit applies. (The trailing didChange fails on
+	// this fake, unstarted client — the file write is what this test pins.)
+	if err := c.ApplyWorkspaceEdit(context.Background(), edit); err != nil && !strings.Contains(err.Error(), "LSP client not started") {
+		t.Fatalf("matching snapshot must apply: %v", err)
+	}
+	got, _ = os.ReadFile(p)
+	if string(got) != "REPLACED\n" {
+		t.Errorf("unexpected content after apply: %q", got)
+	}
+}
+
+// TestApplyTextMatchEdit_AbsenceCheckDoesNotJoinBoundaries pins the CodeRabbit
+// fix: deleting "()" from "(())" applies correctly and must not be rejected by
+// an absence check that forms a false match by concatenating the text before
+// and after the site (")" + "(" joins into "()").
+func TestApplyTextMatchEdit_AbsenceCheckDoesNotJoinBoundaries(t *testing.T) {
+	p := writeTextMatchFixture(t, "f(())\n")
+	res, err := applyTextMatchEdit(context.Background(), p, "()", "", fakeTextMatchApplyFn(p))
+	if err != nil {
+		t.Fatalf("a correct deletion must not be rejected: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("verification falsely rejected a boundary join: %s", concatResultText(res))
+	}
+	got, _ := os.ReadFile(p)
+	if string(got) != "f()\n" {
+		t.Errorf("unexpected file content: %q", got)
+	}
+}
+
+// TestApplyTextMatchEdit_LockHonorsContextAndPrunes pins the PR #68
+// maintainer-review lock fixes: waiting for the per-file lock honors the
+// caller's context, and the lock map is pruned once the last holder leaves.
+func TestApplyTextMatchEdit_LockHonorsContextAndPrunes(t *testing.T) {
+	p := writeTextMatchFixture(t, "a\nb\n")
+	// Hold the lock from another goroutine.
+	release, lerr := lockTextMatchFile(context.Background(), p)
+	if lerr != nil {
+		t.Fatal(lerr)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+	_, err := applyTextMatchEdit(ctx, p, "a", "b", fakeTextMatchApplyFn(p))
+	release()
+	if err == nil || !strings.Contains(err.Error(), "context canceled") {
+		t.Fatalf("a cancelled caller must be released from the lock wait, got %v", err)
+	}
+	// The cancelled waiter must not leak its reference: give the drain
+	// goroutine a moment, then the map entry must be pruned once released.
+	time.Sleep(100 * time.Millisecond)
+	textMatchFileLocksMu.Lock()
+	left := len(textMatchFileLocks)
+	textMatchFileLocksMu.Unlock()
+	if left != 0 {
+		t.Errorf("lock map must be pruned after the last holder/waiter leaves, %d entries left", left)
+	}
+	// And a fresh apply still works.
+	if _, err := applyTextMatchEdit(context.Background(), p, "a", "b", fakeTextMatchApplyFn(p)); err != nil {
+		t.Fatalf("apply after the cancelled waiter must succeed: %v", err)
 	}
 }
 

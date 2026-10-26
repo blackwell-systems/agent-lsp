@@ -621,8 +621,8 @@ func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string
 		// The full read→find→apply→verify sequence holds the per-file lock so
 		// two concurrent text-match applies to the same file cannot both
 		// compute their ranges against the same disk snapshot (issue #18).
-		result, err := applyTextMatchEdit(ctx, absPath, oldText, newText, func(ctx context.Context, edit any) error {
-			return client.ApplyWorkspaceEdit(ctx, edit)
+		result, err := applyTextMatchEdit(ctx, absPath, oldText, newText, func(ctx context.Context, plan textMatchPlan) error {
+			return client.ApplyWorkspaceEdit(ctx, plan.edit)
 		})
 		if err != nil {
 			return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): %s", err)), nil
@@ -660,31 +660,69 @@ func textMatchApply(filePath, oldText, newText string) (any, error) {
 // textMatchFileLocks serializes the text-match apply sequence per absolute
 // file path (issue #18 fix 2): without it, two concurrent text-match applies
 // to the same file both computed their ranges against the same disk snapshot
-// and the second landed at a stale position. Entries are never removed; the
-// map is bounded by the number of distinct files edited in the process
-// lifetime.
-var (
-	textMatchFileLocksMu sync.Mutex
-	textMatchFileLocks   = map[string]*sync.Mutex{}
-)
-
-// lockTextMatchFile acquires the per-file mutex for absPath and returns the
-// corresponding unlock function.
-func lockTextMatchFile(absPath string) func() {
-	textMatchFileLocksMu.Lock()
-	mu := textMatchFileLocks[absPath]
-	if mu == nil {
-		mu = &sync.Mutex{}
-		textMatchFileLocks[absPath] = mu
-	}
-	textMatchFileLocksMu.Unlock()
-	mu.Lock()
-	return mu.Unlock
+// and the second landed at a stale position.
+type textMatchFileLock struct {
+	mu   sync.Mutex
+	refs int // holders + waiters; the map entry is pruned at zero
 }
 
-// workspaceEditApplier applies a constructed WorkspaceEdit. HandleApplyEdit
-// wires it to LSPClient.ApplyWorkspaceEdit; tests inject a splicing fake.
-type workspaceEditApplier func(ctx context.Context, edit any) error
+var (
+	textMatchFileLocksMu sync.Mutex
+	textMatchFileLocks   = map[string]*textMatchFileLock{}
+)
+
+// lockTextMatchFile acquires the per-file mutex for absPath, honoring ctx:
+// a caller whose context ends while waiting is released (its pending acquire
+// is drained by a cleanup goroutine and never leaks the lock). The map entry
+// is reference-counted and pruned once the last holder/waiter leaves, so the
+// map stays bounded by concurrently-edited files instead of growing for the
+// process lifetime. (PR #68 maintainer review)
+func lockTextMatchFile(ctx context.Context, absPath string) (func(), error) {
+	textMatchFileLocksMu.Lock()
+	l := textMatchFileLocks[absPath]
+	if l == nil {
+		l = &textMatchFileLock{}
+		textMatchFileLocks[absPath] = l
+	}
+	l.refs++
+	textMatchFileLocksMu.Unlock()
+
+	acquired := make(chan struct{})
+	go func() {
+		l.mu.Lock()
+		close(acquired)
+	}()
+	select {
+	case <-acquired:
+	case <-ctx.Done():
+		// Drain the pending acquire so the goroutine never holds the lock
+		// after this caller left, then release the reference.
+		go func() {
+			<-acquired
+			l.mu.Unlock()
+			releaseTextMatchFileLock(absPath, l)
+		}()
+		return nil, ctx.Err()
+	}
+	return func() {
+		l.mu.Unlock()
+		releaseTextMatchFileLock(absPath, l)
+	}, nil
+}
+
+func releaseTextMatchFileLock(absPath string, l *textMatchFileLock) {
+	textMatchFileLocksMu.Lock()
+	l.refs--
+	if l.refs <= 0 {
+		delete(textMatchFileLocks, absPath)
+	}
+	textMatchFileLocksMu.Unlock()
+}
+
+// workspaceEditApplier applies a constructed text-match plan (its edit plus
+// the snapshot the span was computed against). HandleApplyEdit wires it to
+// LSPClient.ApplyWorkspaceEdit; tests inject a splicing fake.
+type workspaceEditApplier func(ctx context.Context, plan textMatchPlan) error
 
 // applyTextMatchEdit runs the full serialized text-match apply sequence for
 // one file: read → findText → build edit → apply → post-apply verification
@@ -693,14 +731,26 @@ type workspaceEditApplier func(ctx context.Context, edit any) error
 // between the read and the write. The WorkspaceEdit (positional) mode of
 // apply_edit is not serialized.
 func applyTextMatchEdit(ctx context.Context, filePath, oldText, newText string, applyFn workspaceEditApplier) (types.ToolResult, error) {
-	unlock := lockTextMatchFile(filePath)
+	unlock, err := lockTextMatchFile(ctx, filePath)
+	if err != nil {
+		return types.ToolResult{}, fmt.Errorf("waiting for the per-file edit lock on %s: %w", filePath, err)
+	}
 	defer unlock()
 
 	plan, err := buildTextMatchPlan(filePath, oldText, newText)
 	if err != nil {
 		return types.ToolResult{}, err
 	}
-	if err := applyFn(ctx, plan.edit); err != nil {
+	// Newline and EOL handling can make the replacement byte-identical to the
+	// span the caller quoted (e.g. "foo(\n" -> "foo(" on a CRLF file, or a
+	// deletion on the normalised path whose span is re-balanced back to the
+	// original): applying it would be a no-op, so say so instead of
+	// reporting success over an untouched file. (PR #68 maintainer review)
+	if plan.replacement == plan.spanText {
+		startLine, _, endLine, _ := byteSpanToLSPRange(plan.src, plan.startByte, plan.startByte+len(plan.spanText))
+		return types.TextResult(fmt.Sprintf("No change applied: new_text is byte-identical to the matched span in %s (bytes %d-%d, lines %d-%d) after EOL handling; nothing was written", filePath, plan.startByte, plan.startByte+len(plan.spanText), startLine, endLine)), nil
+	}
+	if err := applyFn(ctx, plan); err != nil {
 		return types.ToolResult{}, err
 	}
 
@@ -734,8 +784,12 @@ func verifyTextMatchApplied(after string, plan textMatchPlan) bool {
 	// embed the old text (e.g. "return nil" -> "return nil // guard"), so
 	// the absence check excludes the replaced span instead of the whole file.
 	if strings.Count(plan.src, plan.spanText) == 1 {
-		outside := after[:plan.startByte] + after[siteEnd:]
-		if strings.Contains(outside, plan.spanText) {
+		// Check the parts BEFORE and AFTER the applied site separately:
+		// concatenating them can form a spanText occurrence that never existed
+		// in the file (deleting "()" from "(())" leaves ")" + "(" which joins
+		// into "()"), rejecting a correct edit and inviting a double apply.
+		// (PR #68 maintainer review / CodeRabbit)
+		if strings.Contains(after[:plan.startByte], plan.spanText) || strings.Contains(after[siteEnd:], plan.spanText) {
 			return false
 		}
 	}
@@ -780,21 +834,35 @@ func buildTextMatchPlan(filePath, oldText, newText string) (textMatchPlan, error
 	var plan textMatchPlan
 	if start, end, ok := findTextExact(src, oldText); ok {
 		spanText := src[start:end]
+		// The exact span is byte-identical to what the caller quoted, so the
+		// replacement is applied VERBATIM (newline changes included): silently
+		// re-balancing it turned intended newline changes into no-ops that
+		// still reported success (PR #68 maintainer review). Only the EOL
+		// STYLE is aligned: a replacement written with LF must not corrupt a
+		// CRLF region (issue #18 fix 4).
 		replacement := newText
 		if strings.Contains(spanText, "\r\n") {
-			// The matched region uses CRLF endings: preserve them in the
-			// replacement even when old_text/new_text were written with LF
-			// (issue #18 fix 4).
 			replacement = toCRLF(newText)
 		}
-		replacement = balanceTrailingEOL(spanText, replacement)
 		plan = textMatchPlan{filePath: filePath, src: src, startByte: start, spanText: spanText, replacement: replacement}
 	} else {
 		start, end, ok := findTextNormalized(src, oldText)
 		if !ok {
 			return textMatchPlan{}, fmt.Errorf("old_text not found in %s (tried exact and whitespace-normalised line match)", filePath)
 		}
-		plan = textMatchPlan{filePath: filePath, src: src, startByte: start, spanText: src[start:end], replacement: newText}
+		// The normalised span is the FULL matched lines (indentation plus the
+		// trailing newline), which is not what the caller quoted: balance the
+		// replacement's trailing EOL against the span so the next line does
+		// not fuse onto the replacement (the original issue #18 bug, which
+		// survived on this path), and align CRLF style. (PR #68 maintainer
+		// review / CodeRabbit)
+		spanText := src[start:end]
+		replacement := newText
+		if strings.Contains(spanText, "\r\n") {
+			replacement = toCRLF(newText)
+		}
+		replacement = balanceTrailingEOL(spanText, replacement)
+		plan = textMatchPlan{filePath: filePath, src: src, startByte: start, spanText: spanText, replacement: replacement}
 	}
 
 	startLine, startChar, endLine, endChar := byteSpanToLSPRange(src, plan.startByte, plan.startByte+len(plan.spanText))
@@ -815,6 +883,13 @@ func buildTextMatchPlan(filePath, oldText, newText string) (textMatchPlan, error
 				},
 			},
 		},
+		// Compare-and-swap precondition for the positional apply: the file on
+		// disk must still be the snapshot the span was computed against when
+		// the edit is applied, or the positional splice corrupts the file and
+		// the corruption stays (the post-apply verification reports it, but
+		// the bytes are already lost). The LSP client refuses to write when
+		// the file no longer matches. (PR #68 maintainer review)
+		"x-expected-snapshot": plan.src,
 	}
 	return plan, nil
 }

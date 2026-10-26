@@ -2641,7 +2641,7 @@ func (c *LSPClient) applyDocumentChanges(ctx context.Context, dc any) error {
 				Edits []textEdit `json:"edits"`
 			}
 			if err := json.Unmarshal(entry, &te); err == nil && te.TextDocument.URI != "" {
-				if err := c.applyEditsToFile(ctx, te.TextDocument.URI, te.Edits); err != nil {
+				if err := c.applyEditsToFile(ctx, te.TextDocument.URI, te.Edits, ""); err != nil {
 					return err
 				}
 			}
@@ -2670,6 +2670,14 @@ func (c *LSPClient) ApplyWorkspaceEdit(ctx context.Context, edit any) error {
 		return c.applyDocumentChanges(ctx, dc)
 	}
 
+	// Optional compare-and-swap precondition (text-match mode only): the file
+	// must still be the snapshot the edit's ranges were computed against when
+	// it is applied, or the positional splice corrupts the file and the
+	// corruption stays. The check runs against the SAME read that applies the
+	// edits, so a concurrent writer landing between the plan's read and this
+	// one is caught before anything is written. (PR #68 maintainer review)
+	expectedSnapshot, _ := editMap["x-expected-snapshot"].(string)
+
 	// Fallback to changes map.
 	if changes, ok := editMap["changes"]; ok {
 		b, _ := json.Marshal(changes)
@@ -2678,7 +2686,7 @@ func (c *LSPClient) ApplyWorkspaceEdit(ctx context.Context, edit any) error {
 			return err
 		}
 		for uri, edits := range changeMap {
-			if err := c.applyEditsToFile(ctx, uri, edits); err != nil {
+			if err := c.applyEditsToFile(ctx, uri, edits, expectedSnapshot); err != nil {
 				return err
 			}
 		}
@@ -2692,7 +2700,10 @@ type textEdit struct {
 }
 
 // applyEditsToFile applies text edits in reverse order to a file and sends didChange.
-func (c *LSPClient) applyEditsToFile(ctx context.Context, uri string, edits []textEdit) error {
+// expectedSnapshot is the optional compare-and-swap precondition: when set,
+// the file's content at the moment of the apply must match it exactly, and a
+// mismatch refuses the write (nothing is changed).
+func (c *LSPClient) applyEditsToFile(ctx context.Context, uri string, edits []textEdit, expectedSnapshot string) error {
 	path, err := uripkg.ValidatePath(uripkg.URIToPath(uri), c.rootDir)
 	if err != nil {
 		return fmt.Errorf("applyEdit: %w", err)
@@ -2700,6 +2711,9 @@ func (c *LSPClient) applyEditsToFile(ctx context.Context, uri string, edits []te
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("applyEdit read %s: %w", path, err)
+	}
+	if expectedSnapshot != "" && string(data) != expectedSnapshot {
+		return fmt.Errorf("applyEdit: %s changed since the edit was computed (concurrent modification); NOTHING was written — re-run against the current file contents", path)
 	}
 
 	// Apply edits in reverse order (bottom-to-top) using the canonical

@@ -11,8 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/session"
@@ -48,23 +46,22 @@ func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr 
 		return types.ErrorResult(fmt.Sprintf("invalid file_path: %s", err)), nil
 	}
 
-	// Read the file and locate old_text to compute positional range.
-	content, err := os.ReadFile(filePath)
+	// Locate old_text through the SAME plan builder apply_edit uses (exact
+	// match first, then the whitespace-normalised full-line fallback, with the
+	// same EOL balancing): the preview previously ran a raw strings.Index on
+	// the unbalanced text, so on the normalised path it previewed a span the
+	// apply would never produce. (PR #68 maintainer review)
+	plan, err := buildTextMatchPlan(filePath, oldText, newText)
 	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("reading %s: %s", filePath, err)), nil
+		return types.ErrorResult(fmt.Sprintf("old_text not found in %s (tried exact and whitespace-normalised line match)", filePath)), nil
 	}
-	src := string(content)
+	src := plan.src
 
-	idx := strings.Index(src, oldText)
-	if idx < 0 {
-		return types.ErrorResult(fmt.Sprintf("old_text not found in %s", filePath)), nil
-	}
-
-	// 0-based line and UTF-16 column. Columns were byte counts here, which
-	// only agreed with the simulation's edit by accident before issue #52
-	// made that path UTF-16 aware; on a line with non-ASCII text before the
-	// match the preview edited the wrong span.
-	startLine, startCol, endLine, endCol := byteSpanToLSPRange(src, idx, idx+len(oldText))
+	// 0-based line and UTF-16 column over the plan's matched span. Columns
+	// were byte counts here, which only agreed with the simulation's edit by
+	// accident before issue #52 made that path UTF-16 aware; on a line with
+	// non-ASCII text before the match the preview edited the wrong span.
+	startLine, startCol, endLine, endCol := byteSpanToLSPRange(src, plan.startByte, plan.startByte+len(plan.spanText))
 
 	// Build args for HandleSimulateEditAtomic.
 	workspaceRoot := client.RootDir()

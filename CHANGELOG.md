@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+- **`apply_edit` text-match no longer corrupts the file when a concurrent writer lands between the plan and the apply** ([#76](https://github.com/blackwell-systems/agent-lsp/issues/76)): the text-match sequence computed its span against a snapshot and applied it positionally through a fresh re-read, so a write landing in between (positional `apply_edit`, rename, `replace_symbol_body`, an editor) was spliced over as if nothing had changed — losing bytes, reporting an error, and leaving the corruption on disk. The apply now carries a compare-and-swap precondition: the same read that splices refuses to write when the file no longer matches the snapshot, so a stale edit changes nothing and asks to be re-run. The per-file lock wait honors the caller's context and the lock map is pruned once the last holder leaves.
+- **The whitespace-normalised fallback of `apply_edit` text-match no longer fuses the next line into the replacement** ([#76](https://github.com/blackwell-systems/agent-lsp/issues/76)): the fallback matches full lines (including their trailing newline) even when `old_text` has none, and the replacement was applied verbatim, so a `new_text` without a trailing newline joined the following line onto it (the original bug, which had only been fixed on the exact-match path). The fallback now balances the replacement's EOL against the matched span and aligns CRLF style, as the exact path did.
+- **`apply_edit` text-match applies intended newline changes instead of silently no-oping them, and a no-op says so**: on the exact-match path the replacement is now applied verbatim (only the EOL style is aligned) — balancing used to rewrite a `new_text` that adds or removes a trailing newline into a byte-identical no-op and still report "Edit applied successfully" over an untouched file. When EOL handling does make the replacement byte-identical to the matched span, the tool now reports "No change applied" and writes nothing.
+- **`safe_apply_edit`'s preview locates `old_text` through the same matcher the apply uses**: the preview ran a raw `strings.Index`, so on the whitespace-normalised path it previewed a span the apply would never produce (and errored on files the apply would match); both now share one plan builder.
+- **The post-apply verification of `apply_edit` text-match no longer rejects correct boundary edits**: the "old text must be gone" check concatenated the text before and after the applied site, which can form a false occurrence (deleting `"()"` from `"f(())"` joins `")" + "("` back into `"()"`), reporting a failed verification for an edit that landed and inviting a double apply. The parts are now checked separately.
+
 ## [0.23.1] - 2026-10-23
 
 ### Fixed
