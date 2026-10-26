@@ -142,6 +142,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 	var allDocSymbols []types.DocumentSymbol // retained for sync-guarded detection
 	filesBySymbol := make(map[string]string) // symbol name -> file path
 	var warnings []string
+	analyzedFiles := 0
 
 	for _, file := range changedFiles {
 		langID := client.LanguageIDForFile(file)
@@ -152,6 +153,7 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 			warnings = append(warnings, fmt.Sprintf("warning: could not get symbols for %s: %s", file, err))
 			continue
 		}
+		analyzedFiles++
 		allDocSymbols = append(allDocSymbols, symbols...)
 		for _, sym := range symbols {
 			filesBySymbol[sym.Name] = file
@@ -169,6 +171,10 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 		} else {
 			collectExportedSymbols(nested, file, langID, &allExports, true, 0, 0)
 		}
+	}
+
+	if analyzedFiles == 0 {
+		return types.ErrorResult("Could not analyze any changed files. " + strings.Join(warnings, "; ")), nil
 	}
 
 	// Phase 1.5: Warmup. The first reference query on a cold workspace forces
@@ -331,6 +337,8 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 		testFiles = append(testFiles, f)
 	}
 
+	warnings = append(warnings, refWarnings...)
+
 	// Build summary.
 	summary := fmt.Sprintf("Found %d changed symbols with %d test references across %d test files.",
 		len(changedSymbols), len(testFunctions), len(testFiles))
@@ -345,12 +353,12 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 		"test_functions":   testFunctions,
 		"non_test_callers": nonTestCallers,
 		"summary":          summary,
-		"warnings":         refWarnings,
+		"warnings":         warnings,
 	}
 
 	impactHint := "Review high-callers symbols before making changes."
-	if len(refWarnings) > 0 {
-		impactHint = fmt.Sprintf("%d warnings encountered during analysis. %s", len(refWarnings), impactHint)
+	if len(warnings) > 0 {
+		impactHint = fmt.Sprintf("%d warnings encountered during analysis. %s", len(warnings), impactHint)
 	}
 
 	// Graph-profile: build a *gcf.Payload for structured graph output.
@@ -359,6 +367,9 @@ func HandleGetChangeImpact(ctx context.Context, client *lsp.LSPClient, args map[
 		result, err := EncodeResult(ctx, payload)
 		if err != nil {
 			return types.ErrorResult(fmt.Sprintf("encoding response: %s", err)), nil
+		}
+		if len(warnings) > 0 {
+			result.Content = append(result.Content, types.ContentItem{Type: "text", Text: strings.Join(warnings, "\n")})
 		}
 		return appendHint(result, impactHint), nil
 	}

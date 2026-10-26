@@ -815,7 +815,8 @@ callers, and test functions as nodes, with caller-to-symbol edges.
 - `test_files` is the deduplicated set of test files that reference any changed symbol.
 - `non_test_callers` (top level) is the flat blast radius for production code across all symbols.
 - `sync_guarded`: present and `true` on an `affected_symbols` entry that is a method on a type containing synchronization primitives (Mutex, RWMutex, Lock, atomic). Covers Go, Java, Rust, Python, C/C++ primitives. Helps agents distinguish mutex-guarded code from pure functions when assessing risk.
-- `warnings` contains messages for any `GetReferences` calls that failed (non-fatal).
+- `warnings` contains failed symbol-extraction and reference-query details. GCF graph responses include these details as a separate text item. Partial results do not establish impact for files that failed.
+- If every file fails symbol extraction, the tool returns an error rather than an empty successful graph.
 
 ---
 
