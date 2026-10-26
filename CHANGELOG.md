@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+- **`start_lsp` with `connect` always failed** ([#74](https://github.com/blackwell-systems/agent-lsp/issues/74)): connecting to an already-running language server over TCP returned "passive initialize failed: start process: exec: no command", because `Initialize` tried to spawn a server process even for a client that was already connected over a socket. It now runs the handshake over the existing connection.
+- **The `indexed` field was missing under the default output format** ([#75](https://github.com/blackwell-systems/agent-lsp/issues/75)): `find_symbol`, `find_references` and `blast_radius` add `indexed` to say whether the workspace has finished indexing, but it was added only by decoding the result as a JSON object, so it was silently dropped under GCF and for JSON array results. Those results now carry an `indexed=true` or `indexed=false` line as a separate content item (with a note that results may be incomplete when false); JSON object results still get the field.
+
 ## [0.23.3] - 2026-10-26
 
 ### Fixed

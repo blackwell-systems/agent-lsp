@@ -1019,8 +1019,13 @@ func (c *LSPClient) isJDTLS() bool {
 // Initialize starts the LSP process and performs the LSP handshake.
 func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	c.rootDir = rootDir
-	if err := c.start(); err != nil {
-		return err
+	// Passive and daemon clients are already connected over a socket, with
+	// their read loop running: there is no process to spawn, and calling
+	// start() failed with "exec: no command" on every connect= call (#74).
+	if c.socketConn == nil {
+		if err := c.start(); err != nil {
+			return err
+		}
 	}
 	c.refCache = NewSymbolRefCache(rootDir)
 

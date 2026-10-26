@@ -1,7 +1,9 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
@@ -84,12 +86,48 @@ func TestAppendIndexedField_AddsTrue(t *testing.T) {
 	}
 }
 
+// TestAppendIndexedField_NonJSON covers output that is not a JSON object:
+// the primary text is left alone and indexed is reported in its own item.
 func TestAppendIndexedField_NonJSON(t *testing.T) {
 	result := types.TextResult("this is not JSON")
 	client := lsp.NewLSPClient("fake", nil)
 
 	got := AppendIndexedField(result, client)
 	if got.Content[0].Text != "this is not JSON" {
-		t.Errorf("expected unchanged non-JSON result, got %s", got.Content[0].Text)
+		t.Errorf("primary text changed: %s", got.Content[0].Text)
+	}
+	if len(got.Content) != 2 || !strings.HasPrefix(got.Content[1].Text, "indexed=false") {
+		t.Fatalf("content = %+v, want an indexed=false item", got.Content)
+	}
+}
+
+// Issue #75: under GCF, the default output format, indexed was dropped.
+func TestAppendIndexedField_GCF(t *testing.T) {
+	ctx := ContextWithOutputFormat(context.Background(), "gcf")
+	result, err := EncodeResult(ctx, map[string]any{"affected_symbols": []any{}, "total": 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	primary := result.Content[0].Text
+	client := lsp.NewLSPClient("fake", nil)
+
+	got := AppendIndexedField(result, client)
+	if got.Content[0].Text != primary {
+		t.Errorf("GCF output changed: %q", got.Content[0].Text)
+	}
+	if len(got.Content) != 2 || !strings.HasPrefix(got.Content[1].Text, "indexed=false") {
+		t.Fatalf("content = %+v, want an indexed=false item", got.Content)
+	}
+}
+
+// A JSON array (find_symbol, find_references) cannot carry a field either.
+func TestAppendIndexedField_JSONArray(t *testing.T) {
+	client := lsp.NewLSPClient("fake", nil)
+	got := AppendIndexedField(types.TextResult(`[{"name":"Foo"}]`), client)
+	if got.Content[0].Text != `[{"name":"Foo"}]` {
+		t.Errorf("array changed: %s", got.Content[0].Text)
+	}
+	if len(got.Content) != 2 || !strings.HasPrefix(got.Content[1].Text, "indexed=false") {
+		t.Fatalf("content = %+v, want an indexed=false item", got.Content)
 	}
 }
