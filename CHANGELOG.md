@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.23.5] - 2026-10-27
 
 ### Fixed
 - **A language server progress report that never ended cost every `find_references` 60 seconds**: `find_references` (and the tools built on it) waits for active `$/progress` work before querying, and unlike the other tools it repeated that wait on every call, so a token that never ended (a server bug or a hung task) made each call take the full 60 s. A token that has already made a wait time out is now skipped by later waits, so it costs one wait; new progress is still waited on. Explicit long waits (the jdtls import, `start_lsp`'s `ready_timeout_seconds`, the daemon) still wait on every token. The wait also no longer risks sleeping past its deadline when its wake-up timer fired just before it.
