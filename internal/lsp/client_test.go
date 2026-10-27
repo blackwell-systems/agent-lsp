@@ -551,7 +551,10 @@ func TestLSPClient_OpenDocument_JSXLanguageID(t *testing.T) {
 		{"file:///project/app.ts", "typescript", "typescript"},
 		{"file:///project/app.js", "javascript", "javascript"},
 		{"file:///project/view.tsx", "typescriptreact", "typescriptreact"},
-		{"file:///project/notes.tsx", "plaintext", "plaintext"},
+		// An omitted language (tools default it to "plaintext") takes the one
+		// the extension names.
+		{"file:///project/notes.tsx", "plaintext", "typescriptreact"},
+		{"file:///project/notes.txt", "plaintext", "plaintext"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.uri, func(t *testing.T) {

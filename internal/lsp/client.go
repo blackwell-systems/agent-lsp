@@ -1689,7 +1689,14 @@ func withinRoot(path, rootDir string) bool {
 // LSP gives JSX files their own identifiers. typescript-language-server parses a
 // .tsx file opened as "typescript" as plain TypeScript and reports every JSX
 // element as a syntax error.
+//
+// Most tools default an omitted language_id to "plaintext", so a document that
+// arrives without a real language takes the one its extension names; only an
+// unknown extension stays "plaintext". An explicit language is kept.
 func documentLanguageID(filePath, languageID string) string {
+	if languageID == "" || languageID == "plaintext" {
+		languageID = LanguageIDFromPath(filePath)
+	}
 	switch strings.ToLower(filepath.Ext(filePath)) {
 	case ".tsx":
 		if languageID == "typescript" {
