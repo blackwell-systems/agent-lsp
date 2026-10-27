@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blackwell-systems/agent-lsp/internal/config"
 	gcf "github.com/blackwell-systems/agent-lsp/internal/encoding/gcf"
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
@@ -33,6 +34,17 @@ import (
 
 // isTestFile returns true if the given path looks like a test file.
 func isTestFile(path string) bool {
+	if strings.HasSuffix(path, ".gleam") {
+		if strings.HasSuffix(path, "_test.gleam") {
+			return true
+		}
+		root, language, err := config.InferWorkspaceRoot(path)
+		if err != nil || language != "gleam" {
+			return false
+		}
+		relative, err := filepath.Rel(root, path)
+		return err == nil && strings.HasPrefix(filepath.ToSlash(relative), "test/")
+	}
 	if strings.HasSuffix(path, "_test.go") {
 		return true
 	}

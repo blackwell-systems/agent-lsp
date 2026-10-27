@@ -401,6 +401,8 @@ func (m *ServerManager) LanguageIDForFile(filePath string) string {
 func LanguageIDFromPath(path string) string {
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
+	case ".gleam":
+		return "gleam"
 	case ".go":
 		return "go"
 	case ".ts", ".tsx":

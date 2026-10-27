@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -215,5 +216,28 @@ func TestInferWorkspaceRoot_MarkerInParent(t *testing.T) {
 	}
 	if gotLang != "go" {
 		t.Errorf("languageID: got %q, want %q", gotLang, "go")
+	}
+}
+
+func TestInferWorkspaceRoot_Gleam(t *testing.T) {
+	for _, nested := range []bool{false, true} {
+		t.Run(fmt.Sprint("nested=", nested), func(t *testing.T) {
+			repo := t.TempDir()
+			mkdirAll(t, filepath.Join(repo, ".git"))
+			root := repo
+			if nested {
+				root = filepath.Join(repo, "packages", "library")
+			}
+			mkdirAll(t, filepath.Join(root, "src"))
+			touch(t, filepath.Join(root, "gleam.toml"))
+			// Gleam projects can also have JavaScript build tooling.
+			touch(t, filepath.Join(root, "package.json"))
+			for _, path := range []string{root, filepath.Join(root, "src", "new_module.gleam")} {
+				gotRoot, gotLang, err := InferWorkspaceRoot(path)
+				if err != nil || gotRoot != root || gotLang != "gleam" {
+					t.Fatalf("InferWorkspaceRoot(%q) = %q, %q, %v; want %q, gleam, nil", path, gotRoot, gotLang, err, root)
+				}
+			}
+		})
 	}
 }

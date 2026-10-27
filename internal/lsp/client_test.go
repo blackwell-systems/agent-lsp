@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -914,5 +916,36 @@ func TestHasCapabilityExported(t *testing.T) {
 	}
 	if c.HasCapability("typeHierarchyProvider") {
 		t.Error("expected false for undeclared capability")
+	}
+}
+
+func TestReopenDocument_GleamLanguageID(t *testing.T) {
+	for _, filename := range []string{"person.gleam", "PERSON.GLEAM"} {
+		t.Run(filename, func(t *testing.T) {
+			file := filepath.Join(t.TempDir(), filename)
+			if err := os.WriteFile(file, []byte("pub fn main() { Nil }\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			client, _, output := newTestClient(t)
+			if got := client.LanguageIDForFile(file); got != "gleam" {
+				t.Errorf("LanguageIDForFile = %q, want gleam", got)
+			}
+			done := make(chan error, 1)
+			go func() { done <- client.ReopenDocument(context.Background(), PathToFileURI(file)) }()
+			message := readNextMsg(t, output)
+			if message == nil {
+				return
+			}
+			if message["method"] != "textDocument/didOpen" {
+				t.Fatalf("unexpected notification: %v", message)
+			}
+			doc := message["params"].(map[string]any)["textDocument"].(map[string]any)
+			if got := doc["languageId"]; got != "gleam" {
+				t.Errorf("didOpen languageId = %v, want gleam", got)
+			}
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
