@@ -136,17 +136,13 @@ func (m *SessionManager) ApplyEdit(ctx context.Context, sessionID, fileURI strin
 
 	// Lazy baseline: establish baseline for this file if not already set.
 	if _, exists := session.Baselines[fileURI]; !exists {
-		// Wait for diagnostics to stabilize.
-		if err := lsp.WaitForDiagnostics(ctx, session.Client, []string{fileURI}, 3000); err != nil {
-			logging.Log(logging.LevelWarning, fmt.Sprintf("session.baseline_timeout: %s file=%s", sessionID, fileURI))
-		}
-
-		// Snapshot diagnostics.
-		diagnostics := session.Client.GetDiagnostics(fileURI)
-		session.Baselines[fileURI] = DiagnosticsSnapshot{
-			URI:         fileURI,
-			Diagnostics: diagnostics,
-			Confidence:  ConfidenceHigh,
+		// A server whose pull gives the final answer (gopls) is asked after the
+		// document is open with its original content; otherwise wait for the
+		// push stream to settle before opening, as before.
+		pull := session.Client.PrefersPullDiagnostics()
+		var diagnostics []types.LSPDiagnostic
+		if !pull {
+			diagnostics = pushBaseline(ctx, session, sessionID, fileURI)
 		}
 
 		// Read file content from disk.
@@ -167,6 +163,22 @@ func (m *SessionManager) ApplyEdit(ctx context.Context, sessionID, fileURI strin
 			session.MarkDirty(fmt.Errorf("opening document %s: %w", fileURI, err))
 			return nil, fmt.Errorf("opening document %s: %w", fileURI, err)
 		}
+
+		if pull {
+			pulled, err := session.Client.PullDiagnostics(ctx, fileURI)
+			if err != nil {
+				logging.Log(logging.LevelWarning, fmt.Sprintf("session.baseline_pull_failed: %s file=%s: %v", sessionID, fileURI, err))
+				pulled = pushBaseline(ctx, session, sessionID, fileURI)
+			}
+			diagnostics = pulled
+		}
+
+		// Snapshot diagnostics.
+		session.Baselines[fileURI] = DiagnosticsSnapshot{
+			URI:         fileURI,
+			Diagnostics: diagnostics,
+			Confidence:  ConfidenceHigh,
+		}
 	}
 
 	// Increment version.
@@ -175,11 +187,22 @@ func (m *SessionManager) ApplyEdit(ctx context.Context, sessionID, fileURI strin
 	// Apply range edit in-memory.
 	session.Contents[fileURI] = applyRangeEdit(session.Contents[fileURI], rng, newText)
 
+	// Mark the diagnostics before the change goes out, so Evaluate can tell a
+	// publication for this edit from the ones already cached.
+	mark := session.Client.MarkDiagnostics(fileURI)
+
 	// Send to LSP via OpenDocument (which sends didChange when already open).
 	if err := session.Client.OpenDocument(ctx, fileURI, session.Contents[fileURI], session.Language); err != nil {
 		session.MarkDirty(fmt.Errorf("sending didChange for %s: %w", fileURI, err))
 		return nil, fmt.Errorf("sending didChange for %s: %w", fileURI, err)
 	}
+	if v, ok := session.Client.DocumentVersion(fileURI); ok {
+		mark.Version = v
+	}
+	if session.DiagMarks == nil {
+		session.DiagMarks = make(map[string]lsp.DiagnosticsMark)
+	}
+	session.DiagMarks[fileURI] = mark
 
 	// Record edit.
 	session.Edits = append(session.Edits, AppliedEdit{
@@ -250,15 +273,36 @@ func (m *SessionManager) Evaluate(ctx context.Context, sessionID, scope string, 
 		uris = append(uris, uri)
 	}
 
-	// Wait for diagnostics to stabilize.
-	if err := lsp.WaitForDiagnostics(ctx, session.Client, uris, timeoutMs); err != nil {
-		logging.Log(logging.LevelWarning, fmt.Sprintf("session.evaluate_timeout: %s", sessionID))
-		timedOut = true
+	// A server whose pull gives the final answer for the current version
+	// (gopls) is asked directly. Its pushes arrive in stages, so a wait on them
+	// could settle on an early set without the type errors and let
+	// safe_apply_edit write an edit that breaks the build.
+	var pulled map[string][]types.LSPDiagnostic
+	if len(uris) > 0 && session.Client.PrefersPullDiagnostics() {
+		pulled = pullAll(ctx, session.Client, uris, timeoutMs)
+		if pulled == nil {
+			logging.Log(logging.LevelWarning, fmt.Sprintf("session.evaluate_pull_failed: %s; waiting on published diagnostics", sessionID))
+		}
+	}
+
+	// Otherwise wait for diagnostics that cover the last edit to each file. A
+	// wait that ends without them must count as a timeout: the cache may still
+	// hold the pre-edit diagnostics, which would read as net_delta 0 with high
+	// confidence and let safe_apply_edit write an unverified edit.
+	if len(uris) > 0 && pulled == nil {
+		settled, err := lsp.WaitForDiagnosticsSettled(ctx, session.Client, uris, session.DiagMarks, timeoutMs)
+		if err != nil || !settled {
+			logging.Log(logging.LevelWarning, fmt.Sprintf("session.evaluate_timeout: %s", sessionID))
+			timedOut = true
+		}
 	}
 
 	// For each file in baselines, compute diff.
 	for uri, baseline := range session.Baselines {
-		current := session.Client.GetDiagnostics(uri)
+		current, ok := pulled[uri]
+		if !ok {
+			current = session.Client.GetDiagnostics(uri)
+		}
 		introduced, resolved := DiffDiagnostics(baseline.Diagnostics, current)
 		allIntroduced = append(allIntroduced, introduced...)
 		allResolved = append(allResolved, resolved...)
@@ -286,6 +330,32 @@ func (m *SessionManager) Evaluate(ctx context.Context, sessionID, scope string, 
 		Timeout:          timedOut,
 		DurationMs:       time.Since(start).Milliseconds(),
 	}, nil
+}
+
+// pushBaseline waits for the push stream to settle and returns the cached
+// diagnostics for fileURI, the baseline for servers that are not pulled.
+func pushBaseline(ctx context.Context, session *SimulationSession, sessionID, fileURI string) []types.LSPDiagnostic {
+	if err := lsp.WaitForDiagnostics(ctx, session.Client, []string{fileURI}, 3000); err != nil {
+		logging.Log(logging.LevelWarning, fmt.Sprintf("session.baseline_timeout: %s file=%s", sessionID, fileURI))
+	}
+	return session.Client.GetDiagnostics(fileURI)
+}
+
+// pullAll pulls diagnostics for every uri within timeoutMs. It returns nil if
+// any pull fails, so the caller falls back to the push stream for all of them
+// rather than mixing a verified answer with an unverified one.
+func pullAll(ctx context.Context, client *lsp.LSPClient, uris []string, timeoutMs int) map[string][]types.LSPDiagnostic {
+	pctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+	out := make(map[string][]types.LSPDiagnostic, len(uris))
+	for _, uri := range uris {
+		diags, err := client.PullDiagnostics(pctx, uri)
+		if err != nil {
+			return nil
+		}
+		out[uri] = diags
+	}
+	return out
 }
 
 // evalConfidence decides how much to trust an evaluation result.

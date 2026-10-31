@@ -9,6 +9,7 @@ import (
 // for workspace root markers in priority order:
 //
 //	go.mod        → language "go"
+//	gleam.toml    → language "gleam"
 //	package.json  → language "typescript"
 //	Cargo.toml    → language "rust"
 //	pyproject.toml or setup.py → language "python"
@@ -40,6 +41,7 @@ func inferWorkspaceRoot(filePath string) (root, languageID string, err error) {
 	}
 	markers := []marker{
 		{"go.mod", "go"},
+		{"gleam.toml", "gleam"},
 		{"package.json", "typescript"},
 		{"Cargo.toml", "rust"},
 		{"pyproject.toml", "python"},

@@ -110,24 +110,27 @@ func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr 
 		return appendHint(encoded, hint), nil
 	}
 
-	// Safe: apply the edit.
-	applyArgs := map[string]any{
-		"file_path": filePath,
-		"old_text":  oldText,
-		"new_text":  newText,
-	}
-	applyResult, err := HandleApplyEdit(ctx, client, applyArgs)
-	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("apply failed: %s", err)), nil
-	}
+	// Safe: apply the edit, but only to the content the preview checked. If
+	// the file changed since it was read above, the preview no longer covers
+	// it, so nothing is written.
+	applyResult, changed := applyTextMatch(ctx, client, filePath, oldText, newText, content)
 	if applyResult.IsError {
 		return applyResult, nil
+	}
+	if !changed {
+		previewJSON["applied"] = false
+		encoded, _ := EncodeResult(ctx, previewJSON)
+		return appendHint(encoded, noChangeMessage), nil
 	}
 
 	// Build a combined result.
 	previewJSON["applied"] = true
 	encoded, _ := EncodeResult(ctx, previewJSON)
-	return appendHint(encoded, "Edit applied successfully (net_delta == 0)."), nil
+	hint := "Edit applied successfully (net_delta == 0)."
+	if note := lineBreakNote(oldText, newText); note != "" {
+		hint += " " + note
+	}
+	return appendHint(encoded, hint), nil
 }
 
 // previewBlocksApply decides whether a safe_apply_edit preview permits writing

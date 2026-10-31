@@ -23,6 +23,7 @@
 package lsp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -193,14 +194,36 @@ type LSPClient struct {
 	openDocs map[string]docMeta // uri -> meta
 
 	// diagnostics
-	diagMu   sync.RWMutex
-	diags    map[string][]types.LSPDiagnostic
-	diagSubs []types.DiagnosticUpdateCallback
+	diagMu sync.RWMutex
+	diags  map[string][]types.LSPDiagnostic
+	// diagGen counts publishDiagnostics notifications per normalized URI and
+	// diagVersion holds the document version the last one reported (absent
+	// when the server sent none). WaitForDiagnosticsSettled uses them to tell
+	// a publication that arrived during the wait, or that covers the edited
+	// document version, from a cached or stale one. Guarded by diagMu.
+	diagGen     map[string]uint64
+	diagVersion map[string]int
+	// republishesUnchanged is true when the server publishes diagnostics for
+	// every document version, even when they did not change, so that a missing
+	// publication means the edit has not been analysed. Only gopls is known to:
+	// typescript-language-server, rust-analyzer and the Dart server stay silent
+	// when a clean edit leaves the diagnostics as they were, and clangd skips a
+	// version whose text matches one it already analysed. Set at construction.
+	republishesUnchanged bool
+	diagSubs             []types.DiagnosticUpdateCallback
 
 	// workspace readiness ($/progress)
 	progressMu     sync.Mutex
 	progressTokens map[any]struct{} // active begin tokens
 	progressCond   *sync.Cond       // signalled when progressTokens becomes empty
+	// staleProgress holds tokens that already made a readiness wait time out:
+	// a token that never ends (a server bug or a hung task) would otherwise
+	// cost every later find_references the full 60s wait. Later default waits
+	// ignore them; a fresh begin or an end for the token clears it.
+	staleProgress map[any]struct{}
+	// seenProgress records that the server has sent at least one progress
+	// begin. Guarded by progressMu.
+	seenProgress bool
 
 	// workspace scoping (generated config for large repos)
 	scopeConfig  *ScopeConfig
@@ -246,14 +269,17 @@ type LSPClient struct {
 // NewLSPClient creates a new, unstarted LSP client.
 func NewLSPClient(serverPath string, serverArgs []string) *LSPClient {
 	c := &LSPClient{
-		serverPath:     serverPath,
-		serverArgs:     serverArgs,
-		pending:        make(map[int]*pendingRequest),
-		openDocs:       make(map[string]docMeta),
-		diags:          make(map[string][]types.LSPDiagnostic),
-		progressTokens: make(map[any]struct{}),
-		capabilities:   make(map[string]any),
-		warmup:         newWarmupState(),
+		serverPath: serverPath,
+		serverArgs: serverArgs,
+		// gopls publishes for every document version, so a missing
+		// publication means it has not caught up yet.
+		republishesUnchanged: isGoplsPath(serverPath),
+		pending:              make(map[int]*pendingRequest),
+		openDocs:             make(map[string]docMeta),
+		diags:                make(map[string][]types.LSPDiagnostic),
+		progressTokens:       make(map[any]struct{}),
+		capabilities:         make(map[string]any),
+		warmup:               newWarmupState(),
 	}
 	c.nextID.Store(0)
 	c.progressCond = sync.NewCond(&c.progressMu)
@@ -688,6 +714,7 @@ func (c *LSPClient) sendResponse(id json.RawMessage, result any) {
 func (c *LSPClient) handlePublishDiagnostics(params json.RawMessage) {
 	var p struct {
 		URI         string                `json:"uri"`
+		Version     *int                  `json:"version"`
 		Diagnostics []types.LSPDiagnostic `json:"diagnostics"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -697,8 +724,19 @@ func (c *LSPClient) handlePublishDiagnostics(params json.RawMessage) {
 	// Notify warmup gate that diagnostics have arrived.
 	c.warmup.NotifyDiagnostic()
 
+	key := NormalizeFileURI(p.URI)
 	c.diagMu.Lock()
-	c.diags[NormalizeFileURI(p.URI)] = p.Diagnostics
+	c.diags[key] = p.Diagnostics
+	if c.diagGen == nil {
+		c.diagGen = make(map[string]uint64)
+		c.diagVersion = make(map[string]int)
+	}
+	c.diagGen[key]++
+	if p.Version != nil {
+		c.diagVersion[key] = *p.Version
+	} else {
+		delete(c.diagVersion, key)
+	}
 	subs := make([]types.DiagnosticUpdateCallback, len(c.diagSubs))
 	copy(subs, c.diagSubs)
 	c.diagMu.Unlock()
@@ -724,14 +762,42 @@ func (c *LSPClient) handleProgress(params json.RawMessage) {
 	switch p.Value.Kind {
 	case "begin":
 		c.progressTokens[p.Token] = struct{}{}
+		delete(c.staleProgress, p.Token)
+		if !c.seenProgress {
+			// The server's first progress is its initial load. A readiness
+			// wait that ran before it began (servers such as rust-analyzer and
+			// jdtls start a few hundred milliseconds after initialize) saw no
+			// progress and marked the workspace loaded; undo that, so tools
+			// wait for the load and indexed is not reported true while the
+			// server is still indexing.
+			c.seenProgress = true
+			c.workspaceLoaded.Store(false)
+		}
 	case "report":
 		logging.Log(logging.LevelDebug, fmt.Sprintf("$/progress report token=%v", p.Token))
 	case "end":
 		delete(c.progressTokens, p.Token)
-		if len(c.progressTokens) == 0 {
+		delete(c.staleProgress, p.Token)
+		if c.pendingProgressLocked(true) == 0 {
 			c.progressCond.Broadcast()
 		}
 	}
+}
+
+// pendingProgressLocked counts the active progress tokens a readiness wait
+// should block on: all of them, or with skipStale only those that have not
+// already made a wait time out. The caller holds progressMu.
+func (c *LSPClient) pendingProgressLocked(skipStale bool) int {
+	if !skipStale {
+		return len(c.progressTokens)
+	}
+	n := 0
+	for tok := range c.progressTokens {
+		if _, stale := c.staleProgress[tok]; !stale {
+			n++
+		}
+	}
+	return n
 }
 
 // HasActiveProgress reports whether the server currently has open $/progress
@@ -745,12 +811,16 @@ func (c *LSPClient) HasActiveProgress() bool {
 	return len(c.progressTokens) > 0
 }
 
+// defaultReadinessWait caps the readiness wait that queries run before talking
+// to the server. A variable so tests can shorten it.
+var defaultReadinessWait = 60 * time.Second
+
 // waitForWorkspaceReady blocks until activeProgressTokens is empty or 60s
 // elapses. Uses a condition variable so handleProgress can signal immediately.
 // A timer goroutine guarantees the deadline fires even if gopls never emits
 // a matching "end" progress token (preventing an indefinite block).
 func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
-	c.WaitForWorkspaceReadyTimeout(ctx, 60*time.Second)
+	c.waitForProgress(ctx, defaultReadinessWait, true)
 	c.workspaceLoaded.Store(true)
 }
 
@@ -771,14 +841,26 @@ func (c *LSPClient) ensureWorkspaceReady(ctx context.Context) {
 // $/progress begin to arrive. Servers like jdtls emit progress tokens
 // asynchronously after initialize — without this grace period, the wait
 // returns immediately before indexing has even started.
+//
+// It waits on every active token, including ones an earlier default wait gave
+// up on: callers that pass a long timeout (the jdtls import, start_lsp's
+// ready_timeout_seconds, the daemon) mean to wait for a long-running load.
 func (c *LSPClient) WaitForWorkspaceReadyTimeout(ctx context.Context, timeout time.Duration) {
+	c.waitForProgress(ctx, timeout, false)
+}
+
+// waitForProgress implements the readiness waits. With skipStale, tokens that
+// already made a wait time out are ignored, and a wait that times out marks
+// the tokens still active as stale, so a token that never ends is waited on
+// once rather than on every call.
+func (c *LSPClient) waitForProgress(ctx context.Context, timeout time.Duration, skipStale bool) {
 	c.progressMu.Lock()
 	defer c.progressMu.Unlock()
 
 	// Grace period: if no progress tokens yet and caller requested an extended
 	// wait (>60s), wait briefly for the first token. Avoids 10s delay for
 	// default-timeout callers (GetReferences, etc.) on servers that never emit progress.
-	if len(c.progressTokens) == 0 && timeout > 60*time.Second {
+	if c.pendingProgressLocked(skipStale) == 0 && timeout > 60*time.Second {
 		grace := make(chan struct{})
 		go func() {
 			select {
@@ -790,7 +872,7 @@ func (c *LSPClient) WaitForWorkspaceReadyTimeout(ctx context.Context, timeout ti
 			}
 		}()
 		graceDeadline := time.Now().Add(10 * time.Second)
-		for len(c.progressTokens) == 0 {
+		for c.pendingProgressLocked(skipStale) == 0 {
 			if time.Now().After(graceDeadline) || ctx.Err() != nil {
 				close(grace)
 				return
@@ -801,12 +883,16 @@ func (c *LSPClient) WaitForWorkspaceReadyTimeout(ctx context.Context, timeout ti
 	}
 
 	// Guarantee a wakeup at the deadline so the cond var doesn't block forever
-	// if the server emits a begin token without a corresponding end token.
+	// if the server emits a begin token without a corresponding end token. The
+	// deadline is fixed before the timer starts: a timer started first could
+	// fire just before the deadline, and the loop would wait again with
+	// nothing left to wake it.
+	deadline := time.Now().Add(timeout)
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
 		select {
-		case <-time.After(timeout):
+		case <-time.After(time.Until(deadline) + time.Millisecond):
 			c.progressCond.Broadcast()
 		case <-ctx.Done():
 			c.progressCond.Broadcast()
@@ -814,9 +900,20 @@ func (c *LSPClient) WaitForWorkspaceReadyTimeout(ctx context.Context, timeout ti
 		}
 	}()
 
-	deadline := time.Now().Add(timeout)
-	for len(c.progressTokens) > 0 {
-		if time.Now().After(deadline) || ctx.Err() != nil {
+	for c.pendingProgressLocked(skipStale) > 0 {
+		if ctx.Err() != nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			if skipStale {
+				if c.staleProgress == nil {
+					c.staleProgress = make(map[any]struct{})
+				}
+				for tok := range c.progressTokens {
+					c.staleProgress[tok] = struct{}{}
+				}
+				logging.Log(logging.LevelWarning, fmt.Sprintf("readiness wait timed out after %s with %d progress token(s) still active; later waits will not block on them", timeout, len(c.progressTokens)))
+			}
 			return
 		}
 		c.progressCond.Wait()
@@ -978,6 +1075,17 @@ func (c *LSPClient) SetServerInfoForTest(name, version string) {
 	c.serverVersion = version
 }
 
+// DiscardOutputForTest makes the client send its messages nowhere, so tests in
+// other packages can run paths that notify the server (such as a file edit's
+// didChange) without spawning a process.
+func (c *LSPClient) DiscardOutputForTest() {
+	c.stdin = discardWriteCloser{io.Discard}
+}
+
+type discardWriteCloser struct{ io.Writer }
+
+func (discardWriteCloser) Close() error { return nil }
+
 // isJDTLS reports whether the server binary appears to be Eclipse jdtls.
 // Checks the binary name for "jdtls" (covers /usr/local/bin/jdtls and
 // wrapper scripts named jdtls).
@@ -986,11 +1094,25 @@ func (c *LSPClient) isJDTLS() bool {
 	return strings.Contains(strings.ToLower(base), "jdtls")
 }
 
+// isGopls reports whether the server binary is gopls.
+func (c *LSPClient) isGopls() bool {
+	return isGoplsPath(c.serverPath)
+}
+
+func isGoplsPath(serverPath string) bool {
+	return strings.TrimSuffix(filepath.Base(serverPath), ".exe") == "gopls"
+}
+
 // Initialize starts the LSP process and performs the LSP handshake.
 func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 	c.rootDir = rootDir
-	if err := c.start(); err != nil {
-		return err
+	// Passive and daemon clients are already connected over a socket, with
+	// their read loop running: there is no process to spawn, and calling
+	// start() failed with "exec: no command" on every connect= call (#74).
+	if c.socketConn == nil {
+		if err := c.start(); err != nil {
+			return err
+		}
 	}
 	c.refCache = NewSymbolRefCache(rootDir)
 
@@ -1134,6 +1256,15 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 		"workspaceFolders": []map[string]any{
 			{"uri": rootURI, "name": rootDir},
 		},
+	}
+
+	// gopls publishes diagnostics for an edit in stages (an early set without
+	// type errors, then the type-check results), so a wait on the push stream
+	// cannot know when it has the final answer. Its pull mode answers for the
+	// current document version synchronously; safe_apply_edit's preview uses
+	// it (see PrefersPullDiagnostics). gopls keeps publishing as before.
+	if c.isGopls() {
+		initParams["initializationOptions"] = map[string]any{"pullDiagnostics": true}
 	}
 
 	// jdtls (Java) needs initializationOptions with settings and
@@ -1428,7 +1559,12 @@ func (c *LSPClient) Restart(ctx context.Context, rootDir string) (int, error) {
 	c.pendingMu.Unlock()
 	c.progressMu.Lock()
 	c.progressTokens = make(map[any]struct{})
+	c.staleProgress = nil
+	c.seenProgress = false
 	c.progressMu.Unlock()
+	// The fresh server has loaded nothing yet; indexed must not stay true
+	// from the previous process.
+	c.workspaceLoaded.Store(false)
 	c.capsMu.Lock()
 	c.capabilities = make(map[string]any)
 	c.capsMu.Unlock()
@@ -1440,6 +1576,9 @@ func (c *LSPClient) Restart(ctx context.Context, rootDir string) (int, error) {
 	c.mu.Unlock()
 	c.diagMu.Lock()
 	c.diags = make(map[string][]types.LSPDiagnostic)
+	// Document versions restart at 1 on the fresh server; a version recorded
+	// from the previous process must not satisfy a later wait.
+	c.diagVersion = make(map[string]int)
 	c.diagMu.Unlock()
 	c.legendMu.Lock()
 	c.legendTypes = nil
@@ -1561,7 +1700,14 @@ func withinRoot(path, rootDir string) bool {
 // LSP gives JSX files their own identifiers. typescript-language-server parses a
 // .tsx file opened as "typescript" as plain TypeScript and reports every JSX
 // element as a syntax error.
+//
+// Most tools default an omitted language_id to "plaintext", so a document that
+// arrives without a real language takes the one its extension names; only an
+// unknown extension stays "plaintext". An explicit language is kept.
 func documentLanguageID(filePath, languageID string) string {
+	if languageID == "" || languageID == "plaintext" {
+		languageID = LanguageIDFromPath(filePath)
+	}
 	switch strings.ToLower(filepath.Ext(filePath)) {
 	case ".tsx":
 		if languageID == "typescript" {
@@ -1685,6 +1831,40 @@ func (c *LSPClient) ResetDiagnostics(uri string) {
 	c.diagMu.Lock()
 	defer c.diagMu.Unlock()
 	delete(c.diags, NormalizeFileURI(uri))
+	delete(c.diagVersion, NormalizeFileURI(uri))
+}
+
+// RepublishesUnchangedDiagnostics reports whether the server is known to
+// publish diagnostics after every change, including unchanged ones.
+func (c *LSPClient) RepublishesUnchangedDiagnostics() bool {
+	c.diagMu.RLock()
+	defer c.diagMu.RUnlock()
+	return c.republishesUnchanged
+}
+
+// diagnosticsState reports how many publishDiagnostics notifications have
+// arrived for uri and the document version the last one carried (hasVersion
+// is false when the server sent none or none has arrived).
+func (c *LSPClient) diagnosticsState(uri string) (gen uint64, version int, hasVersion bool) {
+	key := NormalizeFileURI(uri)
+	c.diagMu.RLock()
+	defer c.diagMu.RUnlock()
+	version, hasVersion = c.diagVersion[key]
+	return c.diagGen[key], version, hasVersion
+}
+
+// DocumentVersion returns the version agent-lsp last sent to the server for an
+// open document (didOpen sends 1, each didChange increments it).
+func (c *LSPClient) DocumentVersion(uri string) (int, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if meta, ok := c.openDocs[uri]; ok {
+		return meta.version, true
+	}
+	if meta, ok := c.openDocs[NormalizeFileURI(uri)]; ok {
+		return meta.version, true
+	}
+	return 0, false
 }
 
 // GetAllDiagnostics returns a copy of all diagnostics.
@@ -1755,6 +1935,10 @@ func (c *LSPClient) PullDiagnostics(ctx context.Context, uri string) ([]types.LS
 	if err := json.Unmarshal(result, &report); err != nil {
 		return nil, err
 	}
+	// gopls (as of v0.23) leaves kind empty on its full reports.
+	if report.Kind == "" && c.isGopls() {
+		report.Kind = "full"
+	}
 	if report.Kind != "full" {
 		// Returning an empty list here would read as "verified clean" to the
 		// caller while nothing was verified.
@@ -1823,6 +2007,8 @@ func languageIDFromURI(uri string) string {
 			ext = ext[:end]
 		}
 		switch ext {
+		case "gleam":
+			return "gleam"
 		case "go":
 			return "go"
 		case "ts", "tsx":
@@ -2702,8 +2888,31 @@ type textEdit struct {
 	NewText string      `json:"newText"`
 }
 
+// ErrFileChanged reports that a file no longer holds the content an edit was
+// computed against, so the edit was not written.
+var ErrFileChanged = errors.New("the file changed after the edit was planned; nothing was written, re-run the edit against the current content")
+
+// ApplyTextEditIfUnchanged replaces rng in the file at uri with newText, but
+// only while the file still holds exactly expected: the bytes rng was computed
+// from. A positional edit applied to content that has since changed would land
+// at a stale offset and corrupt the file (issue #76), so a mismatch returns
+// ErrFileChanged and writes nothing.
+//
+// The comparison is made on the same read the edit is spliced into, which
+// leaves only the moment between that read and the write: a writer landing
+// there is still overwritten, since other processes do not share a lock.
+func (c *LSPClient) ApplyTextEditIfUnchanged(ctx context.Context, uri string, expected []byte, rng types.Range, newText string) error {
+	return c.applyEditsToFileExpecting(ctx, uri, []textEdit{{Range: rng, NewText: newText}}, expected, true)
+}
+
 // applyEditsToFile applies text edits in reverse order to a file and sends didChange.
 func (c *LSPClient) applyEditsToFile(ctx context.Context, uri string, edits []textEdit) error {
+	return c.applyEditsToFileExpecting(ctx, uri, edits, nil, false)
+}
+
+// applyEditsToFileExpecting is applyEditsToFile with an optional precondition:
+// when check is set, the file must hold exactly expected or nothing is written.
+func (c *LSPClient) applyEditsToFileExpecting(ctx context.Context, uri string, edits []textEdit, expected []byte, check bool) error {
 	path, err := uripkg.ValidatePath(uripkg.URIToPath(uri), c.rootDir)
 	if err != nil {
 		return fmt.Errorf("applyEdit: %w", err)
@@ -2711,6 +2920,9 @@ func (c *LSPClient) applyEditsToFile(ctx context.Context, uri string, edits []te
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("applyEdit read %s: %w", path, err)
+	}
+	if check && !bytes.Equal(data, expected) {
+		return fmt.Errorf("applyEdit %s: %w", path, ErrFileChanged)
 	}
 
 	// Apply edits in reverse order (bottom-to-top) using the canonical
@@ -2846,6 +3058,16 @@ func (c *LSPClient) hasCapability(key string) bool {
 // (issue #43)
 func (c *LSPClient) SupportsPullDiagnostics() bool {
 	return c.hasCapability("diagnosticProvider")
+}
+
+// PrefersPullDiagnostics reports whether a pull gives this server's final
+// diagnostics for the current document version, so a caller that must know
+// the result for an edit (the speculative-session preview) should pull rather
+// than wait on the push stream. Only gopls qualifies: its pushes arrive in
+// stages, and its pull is synchronous. Pull is not used for other servers
+// here, since at least one known implementation hangs (see requestTimeouts).
+func (c *LSPClient) PrefersPullDiagnostics() bool {
+	return c.isGopls() && c.SupportsPullDiagnostics()
 }
 
 func (c *LSPClient) getCapabilityRaw(key string) any {

@@ -30,6 +30,10 @@ func TestIsTestFile(t *testing.T) {
 		// Python test_ prefix
 		{"test_models.py", true},
 		{"/home/user/project/test_utils.py", true},
+		// Gleam unit tests and support modules under the standard test directory
+		{"test/person_test.gleam", true},
+		{"src/person.gleam", false},
+		{"src/contest/person.gleam", false},
 		// Negative cases
 		{"pkg/foo/bar.go", false},
 		{"main.go", false},
@@ -980,4 +984,43 @@ func TestFindEnclosingCaller_FallsBackToEnclosingDeclaration(t *testing.T) {
 	if got == nil || got.Name != "App" {
 		t.Fatalf("caller = %+v, want the enclosing const App", got)
 	}
+}
+
+// A package may live below a directory named test, as the integration fixture
+// does. Only its own test directory establishes test callers.
+func TestIsTestFile_GleamPackageRoot(t *testing.T) {
+	repo := t.TempDir()
+	root := filepath.Join(repo, "test", "fixtures", "library")
+	if err := os.MkdirAll(root, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "gleam.toml"), []byte("name = \"example\"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{
+		{"src/person.gleam", false},
+		{"src/test/person.gleam", false},
+		{"src/person_test.gleam", true},
+		{"test/person.gleam", true},
+		{"test/support/person.gleam", true},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			path := filepath.Join(root, filepath.FromSlash(tc.path))
+			if got := isTestFile(path); got != tc.want {
+				t.Errorf("isTestFile(%q) = %v, want %v", path, got, tc.want)
+			}
+		})
+	}
+	t.Run("repository fixture production source", func(t *testing.T) {
+		path, err := filepath.Abs(filepath.Join("..", "..", "test", "fixtures", "gleam", "src", "greeter.gleam"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if isTestFile(path) {
+			t.Errorf("production fixture source misclassified as test: %s", path)
+		}
+	})
 }

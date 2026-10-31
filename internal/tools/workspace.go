@@ -10,6 +10,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -613,14 +614,8 @@ func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string
 			return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): %s", err)), nil
 		}
 		newText, _ := args["new_text"].(string)
-		edit, err := textMatchApply(validPath, oldText, newText)
-		if err != nil {
-			return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): %s", err)), nil
-		}
-		if err := client.ApplyWorkspaceEdit(ctx, edit); err != nil {
-			return types.ErrorResult(fmt.Sprintf("apply_edit: %s", err)), nil
-		}
-		return types.TextResult("Edit applied successfully"), nil
+		res, _ := applyTextMatch(ctx, client, validPath, oldText, newText, nil)
+		return res, nil
 	}
 
 	// WorkspaceEdit mode.
@@ -635,40 +630,90 @@ func HandleApplyEdit(ctx context.Context, client *lsp.LSPClient, args map[string
 	return types.TextResult("Edit applied successfully"), nil
 }
 
-// textMatchApply constructs a WorkspaceEdit by locating oldText in the file at
-// filePath and replacing it with newText. It tries an exact byte match first;
-// if that fails it falls back to a line-by-line whitespace-normalised match
-// (each line compared after strings.TrimSpace). The normalised match replaces
-// full lines, so newText should include the desired indentation for those lines.
-func textMatchApply(filePath, oldText, newText string) (any, error) {
-	content, err := os.ReadFile(filePath)
+// applyTextMatch replaces the first match of oldText in the file at path
+// (already validated) with newText. The match position is computed from one
+// read of the file, and the write is refused if the file changed after that
+// read, so a concurrent writer cannot make the edit land at a stale offset
+// (issue #76). When expected is non-nil, the file must also still hold exactly
+// those bytes: safe_apply_edit passes the content it previewed, so an edit is
+// never written over content its preview did not check.
+//
+// changed is false when nothing was written: on an error, or when new_text
+// equals the matched text.
+func applyTextMatch(ctx context.Context, client *lsp.LSPClient, path, oldText, newText string, expected []byte) (result types.ToolResult, changed bool) {
+	content, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", filePath, err)
+		return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): reading %s: %s", path, err)), false
 	}
-	src := string(content)
+	if expected != nil && !bytes.Equal(content, expected) {
+		return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): %s: %s", path, lsp.ErrFileChanged)), false
+	}
+	rng, replacement, unchanged, ok := planTextMatch(string(content), oldText, newText)
+	if !ok {
+		return types.ErrorResult(fmt.Sprintf("apply_edit (text-match): old_text not found in %s (tried exact and whitespace-normalised line match)", path)), false
+	}
+	if unchanged {
+		return types.TextResult(noChangeMessage), false
+	}
+	if textMatchBeforeApply != nil {
+		textMatchBeforeApply(path)
+	}
+	if err := client.ApplyTextEditIfUnchanged(ctx, CreateFileURI(path), content, rng, replacement); err != nil {
+		return types.ErrorResult(fmt.Sprintf("apply_edit: %s", err)), false
+	}
+	msg := "Edit applied successfully"
+	if note := lineBreakNote(oldText, newText); note != "" {
+		msg += ". " + note
+	}
+	return types.TextResult(msg), true
+}
 
+// lineBreakNote explains a text-match edit that removes or adds the line break
+// at the end of the matched text. The edit is applied as given, since joining
+// or splitting lines can be intended, but an agent that dropped the trailing
+// newline from new_text by accident would otherwise see plain success while
+// the next line was joined onto its replacement.
+func lineBreakNote(oldText, newText string) string {
+	oldNL, newNL := strings.HasSuffix(oldText, "\n"), strings.HasSuffix(newText, "\n")
+	switch {
+	case oldNL && !newNL:
+		return "Note: old_text ends with a line break and new_text does not, so the line that followed the match now continues on the replacement's last line. If that was not intended, end new_text with a newline."
+	case !oldNL && newNL:
+		return "Note: new_text ends with a line break that old_text did not have, so a line break was added after the replacement."
+	}
+	return ""
+}
+
+// noChangeMessage is the result of a text-match edit whose new_text equals the
+// text it matched: nothing is written, and the result must not claim success.
+const noChangeMessage = "No change applied: new_text is identical to the matched text, so the file was not modified."
+
+// textMatchBeforeApply, when set by a test, runs between planning a text-match
+// edit and applying it, to simulate a concurrent writer.
+var textMatchBeforeApply func(path string)
+
+// planTextMatch locates oldText in src and returns the range to replace and
+// the text to put there. An exact match is replaced with newText verbatim.
+// A whitespace-normalised match (old_text differed from the file only in
+// indentation or line endings) gets newText converted to CRLF when the
+// matched lines use CRLF, so the file does not end up with mixed line
+// endings. unchanged reports that the replacement equals the matched text.
+func planTextMatch(src, oldText, newText string) (rng types.Range, replacement string, unchanged, ok bool) {
+	exact := strings.Contains(src, oldText)
 	startByte, endByte, ok := findText(src, oldText)
 	if !ok {
-		return nil, fmt.Errorf("old_text not found in %s (tried exact and whitespace-normalised line match)", filePath)
+		return types.Range{}, "", false, false
 	}
-
+	replacement = newText
+	if !exact && (strings.Contains(src[startByte:endByte], "\r\n") || strings.HasPrefix(src[endByte:], "\r\n")) {
+		replacement = strings.ReplaceAll(strings.ReplaceAll(newText, "\r\n", "\n"), "\n", "\r\n")
+	}
 	startLine, startChar, endLine, endChar := byteSpanToLSPRange(src, startByte, endByte)
-
-	fileURI := CreateFileURI(filePath)
-	edit := map[string]any{
-		"changes": map[string]any{
-			fileURI: []any{
-				map[string]any{
-					"range": map[string]any{
-						"start": map[string]any{"line": startLine, "character": startChar},
-						"end":   map[string]any{"line": endLine, "character": endChar},
-					},
-					"newText": newText,
-				},
-			},
-		},
+	rng = types.Range{
+		Start: types.Position{Line: startLine, Character: startChar},
+		End:   types.Position{Line: endLine, Character: endChar},
 	}
-	return edit, nil
+	return rng, replacement, replacement == src[startByte:endByte], true
 }
 
 // findText returns the byte range [start, end) of oldText within src.
@@ -715,13 +760,21 @@ func findText(src, oldText string) (start, end int, found bool) {
 		for k := 0; k < i; k++ {
 			byteStart += len(srcLines[k]) + 1 // +1 for '\n'
 		}
+		// The span ends at the end of the last matched line's text. Its line
+		// break is part of the span only when old_text ends with one, as an
+		// exact match would; including it unconditionally made a new_text
+		// without a trailing newline fuse the following line onto it.
 		byteEnd := byteStart
 		lastIdx := i + len(patLines) - 1
-		for k := i; k <= lastIdx; k++ {
-			byteEnd += len(srcLines[k])
-			if k < len(srcLines)-1 {
-				byteEnd++ // '\n'
-			}
+		for k := i; k < lastIdx; k++ {
+			byteEnd += len(srcLines[k]) + 1 // '\n'
+		}
+		byteEnd += len(srcLines[lastIdx])
+		switch {
+		case strings.HasSuffix(oldText, "\n") && lastIdx < len(srcLines)-1:
+			byteEnd++ // the line's '\n' (a preceding '\r' is already in the span)
+		case strings.HasSuffix(srcLines[lastIdx], "\r"):
+			byteEnd-- // leave a CRLF line ending intact
 		}
 		return byteStart, byteEnd, true
 	}
