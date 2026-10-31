@@ -535,3 +535,28 @@ func TestServerCapabilitiesResponse_Multi_GCFShapeIsBackwardsCompatible(t *testi
 		t.Errorf("multi GCF output must keep the default server's ServerName at the top level:\n%s", multiGCF)
 	}
 }
+
+// A connected server that is not initialized has nothing to report, but it
+// must be named rather than dropped without a word.
+func TestHandleGetServerCapabilitiesMulti_NotesUninitializedServer(t *testing.T) {
+	live := startFakeLSP(t, []string{"workspace/symbol"}, nil, false)
+	stale := lsp.NewLSPClient("stale-server", nil)
+	for _, clients := range [][]*lsp.LSPClient{{live, stale}, {stale, live}} {
+		res, err := HandleGetServerCapabilitiesMulti(context.Background(), clients, nil)
+		if err != nil || res.IsError {
+			t.Fatalf("err=%v result=%+v", err, res)
+		}
+		var note string
+		for _, c := range res.Content[1:] {
+			note += c.Text
+		}
+		if !strings.Contains(note, "1 of 2 connected servers were not initialized") {
+			t.Fatalf("missing skipped-server note: %+v", res.Content)
+		}
+	}
+	// All initialized: no note.
+	res, _ := HandleGetServerCapabilitiesMulti(context.Background(), []*lsp.LSPClient{live}, nil)
+	if len(res.Content) != 1 {
+		t.Errorf("unexpected extra content with every server initialized: %+v", res.Content)
+	}
+}

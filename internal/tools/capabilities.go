@@ -2,7 +2,9 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
@@ -193,23 +195,37 @@ func buildServerCapabilitiesResult(client *lsp.LSPClient) ServerCapabilitiesResu
 // byte-identically to HandleGetServerCapabilities.
 func HandleGetServerCapabilitiesMulti(ctx context.Context, clients []*lsp.LSPClient, _ map[string]any) (types.ToolResult, error) {
 	var inited []*lsp.LSPClient
-	for _, c := range clients {
+	var skippedBy []string
+	for idx, c := range clients {
 		if c != nil && c.IsInitialized() {
 			inited = append(inited, c)
+		} else {
+			skippedBy = append(skippedBy, fmt.Sprintf("server-%d", idx))
 		}
 	}
 	if len(inited) == 0 {
 		return types.ErrorResult("LSP client not initialized; call start_lsp first"), nil
 	}
+	var result types.ToolResult
 	if len(inited) == 1 {
-		return HandleGetServerCapabilities(ctx, inited[0], nil)
+		result, _ = HandleGetServerCapabilities(ctx, inited[0], nil)
+	} else {
+		all := make([]ServerCapabilitiesResult, 0, len(inited))
+		for _, c := range inited {
+			all = append(all, buildServerCapabilitiesResult(c))
+		}
+		result, _ = EncodeResult(ctx, serverCapabilitiesResponse(all))
 	}
-	all := make([]ServerCapabilitiesResult, 0, len(inited))
-	for _, c := range inited {
-		all = append(all, buildServerCapabilitiesResult(c))
+	// A connected server that is not initialized has no capabilities to
+	// report; name it rather than leaving it out silently, as find_symbol's
+	// fan-out does, so the report is not read as covering every server.
+	if len(skippedBy) > 0 && !result.IsError {
+		result.Content = append(result.Content, types.ContentItem{
+			Type: "text",
+			Text: fmt.Sprintf("Note: %d of %d connected servers were not initialized and are not included (%s).", len(skippedBy), len(clients), strings.Join(skippedBy, ", ")),
+		})
 	}
-	encoded, _ := EncodeResult(ctx, serverCapabilitiesResponse(all))
-	return encoded, nil
+	return result, nil
 }
 
 // serverCapabilitiesResponse builds the wire shape for the capability

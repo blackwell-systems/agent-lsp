@@ -12,15 +12,19 @@ import (
 
 // TestGetServerCapabilitiesHandler_FansOutToAllServers is the cmd-level
 // regression test for the wiring gap flagged in the maintainer review of
-// upstream PR #72: HandleGetServerCapabilitiesMulti was never exercised by a
+// PR #72: HandleGetServerCapabilitiesMulti was never exercised by a
 // test, so reverting the registered handler to the single-server
 // HandleGetServerCapabilities(ctx, d.cs.get(), nil) left the whole suite
 // green while the fan-out shipped dead. Only calling the registered MCP tool
-// observes the wiring. (PR #72 maintainer review, item 1)
+// observes the wiring.
 func TestGetServerCapabilitiesHandler_FansOutToAllServers(t *testing.T) {
 	ctx := context.Background()
 	defaultClient := fakeSymServer(t, "DefaultOnly")
 	secondClient := fakeSymServer(t, "SecondOnly")
+	// Distinct identities, so the test proves the two entries come from two
+	// servers rather than one server's report repeated.
+	defaultClient.SetServerInfoForTest("default-server", "1.0")
+	secondClient.SetServerInfoForTest("second-server", "2.0")
 
 	cs := &clientState{}
 	cs.set(defaultClient)
@@ -72,6 +76,9 @@ func TestGetServerCapabilitiesHandler_FansOutToAllServers(t *testing.T) {
 	}
 	if len(resp.AllServers) != 2 {
 		t.Fatalf("want all_servers with 2 entries, got %d — is the handler still wired to the single-server path?\n%s", len(resp.AllServers), got)
+	}
+	if a, b := resp.AllServers[0]["server_name"], resp.AllServers[1]["server_name"]; a != "default-server" || b != "second-server" {
+		t.Fatalf("all_servers names = %v, %v; want default-server, second-server", a, b)
 	}
 	for i, entry := range resp.AllServers {
 		caps, ok := entry["capabilities"].(map[string]any)
