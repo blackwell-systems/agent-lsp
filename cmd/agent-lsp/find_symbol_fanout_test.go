@@ -104,10 +104,10 @@ func fakeSymServer(t *testing.T, sym string) *lsp.LSPClient {
 }
 
 // TestFindSymbolHandler_FansOutToAllServers is the cmd-level regression test
-// for the blocking review finding on upstream PR #59: find_symbol was wired
+// for the blocking review finding on PR #59: find_symbol was wired
 // to tools.HandleGetWorkspaceSymbols(ctx, d.cs.get(), ...) — the default
 // client only — so an MQL workspace with clangd as the default server
-// returned false empty results (upstream issue #55). The handler must route
+// returned false empty results (issue #55). The handler must route
 // through workspaceQueryClients (every connected server), which is only
 // observable by calling the registered MCP tool, not the Multi handler
 // directly.
@@ -164,7 +164,7 @@ func TestFindSymbolHandler_FansOutToAllServers(t *testing.T) {
 	// The result is a JSON array of symbols in basic detail (an agent hint is
 	// appended after the JSON), so decode the first value and require BOTH
 	// servers' hits — a plain strings.Contains(got, "2") was vacuous
-	// ("kind":12 contains a 2). (PR #71 maintainer review / CodeRabbit)
+	// ("kind":12 contains a 2).
 	var gotSymbols []map[string]any
 	if err := json.NewDecoder(strings.NewReader(got)).Decode(&gotSymbols); err != nil {
 		t.Fatalf("find_symbol result does not start with a JSON symbol array: %v\n%s", err, got)

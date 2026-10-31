@@ -81,9 +81,9 @@ func startHangingLSP(t *testing.T, declared []string) *lsp.LSPClient {
 		// asynchronously and the silent capability gate in
 		// GetWorkspaceSymbols would otherwise swallow the query.
 		deadline := time.Now().Add(2 * time.Second)
-		for time.Now().Before(deadline) {
-			if client.HasCapability("workspaceSymbolProvider") {
-				break
+		for !client.HasCapability("workspaceSymbolProvider") {
+			if time.Now().After(deadline) {
+				t.Fatal("capability registration never arrived; the gate would return an empty result for the wrong reason")
 			}
 			time.Sleep(2 * time.Millisecond)
 		}

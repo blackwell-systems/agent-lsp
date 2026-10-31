@@ -632,12 +632,15 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 // perServerQueryTimeout caps each server's workspace query in multi-server
 // fan-out: one slow server must degrade to a "did not answer" note instead
 // of stretching the aggregate by its full workspace-ready wait plus request
-// timeout. A variable so tests can shorten it. (CodeRabbit #59 review
-// thread 5)
+// timeout. A variable so tests can shorten it.
 var perServerQueryTimeout = 30 * time.Second
 
 // maxParallelServerQueries bounds the goroutines one fan-out issues, so a
 // large connected-server set cannot stampede the process.
+//
+// The per-server cap starts when a server gets one of these slots, so with n
+// servers that all hang the call can take about ceil(n/4) times
+// perServerQueryTimeout (1 fast plus 5 hanging servers with a 1s cap took 2s).
 const maxParallelServerQueries = 4
 
 // isQueryCapExpiry reports whether err is a per-server query context
@@ -654,9 +657,10 @@ func isQueryCapExpiry(err error) bool {
 // initialized client; each symbol is tagged with the server that produced it
 // ("server" field, empty when a single server answers). Single-client sets
 // behave byte-identically to HandleGetWorkspaceSymbols in JSON and in basic
-// GCF; hover-detail GCF gains one empty "Server" column on single-server
-// output because gcf-go's tabular encoder ignores omitempty (upstream
-// gcf-go limitation, not reproduced by JSON or the basic graph encoding).
+// GCF; hover-detail GCF gains an empty "Server" column in both its Enriched
+// and Symbols sections on single-server output, because gcf-go's tabular
+// encoder ignores omitempty (a gcf-go limitation, not reproduced by JSON or
+// the basic graph encoding).
 func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
 	// At least one initialized client is required to run the query: a slice
 	// of nil or fresh clients must produce the not-initialized error, not a
@@ -790,7 +794,6 @@ func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClien
 	// within <cap>" wording — the single-server path runs with no cap at all,
 	// so any ctx error there is the caller's, and a caller deadline shorter
 	// than the cap would otherwise be misreported as a cap timeout.
-	// (PR #71 maintainer review)
 	if err := ctx.Err(); err != nil {
 		return types.ErrorResult(fmt.Sprintf("find_symbol: %s", err)), nil
 	}
@@ -798,7 +801,7 @@ func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClien
 	// Multi-server output mode counts INITIALIZED clients, not slice length:
 	// one initialized plus one stale client is a single-server answer and
 	// must not gain "server" tags, @server provenance, or multi-server
-	// wording. (PR #71 maintainer review; mirrors HandleGetServerCapabilities)
+	// wording. (mirrors HandleGetServerCapabilities)
 	initializedCount := countInitialized(clients)
 
 	for _, out := range outcomes {
@@ -891,8 +894,7 @@ func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClien
 	// Skipped servers are surfaced too: a crashed or uninitialized member
 	// of the fan-out is silently dropped by the query loop, and an empty
 	// aggregate over such a set would otherwise look like an authoritative
-	// "not found" (the false empty result upstream issue #55 reported).
-	// (PR #71 maintainer review)
+	// "not found" (the false empty result issue #55 reported).
 	skipped, skippedBy := 0, []string(nil)
 	for idx, client := range clients {
 		if client == nil || !client.IsInitialized() {

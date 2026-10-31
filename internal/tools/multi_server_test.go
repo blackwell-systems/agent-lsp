@@ -146,7 +146,7 @@ func startFakeLSP(t *testing.T, declared []string, wsymResult []any, fail bool) 
 		// A registration that never lands is a broken fake, not a legitimate
 		// test condition: fail instead of letting the silent capability gate
 		// return an empty result that makes the test pass for the wrong
-		// reason. (PR #71 maintainer review / CodeRabbit)
+		// reason.
 		for k := range want {
 			if !client.HasCapability(k) {
 				t.Fatalf("fake server capability %q never registered", k)
@@ -275,7 +275,7 @@ func TestHandleGetWorkspaceSymbolsMulti_FanOut(t *testing.T) {
 // handler must surface the caller's own error ("context canceled"), never the
 // aggregate "all N connected servers did not answer within 30s" wording —
 // which is doubly wrong on the single-server path, where no cap applies, and
-// for a caller deadline shorter than the cap. (PR #71 maintainer review)
+// for a caller deadline shorter than the cap.
 func TestHandleGetWorkspaceSymbolsMulti_CancelledCallerContext(t *testing.T) {
 	for _, n := range []int{1, 2} {
 		clients := make([]*lsp.LSPClient, n)
@@ -305,7 +305,7 @@ func TestHandleGetWorkspaceSymbolsMulti_CancelledCallerContext(t *testing.T) {
 // (never-initialized) client is a single-server answer — no "server" tags,
 // no @server provenance — while the skipped stale server is still surfaced
 // in a note instead of vanishing silently (the false empty result upstream
-// issue #55 reported). (PR #71 maintainer review)
+// issue #55 reported).
 func TestHandleGetWorkspaceSymbolsMulti_ModeCountsInitializedClients(t *testing.T) {
 	live := startFakeLSP(t, []string{"workspace/symbol"}, []any{wsymJSON("Alpha")}, false)
 	stale := lsp.NewLSPClient("stale-fake", nil) // never initialized
