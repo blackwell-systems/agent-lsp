@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+- **Workspace-level queries are no longer bound to the default server in multi-server mode** ([#55](https://github.com/blackwell-systems/agent-lsp/issues/55)): `find_symbol` has no file argument to route by, so in auto-detect multi-server mode it always hit the default client — with MQL and C/C++ sources in one workspace that is clangd, which answers `0` for MQL symbols that resolve fine in single-server mode (false empty results). It now fans out over every connected client and merges the per-server results with each symbol tagged by its producing server (the `server` field is omitted entirely in single-server mode, so the JSON shape is unchanged; hover enrichment uses the server that owns each symbol) and reports per-server query failures in the hint. Servers are queried four at a time, each capped at 30 s, so a server that does not answer is reported as such instead of stalling the call; with more than four hanging servers the call can take about ceil(n/4) times the cap. Single-server results are unchanged in JSON and basic GCF; hover-detail GCF gains an empty `Server` column. Contributed by [@davalillo](https://github.com/davalillo).
+
 ## [0.23.5] - 2026-10-27
 
 ### Fixed

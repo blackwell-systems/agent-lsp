@@ -22,11 +22,14 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 
 	"github.com/blackwell-systems/agent-lsp/internal/encoding/gcf"
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
@@ -623,6 +626,55 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 	if err := CheckInitialized(client); err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
+	return HandleGetWorkspaceSymbolsMulti(ctx, []*lsp.LSPClient{client}, args)
+}
+
+// perServerQueryTimeout caps each server's workspace query in multi-server
+// fan-out: one slow server must degrade to a "did not answer" note instead
+// of stretching the aggregate by its full workspace-ready wait plus request
+// timeout. A variable so tests can shorten it.
+var perServerQueryTimeout = 30 * time.Second
+
+// maxParallelServerQueries bounds the goroutines one fan-out issues, so a
+// large connected-server set cannot stampede the process.
+//
+// The per-server cap starts when a server gets one of these slots, so with n
+// servers that all hang the call can take about ceil(n/4) times
+// perServerQueryTimeout (1 fast plus 5 hanging servers with a 1s cap took 2s).
+const maxParallelServerQueries = 4
+
+// isQueryCapExpiry reports whether err is a per-server query context
+// expiring (as opposed to a genuine server error), so it can be reported as
+// "did not answer" rather than as a failure.
+func isQueryCapExpiry(err error) bool {
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
+}
+
+// HandleGetWorkspaceSymbolsMulti is the multi-server fan-out of find_symbol
+// (issue #55): server-less workspace queries must not be bound to the default
+// server, which in auto-detect mode may not own the workspace's documents
+// (e.g. clangd answering 0 for MQL symbols). The query runs against every
+// initialized client; each symbol is tagged with the server that produced it
+// ("server" field, empty when a single server answers). Single-client sets
+// behave byte-identically to HandleGetWorkspaceSymbols in JSON and in basic
+// GCF; hover-detail GCF gains an empty "Server" column in both its Enriched
+// and Symbols sections on single-server output, because gcf-go's tabular
+// encoder ignores omitempty (a gcf-go limitation, not reproduced by JSON or
+// the basic graph encoding).
+func HandleGetWorkspaceSymbolsMulti(ctx context.Context, clients []*lsp.LSPClient, args map[string]any) (types.ToolResult, error) {
+	// At least one initialized client is required to run the query: a slice
+	// of nil or fresh clients must produce the not-initialized error, not a
+	// successful-looking "No matches" hint. (CodeRabbit #59 thread 2)
+	hasInitialized := false
+	for _, c := range clients {
+		if c != nil && c.IsInitialized() {
+			hasInitialized = true
+			break
+		}
+	}
+	if !hasInitialized {
+		return types.ErrorResult("LSP client not initialized; call start_lsp first"), nil
+	}
 
 	query, _ := args["query"].(string)
 	detailLevel, _ := args["detail_level"].(string)
@@ -635,9 +687,233 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 		offset = v
 	}
 
-	symbols, err := client.GetWorkspaceSymbols(ctx, query)
-	if err != nil {
+	// Fan out; tag each symbol with its producing server (stable order:
+	// client list order, then server answer order — the client list is
+	// default-first, so the default server's answers lead the merged list
+	// no matter which server finishes first).
+	type serverSymbol struct {
+		sym    types.SymbolInformation
+		client *lsp.LSPClient
+	}
+
+	// serverQueryOutcome records one initialized server's fan-out result:
+	// its answers, its provenance tag, and how the query ended (answered,
+	// errored, or did not answer within the per-server cap).
+	type serverQueryOutcome struct {
+		client   *lsp.LSPClient
+		name     string
+		syms     []types.SymbolInformation
+		err      error
+		timedOut bool
+	}
+
+	anyDeclared := false
+	for _, client := range clients {
+		if client != nil && client.IsInitialized() && client.HasCapability("workspaceSymbolProvider") {
+			anyDeclared = true
+			break
+		}
+	}
+
+	serverTag := func(clientIdx int, client *lsp.LSPClient) string {
+		name, _ := client.GetServerInfo()
+		if name == "" {
+			name = "server-" + itoa(clientIdx)
+		}
+		return name
+	}
+
+	outcomes := make([]*serverQueryOutcome, len(clients))
+	if len(clients) == 1 {
+		// Single-server set: query inline with no per-server cap, so the
+		// single-server path stays byte-identical to the historical
+		// HandleGetWorkspaceSymbols behavior.
+		for clientIdx, client := range clients {
+			if client == nil || !client.IsInitialized() {
+				continue
+			}
+			syms, err := client.GetWorkspaceSymbols(ctx, query)
+			outcomes[clientIdx] = &serverQueryOutcome{
+				client: client,
+				name:   serverTag(clientIdx, client),
+				syms:   syms,
+				err:    err,
+			}
+		}
+	} else {
+		// Multi-server fan-out queries concurrently under a per-server cap:
+		// querying sequentially lets every connected server add its full
+		// workspace-ready wait plus request timeout to the worst-case
+		// latency, and one hanging server would stall the aggregate instead
+		// of degrading to a "did not answer" note. (CodeRabbit #59 review
+		// thread 5)
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, maxParallelServerQueries)
+		for clientIdx, client := range clients {
+			if client == nil || !client.IsInitialized() {
+				continue
+			}
+			wg.Add(1)
+			go func(idx int, c *lsp.LSPClient) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+				qctx, cancel := context.WithTimeout(ctx, perServerQueryTimeout)
+				defer cancel()
+				type queryResult struct {
+					syms []types.SymbolInformation
+					err  error
+				}
+				// GetWorkspaceSymbols honors qctx; the select additionally
+				// keeps the bound if any client path ever blocks past it.
+				done := make(chan queryResult, 1)
+				go func() {
+					syms, err := c.GetWorkspaceSymbols(qctx, query)
+					done <- queryResult{syms, err}
+				}()
+				out := &serverQueryOutcome{client: c, name: serverTag(idx, c)}
+				select {
+				case r := <-done:
+					out.syms, out.err = r.syms, r.err
+				case <-qctx.Done():
+					out.timedOut = true
+				}
+				outcomes[idx] = out
+			}(clientIdx, client)
+		}
+		wg.Wait()
+	}
+
+	var merged []serverSymbol
+	var firstErr error
+	errored, timedOut := 0, 0
+	var failedBy, unansweredBy []string
+
+	// A cancelled or expired CALLER context is not a per-server cap expiry:
+	// surface the caller's own error instead of the aggregate "did not answer
+	// within <cap>" wording — the single-server path runs with no cap at all,
+	// so any ctx error there is the caller's, and a caller deadline shorter
+	// than the cap would otherwise be misreported as a cap timeout.
+	if err := ctx.Err(); err != nil {
 		return types.ErrorResult(fmt.Sprintf("find_symbol: %s", err)), nil
+	}
+
+	// Multi-server output mode counts INITIALIZED clients, not slice length:
+	// one initialized plus one stale client is a single-server answer and
+	// must not gain "server" tags, @server provenance, or multi-server
+	// wording. (mirrors HandleGetServerCapabilities)
+	initializedCount := countInitialized(clients)
+
+	for _, out := range outcomes {
+		if out == nil {
+			continue
+		}
+		switch {
+		case out.timedOut || isQueryCapExpiry(out.err):
+			timedOut++
+			unansweredBy = append(unansweredBy, out.name)
+		case out.err != nil:
+			errored++
+			failedBy = append(failedBy, out.name+": "+out.err.Error())
+			if firstErr == nil {
+				firstErr = out.err
+			}
+		default:
+			for _, s := range out.syms {
+				if initializedCount > 1 {
+					s.Server = out.name
+				}
+				merged = append(merged, serverSymbol{sym: s, client: out.client})
+			}
+		}
+	}
+
+	// The denominator counts only the clients that actually ran the query:
+	// nil and uninitialized members are skipped and must not inflate the
+	// server total. (CodeRabbit #59 re-review thread — same helper supplies
+	// the all-failed check below)
+	queriedServers := countInitialized(clients)
+	if len(merged) == 0 && errored+timedOut == queriedServers && queriedServers > 0 {
+		if firstErr != nil {
+			return types.ErrorResult(fmt.Sprintf("find_symbol: %s", firstErr)), nil
+		}
+		return types.ErrorResult(fmt.Sprintf("find_symbol: all %d connected servers did not answer within %s", queriedServers, perServerQueryTimeout)), nil
+	}
+
+	// Deduplicate identical results across servers: the same symbol (name +
+	// location) reported by more than one connected server is one symbol,
+	// not two. The first occurrence wins — the client list is default-first,
+	// so the default server's copy is kept. Duplicates reported by one and
+	// the same server are that server's own answer and stay. Single-server
+	// sets are untouched: every entry shares one contributor.
+	// (CodeRabbit #59 review thread 6)
+	if initializedCount > 1 {
+		type symKey struct {
+			name    string
+			uri     string
+			line    int
+			char    int
+			endLine int
+			endChar int
+		}
+		firstBy := make(map[symKey]int, len(merged))
+		var deduped []serverSymbol
+		for _, ms := range merged {
+			k := symKey{
+				name:    ms.sym.Name,
+				uri:     ms.sym.Location.URI,
+				line:    ms.sym.Location.Range.Start.Line,
+				char:    ms.sym.Location.Range.Start.Character,
+				endLine: ms.sym.Location.Range.End.Line,
+				endChar: ms.sym.Location.Range.End.Character,
+			}
+			if first, ok := firstBy[k]; ok {
+				if deduped[first].client == ms.client {
+					deduped = append(deduped, ms)
+				}
+				continue
+			}
+			firstBy[k] = len(deduped)
+			deduped = append(deduped, ms)
+		}
+		merged = deduped
+	}
+
+	symbols := make([]types.SymbolInformation, len(merged))
+	for i, ms := range merged {
+		symbols[i] = ms.sym
+	}
+
+	// Server-failure provenance is built once and appended to EVERY
+	// partial-result branch — basic, hover-enriched, and the empty-result
+	// paths — so callers can never mistake an incomplete fan-out for a
+	// complete answer. (CodeRabbit #59 thread 3) The note names the failing
+	// servers: a bare count does not tell the caller which server to
+	// restart or re-query. (CodeRabbit #59 review thread 6)
+	failureNote := ""
+	// Skipped servers are surfaced too: a crashed or uninitialized member
+	// of the fan-out is silently dropped by the query loop, and an empty
+	// aggregate over such a set would otherwise look like an authoritative
+	// "not found" (the false empty result issue #55 reported).
+	skipped, skippedBy := 0, []string(nil)
+	for idx, client := range clients {
+		if client == nil || !client.IsInitialized() {
+			skipped++
+			skippedBy = append(skippedBy, fmt.Sprintf("server-%d", idx))
+		}
+	}
+	if len(clients) > 1 && (errored > 0 || timedOut > 0 || skipped > 0) {
+		var clauses []string
+		if errored > 0 {
+			clauses = append(clauses, fmt.Sprintf("%d of %d servers failed the query (%s)", errored, queriedServers, strings.Join(failedBy, "; ")))
+		}
+		if timedOut > 0 {
+			clauses = append(clauses, fmt.Sprintf("%s did not answer within %s", strings.Join(unansweredBy, ", "), perServerQueryTimeout))
+		}
+		if skipped > 0 {
+			clauses = append(clauses, fmt.Sprintf("%d of %d connected servers were not initialized and were skipped (%s)", skipped, len(clients), strings.Join(skippedBy, ", ")))
+		}
+		failureNote = " Note: " + strings.Join(clauses, "; ") + "."
 	}
 
 	wsSymHint := "Use inspect_symbol on a symbol for type details."
@@ -649,18 +925,22 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 	// CodeRabbit #51 thread 1)
 	emptyCause := ""
 	if len(symbols) == 0 {
-		if !client.HasCapability("workspaceSymbolProvider") {
+		if !anyDeclared {
 			emptyCause = "No matches. The server does not declare the workspaceSymbolProvider capability — workspace symbol search is unavailable for this language server."
-		} else if note := noteIndexCoverage(ctx, client); note != "" {
+			if initializedCount > 1 {
+				emptyCause = "No matches. None of the connected servers declare the workspaceSymbolProvider capability — workspace symbol search is unavailable."
+			}
+		} else if note := noteIndexCoverageMulti(ctx, clients); note != "" {
 			emptyCause = "No matches. Note: " + note + "."
 		}
 	}
 	if detailLevel == "basic" || detailLevel == "" {
 		encoded, _ := encodeWorkspaceSymbolsResult(ctx, symbols)
-		return appendHint(encoded, emptyHint(emptyCause, wsSymHint)), nil
+		return appendHint(encoded, emptyHint(emptyCause, wsSymHint)+failureNote), nil
 	}
 
-	// Enrich the offset..offset+limit window with hover info.
+	// Enrich the offset..offset+limit window with hover info, using the
+	// server that owns each symbol.
 	resp := workspaceSymbolsResponse{
 		Total:   len(symbols),
 		Symbols: symbols,
@@ -668,18 +948,18 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 
 	if start, end, pg := symbolPaginationWindow(len(symbols), offset, limit); pg != nil {
 		resp.Pagination = pg
-		window := symbols[start:end]
+		window := merged[start:end]
 		enriched := make([]workspaceSymbolEnriched, len(window))
-		for i, sym := range window {
-			enriched[i] = workspaceSymbolEnriched{SymbolInformation: sym}
-			filePath, pErr := URIToFilePath(sym.Location.URI)
+		for i, ms := range window {
+			enriched[i] = workspaceSymbolEnriched{SymbolInformation: ms.sym}
+			filePath, pErr := URIToFilePath(ms.sym.Location.URI)
 			if pErr == nil {
 				pos := types.Position{
-					Line:      sym.Location.Range.Start.Line + 1,
-					Character: sym.Location.Range.Start.Character + 1,
+					Line:      ms.sym.Location.Range.Start.Line + 1,
+					Character: ms.sym.Location.Range.Start.Character + 1,
 				}
-				hoverText, hErr := WithDocument[string](ctx, client, filePath, "", func(uri string) (string, error) {
-					return client.GetInfoOnLocation(ctx, uri, pos)
+				hoverText, hErr := WithDocument[string](ctx, ms.client, filePath, "", func(uri string) (string, error) {
+					return ms.client.GetInfoOnLocation(ctx, uri, pos)
 				})
 				if hErr == nil && hoverText != "" {
 					enriched[i].Hover = hoverText
@@ -690,7 +970,7 @@ func HandleGetWorkspaceSymbols(ctx context.Context, client *lsp.LSPClient, args 
 	}
 
 	encoded, _ := EncodeResult(ctx, resp)
-	return appendHint(encoded, emptyHint(emptyCause, wsSymHint)), nil
+	return appendHint(encoded, emptyHint(emptyCause, wsSymHint)+failureNote), nil
 }
 
 // emptyHint picks the hint for a (possibly empty) result: the empty-cause
@@ -700,6 +980,30 @@ func emptyHint(cause, fallback string) string {
 		return cause
 	}
 	return fallback
+}
+
+// countInitialized counts non-nil initialized clients in the set.
+func countInitialized(clients []*lsp.LSPClient) int {
+	n := 0
+	for _, c := range clients {
+		if c != nil && c.IsInitialized() {
+			n++
+		}
+	}
+	return n
+}
+
+// itoa is a minimal integer formatter for server-N labels.
+func itoa(i int) string {
+	if i == 0 {
+		return "0"
+	}
+	var b []byte
+	for i > 0 {
+		b = append([]byte{byte('0' + i%10)}, b...)
+		i /= 10
+	}
+	return string(b)
 }
 
 // toIntOpt reads an integer argument without error — returns (value, true) if present and valid.
@@ -874,17 +1178,52 @@ func buildDocumentSymbolsPayload(symbols []types.DocumentSymbol, filePath string
 	return gcf.BuildGraphPayload("list_symbols", gcfSymbols, nil)
 }
 
+// sanitizeServerForProvenance makes a server name safe for the GCF wire
+// format: the GCF decoder splits symbol lines on whitespace
+// (strings.Fields), so a name like "MQL Language Server" would decode as
+// provenance "lsp_resolved@MQL" with the trailing words corrupting the
+// line. Whitespace and the '@' source/instance separator used by the
+// lsp_resolved@<server> convention become underscores. (CodeRabbit #59
+// thread 1, review thread 5)
+func sanitizeServerForProvenance(name string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) || r == '@' {
+			return '_'
+		}
+		return r
+	}, name)
+}
+
 // buildWorkspaceSymbolsPayload converts workspace symbols into a flat graph Payload.
 func buildWorkspaceSymbolsPayload(symbols []types.SymbolInformation) *gcfgo.Payload {
 	var gcfSymbols []gcfgo.Symbol
-	for i, sym := range symbols {
+	// Score decay is per server, not per merged-list position: decaying by
+	// global position always ranks every non-default server's results below
+	// the default server's, however well they matched. Each server's answers
+	// decay from 1.0 by their rank within that server, so equal servers
+	// compete on equal footing while a single-server payload (one decay
+	// sequence) stays byte-identical. (CodeRabbit #59 review thread 6)
+	posByServer := make(map[string]int, len(symbols))
+	for _, sym := range symbols {
+		pos := posByServer[sym.Server]
+		posByServer[sym.Server] = pos + 1
 		fp, _ := URIToFilePath(sym.Location.URI)
-		score := max(0.1, 1.0-float64(i)*0.02)
+		score := max(0.1, 1.0-float64(pos)*0.02)
+		// Multi-server fan-out: the GCF wire format has no server field, so
+		// the producing server rides in provenance as "lsp_resolved@<server>"
+		// (an empty Server — single-server mode — keeps the plain token, so
+		// single-client wire bytes are unchanged). A dedicated source field
+		// belongs upstream in gcf-go. The name is sanitized for the
+		// whitespace-delimited GCF decoder. (CodeRabbit #59 thread 1)
+		prov := "lsp_resolved"
+		if sym.Server != "" {
+			prov += "@" + sanitizeServerForProvenance(sym.Server)
+		}
 		gcfSymbols = append(gcfSymbols, gcfgo.Symbol{
 			QualifiedName: gcf.QualifiedName(fp, sym.Name),
 			Kind:          gcf.MapSymbolKind(sym.Kind),
 			Score:         score,
-			Provenance:    "lsp_resolved",
+			Provenance:    prov,
 			Distance:      0,
 		})
 	}

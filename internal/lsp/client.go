@@ -1064,6 +1064,17 @@ func (c *LSPClient) SetRootDirForTest(rootDir string) {
 	c.rootDir = rootDir
 }
 
+// SetServerInfoForTest sets the server name/version reported by
+// GetServerInfo, so callers in other packages can simulate an initialize
+// response (e.g. index-on-open server matching by serverInfo name) without
+// spawning a real LSP process.
+func (c *LSPClient) SetServerInfoForTest(name, version string) {
+	c.capsMu.Lock()
+	defer c.capsMu.Unlock()
+	c.serverName = name
+	c.serverVersion = version
+}
+
 // DiscardOutputForTest makes the client send its messages nowhere, so tests in
 // other packages can run paths that notify the server (such as a file edit's
 // didChange) without spawning a process.
