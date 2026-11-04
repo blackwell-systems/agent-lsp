@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.24.1] - 2026-11-03
 
 ### Fixed
 - **Scala (Metals) never imported the project's build**: Metals asks the editor whether to import an sbt build and, with no one to answer (agent-lsp declined unknown prompts), never did, so it answered only from a fallback compiler without the project's dependencies. agent-lsp now answers Metals' configuration request with `autoImportBuilds: "initial"`, so the build is imported when the project is first opened.
