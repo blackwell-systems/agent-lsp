@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.24.2] - 2026-11-04
 
 ### Added
 - **`agent-lsp init` supports Codex and the ChatGPT desktop app** ([#67](https://github.com/blackwell-systems/agent-lsp/issues/67)): two new targets write Codex's MCP configuration, which the Codex CLI, its IDE extension and the ChatGPT desktop app share. The user target (`11`) registers the server with `codex mcp add` when the `codex` CLI is installed and otherwise adds an `[mcp_servers.agent-lsp]` table to `$CODEX_HOME/config.toml` (default `~/.codex/config.toml`); the project target (`12`) writes `.codex/config.toml`. The TOML is edited in place, so the rest of the file, comments included, is kept byte for byte. Skill awareness rules go to Codex's `AGENTS.md`, and `--with-skills` installs to `$CODEX_HOME/skills`. `agent-lsp uninstall` removes the table, the rules section and the skills. Suggested by [@LuminairPrime](https://github.com/LuminairPrime).
