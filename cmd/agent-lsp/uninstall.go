@@ -68,7 +68,8 @@ func runUninstall(args []string) {
 	// Step 1: MCP config cleanup.
 	mcpPaths := []string{
 		filepath.Join(cwd, ".mcp.json"),
-		filepath.Join(homeDir, ".claude", ".mcp.json"),
+		filepath.Join(homeDir, ".claude.json"),         // Claude Code user scope
+		filepath.Join(homeDir, ".claude", ".mcp.json"), // written by init before v0.24.1; never read by Claude Code
 		filepath.Join(homeDir, ".config", "mcp", "mcp.json"),
 		filepath.Join(cwd, ".cursor", "mcp.json"),
 		filepath.Join(cwd, ".vscode", "cline_mcp_settings.json"),
@@ -79,6 +80,11 @@ func runUninstall(args []string) {
 		r, s := cleanMCPConfig(p, dryRun)
 		removed += r
 		skipped += s
+	}
+	// Claude Code may rewrite ~/.claude.json from memory while running, so
+	// also remove the user-scope entry through its CLI when it is installed.
+	if !dryRun {
+		_ = claudeCLI("mcp", "remove", "--scope", "user", "agent-lsp")
 	}
 
 	// Step 2: Skill directory cleanup (all managed destinations).

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -129,7 +130,7 @@ func runInit(args []string) {
 	if !nonInteractive {
 		fmt.Println("Which AI tool to configure?")
 		fmt.Println("  1. Claude Code  (project .mcp.json in current directory)")
-		fmt.Println("  2. Claude Code  (global ~/.claude/.mcp.json)")
+		fmt.Println("  2. Claude Code  (user scope, all projects: ~/.claude.json)")
 		fmt.Println("  3. Claude Desktop")
 		fmt.Println("  4. Cursor       (.cursor/mcp.json in current directory)")
 		fmt.Println("  5. Cline/VS Code (.vscode/cline_mcp_settings.json in current directory)")
@@ -172,7 +173,12 @@ func runInit(args []string) {
 	lspArgs := buildLspArgs(selected)
 
 	// Step 7: Merge or create the config file.
-	if err := writeOrMergeConfig(targetPath, lspArgs); err != nil {
+	// Claude Code's user scope is managed by the claude CLI, which owns
+	// ~/.claude.json and may rewrite it while running; prefer the CLI and
+	// fall back to editing the file only when it is not installed.
+	if choice == 2 && addClaudeUserScope(lspArgs) == nil {
+		fmt.Println("Registered agent-lsp with Claude Code (user scope) via `claude mcp add`.")
+	} else if err := writeOrMergeConfig(targetPath, lspArgs); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing config: %v\n", err)
 		os.Exit(1)
 	}
@@ -246,7 +252,9 @@ func resolveTargetPath(choice int, customPath string) (string, error) {
 	case 1:
 		return filepath.Join(cwd, ".mcp.json"), nil
 	case 2:
-		return filepath.Join(homeDir, ".claude", ".mcp.json"), nil
+		// Claude Code keeps user-scope MCP servers in ~/.claude.json; it never
+		// read the ~/.claude/.mcp.json this used to write.
+		return filepath.Join(homeDir, ".claude.json"), nil
 	case 3:
 		switch runtime.GOOS {
 		case "darwin":
@@ -292,49 +300,83 @@ func buildLspArgs(entries []config.ServerEntry) []string {
 	return args
 }
 
-// writeOrMergeConfig reads an existing config at path (if any), sets/overwrites
-// the "agent-lsp" key in mcpServers, and writes the result back.
+// writeOrMergeConfig reads an existing config at path (if any), sets the
+// "agent-lsp" entry in mcpServers, and writes the result back. Everything else
+// in the file is kept as it was: other top-level settings (Claude Desktop
+// preferences, a whole Gemini CLI settings.json, Claude Code's ~/.claude.json
+// state) and every field of the other servers (env, url, headers, cwd).
+// Decoding into a struct that only knew mcpServers and type/command/args used
+// to drop all of them on write.
 func writeOrMergeConfig(path string, lspArgs []string) error {
-	var cfg mcpConfig
+	top := map[string]json.RawMessage{}
+	servers := map[string]json.RawMessage{}
 
 	if data, err := os.ReadFile(path); err == nil {
-		// File exists — unmarshal it.
-		if err := json.Unmarshal(data, &cfg); err != nil {
+		if err := json.Unmarshal(data, &top); err != nil {
 			return fmt.Errorf("failed to parse existing config at %s: %w", path, err)
 		}
-		if cfg.MCPServers == nil {
-			cfg.MCPServers = make(map[string]mcpServerEntry)
+		if top == nil {
+			top = map[string]json.RawMessage{}
+		}
+		if raw, ok := top["mcpServers"]; ok && string(raw) != "null" {
+			if err := json.Unmarshal(raw, &servers); err != nil {
+				return fmt.Errorf("failed to parse mcpServers in %s: %w", path, err)
+			}
 		}
 	} else {
-		// File does not exist — create parent directories.
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return fmt.Errorf("failed to create directory for %s: %w", path, err)
-		}
-		cfg = mcpConfig{
-			MCPServers: make(map[string]mcpServerEntry),
 		}
 	}
 
 	// Remove legacy "lsp" key if present (renamed to "agent-lsp" in v0.12.0)
-	delete(cfg.MCPServers, "lsp")
+	delete(servers, "lsp")
 
-	cfg.MCPServers["agent-lsp"] = mcpServerEntry{
-		Type:    "stdio",
-		Command: "agent-lsp",
-		Args:    lspArgs,
+	entry, err := json.Marshal(mcpServerEntry{Type: "stdio", Command: "agent-lsp", Args: lspArgs})
+	if err != nil {
+		return fmt.Errorf("failed to marshal server entry: %w", err)
+	}
+	servers["agent-lsp"] = entry
+	if top["mcpServers"], err = json.Marshal(servers); err != nil {
+		return fmt.Errorf("failed to marshal mcpServers: %w", err)
 	}
 
-	out, err := json.MarshalIndent(cfg, "", "  ")
+	out, err := json.MarshalIndent(top, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 	out = append(out, '\n')
 
-	if err := os.WriteFile(path, out, 0o644); err != nil {
+	mode := os.FileMode(0o644)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm() // keep a private file (such as ~/.claude.json) private
+	}
+	if err := os.WriteFile(path, out, mode); err != nil {
 		return fmt.Errorf("failed to write config to %s: %w", path, err)
 	}
 
 	return nil
+}
+
+// claudeCLI runs the claude CLI; a variable so tests never touch a real
+// Claude Code configuration.
+var claudeCLI = func(args ...string) error {
+	path, err := exec.LookPath("claude")
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(path, args...)
+	cmd.Stdout, cmd.Stderr = nil, nil
+	return cmd.Run()
+}
+
+// addClaudeUserScope registers agent-lsp in Claude Code's user scope with
+// `claude mcp add --scope user`, replacing an existing entry. It returns an
+// error when the CLI is unavailable or the add fails.
+func addClaudeUserScope(lspArgs []string) error {
+	_ = claudeCLI("mcp", "remove", "--scope", "user", "agent-lsp") // absent is fine
+	args := append([]string{"mcp", "add", "--scope", "user", "agent-lsp", "--", "agent-lsp"}, lspArgs...)
+	return claudeCLI(args...)
 }
 
 const (

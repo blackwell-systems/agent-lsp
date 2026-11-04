@@ -360,6 +360,8 @@ agent-lsp init
 
 Detects language servers on your PATH, asks which AI tool you use, writes the correct MCP config, and installs skill awareness rules for your AI provider (CLAUDE.md for Claude Code, `.cursor/rules/` for Cursor, `.clinerules` for Cline, `.windsurfrules` for Windsurf, `GEMINI.md` for Gemini CLI, `AGENTS.md` for Pi). For CI or scripted use: `agent-lsp init --non-interactive`.
 
+For Claude Code, choose the project target (`1`, writes `.mcp.json` in the current directory) or the user scope (`2`, all projects: registers the server with `claude mcp add --scope user` when the `claude` CLI is installed, otherwise adds it to `~/.claude.json`). `init` only sets the `agent-lsp` entry; every other server and setting in an existing config file is kept.
+
 For [Pi](https://github.com/earendil-works/pi), choose the project (`9`) or global (`10`) target. Pi has no built-in MCP support; `init` writes the shared standard MCP files that the [`pi-mcp-adapter`](https://www.npmjs.com/package/pi-mcp-adapter) package reads — project `.mcp.json` (same file Claude Code uses, so one config serves both) or global `~/.config/mcp/mcp.json`. Skill awareness rules go into `AGENTS.md` (project) or `~/.pi/agent/AGENTS.md` (global). Install the adapter once with `pi install npm:pi-mcp-adapter`.
 
 #### One-command complete setup

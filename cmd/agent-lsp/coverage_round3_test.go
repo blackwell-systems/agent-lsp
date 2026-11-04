@@ -14,8 +14,8 @@ func TestResolveTargetPath_GlobalClaude(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(got, ".claude") || !strings.HasSuffix(got, ".mcp.json") {
-		t.Errorf("got %q, want path containing .claude and ending in .mcp.json", got)
+	if !strings.HasSuffix(got, ".claude.json") {
+		t.Errorf("got %q, want Claude Code's user-scope config ~/.claude.json", got)
 	}
 }
 
