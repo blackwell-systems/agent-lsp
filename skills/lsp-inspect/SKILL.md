@@ -3,7 +3,7 @@ name: lsp-inspect
 description: Full code quality audit for a file, package, or directory. Supports batch mode (directory walk with --top ranking), comparison mode (--diff for branch-only issues), severity calibration by blast radius, fix suggestions, and confidence tiers. Applies a check taxonomy (dead symbols, silent failures, error wrapping, coverage gaps, test coverage, doc drift, unrecovered panics, context propagation, concurrency safety) using LSP-first strategies. Concurrency checks cover 25 languages across 4 families (goroutine, thread, async, actor). Produces a severity-tiered findings report. Language-agnostic.
 argument-hint: "<file-or-directory> [--checks <type1>,<type2>] [--json] [--top N] [--diff]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__blast_radius mcp__lsp__find_references mcp__lsp__list_symbols mcp__lsp__inspect_symbol mcp__lsp__get_diagnostics mcp__lsp__find_callers mcp__lsp__go_to_definition mcp__lsp__get_server_capabilities mcp__lsp__get_cross_repo_references Bash
+allowed-tools: mcp__agent-lsp__start_lsp mcp__agent-lsp__open_document mcp__agent-lsp__blast_radius mcp__agent-lsp__find_references mcp__agent-lsp__list_symbols mcp__agent-lsp__inspect_symbol mcp__agent-lsp__get_diagnostics mcp__agent-lsp__find_callers mcp__agent-lsp__go_to_definition mcp__agent-lsp__get_server_capabilities mcp__agent-lsp__get_cross_repo_references Bash
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -72,13 +72,13 @@ severity then blast radius."
 ### Step 0: Initialize and verify workspace
 
 ```
-mcp__lsp__start_lsp(root_dir="<repo_root>")
+mcp__agent-lsp__start_lsp(root_dir="<repo_root>")
 ```
 
 Open one file per package being audited:
 
 ```
-mcp__lsp__open_document(file_path="<target_file>", language_id="<lang>")
+mcp__agent-lsp__open_document(file_path="<target_file>", language_id="<lang>")
 ```
 
 **Warm-up check (mandatory):** Pick one symbol you know is actively used.
@@ -100,7 +100,7 @@ When `--diff` is set:
 Call `blast_radius` once per file in the target:
 
 ```
-mcp__lsp__blast_radius(changed_files=["/abs/path/file.go"], include_transitive=false)
+mcp__agent-lsp__blast_radius(changed_files=["/abs/path/file.go"], include_transitive=false)
 ```
 
 This returns all exported symbols with:

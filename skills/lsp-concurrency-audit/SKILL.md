@@ -3,7 +3,7 @@ name: lsp-concurrency-audit
 description: Concurrency safety audit for a type or file. Maps all fields, traces which are accessed from concurrent contexts (goroutines, threads, async tasks), and flags fields that lack synchronization. Produces a field-level safety report. Language-agnostic across 4 concurrency families.
 argument-hint: "<file-path> [--type <TypeName>]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__blast_radius mcp__lsp__find_callers mcp__lsp__list_symbols mcp__lsp__get_symbol_source mcp__lsp__find_references
+allowed-tools: mcp__agent-lsp__start_lsp mcp__agent-lsp__open_document mcp__agent-lsp__blast_radius mcp__agent-lsp__find_callers mcp__agent-lsp__list_symbols mcp__agent-lsp__get_symbol_source mcp__agent-lsp__find_references
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -40,7 +40,7 @@ the file that have concurrent callers.
 Call `list_symbols` on the target file to enumerate all types (structs, classes):
 
 ```
-mcp__lsp__list_symbols({ "file_path": "<target>" })
+mcp__agent-lsp__list_symbols({ "file_path": "<target>" })
 ```
 
 For each type (kind=23 struct, kind=5 class), collect:
@@ -57,7 +57,7 @@ If `--type` was specified, filter to that type only.
 Call `blast_radius` on the file:
 
 ```
-mcp__lsp__blast_radius({
+mcp__agent-lsp__blast_radius({
   "changed_files": ["<target>"],
   "scope": "all"
 })
@@ -74,7 +74,7 @@ For each method on each target type, call `find_callers` with
 `cross_concurrent: true`:
 
 ```
-mcp__lsp__find_callers({
+mcp__agent-lsp__find_callers({
   "file_path": "<target>",
   "line": <method_line>,
   "column": <method_column>,

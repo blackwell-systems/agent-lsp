@@ -3,7 +3,7 @@ name: lsp-architecture
 description: "Generate a structural architecture overview of a codebase: languages, package map, entry points, dependency graph, and hotspots. One call for the big picture."
 argument-hint: "[workspace-root-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__list_symbols mcp__lsp__blast_radius mcp__lsp__detect_lsp_servers mcp__lsp__find_symbol
+allowed-tools: mcp__agent-lsp__start_lsp mcp__agent-lsp__list_symbols mcp__agent-lsp__blast_radius mcp__agent-lsp__detect_lsp_servers mcp__agent-lsp__find_symbol
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -42,7 +42,7 @@ These limits are strict constraints. Never exceed them:
 If LSP is not yet running, start it with the workspace root:
 
 ```
-mcp__lsp__start_lsp({
+mcp__agent-lsp__start_lsp({
   "workspace_root": "<workspace-root>"
 })
 ```
@@ -50,7 +50,7 @@ mcp__lsp__start_lsp({
 Then detect which language servers are available:
 
 ```
-mcp__lsp__detect_lsp_servers({
+mcp__agent-lsp__detect_lsp_servers({
   "workspace_root": "<workspace-root>"
 })
 → returns: list of detected servers with language names and file patterns
@@ -84,7 +84,7 @@ module hierarchy. Tailor queries by language:
 
 **Go:**
 ```
-mcp__lsp__find_symbol({
+mcp__agent-lsp__find_symbol({
   "query": "",
   "symbol_kind_filter": "Package"
 })
@@ -93,7 +93,7 @@ mcp__lsp__find_symbol({
 Also query for top-level types and functions to fill in package-level detail:
 
 ```
-mcp__lsp__find_symbol({
+mcp__agent-lsp__find_symbol({
   "query": "",
   "symbol_kind_filter": "Function"
 })
@@ -101,7 +101,7 @@ mcp__lsp__find_symbol({
 
 **Python:**
 ```
-mcp__lsp__find_symbol({
+mcp__agent-lsp__find_symbol({
   "query": "",
   "symbol_kind_filter": "Class"
 })
@@ -109,7 +109,7 @@ mcp__lsp__find_symbol({
 
 **TypeScript/JavaScript:**
 ```
-mcp__lsp__find_symbol({
+mcp__agent-lsp__find_symbol({
   "query": "",
   "symbol_kind_filter": "Function"
 })
@@ -134,7 +134,7 @@ the top 30 by symbol count and note that others were omitted.
 Use `find_symbol` to search for common entry point patterns:
 
 ```
-mcp__lsp__find_symbol({
+mcp__agent-lsp__find_symbol({
   "query": "main"
 })
 ```
@@ -166,7 +166,7 @@ Select the **top 10 files** by exported symbol count.
 For each candidate file, call `blast_radius`:
 
 ```
-mcp__lsp__blast_radius({
+mcp__agent-lsp__blast_radius({
   "changed_files": ["<absolute-path-to-file>"],
   "include_transitive": false
 })

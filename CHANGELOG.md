@@ -3,6 +3,24 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+- **TypeScript and JavaScript could not start with the current TypeScript release**: TypeScript 7 ships without `tsserver`, which typescript-language-server needs, so `npm i -g typescript-language-server typescript` now installs a combination that fails with "Could not find a valid TypeScript installation". CI and the Docker images (`typescript`, `web`, `fullstack`, `full`) now pin typescript-language-server 6.0.3 and TypeScript 6.0.3, and the install docs say `typescript@6`. CI had been skipping the TypeScript and JavaScript tests on this error instead of failing.
+- **`type_hierarchy` rejected `direction: supertypes` and `subtypes`**: the schema gave every field named `direction` the call-hierarchy values (incoming, outgoing, both), so only `both` reached the handler. Each tool now declares its own values.
+- **Skills pre-approved the wrong tool names**: their `allowed-tools` used `mcp__lsp__*`, but `agent-lsp init` has named the server `agent-lsp` since v0.12.0, so the tools are `mcp__agent-lsp__*` and the pre-approvals never matched. All 24 skills now use `mcp__agent-lsp__*`. `lsp-onboard` no longer lists a tool that does not exist.
+- **`rename_symbol` was annotated read-only although it writes to disk**: clients that auto-approve read-only tools could run it without asking. It is now marked as a destructive edit like the other editing tools, and its description says it writes unless `dry_run` is set. `refactor` is marked destructive too.
+- **`go_to_definition` ignored `position_pattern`** although its schema offered it; it now resolves the pattern like the other navigation tools.
+- **`execute_command` accepted only object arguments**, so commands that take strings or numbers could not be run; arguments are now any JSON values.
+- **`restart_lsp_server` returned its status as a quoted string** under JSON output; it now returns plain text like the other lifecycle tools.
+- **Schema descriptions stated wrong defaults**: `tab_size` defaults to 2 (not 4), and `timeout_ms` for session evaluation to 3000 ms for file scope and 8000 ms for workspace scope (not 5000). The server instructions and the rules `agent-lsp init` writes now take the tool and skill counts from the code (66 tools, 24 skills).
+- **The daemon-indexing message pointed to a tool that is not registered** (`get_daemon_status`); it now names `agent-lsp daemon-status`.
+
+### Changed
+- **Documentation audit**: the docs were checked against the code and corrected throughout: tool count (66; the docs had counted a tool that never existed), skill count (24), tool parameters and outputs in the tool reference, the GCF, speculative-execution and phase-enforcement guides, environment variables (`LOG_LEVEL`, audit log on by default), install and Docker instructions (`mcp__agent-lsp__*` permissions, `--listen-addr 0.0.0.0` for Docker HTTP, Streamable HTTP rather than HTTP+SSE), the LSP conformance matrix, and the architecture docs.
+- **Docs drift checks**: CI now fails when the tool reference does not document exactly the registered tools, when headline tool or skill counts disagree with the code, or when a skill's phase rules in SKILL.md differ from the rules phase enforcement applies.
+- **CI can be run on demand** (`workflow_dispatch`).
+
 ## [0.24.0] - 2026-11-03
 
 ### Added

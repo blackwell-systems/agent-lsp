@@ -3,7 +3,7 @@ name: lsp-local-symbols
 description: Fast file-scoped symbol analysis — find all usages of a symbol within the current file, list all symbols defined in the file, and get type info at a position. Use when you need local-scope analysis without a workspace-wide search.
 argument-hint: "[symbol-name] in [file-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__open_document mcp__lsp__list_symbols mcp__lsp__inspect_symbol mcp__lsp__get_document_highlights
+allowed-tools: mcp__agent-lsp__open_document mcp__agent-lsp__list_symbols mcp__agent-lsp__inspect_symbol mcp__agent-lsp__get_document_highlights
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -48,7 +48,7 @@ find those. Use `find_references` (via `/lsp-impact`) for cross-file analysis.
 Open the file so the language server tracks it:
 
 ```
-mcp__lsp__open_document
+mcp__agent-lsp__open_document
   file_path: "/abs/path/to/file.go"
   language_id: "go"              # go, typescript, python, rust, etc.
 ```
@@ -58,7 +58,7 @@ mcp__lsp__open_document
 Get the full symbol tree for the file:
 
 ```
-mcp__lsp__list_symbols
+mcp__agent-lsp__list_symbols
   file_path: "/abs/path/to/file.go"
 ```
 
@@ -80,7 +80,7 @@ and a `selectionRange` (just the name). Coordinates are 1-based. Use
 Call `get_document_highlights` at the symbol's position:
 
 ```
-mcp__lsp__get_document_highlights
+mcp__agent-lsp__get_document_highlights
   file_path: "/abs/path/to/file.go"
   line: <selectionRange.start.line from Step 2>
   column: <selectionRange.start.character from Step 2>
@@ -101,7 +101,7 @@ results.
 For any position of interest, get the type signature and docs:
 
 ```
-mcp__lsp__inspect_symbol
+mcp__agent-lsp__inspect_symbol
   file_path: "/abs/path/to/file.go"
   line: <line>
   column: <column>

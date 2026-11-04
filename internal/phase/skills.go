@@ -4,7 +4,7 @@ package phase
 // tool_permissions metadata. These are transcribed from the tool_permissions
 // YAML in each skill's SKILL.md frontmatter.
 //
-// Tool names use the unprefixed form (e.g., "apply_edit" not "mcp__lsp__apply_edit")
+// Tool names use the unprefixed form (e.g., "apply_edit" not "mcp__agent-lsp__apply_edit")
 // because that is what agent-lsp sees in incoming CallToolRequests. External tool
 // names like "Edit", "Write", "Bash" are included in forbidden lists so they
 // appear in get_skill_phase output (informational for the agent), but agent-lsp

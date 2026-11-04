@@ -2,7 +2,7 @@
 name: lsp-verify
 description: Full three-layer verification after any change — LSP diagnostics + compiler build + test suite, ranked by severity. Use after completing any edit, refactor, or feature to confirm nothing is broken before committing.
 user-invocable: true
-allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__suggest_fixes mcp__lsp__format_document mcp__lsp__apply_edit
+allowed-tools: mcp__agent-lsp__get_diagnostics mcp__agent-lsp__run_build mcp__agent-lsp__run_tests mcp__agent-lsp__get_tests_for_file mcp__agent-lsp__suggest_fixes mcp__agent-lsp__format_document mcp__agent-lsp__apply_edit
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -12,51 +12,53 @@ metadata:
       test_correlation:
         description: "Pre-step: map changed source files to their test files"
         allowed:
-          - "mcp__lsp__get_tests_for_file"
+          - "mcp__agent-lsp__get_tests_for_file"
         forbidden:
-          - "mcp__lsp__apply_edit"
+          - "mcp__agent-lsp__apply_edit"
           - "Edit"
           - "Write"
       diagnostics:
         description: "Layer 1: collect LSP diagnostics for changed files"
         allowed:
-          - "mcp__lsp__start_lsp"
-          - "mcp__lsp__get_diagnostics"
+          - "mcp__agent-lsp__start_lsp"
+          - "mcp__agent-lsp__get_diagnostics"
         forbidden:
-          - "mcp__lsp__apply_edit"
+          - "mcp__agent-lsp__apply_edit"
           - "Edit"
           - "Write"
       build:
         description: "Layer 2: run compiler build"
         allowed:
-          - "mcp__lsp__run_build"
+          - "mcp__agent-lsp__run_build"
         forbidden:
-          - "mcp__lsp__apply_edit"
+          - "mcp__agent-lsp__apply_edit"
           - "Edit"
           - "Write"
       tests:
         description: "Layer 3: run test suite"
         allowed:
-          - "mcp__lsp__run_tests"
+          - "mcp__agent-lsp__run_tests"
           - "Bash"                         # scoped test commands for large repos
         forbidden:
-          - "mcp__lsp__apply_edit"
+          - "mcp__agent-lsp__apply_edit"
           - "Edit"
           - "Write"
       fix_and_format:
         description: "Post-verification: apply code action fixes and format"
         allowed:
-          - "mcp__lsp__suggest_fixes"
-          - "mcp__lsp__apply_edit"
-          - "mcp__lsp__format_document"
-          - "mcp__lsp__get_diagnostics"    # re-check after fixes
+          - "mcp__agent-lsp__suggest_fixes"
+          - "mcp__agent-lsp__apply_edit"
+          - "mcp__agent-lsp__format_document"
+          - "mcp__agent-lsp__get_diagnostics"    # re-check after fixes
         forbidden:
-          - "mcp__lsp__simulate_*"
-          - "mcp__lsp__run_build"          # re-run full verify instead
-          - "mcp__lsp__run_tests"          # re-run full verify instead
+          - "mcp__agent-lsp__simulate_*"
+          - "mcp__agent-lsp__run_build"          # re-run full verify instead
+          - "mcp__agent-lsp__run_tests"          # re-run full verify instead
+          - "mcp__agent-lsp__preview_edit"
     global_forbidden:
-      - "mcp__lsp__simulate_*"             # verify is post-edit, not speculative
-      - "mcp__lsp__rename_symbol"          # verify does not make semantic changes
+      - "mcp__agent-lsp__simulate_*"             # verify is post-edit, not speculative
+      - "mcp__agent-lsp__rename_symbol"          # verify does not make semantic changes
+      - "mcp__agent-lsp__preview_edit"
 ---
 
 > Requires the agent-lsp MCP server.
@@ -85,7 +87,7 @@ Before running the three layers, call `get_tests_for_file` for each changed
 source file to build a source → test file map:
 
 ```
-mcp__lsp__get_tests_for_file({ "file_path": "<changed/source/file>" })
+mcp__agent-lsp__get_tests_for_file({ "file_path": "<changed/source/file>" })
 ```
 
 Returns the test files that correspond to each source file. Store this map —
@@ -97,14 +99,14 @@ be sequenced. Issue all three calls in the same message to minimize wall time.
 
 ### Layer 1: LSP Diagnostics
 
-Call `mcp__lsp__get_diagnostics` with `file_path` set to each changed file.
+Call `mcp__agent-lsp__get_diagnostics` with `file_path` set to each changed file.
 `get_diagnostics` takes a file path, not a workspace directory.
 
 Note: requires LSP to be initialized. If not yet running, call `start_lsp`
 with the workspace root first.
 
 ```
-mcp__lsp__get_diagnostics({ "file_path": "<path/to/changed/file>" })
+mcp__agent-lsp__get_diagnostics({ "file_path": "<path/to/changed/file>" })
 ```
 
 Call once per changed file. If you don't know which files changed, call it on
@@ -114,7 +116,7 @@ first, then warnings.
 ### Layer 2: Build
 
 ```
-mcp__lsp__run_build({ "workspace_dir": "<workspace_dir>" })
+mcp__agent-lsp__run_build({ "workspace_dir": "<workspace_dir>" })
 ```
 
 Returns `{ "success": bool, "errors": [...] }`. A failed build means the code
@@ -123,7 +125,7 @@ does not compile. Build errors are blocking — must be resolved before shipping
 ### Layer 3: Tests
 
 ```
-mcp__lsp__run_tests({ "workspace_dir": "<workspace_dir>" })
+mcp__agent-lsp__run_tests({ "workspace_dir": "<workspace_dir>" })
 ```
 
 Does NOT require `start_lsp`. Returns `{ "passed": bool, "failures": [...] }`.
@@ -215,7 +217,7 @@ If all three layers are CLEAN and `changed_files` is known, offer to format
 the changed files before committing:
 
 ```
-mcp__lsp__format_document({ "file_path": "<changed-file>" })
+mcp__agent-lsp__format_document({ "file_path": "<changed-file>" })
 ```
 
 Apply the returned `TextEdit[]` via `apply_edit` if non-empty. Run once per
@@ -229,7 +231,7 @@ If Layer 1 returns errors, the LSP may offer quick fixes. For each error
 location, call `suggest_fixes` to surface available fixes:
 
 ```
-mcp__lsp__suggest_fixes({
+mcp__agent-lsp__suggest_fixes({
   "file_path": "<file>",
   "line": <error line>,
   "column": <error column>
@@ -241,7 +243,7 @@ interface methods", "Remove unused variable"). Pick the most appropriate one
 and apply it:
 
 ```
-mcp__lsp__apply_edit({
+mcp__agent-lsp__apply_edit({
   "file_path": "<file>",
   "old_text": "<text to replace>",
   "new_text": "<replacement>"

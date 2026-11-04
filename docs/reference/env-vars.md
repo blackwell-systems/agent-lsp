@@ -8,7 +8,8 @@ All environment variables are optional. agent-lsp works with no configuration.
 |----------|---------|-------------|
 | `AGENT_LSP_OUTPUT_FORMAT` | `gcf` | Output encoding for tool responses. [GCF tabular encoding](../guide/gcf-integration.md) saves 30-51% tokens. Set to `json` to revert. |
 | `AGENT_LSP_BROKER_TIMEOUT_MS` | `30000` | Timeout in milliseconds for the daemon broker to start. Increase on slow machines or when language servers take long to initialize. |
-| `AGENT_LSP_TOKEN` | (none) | Bearer token for HTTP mode authentication. Required when running with `--http`. Never pass on the command line; use this env var instead. |
+| `AGENT_LSP_PULL_DIAGNOSTICS` | on | Controls the `get_diagnostics` pull fallback: when a server declares `diagnosticProvider` and has not pushed diagnostics for a document, agent-lsp issues `textDocument/diagnostic`. Set to `0`, `false`, `no`, or `off` to disable, for servers whose pull implementation is broken. |
+| `AGENT_LSP_TOKEN` | (none) | Bearer token for HTTP mode authentication. Required when running with `--http`, unless you pass `--no-auth` with a loopback `--listen-addr` (such as `127.0.0.1`); `--no-auth` on a non-loopback address is rejected. Never pass the token on the command line; use this env var instead. |
 
 ## Auto-watcher
 
@@ -23,13 +24,20 @@ The auto-watcher keeps the index fresh by watching the workspace for file change
 
 ## Daemon Mode
 
+The daemon state directory is not configurable. Daemon PID files, socket info, and spawn logs live under `~/.cache/agent-lsp/daemons/<hash>/`.
+
+## Java (jdtls)
+
+agent-lsp detects installed JDKs to fill in jdtls's `java.configuration.runtimes` setting. Besides standard install locations (Homebrew and `/Library/Java/JavaVirtualMachines` on macOS, `/usr/lib/jvm` on Linux), it reads:
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AGENT_LSP_DAEMON_DIR` | `~/.cache/agent-lsp` | Directory for daemon PID files, socket info, and spawn logs. |
+| `JAVA_HOME` | (unset) | If set, this JDK is added to the detected runtimes. |
+| `SDKMAN_DIR` | (unset) | If set, every JDK under `$SDKMAN_DIR/candidates/java/` (except `current`) is added to the detected runtimes. |
 
 ## Debug
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AGENT_LSP_LOG_LEVEL` | `warning` | Log level: `debug`, `info`, `warning`, `error`. Also configurable at runtime via the `set_log_level` tool. |
-| `AGENT_LSP_AUDIT_LOG` | (none) | Path to write JSON audit log of all tool calls. Useful for debugging and performance analysis. |
+| `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency`. An unrecognized value prints a warning and keeps `info`. Also configurable at runtime via the `set_log_level` tool. |
+| `AGENT_LSP_AUDIT_LOG` | `~/.agent-lsp/audit.jsonl` | Path of the JSONL audit log of tool calls. Audit logging is always on; this variable (or the `--audit-log` flag, which takes precedence) only changes where it is written. Useful for debugging and performance analysis. |

@@ -3,7 +3,7 @@ name: lsp-cross-repo
 description: Cross-repository analysis — find all callers of a library symbol in one or more consumer repos. Use when refactoring a shared library and need to understand how consumers use it.
 argument-hint: "[symbol-name] in [library-file:line:col] used by [consumer-root ...]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__find_symbol mcp__lsp__get_cross_repo_references mcp__lsp__add_workspace_folder mcp__lsp__list_workspace_folders mcp__lsp__go_to_implementation mcp__lsp__find_callers mcp__lsp__inspect_symbol
+allowed-tools: mcp__agent-lsp__start_lsp mcp__agent-lsp__find_symbol mcp__agent-lsp__get_cross_repo_references mcp__agent-lsp__add_workspace_folder mcp__agent-lsp__list_workspace_folders mcp__agent-lsp__go_to_implementation mcp__agent-lsp__find_callers mcp__agent-lsp__inspect_symbol
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -36,7 +36,7 @@ Use `/lsp-impact` instead for single-repo blast-radius analysis.
 Start the language server on the library root if not already running:
 
 ```
-mcp__lsp__start_lsp({ "root_dir": "/path/to/library" })
+mcp__agent-lsp__start_lsp({ "root_dir": "/path/to/library" })
 ```
 
 ### Step 2 — Locate the library symbol
@@ -44,7 +44,7 @@ mcp__lsp__start_lsp({ "root_dir": "/path/to/library" })
 Find the symbol's definition to get `file_path`, `line`, and `column`:
 
 ```
-mcp__lsp__find_symbol({ "query": "<symbol-name>" })
+mcp__agent-lsp__find_symbol({ "query": "<symbol-name>" })
 ```
 
 Pick the result in the library repo (not a test file).
@@ -56,7 +56,7 @@ roots. This adds each consumer as a workspace folder, waits for indexing, runs
 `find_references` across all roots, and returns results partitioned by repo:
 
 ```
-mcp__lsp__get_cross_repo_references({
+mcp__agent-lsp__get_cross_repo_references({
   "symbol_file": "/abs/path/to/library/file.go",
   "line": <line>,
   "column": <column>,
@@ -85,7 +85,7 @@ Returns:
 For a deeper look at how consumers call the symbol:
 
 ```
-mcp__lsp__find_callers({
+mcp__agent-lsp__find_callers({
   "file_path": "<library-file>",
   "line": <line>,
   "column": <column>,
@@ -96,7 +96,7 @@ mcp__lsp__find_callers({
 For interfaces — all consumer-side implementations:
 
 ```
-mcp__lsp__go_to_implementation({
+mcp__agent-lsp__go_to_implementation({
   "file_path": "<library-file>",
   "line": <line>,
   "column": <column>

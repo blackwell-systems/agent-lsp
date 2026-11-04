@@ -2,7 +2,7 @@
 name: lsp-safe-edit
 description: Wrap any code edit with before/after diagnostic comparison. Speculatively previews the change first (preview_edit), then applies to disk only if the error delta is acceptable. If post-edit errors appear, surfaces code actions for quick fixes. Handles single and multi-file edits.
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__open_document mcp__lsp__get_diagnostics mcp__lsp__preview_edit mcp__lsp__simulate_chain mcp__lsp__suggest_fixes mcp__lsp__format_document mcp__lsp__apply_edit Edit Write Bash
+allowed-tools: mcp__agent-lsp__start_lsp mcp__agent-lsp__open_document mcp__agent-lsp__get_diagnostics mcp__agent-lsp__preview_edit mcp__agent-lsp__simulate_chain mcp__agent-lsp__suggest_fixes mcp__agent-lsp__format_document mcp__agent-lsp__apply_edit Edit Write Bash
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -12,20 +12,20 @@ metadata:
       setup:
         description: "Open files and capture baseline diagnostics"
         allowed:
-          - "mcp__lsp__start_lsp"
-          - "mcp__lsp__open_document"
-          - "mcp__lsp__get_diagnostics"
+          - "mcp__agent-lsp__start_lsp"
+          - "mcp__agent-lsp__open_document"
+          - "mcp__agent-lsp__get_diagnostics"
         forbidden:
-          - "mcp__lsp__apply_edit"
+          - "mcp__agent-lsp__apply_edit"
           - "Edit"
           - "Write"
       speculative_preview:
         description: "Simulate the edit in memory before touching disk"
         allowed:
-          - "mcp__lsp__preview_edit"
-          - "mcp__lsp__simulate_chain"
+          - "mcp__agent-lsp__preview_edit"
+          - "mcp__agent-lsp__simulate_chain"
         forbidden:
-          - "mcp__lsp__apply_edit"
+          - "mcp__agent-lsp__apply_edit"
           - "Edit"
           - "Write"
       apply:
@@ -33,23 +33,25 @@ metadata:
         allowed:
           - "Edit"
           - "Write"
-          - "mcp__lsp__apply_edit"
+          - "mcp__agent-lsp__apply_edit"
         forbidden:
-          - "mcp__lsp__simulate_*"
+          - "mcp__agent-lsp__simulate_*"
+          - "mcp__agent-lsp__preview_edit"
       verify_and_fix:
         description: "Collect post-edit diagnostics, surface code actions, format"
         allowed:
-          - "mcp__lsp__get_diagnostics"
-          - "mcp__lsp__suggest_fixes"
-          - "mcp__lsp__apply_edit"        # for applying code action fixes
-          - "mcp__lsp__format_document"
+          - "mcp__agent-lsp__get_diagnostics"
+          - "mcp__agent-lsp__suggest_fixes"
+          - "mcp__agent-lsp__apply_edit"        # for applying code action fixes
+          - "mcp__agent-lsp__format_document"
         forbidden:
-          - "mcp__lsp__simulate_*"
-          - "mcp__lsp__run_build"
-          - "mcp__lsp__run_tests"
+          - "mcp__agent-lsp__simulate_*"
+          - "mcp__agent-lsp__run_build"
+          - "mcp__agent-lsp__run_tests"
+          - "mcp__agent-lsp__preview_edit"
     global_forbidden:
-      - "mcp__lsp__rename_symbol"          # safe-edit uses direct edits
-      - "mcp__lsp__blast_radius"      # blast radius is lsp-impact's job
+      - "mcp__agent-lsp__rename_symbol"          # safe-edit uses direct edits
+      - "mcp__agent-lsp__blast_radius"      # blast radius is lsp-impact's job
 ---
 
 > Requires the agent-lsp MCP server.
@@ -63,7 +65,7 @@ vs. resolved after applying. If errors appear, surfaces code actions to fix them
 ## Prerequisites
 
 LSP must be running for the target workspace. If not yet initialized, call
-`mcp__lsp__start_lsp` with the workspace root before proceeding.
+`mcp__agent-lsp__start_lsp` with the workspace root before proceeding.
 
 Auto-init note: agent-lsp supports workspace auto-inference from file paths.
 Explicit `start_lsp` is only needed when switching workspace roots.
@@ -79,19 +81,19 @@ Explicit `start_lsp` is only needed when switching workspace roots.
 
 ### Step 1 — Open target file(s)
 
-Call `mcp__lsp__open_document` for each file that will be edited:
+Call `mcp__agent-lsp__open_document` for each file that will be edited:
 
 ```
-mcp__lsp__open_document(file_path: "/abs/path/to/file.go", language_id: "go")
+mcp__agent-lsp__open_document(file_path: "/abs/path/to/file.go", language_id: "go")
 ```
 
 ### Step 2 — Capture baseline diagnostics (BEFORE)
 
-Call `mcp__lsp__get_diagnostics` for each target file. Store as BEFORE.
+Call `mcp__agent-lsp__get_diagnostics` for each target file. Store as BEFORE.
 For multi-file edits, collect diagnostics for all files involved.
 
 ```
-BEFORE = mcp__lsp__get_diagnostics(file_path: "/abs/path/to/file.go")
+BEFORE = mcp__agent-lsp__get_diagnostics(file_path: "/abs/path/to/file.go")
 ```
 
 If the server returns an empty list immediately after open, wait briefly and
@@ -99,11 +101,11 @@ retry — LSP analysis is async.
 
 ### Step 3 — Speculative preview (preview_edit)
 
-Before touching disk, call `mcp__lsp__preview_edit` to preview the
+Before touching disk, call `mcp__agent-lsp__preview_edit` to preview the
 error delta of the intended change:
 
 ```
-mcp__lsp__preview_edit(
+mcp__agent-lsp__preview_edit(
   file_path: "/abs/path/to/file.go",
   start_line: <N>,
   start_column: <col>,
@@ -142,7 +144,7 @@ all call sites after adding a parameter).
 whether the cumulative change is safe — without touching disk:
 
 ```
-mcp__lsp__simulate_chain({
+mcp__agent-lsp__simulate_chain({
   "workspace_root": "/abs/path/to/workspace",
   "language": "go",
   "edits": [
@@ -195,10 +197,10 @@ applying remaining files.
 
 ### Step 5 — Capture post-edit diagnostics (AFTER)
 
-Call `mcp__lsp__get_diagnostics` again for each edited file. Store as AFTER.
+Call `mcp__agent-lsp__get_diagnostics` again for each edited file. Store as AFTER.
 
 ```
-AFTER = mcp__lsp__get_diagnostics(file_path: "/abs/path/to/file.go")
+AFTER = mcp__agent-lsp__get_diagnostics(file_path: "/abs/path/to/file.go")
 ```
 
 For multi-file edits, collect diagnostics for all files and merge the results.
@@ -215,11 +217,11 @@ Match by `(file, line, message)` tuple to handle line-number shifts. Treat
 
 ### Step 7 — Surface code actions if errors were introduced
 
-If any new `error`-severity diagnostics appear, call `mcp__lsp__suggest_fixes`
+If any new `error`-severity diagnostics appear, call `mcp__agent-lsp__suggest_fixes`
 at each error location to surface quick fixes:
 
 ```
-mcp__lsp__suggest_fixes(
+mcp__agent-lsp__suggest_fixes(
   file_path: "<file>",
   start_line: <error line>,
   start_column: 1,
@@ -241,7 +243,7 @@ Apply code actions? [y/n/select]
 ```
 
 If the user accepts, apply the code action's `WorkspaceEdit` via
-`mcp__lsp__apply_edit`, then re-collect diagnostics and re-diff.
+`mcp__agent-lsp__apply_edit`, then re-collect diagnostics and re-diff.
 
 ### Step 8 — Format (optional)
 
@@ -249,13 +251,13 @@ If the diagnostic diff is clean (net change ≤ 0), offer to format the edited
 file via the language server:
 
 ```
-mcp__lsp__format_document({ "file_path": "/abs/path/to/file" })
+mcp__agent-lsp__format_document({ "file_path": "/abs/path/to/file" })
 ```
 
 Returns `TextEdit[]`. If non-empty, apply immediately:
 
 ```
-mcp__lsp__apply_edit({ "workspace_edit": <TextEdit[]> })
+mcp__agent-lsp__apply_edit({ "workspace_edit": <TextEdit[]> })
 ```
 
 Skip if the user did not ask for formatting, or if there are unresolved errors

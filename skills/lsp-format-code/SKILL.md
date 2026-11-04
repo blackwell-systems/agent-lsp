@@ -3,7 +3,7 @@ name: lsp-format-code
 description: Format a file or selection using the language server's formatter. Use before committing to apply consistent style, or after generating code to clean up indentation and spacing. Supports full-file and range-based formatting.
 argument-hint: "[file-path] [optional: start_line-end_line]"
 user-invocable: true
-allowed-tools: mcp__lsp__open_document mcp__lsp__format_document mcp__lsp__format_range mcp__lsp__apply_edit mcp__lsp__get_diagnostics mcp__lsp__get_server_capabilities
+allowed-tools: mcp__agent-lsp__open_document mcp__agent-lsp__format_document mcp__agent-lsp__format_range mcp__agent-lsp__apply_edit mcp__agent-lsp__get_diagnostics mcp__agent-lsp__get_server_capabilities
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -39,7 +39,7 @@ If unsure whether the language server supports formatting for this file, check
 capabilities first:
 
 ```
-mcp__lsp__get_server_capabilities({ "file_path": "<file>" })
+mcp__agent-lsp__get_server_capabilities({ "file_path": "<file>" })
 ```
 
 Look for `documentFormattingProvider` (full-file) and
@@ -52,19 +52,19 @@ Rust, Python all do via their standard servers).
 ### Step 2 — Open the file
 
 ```
-mcp__lsp__open_document({ "file_path": "/abs/path/to/file.go", "language_id": "go" })
+mcp__agent-lsp__open_document({ "file_path": "/abs/path/to/file.go", "language_id": "go" })
 ```
 
 ### Step 3 — Request formatting edits
 
 **Full file:**
 ```
-mcp__lsp__format_document({ "file_path": "/abs/path/to/file.go" })
+mcp__agent-lsp__format_document({ "file_path": "/abs/path/to/file.go" })
 ```
 
 **Selection only:**
 ```
-mcp__lsp__format_range({
+mcp__agent-lsp__format_range({
   "file_path": "/abs/path/to/file.go",
   "start_line": <N>,
   "end_line": <M>
@@ -79,7 +79,7 @@ write to disk. If the list is empty, the file is already correctly formatted.
 Pass the `TextEdit[]` from Step 3 to `apply_edit`:
 
 ```
-mcp__lsp__apply_edit({ "workspace_edit": <TextEdit[] from Step 3> })
+mcp__agent-lsp__apply_edit({ "workspace_edit": <TextEdit[] from Step 3> })
 ```
 
 This writes the formatting changes to disk.
@@ -89,7 +89,7 @@ This writes the formatting changes to disk.
 Call `get_diagnostics` to confirm formatting did not introduce any errors:
 
 ```
-mcp__lsp__get_diagnostics({ "file_path": "/abs/path/to/file.go" })
+mcp__agent-lsp__get_diagnostics({ "file_path": "/abs/path/to/file.go" })
 ```
 
 Formatting should never introduce errors — if it does, report immediately

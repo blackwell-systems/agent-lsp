@@ -3,7 +3,7 @@ name: lsp-impact
 description: Blast-radius analysis for a symbol or file — shows all callers, type supertypes/subtypes, and reference count before you change it. Use when refactoring, deleting, or changing the signature of any function, type, or method. Also accepts a file path to surface all exported-symbol impact in one shot.
 argument-hint: "[symbol-name | file-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__find_callers mcp__lsp__type_hierarchy mcp__lsp__find_references mcp__lsp__get_server_capabilities mcp__lsp__blast_radius
+allowed-tools: mcp__agent-lsp__go_to_symbol mcp__agent-lsp__find_callers mcp__agent-lsp__type_hierarchy mcp__agent-lsp__find_references mcp__agent-lsp__get_server_capabilities mcp__agent-lsp__blast_radius
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -36,7 +36,7 @@ the file, resolves their references, and returns test callers (with enclosing
 test function names) and non-test callers in a single call.
 
 ```
-mcp__lsp__blast_radius({
+mcp__agent-lsp__blast_radius({
   "changed_files": ["/abs/path/to/file.go"],
   "include_transitive": false   // set true to surface second-order callers
 })
@@ -62,14 +62,14 @@ Skip Steps 1–5 if the file-level summary is sufficient.
 
 ## Prerequisites (for symbol-level Steps 1–5)
 
-If LSP is not yet initialized, call `mcp__lsp__start_lsp` with the workspace
+If LSP is not yet initialized, call `mcp__agent-lsp__start_lsp` with the workspace
 root first.
 
 Check what the server supports before proceeding — `find_callers` and
 `type_hierarchy` are optional LSP features not implemented by all servers:
 
 ```
-mcp__lsp__get_server_capabilities()
+mcp__agent-lsp__get_server_capabilities()
 ```
 
 Note which tools appear in `supported_tools`. Steps 3 and 4 below depend on
@@ -82,7 +82,7 @@ this result.
 Use `go_to_symbol` with the symbol name provided by the user:
 
 ```
-mcp__lsp__go_to_symbol({
+mcp__agent-lsp__go_to_symbol({
   "symbol_path": "Package.SymbolName",
   "workspace_root": "/abs/path"   // optional, narrows scope
 })
@@ -104,7 +104,7 @@ Call `find_references` with `include_declaration: false` to find every usage
 site across the workspace:
 
 ```
-mcp__lsp__find_references({
+mcp__agent-lsp__find_references({
   "file_path": "<file from Step 1>",
   "position_pattern": "func @@SymbolName(",   // adjust prefix for symbol kind
   "include_declaration": false
@@ -124,7 +124,7 @@ examples by language and symbol kind.
 Only if `find_callers` appears in `supported_tools` from Step 0.
 
 ```
-mcp__lsp__find_callers({
+mcp__agent-lsp__find_callers({
   "file_path": "<file from Step 1>",
   "line": <line from Step 1>,
   "column": <column from Step 1>,
@@ -143,7 +143,7 @@ Only applicable when the symbol is a **type, interface, or class** (not a
 plain function or method). Only if `type_hierarchy` appears in `supported_tools`.
 
 ```
-mcp__lsp__type_hierarchy({
+mcp__agent-lsp__type_hierarchy({
   "file_path": "<file from Step 1>",
   "line": <line from Step 1>,
   "column": <column from Step 1>,

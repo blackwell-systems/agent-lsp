@@ -140,7 +140,9 @@ func HandleGoToDefinition(ctx context.Context, client *lsp.LSPClient, args map[s
 		return types.ErrorResult("file_path is required"), nil
 	}
 
-	line, col, err := extractPosition(args)
+	// position_pattern is advertised in the schema; resolve it like the
+	// other navigation tools instead of reading only line/column.
+	line, col, err := ExtractPositionWithPattern(args, filePath)
 	if err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}

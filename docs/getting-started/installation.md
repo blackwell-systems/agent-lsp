@@ -50,7 +50,7 @@ docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-l
 docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:python python:pyright-langserver,--stdio
 ```
 
-See [distribution](../distribution.md) for the full Docker tag list and HTTP mode setup.
+See [DOCKER.md](https://github.com/blackwell-systems/agent-lsp/blob/main/DOCKER.md) for the full Docker tag list and HTTP mode setup, and [distribution](../architecture/distribution.md) for how images are published.
 
 ## Windows
 

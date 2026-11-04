@@ -1,6 +1,6 @@
 # agent-lsp combo image — multiple language servers
 # Build with: docker build -f Dockerfile.combo \
-#   --build-arg NPM_PACKAGES="typescript-language-server typescript pyright" \
+#   --build-arg NPM_PACKAGES="typescript-language-server@6.0.3 typescript@6.0.3 pyright" \
 #   --build-arg GO_PACKAGES="golang.org/x/tools/gopls@latest" \
 #   -t ghcr.io/blackwell-systems/agent-lsp:fullstack .
 

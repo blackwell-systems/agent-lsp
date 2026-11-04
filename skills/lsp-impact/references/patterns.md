@@ -54,7 +54,7 @@ Always call `get_server_capabilities()` before attempting these tools. Check
 the `supported_tools` list in the response:
 
 ```
-mcp__lsp__get_server_capabilities()
+mcp__agent-lsp__get_server_capabilities()
 → {
     supported_tools: ["go_to_symbol", "find_references", "find_callers", ...],
     unsupported_tools: ["type_hierarchy", ...]

@@ -18,6 +18,7 @@ Every LSP 3.17 method and its MCP surface. "Protocol only" means the method is c
 | `textDocument/didClose` | §3.15.9 | `close_document` | ✓ |
 | `textDocument/didChange` | §3.15.8 | — | ✓ protocol only (sent internally by `open_document` for already-open files and by simulation edits) |
 | `textDocument/publishDiagnostics` | §3.17.1 | `get_diagnostics` | ✓ |
+| `textDocument/diagnostic` (pull) | — (new in 3.17) | `get_diagnostics` (fallback), simulation tools | ✓ pulled for gopls baselines and evaluations in `preview_edit`/`simulate_*`/`safe_apply_edit` (gopls is started with `pullDiagnostics`); `get_diagnostics` pulls a document only when its push channel is dead and the server declares `diagnosticProvider` (disable with `AGENT_LSP_PULL_DIAGNOSTICS=0`) |
 | `textDocument/hover` | §3.15.11 | `inspect_symbol` | ✓ |
 | `textDocument/completion` | §3.15.13 | `get_completions` | ✓ |
 | `textDocument/signatureHelp` | §3.15.14 | `get_signature_help` | ✓ |
@@ -54,6 +55,19 @@ Every LSP 3.17 method and its MCP surface. "Protocol only" means the method is c
 | `workspace/executeCommand` | §3.16.13 | `execute_command` | ✓ |
 | `workspace/didChangeWatchedFiles` | §3.16.8 | `did_change_watched_files` (+ auto-watch) | ✓ |
 | `workspace/didChangeWorkspaceFolders` | §3.16.5 | `add_workspace_folder`, `remove_workspace_folder` | ✓ |
+| `workspace/applyEdit` | — | — | ✓ protocol only (server-initiated): the edit is applied to disk and answered with `{applied, failureReason?}`, or captured (not applied) while the `refactor` tool runs a command, so the tool can preview or apply it |
+| `workspace/didChangeConfiguration` | — | — | ✓ protocol only: sent once after `initialized` for jdtls (empty `java` settings) to trigger the Maven/Gradle import; client capability declared with `dynamicRegistration` |
+
+### Interactive Refactoring (gopls extension)
+
+Not part of LSP 3.17. Implemented in `internal/lsp/interactive.go` for gopls v0.24+ interactive refactorings ([golang/go#76331](https://github.com/golang/go/issues/76331)).
+
+| Method / capability | MCP Tool | Status |
+|--------------------|----------|--------|
+| Client capability `experimental.interactiveResolve` (`inputTypes`: string, file, bool, number, enum, lazyEnum, list) | — | ✓ declared in `initialize`, so the server asks for input instead of baking in defaults |
+| Server capability `experimental.interactiveResolveProvider` | `refactor` | ✓ checked before resolving commands interactively |
+| `command/resolve` | `refactor` | ✓ sends the answers so far; a reply with form fields is returned to the agent as `needs_input` |
+| `interactive/listEnum` | `refactor` (`option_queries`) | ✓ searches the options of a `lazyEnum` field |
 
 ### Protocol Infrastructure
 
@@ -84,22 +98,23 @@ Every LSP 3.17 method and its MCP surface. "Protocol only" means the method is c
 
 ## [Progress Protocol](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#progress) (§3.18)
 
-- `window/workDoneProgress/create`: the progress token is pre-registered in `activeProgressTokens` before the response is sent, so subsequent `$/progress` notifications are always recognized
+- `window/workDoneProgress/create`: the progress token is pre-registered in `progressTokens` before the response is sent, so subsequent `$/progress` notifications are always recognized
 - `$/progress` begin/report/end: all three `WorkDoneProgress` kinds are handled:
   - `begin`: token added to active set
   - `report`: logged at debug level
   - `end`: token removed; when active set reaches zero, workspace-ready resolvers are notified
-- `waitForWorkspaceReady()` blocks `textDocument/references` requests until all active progress tokens complete, ensuring gopls has finished workspace indexing before reference queries are sent
+- `ensureWorkspaceReady()` runs at the top of every query method (references, definition, hover, symbols, call/type hierarchy, and the rest). Until the workspace is marked loaded, it blocks for up to 60s waiting for active progress tokens to end, so servers like gopls finish workspace indexing before queries are sent
+- A token that never ends makes that wait time out once; it is then marked stale and skipped by later default waits, so one stuck token does not delay every query. Explicit long waits (`start_lsp`'s `ready_timeout_seconds`, the jdtls import, the daemon) still wait on every active token
 
 ---
 
 ## Server-Initiated Requests
 
-All three server-initiated request types sent by gopls (and common in other LSP servers) are handled:
+Four server-initiated request types are handled:
 
 ### [`workspace/configuration`](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_configuration) (§3.16.14)
 
-Responds with an array of `null` values matching `params.items.length`. Without this response, gopls blocks workspace loading and `$/progress end` never fires, so `waitForWorkspaceReady()` would hang indefinitely.
+Responds with an array of empty objects (`{}`), one per entry in `params.items`. `{}` means "use defaults"; servers like jdtls treat `null` as "no configuration" and skip project import. Without any response, gopls blocks workspace loading and `$/progress end` never fires, so the workspace-ready wait would hang until its timeout.
 
 ### `window/workDoneProgress/create`
 
@@ -107,7 +122,11 @@ Responds with `null` (the required result). The progress token is extracted from
 
 ### `client/registerCapability`
 
-Responds with `null`. Dynamic capability registration is acknowledged without modifying any state.
+Responds with `null`. Each registration's method is mapped to its capability key (for example `textDocument/documentSymbol` to `documentSymbolProvider`) and merged into the client's capability map, merging `registerOptions` when present and otherwise setting the capability to `true` (keeping an existing options object). Servers like jdtls register document-level providers lazily after workspace import, so later capability checks see them.
+
+### [`workspace/applyEdit`](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_applyEdit)
+
+Applies the `WorkspaceEdit` and responds with `{ applied: true }`, or `{ applied: false, failureReason }` on error. While the `refactor` tool is running a command, the edit is captured instead of applied, and the tool previews or applies it.
 
 All unrecognized server-initiated requests also receive a `null` response to unblock the server rather than timing out.
 
@@ -164,7 +183,7 @@ Both response shapes are handled:
 
 ### [`textDocument/publishDiagnostics`](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics) (§3.17.1)
 
-- `versionSupport: false` declared in client capabilities, so the server omits the optional `version` field
+- `versionSupport` is not declared in client capabilities (only `relatedInformation` and `tagSupport`). The optional `version` field is still parsed when a server sends it and recorded per URI; the simulation diagnostics wait uses it to tell diagnostics for the edited document version from stale ones
 - `uri` and `diagnostics` destructured correctly; `uri` validated as a string before processing
 - Diagnostics stored per-URI and used to populate `codeAction` context and `waitForFileIndexed` readiness detection
 

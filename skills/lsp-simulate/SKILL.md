@@ -2,7 +2,7 @@
 name: lsp-simulate
 description: Speculative code editing session — simulate changes in memory before touching disk. Use when planning edits that might break things, exploring refactors across multiple files, or verifying an edit is safe before applying.
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__create_simulation_session mcp__lsp__simulate_edit mcp__lsp__simulate_chain mcp__lsp__evaluate_session mcp__lsp__commit_session mcp__lsp__discard_session mcp__lsp__destroy_session mcp__lsp__preview_edit
+allowed-tools: mcp__agent-lsp__start_lsp mcp__agent-lsp__create_simulation_session mcp__agent-lsp__simulate_edit mcp__agent-lsp__simulate_chain mcp__agent-lsp__evaluate_session mcp__agent-lsp__commit_session mcp__agent-lsp__discard_session mcp__agent-lsp__destroy_session mcp__agent-lsp__preview_edit
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata: {}
@@ -22,7 +22,7 @@ LSP must be running for the target workspace. If not yet initialized, call
 `start_lsp` before any simulation tool.
 
 ```
-mcp__lsp__start_lsp(root_dir: "/your/workspace")
+mcp__agent-lsp__start_lsp(root_dir: "/your/workspace")
 ```
 
 Auto-init note: agent-lsp supports workspace auto-inference from file paths.
@@ -34,7 +34,7 @@ For a single what-if check, use `preview_edit` — it creates a session,
 applies the edit, evaluates, and destroys the session in one call:
 
 ```
-mcp__lsp__preview_edit(
+mcp__agent-lsp__preview_edit(
   workspace_root: "/your/workspace",
   language: "go",
   file_path: "/abs/path/to/file.go",
@@ -62,7 +62,7 @@ when you want to inspect the patch before deciding whether to write to disk.
 **Step 1 — Create a simulation session**
 
 ```
-mcp__lsp__create_simulation_session(
+mcp__agent-lsp__create_simulation_session(
   workspace_root: "/your/workspace",
   language: "go"
 )
@@ -75,7 +75,7 @@ Call `simulate_edit` one or more times. All edits are in-memory only.
 Positions are 1-indexed (matching editor line numbers and `cat -n` output).
 
 ```
-mcp__lsp__simulate_edit(
+mcp__agent-lsp__simulate_edit(
   session_id: "abc123",
   file_path: "/abs/path/to/file.go",
   start_line: 10, start_column: 1,
@@ -90,7 +90,7 @@ Repeat for additional edits as needed.
 **Step 3 — Evaluate the session**
 
 ```
-mcp__lsp__evaluate_session(
+mcp__agent-lsp__evaluate_session(
   session_id: "abc123",
   scope: "file"
 )
@@ -113,23 +113,23 @@ mcp__lsp__evaluate_session(
 If `net_delta == 0`, proceed to commit. Otherwise, discard:
 
 ```
-mcp__lsp__discard_session(session_id: "abc123")
+mcp__agent-lsp__discard_session(session_id: "abc123")
 ```
 
 **Step 5 — Commit the session**
 
 ```
 -- Preview patch only (no disk write):
-mcp__lsp__commit_session(session_id: "abc123", apply: false)
+mcp__agent-lsp__commit_session(session_id: "abc123", apply: false)
 
 -- Write to disk:
-mcp__lsp__commit_session(session_id: "abc123", apply: true)
+mcp__agent-lsp__commit_session(session_id: "abc123", apply: true)
 ```
 
 **Step 6 — Destroy the session (always)**
 
 ```
-mcp__lsp__destroy_session(session_id: "abc123")
+mcp__agent-lsp__destroy_session(session_id: "abc123")
 ```
 
 Always call `destroy_session` after commit or discard to release server
@@ -142,7 +142,7 @@ how far through the sequence is safe to apply. Unlike multiple `simulate_edit`
 calls, `simulate_chain` evaluates diagnostics after each step.
 
 ```
-mcp__lsp__simulate_chain(
+mcp__agent-lsp__simulate_chain(
   session_id: "abc123",
   edits: [
     { file_path: "/abs/file.go", start_line: 5, start_column: 1,
@@ -196,12 +196,12 @@ Always call `destroy_session` after finishing a session, even on error paths:
 
 ```
 -- After commit:
-mcp__lsp__commit_session(session_id: "abc123", apply: true)
-mcp__lsp__destroy_session(session_id: "abc123")
+mcp__agent-lsp__commit_session(session_id: "abc123", apply: true)
+mcp__agent-lsp__destroy_session(session_id: "abc123")
 
 -- After discard:
-mcp__lsp__discard_session(session_id: "abc123")
-mcp__lsp__destroy_session(session_id: "abc123")
+mcp__agent-lsp__discard_session(session_id: "abc123")
+mcp__agent-lsp__destroy_session(session_id: "abc123")
 ```
 
 **MCP server restart:** Sessions are ephemeral — they live in server memory

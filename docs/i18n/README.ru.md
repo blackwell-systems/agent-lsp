@@ -311,7 +311,7 @@ go install github.com/blackwell-systems/agent-lsp/cmd/agent-lsp@latest
 
 | Язык | Сервер | Установка |
 |----------|--------|---------|
-| TypeScript / JavaScript | `typescript-language-server` | `npm i -g typescript-language-server typescript` |
+| TypeScript / JavaScript | `typescript-language-server` | `npm i -g typescript-language-server typescript@6` |
 | Python | `pyright-langserver` | `npm i -g pyright` |
 | Go | `gopls` | `go install golang.org/x/tools/gopls@latest` |
 | Rust | `rust-analyzer` | `rustup component add rust-analyzer` |

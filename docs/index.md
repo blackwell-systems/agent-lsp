@@ -1,6 +1,6 @@
 # agent-lsp
 
-**The most complete MCP server for language intelligence.** 67 tools, 30 CI-verified languages, 24 agent workflows. Single Go binary.
+**The most complete MCP server for language intelligence.** 66 tools, 30 CI-verified languages, 24 agent workflows. Single Go binary.
 
 ---
 
@@ -36,7 +36,7 @@ Simulate changes in memory before writing to disk. No other MCP-LSP implementati
 
 `preview_edit` previews the diagnostic impact of any edit. You see exactly what breaks before the file is touched. `simulate_chain` evaluates a sequence of dependent edits and reports which step first introduces an error.
 
-Read more in the [speculative execution docs](speculative-execution.md).
+Read more in the [speculative execution docs](guide/speculative-execution.md).
 
 ## Phase enforcement
 
@@ -44,17 +44,22 @@ Skills tell agents the correct order of operations. Phase enforcement makes the 
 
 When an agent activates a skill, every tool call is checked against the current phase's permissions. Calling `apply_edit` during blast-radius analysis returns an error with specific recovery guidance, not silence. Phases advance automatically as the agent progresses through the workflow.
 
-No other MCP tool provider enforces workflow ordering at runtime. Read more in the [phase enforcement docs](phase-enforcement.md).
+No other MCP tool provider enforces workflow ordering at runtime. Read more in the [phase enforcement docs](guide/phase-enforcement.md).
 
 ## Works with
 
-| AI Tool | Transport | Config |
-|---------|-----------|--------|
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | stdio | `mcpServers` in `.mcp.json` |
-| [Continue](https://continue.dev) | stdio | `mcpServers` in `config.json` |
-| [Cline](https://github.com/cline/cline) | stdio | `mcpServers` in settings |
-| [Cursor](https://cursor.com) | stdio | `mcpServers` in settings |
-| Any MCP client | HTTP+SSE | `--http --port 8080` with Bearer token auth |
+| AI Tool | Transport | Setup |
+|---------|-----------|-------|
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | stdio | `agent-lsp init` |
+| [Cursor](https://cursor.com) | stdio | `agent-lsp init` |
+| [Windsurf](https://windsurf.com) | stdio | `agent-lsp init` |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | stdio | `agent-lsp init` |
+| [Continue](https://continue.dev) | stdio | `mcpServers` in `.continue/config.yaml` |
+| [Cline](https://github.com/cline/cline) | stdio | `agent-lsp init` |
+| [Pi](https://github.com/earendil-works/pi) | stdio | `agent-lsp init` + `pi install npm:pi-mcp-adapter` |
+| Any MCP client | Streamable HTTP | `--http --port 8080` with Bearer token auth (`AGENT_LSP_TOKEN`) |
+
+See [MCP client configuration](getting-started/mcp-clients.md) for copy-paste configs.
 
 ## What's unique
 
@@ -70,5 +75,5 @@ No other MCP tool provider enforces workflow ordering at runtime. Read more in t
 | Type hierarchy | CI-verified |
 | Cross-repo references | multi-root workspace |
 | Auto-watch | always-on, debounced file watching |
-| HTTP+SSE transport | bearer token auth, non-root Docker |
+| Streamable HTTP transport | bearer token auth, non-root Docker |
 | Distribution | **single Go binary**, 10 install channels |

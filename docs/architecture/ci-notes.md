@@ -129,7 +129,7 @@ Runs deterministic assertions against agent-lsp through the MCP stdio transport 
 | `test/multi_lang_test.go` | `multi-lang-core`, `multi-lang-extended`, + per-language jobs | Tier 1 + 34 Tier 2 tools across 30 language servers |
 | `test/speculative_test.go` | `speculative-test` | All 8 simulation tools across 8 languages in parallel |
 | `test/error_paths_test.go` | `unit-and-smoke` | 11 bad-input subtests (out-of-bounds positions, nonexistent files, invalid session IDs); asserts well-formed errors, not crashes |
-| `test/consistency_test.go` | `multi-lang-core` | Structural shape validation for 4 tools across Go, TypeScript, Python, Rust in parallel |
+| `test/consistency_test.go` | (none) | `TestCrossLanguageConsistency`: structural shape validation for 4 tools across Go, TypeScript, Python, Rust in parallel. Not run in CI: the `multi-lang-core` job's `-run "TestMultiLanguage/^(Go\|TypeScript\|Python\|Rust\|Kotlin)$"` pattern does not match it. Run locally with `go test -v -run TestCrossLanguageConsistency ./test/` |
 | `test/build_tools_test.go` | `unit-and-smoke` | `run_build`, `run_tests`, `get_tests_for_file` |
 | `test/documentation_test.go` | `unit-and-smoke` | `get_symbol_documentation` |
 | `test/binary_test.go` | `unit-and-smoke` | Binary smoke tests (startup, missing args, help) |
@@ -138,6 +138,6 @@ Runs deterministic assertions against agent-lsp through the MCP stdio transport 
 
 ## Tool-specific notes
 
-**`type_hierarchy`:** Tested on Java (jdtls) and TypeScript (typescript-language-server). TypeScript skips when the server does not return a hierarchy item at the configured position.
+**`type_hierarchy`:** CI coverage is Go (gopls) via mcp-assert (`examples/mcp-assert/go/type_hierarchy.yaml`, which asserts the call does not error). The multi-language harness configures a type hierarchy position only for Java (jdtls) and TypeScript (typescript-language-server), and both currently skip in CI; the harness also treats an error, a "No type hierarchy item found" reply, or an empty result as a skip, not a failure.
 
 **Completions and workspace symbol search:** Not supported by some servers in the test harness; marked `—` in the conformance table.

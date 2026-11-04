@@ -25,7 +25,7 @@ At runtime, agent-lsp consists of two layers of processes communicating over pip
 ```
 AI agent (Claude Code, Cursor, etc.)
     │
-    │  JSON-RPC over stdio (or HTTP+SSE)
+    │  JSON-RPC over stdio (or Streamable HTTP)
     ▼
 agent-lsp process  (the MCP server, one long-lived Go binary)
     │
@@ -60,7 +60,7 @@ The daemon auto-spawns on first `start_lsp` for Python/TypeScript, indexes the w
 ```
 AI agent
     │
-    │  JSON-RPC over stdio (or HTTP+SSE)
+    │  JSON-RPC over stdio (or Streamable HTTP)
     ▼
 agent-lsp (ephemeral)
     │
@@ -73,7 +73,7 @@ Passive mode is activated by passing `connect: "localhost:9999"` to `start_lsp`.
 
 **What agent-lsp does:**
 
-1. Speaks MCP to the AI agent, exposing 67 tools the agent can call.
+1. Speaks MCP to the AI agent, exposing 66 tools the agent can call.
 2. Translates each tool call into one or more LSP JSON-RPC requests, sent over stdin/stdout pipes to the appropriate language server subprocess.
 3. Maintains a persistent session: the language server index stays warm across all tool calls, all files, all packages. There is no cold-start on each request.
 4. Adds a speculative execution layer on top: edits can be applied in-memory to the live LSP state, evaluated for diagnostic impact, then committed to disk or discarded, without ever touching the file system until explicitly requested.
@@ -111,23 +111,20 @@ cmd/agent-lsp/
                            addToolWithPhaseCheck[T] generic wrapper for phase enforcement;
                            PhaseTracker initialization with BuiltinSkills();
                            (tool registration was extracted from server.go in a decomposition wave;
-                           server.go now delegates to the six tool files below)
+                           server.go now delegates to the nine tools_*.go files below)
   helpers.go            ← shared helpers for the cmd layer (toolArgsToMap, clientForFile, autoInitClient)
   http_test.go          ← tests for HTTP transport and --http/--port/--token flag parsing
   schema_fix.go         ← fixes nullable array types in JSON Schemas for Gemini compatibility;
                            collapses Types: ["null","array"] to Type: "array"
-  tools_navigation.go   ← 10 navigation tools: go_to_definition, go_to_type_definition,
+  tools_navigation.go   ← 11 navigation tools: go_to_definition, go_to_type_definition,
                            go_to_implementation, go_to_declaration, go_to_symbol,
-                           rename_symbol, prepare_rename, get_document_highlights,
+                           rename_symbol, refactor, prepare_rename, get_document_highlights,
                            find_callers, type_hierarchy
   tools_analysis.go     ← 14 analysis tools: inspect_symbol, get_completions,
                            get_signature_help, suggest_fixes, list_symbols,
                            find_symbol, find_references, get_inlay_hints,
                            get_semantic_tokens, get_symbol_source, get_symbol_documentation,
                            blast_radius, get_cross_repo_references, detect_changes
-  tools_context.go      ← 1 composite context tool: get_editing_context
-                           (file symbols + callers + callees + imports in one call;
-                           supports if_none_match ETag and token savings metadata)
   tools_workspace.go    ← 21 workspace/lifecycle tools: start_lsp, restart_lsp_server,
                            add_workspace_folder, remove_workspace_folder, list_workspace_folders,
                            open_document, close_document, get_diagnostics, get_server_capabilities,
@@ -142,6 +139,10 @@ cmd/agent-lsp/
                            shared ResolveSymbolByNamePath resolver
   tools_phase.go        ← 3 phase enforcement tools: activate_skill, deactivate_skill,
                            get_skill_phase; checkPhasePermission helper
+  tools_explore.go      ← explore_symbol: composite hover + source + callers + references
+  tools_safe_edit.go    ← safe_apply_edit: preview_edit + apply only when safe
+  tools_aliases.go      ← 3 intent aliases: callers (find_callers, direction incoming),
+                           explore (explore_symbol), safe_edit (safe_apply_edit)
   audit_helpers.go      ← Diagnostic snapshot helpers for audit trail (pre/post edit)
 
 internal/phase/
@@ -177,7 +178,11 @@ internal/lsp/
                      startOrConnectDaemon: transparent daemon lifecycle for Python/TypeScript
   resolver.go      ← ClientResolver interface
   framing.go       ← Content-Length framing (FrameReader / FrameWriter)
-  diagnostics.go   ← WaitForDiagnostics: stabilization wait with timeout
+  diagnostics.go   ← DiagnosticsMark, MarkDiagnostics, WaitForDiagnosticsSettled: waits for
+                     diagnostics covering the edited document version, reports settled;
+                     WaitForDiagnostics wraps it
+  interactive.go   ← client side of interactive refactorings (command/resolve,
+                     interactive/listEnum) for the refactor tool
   normalize.go     ← NormalizeDocumentSymbols, NormalizeCompletion, NormalizeCodeActions
   daemon.go        ← DaemonInfo, NeedsDaemon, FindRunningDaemon, WriteDaemonInfo,
                      ListDaemons, StopDaemon, CleanupStaleDaemons
@@ -227,21 +232,26 @@ internal/tools/
   simulation.go    ← Tool handlers for the speculative execution layer
   build.go         ← run_build, run_tests, get_tests_for_file
   change_impact.go ← blast_radius (enumerate exported symbols, resolve references, partition test/non-test callers)
-  context_meta.go  ← HandleGetEditingContextWithMeta: wraps get_editing_context handler with
-                     AppendTokenMeta for token savings metadata
   token_savings.go ← EstimateTokenSavings, AppendTokenMeta: token savings metadata helpers;
-                     appends _meta.token_savings to list_symbols, get_symbol_source, get_editing_context
+                     appends _meta.token_savings to list_symbols and get_symbol_source
+  indexed.go       ← AppendIndexedField: adds indexed true/false to blast_radius,
+                     find_references, find_symbol results
+  index_coverage.go ← bounded filesystem probe used to judge index coverage
+  refactor.go      ← refactor (list/run refactor* code actions; answers interactive questions)
+  safe_edit.go     ← safe_apply_edit (preview, refuse if unverified, apply previewed content only)
+  explore.go       ← explore_symbol
+  symbol_edit.go   ← replace_symbol_body, insert_after/before_symbol, safe_delete_symbol
   cross_repo.go    ← get_cross_repo_references (add consumer repos as workspace folders, partition references by repo)
   detect_changes.go ← detect_changes (git diff + filter to recognized languages + blast_radius + per-symbol risk classification)
   cache_artifact.go ← export_cache and import_cache tool handlers (delegate to SymbolRefCache.ExportArtifact/ImportArtifact)
-  workspace.go     ← workspace folder management (add/remove/list)
+  workspace.go     ← rename_symbol, prepare_rename, format_document, format_range,
+                     apply_edit, execute_command
   workspace_folders.go ← add_workspace_folder, remove_workspace_folder, list_workspace_folders
   session.go       ← start_lsp, open_document, close_document, restart_lsp_server
-  utilities.go     ← apply_edit, execute_command, did_change_watched_files, set_log_level,
-                     format_document, format_range, rename_symbol, prepare_rename
+  utilities.go     ← did_change_watched_files, set_log_level
   fuzzy.go         ← fuzzy matching utilities for workspace symbol lookup
   position_pattern.go ← position_pattern argument handling (e.g. "func Foo"); LineScope
-                       (line_scope_start/line_scope_end) for disambiguating duplicate matches
+                       (line_scope_start/line_scope_end) support, not exposed by any MCP tool
   runner.go        ← build/test runner dispatch table
 
 internal/resources/
@@ -266,6 +276,12 @@ internal/logging/
 
 internal/extensions/
   registry.go      ← ExtensionRegistry; Activate, RegisterFactory, GetToolHandlers, etc.
+
+internal/encoding/gcf/
+  encode.go        ← Encode: structured data to GCF tabular text (the default output format;
+                     AGENT_LSP_OUTPUT_FORMAT=json switches tools to JSON)
+  graph.go         ← BuildGraphPayload, EncodeGraph, MapSymbolKind, QualifiedName: graph-shaped
+                     GCF output (blast_radius)
 
 pkg/
   lsp/
@@ -327,6 +343,7 @@ skills/            ← Agent Skills (SKILL.md directories)
                       entry points, hotspots, dependency flow
   lsp-onboard/     ← First-session project onboarding: detect languages, build system,
                       entry points, package map, hotspots, diagnostics baseline
+  lsp-concurrency-audit/ ← Field-level concurrency safety audit for the types in a file
 
 experiments/token-savings/    Reproducible benchmark: LSP vs grep/read token cost
 ```
@@ -360,7 +377,7 @@ implementation evolves.
 
 ### Layer rules
 
-- `cmd/agent-lsp/` owns the MCP server lifecycle and routes requests to handlers via the six tool files
+- `cmd/agent-lsp/` owns the MCP server lifecycle and routes requests to handlers via the nine `tools_*.go` registration files
 - `internal/tools/` and `internal/resources/` import from `internal/lsp/`, `internal/session/`, and `internal/types/`. They do not import from each other
 - `internal/lsp/` imports from `internal/types/`, `internal/logging/`, and `internal/uri/` (no upward dependencies)
 - `internal/session/` imports from `internal/lsp/`, `internal/types/`, `internal/logging/`, and `internal/uri/`
@@ -377,7 +394,7 @@ Understanding the process model is the most important prerequisite for reading t
 **MCP server process (agent-lsp binary):**
 
 - One process, long-lived, started once by the AI client.
-- Communicates with the AI via JSON-RPC over **stdio** (default) or **HTTP+SSE** (`--http` flag).
+- Communicates with the AI via JSON-RPC over **stdio** (default) or **Streamable HTTP** (`--http` flag).
 - Owns all Go code in this repo: MCP server, LSP clients, session manager, tool handlers.
 
 **LSP subprocess(es):**
@@ -451,7 +468,7 @@ In direct mode, the Go process communicates with language servers through `os/ex
 
 ## HTTP Transport Mode
 
-By default, agent-lsp communicates with the AI client over stdio. The `--http` flag switches to an HTTP+SSE transport using the MCP SDK's `StreamableHTTPHandler`, suitable for containerized deployments and remote access.
+By default, agent-lsp communicates with the AI client over stdio. The `--http` flag switches to the MCP Streamable HTTP transport (`mcp.NewStreamableHTTPHandler` from the MCP Go SDK), suitable for containerized deployments and remote access.
 
 ### Flags
 
@@ -500,7 +517,7 @@ For HTTP mode, the HTTP server calls `Shutdown` with a 5-second deadline, draini
 
 ## Tool Registration Model
 
-66 MCP tools are exposed to the AI agent. In MCP, a "tool" is a named function with a JSON Schema for its arguments that the AI can invoke via a JSON-RPC `tools/call` request. Tools are defined in ten files under `cmd/agent-lsp/` and dispatched through a shared pattern.
+66 MCP tools are exposed to the AI agent. In MCP, a "tool" is a named function with a JSON Schema for its arguments that the AI can invoke via a JSON-RPC `tools/call` request. Tools are defined in nine `tools_*.go` files under `cmd/agent-lsp/` and dispatched through a shared pattern.
 
 ### How a tool is defined
 
@@ -525,19 +542,21 @@ mcp.AddTool(d.server, &mcp.Tool{
 })
 ```
 
-### The seven registration files
+### The nine registration files
 
 | File | Tools registered | Count |
 |------|-----------------|-------|
-| `tools_workspace.go` | Session lifecycle, build/test, workspace management, cache export/import | 21 |
-| `tools_navigation.go` | go_to_definition, references, call hierarchy, rename | 10 |
-| `tools_analysis.go` | hover, diagnostics, completions, symbols, change impact, detect_changes | 14 |
-| `tools_context.go` | Composite context tool (get_editing_context) | 1 |
+| `tools_workspace.go` | Session lifecycle, build/test, workspace management, diagnostics, formatting, apply_edit, cache export/import | 21 |
+| `tools_navigation.go` | Definition, type definition, implementation, declaration, go_to_symbol, rename_symbol, refactor, prepare_rename, document highlights, call hierarchy, type hierarchy | 11 |
+| `tools_analysis.go` | Hover, completions, signature help, code actions, symbols, references, inlay hints, semantic tokens, symbol source/docs, blast_radius, cross-repo references, detect_changes | 14 |
 | `tools_session.go` | Speculative execution (simulate, evaluate, commit) | 8 |
 | `tools_symbol_edit.go` | Symbol-level editing (replace_symbol_body, insert_after_symbol, insert_before_symbol, safe_delete_symbol) | 4 |
+| `tools_explore.go` | Composite symbol exploration (explore_symbol) | 1 |
+| `tools_safe_edit.go` | Preview + apply when safe (safe_apply_edit) | 1 |
+| `tools_aliases.go` | Intent aliases (callers, explore, safe_edit) | 3 |
 | `tools_phase.go` | Phase enforcement (activate_skill, deactivate_skill, get_skill_phase) | 3 |
 
-All seven registration functions are called from `Run()` in `server.go` via the `toolDeps` bundle, which carries shared dependencies: the MCP server, the client resolver, the session manager, the phase tracker, and the `clientForFileWithAutoInit` closure. The 58 non-phase tools are wrapped via `addToolWithPhaseCheck` (generic wrapper that checks phase permissions before each handler). The 3 phase tools use raw `mcp.AddTool` to avoid circular enforcement.
+All nine registration functions are called by `registerAllTools` from `Run()` in `server.go` via the `toolDeps` bundle, which carries shared dependencies: the MCP server, the client resolver, the session manager, the phase tracker, and the `clientForFileWithAutoInit` closure. The 63 non-phase tools are wrapped via `addToolWithPhaseCheck` (generic wrapper that checks phase permissions before each handler). The 3 phase tools use raw `mcp.AddTool` to avoid circular enforcement.
 
 ### Handler separation
 
@@ -645,7 +664,7 @@ type Logger struct {
     ch   chan Record     // buffered (256 in practice): tool handlers send here
     file *os.File
     done chan struct{}   // closed when writeLoop exits
-    noop bool           // true when no audit path is configured (discard all records)
+    noop bool           // true when the resolved audit path is empty (discard all records)
 }
 
 // Tool handler (hot path) — never blocks
@@ -665,7 +684,7 @@ func (l *Logger) writeLoop() {
 }
 ```
 
-Tool handlers have zero-latency audit logging; they never wait for disk I/O. The `done` channel provides a clean shutdown signal: `Close()` closes `ch`, waits on `<-done`, then closes the file. When no audit path is configured (empty `--audit-log` flag and no `AGENT_LSP_AUDIT_LOG` env var), `NewLogger` returns a no-op logger that discards all records with zero overhead.
+Tool handlers have zero-latency audit logging; they never wait for disk I/O. The `done` channel provides a clean shutdown signal: `Close()` closes `ch`, waits on `<-done`, then closes the file. Audit logging is on by default: with no `--audit-log` flag and no `AGENT_LSP_AUDIT_LOG` env var, `audit.ResolvePath` falls back to `~/.agent-lsp/audit.jsonl`. `NewLogger` returns a no-op logger (discards all records) only when the resolved path is empty, which happens when the home directory cannot be determined.
 
 **4. Progress Token Coordination (sync.Cond)**
 
@@ -674,16 +693,29 @@ Language servers report long-running work (like indexing a workspace) via `$/pro
 ```go
 progressMu     sync.Mutex
 progressTokens map[any]struct{} // active begin tokens
-progressCond   *sync.Cond              // signalled when progressTokens becomes empty
+progressCond   *sync.Cond       // signalled when no tokens the waiters care about remain
+staleProgress  map[any]struct{} // tokens that already made a readiness wait time out
+seenProgress   bool             // the server has sent at least one progress begin
 
-// waitForWorkspaceReady blocks until all $/progress tokens complete or 60s elapses.
-// WaitForWorkspaceReadyTimeout(ctx, timeout) is the variant with a configurable deadline.
+// waitForWorkspaceReady blocks until no non-stale $/progress tokens remain or 60s elapses,
+// then marks the workspace loaded.
 func (c *LSPClient) waitForWorkspaceReady(ctx context.Context) {
-    c.WaitForWorkspaceReadyTimeout(ctx, 60*time.Second)
+    c.waitForProgress(ctx, defaultReadinessWait, true) // skipStale=true
+    c.workspaceLoaded.Store(true)
 }
+
+// WaitForWorkspaceReadyTimeout(ctx, timeout) is the long-wait variant (start_lsp's
+// ready_timeout_seconds, the jdtls import, the daemon): waitForProgress(ctx, timeout, false)
+// waits on every token, stale or not.
 ```
 
-When `readLoop` dispatches a `$/progress end` notification, it removes the token and calls `progressCond.Broadcast()`. All waiters (potentially multiple concurrent `start_lsp` or `find_references` calls) wake up and re-check.
+When `readLoop` dispatches a `$/progress end` notification, it removes the token (and any stale mark for it) and, once no non-stale tokens remain, calls `progressCond.Broadcast()`. All waiters (potentially multiple concurrent `start_lsp` or `find_references` calls) wake up and re-check.
+
+Readiness rules:
+
+- **Stale tokens.** When a default wait (`skipStale=true`) times out, every token still active goes into `staleProgress`, and later default waits do not block on it again. A token that never ends (a server bug or a hung task) therefore costs one 60s wait, not one per query. A fresh `begin` or an `end` for the token clears its stale mark.
+- **Early "loaded" mark.** Some servers (rust-analyzer, jdtls) start their first progress a few hundred milliseconds after `initialize`. A wait that ran before that saw no tokens and set `workspaceLoaded`. The server's first `begin` (`seenProgress` false) resets `workspaceLoaded`, so tools wait for the load and `indexed` is not reported true while the server is indexing.
+- **Restart.** `Restart` clears `progressTokens`, `staleProgress`, and `seenProgress`, and resets `workspaceLoaded`, so readiness is tracked from scratch for the fresh server.
 
 ### Concurrency Safety Summary
 
@@ -867,6 +899,13 @@ type ClientResolver interface {
 
 `ClientForFile` does a linear scan of entries comparing `filepath.Ext(filePath)` against each entry's extension set. The first match wins. If no match is found, it falls back to `entries[0].client`.
 
+### Workspace-level fan-out
+
+Two tools have no file to route by, so in multi-server mode they query every started server instead of only the default client. `workspaceQueryClients` (in `server.go`) collects the active client from `clientState` plus every non-nil client from `resolver.AllClients()`, deduplicated:
+
+- `find_symbol` (`tools_analysis.go`) calls `HandleGetWorkspaceSymbolsMulti` (`internal/tools/analysis.go`), which tags each symbol with the server that produced it and qualifies empty or partial results per server.
+- `get_server_capabilities` (`tools_workspace.go`) calls `HandleGetServerCapabilitiesMulti` (`internal/tools/capabilities.go`), which reports capabilities for each server.
+
 ### csResolver wrapper
 
 `server.go` wraps the real resolver in a `csResolver` that layers `clientState` (a mutex-guarded `*LSPClient`) on top. `start_lsp` writes the freshly initialized client into `clientState` so tools that call `DefaultClient()` immediately after `start_lsp` see the correct instance.
@@ -963,11 +1002,14 @@ mgr.Destroy(ctx, sessionID)
 ### Lazy baseline
 
 The first `ApplyEdit` call for a given file URI within a session:
-1. Waits for diagnostics to stabilize (up to 3s) via `WaitForDiagnostics`
-2. Snapshots the current diagnostics as the baseline
-3. Reads the file content from disk into `session.Contents[uri]`
-4. Stores the original content in `session.OriginalContents[uri]` (used by Discard)
-5. Opens the document in the LSP client
+1. Reads the file content from disk into `session.Contents[uri]`
+2. Stores the original content in `session.OriginalContents[uri]` (used by Discard)
+3. Opens the document in the LSP client
+4. Snapshots the baseline diagnostics. For gopls (`PrefersPullDiagnostics`), it pulls them (`textDocument/diagnostic`) after the document is open. For other servers, it waits for published diagnostics to stabilize (up to 3s, `WaitForDiagnostics`) before opening the document. A failed pull falls back to the push wait.
+
+Every `ApplyEdit` then takes a `DiagnosticsMark` (`MarkDiagnostics`) before sending the `didChange`, records the resulting document version on it, and stores it in `session.DiagMarks[uri]`, so `Evaluate` can tell a publication for this edit from diagnostics that were already cached.
+
+`Evaluate` collects the post-edit diagnostics the same way: gopls is pulled for each file, and other servers wait in `WaitForDiagnosticsSettled` with the marks, which require diagnostics covering the edited version. A wait that ends without them (`settled=false`) counts as a timeout (`timeout: true`, confidence `partial`), because the cache may still hold the pre-edit diagnostics and would otherwise read as `net_delta: 0`. A clean result while the server still has active `$/progress` work is downgraded to confidence `low`.
 
 ### Atomic variant
 
@@ -992,7 +1034,8 @@ Agent                    SessionManager              LSP Client              Dis
   │  simulate_edit(file, range, text)                    │                     │
   │──────────────────────────►│                          │                     │
   │                           │  (first edit for file)   │                     │
-  │                           │  WaitForDiagnostics      │                     │
+  │                           │  baseline: pull (gopls)  │                     │
+  │                           │  or WaitForDiagnostics   │                     │
   │                           │─────────────────────────►│                     │
   │                           │  baseline snapshot       │                     │
   │                           │◄─────────────────────────│                     │
@@ -1010,7 +1053,8 @@ Agent                    SessionManager              LSP Client              Dis
   │                           │                          │                     │
   │  evaluate_session         │                          │                     │
   │──────────────────────────►│                          │                     │
-  │                           │  WaitForDiagnostics      │                     │
+  │                           │  pull (gopls) or         │                     │
+  │                           │  settled wait (marks)    │                     │
   │                           │─────────────────────────►│                     │
   │                           │  current diagnostics     │                     │
   │                           │◄─────────────────────────│                     │
@@ -1050,8 +1094,8 @@ Agent                    SessionManager              LSP Client              Dis
 
 Key points from the diagram:
 - **Disk is never touched until `commit_session(apply: true)`**. The discard path leaves the file system unchanged.
-- **Lazy baseline**: the first `simulate_edit` for a file triggers a `WaitForDiagnostics` snapshot and file read. Subsequent edits to the same file within the session skip this.
-- **Two `WaitForDiagnostics` calls**: one for the baseline (before edit), one for evaluation (after edit). The diff between these two snapshots produces `net_delta`.
+- **Lazy baseline**: the first `simulate_edit` for a file triggers a baseline diagnostics snapshot (pulled for gopls, a push wait otherwise) and a file read. Subsequent edits to the same file within the session skip this.
+- **Two diagnostics snapshots**: one for the baseline (before edit), one for evaluation (after edit, required to cover the edited document version). The diff between these two snapshots produces `net_delta`.
 - **`didChange` notifications** keep the LSP server in sync with in-memory state at every step, including revert on discard.
 
 ### SerializedExecutor
@@ -1115,19 +1159,25 @@ If the Go handler itself returns a non-nil `error` (third return value from the 
 
 ## File Watcher
 
-When `start_lsp` initializes the LSP client, `startWatcher(rootDir)` is called automatically. A goroutine watches the workspace root recursively using [fsnotify](https://github.com/fsnotify/fsnotify) (a cross-platform Go file-system notification library), which uses the platform-native mechanism (`inotify` on Linux, `kqueue` on BSD/macOS, `FSEvents` on macOS for Go 1.23+). File system events are:
+When `start_lsp` initializes the LSP client, `startWatcher(rootDir)` is called automatically. A goroutine watches the workspace root recursively using [fsnotify](https://github.com/fsnotify/fsnotify) (a cross-platform Go file-system notification library), which uses the platform-native mechanism (`inotify` on Linux, `kqueue` on BSD and macOS, `ReadDirectoryChangesW` on Windows). macOS uses kqueue rather than FSEvents: FSEvents needs cgo, which would break the `CGO_ENABLED=0` cross-compiled release. Setting `AGENT_LSP_DISABLE_WATCHER=1` turns the watcher off. File system events are:
 
 1. Deduplicated per path into a `map[string]fsnotify.Op` (pending set)
-2. Flushed as a single `workspace/didChangeWatchedFiles` notification after a **150ms debounce** (`time.AfterFunc`)
+2. Flushed as a single `workspace/didChangeWatchedFiles` notification after a **150ms debounce**. The debounce timer only signals the event loop (a `flushC` channel); the loop itself runs the flush, so the pending set is never touched from a timer goroutine (the earlier `time.AfterFunc` version raced on it)
 3. LSP change type is mapped: `Create→1`, `Write→2`, `Remove|Rename→3`
 
 **Exclusion list** (`watcherSkipDirs`):
 
 ```
 .git  node_modules  target  build  dist  vendor  __pycache__  .venv  venv
+.next  .cache  .idea  .vscode
 ```
 
 All directories whose names start with `.` (except `.` itself) are also skipped. Dynamically-created subdirectories are added to the watcher on the `Create` event.
+
+**File descriptor bounds** (issue #18). On macOS the kqueue backend opens one fd per file in every watched directory, so an unbounded walk can exhaust the per-process fd limit. Two guards apply:
+
+- **Startup walk caps** (`loadWatcherLimits`): a directory with more than `AGENT_LSP_WATCH_MAX_DIR_ENTRIES` entries (default 2048) is skipped along with its subtree, and the walk stops once `AGENT_LSP_WATCH_MAX_ENTRIES` total entries (default 50000) are watched. Files beyond the budget rely on explicit `did_change_watched_files` calls.
+- **Runtime fd guard**: every 30 seconds the event loop samples the process's open fd count (`/proc/self/fd` or `/dev/fd`). Above `AGENT_LSP_WATCH_MAX_FDS` (default 60000) it flushes pending events and tears the watcher down, logging a warning; files then rely on explicit `did_change_watched_files`.
 
 `stopWatcher()` closes the stop channel, triggering a final flush of any pending events before the goroutine exits. It is called during `Shutdown` and at the beginning of each `startWatcher` call to replace a stale watcher on `start_lsp` reinit.
 
@@ -1174,7 +1224,7 @@ InitializedHandler: func(_ context.Context, req *mcp.InitializedRequest) {
 
 Skills are structured workflow definitions that tell agents how to orchestrate MCP tools in the correct multi-step sequence. They are defined as SKILL.md Markdown files in the `skills/` directory and are delivered through two channels:
 
-1. **MCP prompts (embedded):** All 23 skills are embedded in the binary via `//go:embed` and served through the MCP protocol's `prompts/list` and `prompts/get` methods. Any MCP client discovers them automatically. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`.
+1. **MCP prompts (embedded):** All 24 skills are embedded in the binary via `//go:embed` and served through the MCP protocol's `prompts/list` and `prompts/get` methods. Any MCP client discovers them automatically. `prompts/list` returns short descriptions (minimal context cost); full workflow instructions load on demand via `prompts/get`.
 
 2. **AgentSkills (file-based):** The same SKILL.md files can be installed into the AI client's skill directory (`~/.claude/skills/`) via `install.sh` for slash command access in Claude Code and other AgentSkills-compatible clients.
 
@@ -1253,6 +1303,8 @@ The installer scans for `SKILL.md` files up to two levels deep, creates `~/.clau
 | `lsp-generate` | Generate code with LSP-aware validation |
 | `lsp-inspect` | Full code quality audit: dead symbols, test coverage, error handling, doc drift |
 | `lsp-architecture` | Project-level architecture overview: language distribution, package map, entry points, hotspots, dependency flow |
+| `lsp-onboard` | First-session project onboarding: languages, build system, entry points, package map, hotspots, diagnostics baseline |
+| `lsp-concurrency-audit` | Field-level concurrency safety audit for the types in a file (`<file-path> [--type <TypeName>]`) |
 
 ---
 
@@ -1470,15 +1522,17 @@ When the LSP subprocess exits:
 
 ## WaitForDiagnostics
 
-`WaitForDiagnostics(ctx, client, targetURIs []string, timeoutMs int)` is used by `get_diagnostics`, `evaluate_session`, and resource handlers to wait for the language server to finish publishing diagnostics after a document is opened or modified.
+`WaitForDiagnosticsSettled(ctx, client, uris, marks, timeoutMs) (settled bool, err error)` (in `internal/lsp/diagnostics.go`) waits for the language server to publish diagnostics that cover an edit. `WaitForDiagnostics(ctx, client, uris, timeoutMs)` wraps it with no marks and ignores `settled`; `get_diagnostics`, resource handlers, and the non-gopls session baseline use it.
 
-It resolves when:
+A `DiagnosticsMark` is taken with `MarkDiagnostics(uri)` before the change is sent and records the publish count for the URI; the caller sets `Version` to the document version the change produced. The wait resolves when:
 
-1. All target URIs have received at least one diagnostic notification *after* the initial snapshot (the first notification is excluded; it is the server's pre-existing state for that file)
-2. No further diagnostic notifications arrive for **500ms** (the stabilization window)
-3. OR the optional `timeoutMs` is exceeded
+1. Every target URI is covered: when the server reports document versions, its last publication is for at least `mark.Version`; otherwise any publication after the mark counts. A URI without a mark needs a publication that arrives during the wait.
+2. No further diagnostic notifications arrive for **500ms** (the quiet window).
+3. OR `timeoutMs` passes. Then `settled` is false if any publication was for an older document version, or if the server is known to publish for every version (gopls) and stayed silent. For servers that publish nothing when diagnostics are unchanged (typescript-language-server, rust-analyzer, Dart), silence until the deadline is the expected result of a clean edit and counts as settled.
 
-An empty `targetURIs` slice resolves immediately (no wait needed).
+`err` is non-nil only when `ctx` ends. An empty `uris` slice resolves immediately with `settled=true`.
+
+Speculative evaluation does not rely on the push stream for gopls: `Evaluate` pulls diagnostics (`textDocument/diagnostic`) for each edited file, because gopls pushes arrive in stages and a push wait could settle on an early set without the type errors. If a pull fails, it falls back to `WaitForDiagnosticsSettled` with the session's marks. An unsettled wait is reported as a timeout.
 
 ---
 

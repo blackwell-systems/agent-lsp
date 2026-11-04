@@ -69,7 +69,7 @@ Error/warning objects in `errors_introduced` and `errors_resolved`:
 - You want minimal ceremony (no session management)
 
 ```
-mcp__lsp__preview_edit(
+mcp__agent-lsp__preview_edit(
   workspace_root: "/your/workspace",
   language: "go",
   file_path: "/abs/path/to/file.go",

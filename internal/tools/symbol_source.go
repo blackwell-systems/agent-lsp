@@ -63,8 +63,8 @@ func HandleGetSymbolSource(ctx context.Context, client *lsp.LSPClient, args map[
 		return types.ErrorResult(err.Error()), nil
 	}
 
-	// ExtractPositionWithPattern reads args["column"], but this tool's MCP
-	// parameter is named "character". Alias before calling.
+	// The MCP parameter is "column"; "character" is still accepted as an
+	// alias for callers that used the old name.
 	if ch, ok := args["character"]; ok {
 		if args["column"] == nil {
 			args["column"] = ch

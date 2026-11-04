@@ -231,7 +231,7 @@ func GetReferencesWithWarmup(ctx context.Context, client *LSPClient, uri string,
 		}
 		if client.daemonInfo != nil && !client.daemonInfo.Ready {
 			elapsed := time.Since(client.daemonInfo.StartTime).Round(time.Second)
-			return nil, fmt.Errorf("workspace is still being indexed by the daemon (started %s ago). References will be available once indexing completes. Other tools (hover, diagnostics, symbols) work immediately. Check status with get_daemon_status", elapsed)
+			return nil, fmt.Errorf("workspace is still being indexed by the daemon (started %s ago). References will be available once indexing completes. Other tools (hover, diagnostics, symbols) work immediately. Check status with `agent-lsp daemon-status`", elapsed)
 		}
 	} else {
 		// Direct mode: run standard waits.

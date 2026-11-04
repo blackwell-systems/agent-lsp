@@ -93,17 +93,18 @@ agent-lsp auto-detects the language from file extensions. If auto-detection fail
 **Check daemon status:**
 
 ```bash
-cat ~/.cache/agent-lsp/daemon.json
+agent-lsp daemon-status
 ```
 
-This shows running daemon PIDs and socket paths.
+This lists each running daemon with its language, workspace root, PID, readiness (indexing or ready), and uptime. The raw state lives in `~/.cache/agent-lsp/daemons/<id>/daemon.json`, one directory per workspace and language.
 
-**Kill stale daemons:**
+**Stop stale daemons:**
 
-If a daemon is stuck, remove the PID file and restart:
+If a daemon is stuck, stop it and let the next session start a fresh one:
 
 ```bash
-rm ~/.cache/agent-lsp/daemon.json
+agent-lsp daemon-stop --root-dir=/path/to/project --language=python
+agent-lsp daemon-stop --all
 ```
 
 ## MCP client can't find agent-lsp

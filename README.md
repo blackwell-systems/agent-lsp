@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-67%2F67-brightgreen.svg" alt="CI Coverage"></a>
+  <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-66%2F66-brightgreen.svg" alt="CI Coverage"></a>
   <a href="#multi-language-support"><img src="https://img.shields.io/badge/languages-30_CI--verified-brightgreen.svg" alt="Languages"></a>
   <a href="https://github.com/blackwell-systems/mcp-assert"><img src="https://raw.githubusercontent.com/blackwell-systems/mcp-assert/main/assets/badge-passing.svg?v=3" alt="mcp-assert: passing" height="20"></a>
   <a href="https://agentskills.io"><img src="assets/badge-agentskills.svg" alt="Agent Skills"></a>
@@ -17,7 +17,7 @@
   <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
 </p>
 
-**Code intelligence infrastructure for AI agents.** 67 tools, 32 CI-verified languages, 24 agent workflows. Single Go binary.
+**Code intelligence infrastructure for AI agents.** 66 tools, 32 CI-verified languages, 24 agent workflows. Single Go binary.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh && agent-lsp init
@@ -43,7 +43,7 @@ Language servers stay indexed across agent sessions. First session: indexes work
 `blast_radius` → one call returns all exports + all callers (test vs non-test partitioned). Without orchestration: 20+ sequential LSP calls.
 
 **Speculative editing**  
-`simulate_edit` → preview changes in memory, check diagnostic delta, apply or discard. Test edits before touching disk.
+`simulate_edit` → preview changes in memory, check diagnostic delta, apply or discard. Test edits before touching disk. `safe_apply_edit` writes only an edit it could verify: if the preview timed out or the server was still indexing, nothing is written.
 
 **Workflow orchestration**  
 24 skills that chain LSP operations into complete pipelines:
@@ -52,7 +52,7 @@ Language servers stay indexed across agent sessions. First session: indexes work
 - `/lsp-verify` → LSP diagnostics → build → test suite
 
 **Multi-language, single session**  
-One agent-lsp process routes `.go` to gopls, `.ts` to tsserver, `.py` to pyright. No reconfiguration between projects. Session persists across files and repositories.
+One agent-lsp process routes `.go` to gopls, `.ts` to tsserver, `.py` to pyright. No reconfiguration between projects. Session persists across files and repositories. Workspace-wide queries (`find_symbol`, `get_server_capabilities`) ask every running language server, not just the default one. `start_lsp` can also `connect` to a language server that is already running (e.g. `gopls -listen`) and reuse its warm index.
 
 > [!TIP]
 > **Token-optimized output:** Tool responses encoded in [GCF](https://gcformat.com) instead of JSON. 30-84% fewer tokens depending on tool (up to 92.7% with session dedup). [100% LLM comprehension on every frontier model](https://gcformat.com/guide/benchmarks.html), 91.2% on complex code graphs where JSON averages 54.1%. See [below](#token-optimized-output-gcf) for measured savings per tool.
@@ -114,11 +114,11 @@ Tool responses are encoded in [GCF (Graph Compact Format)](https://gcformat.com)
 
 | Profile | Tools | Savings vs JSON |
 |---------|-------|----------------|
-| Tabular | All 66 tools | **30-51%** |
-| Graph | blast_radius, find_callers, explore_symbol, find_references, type_hierarchy, cross_repo, detect_changes, list_symbols | **79-84%** |
+| Tabular | Other structured results (find_references, diagnostics, detect_changes, ...) | **30-51%** |
+| Graph | list_symbols, find_symbol, blast_radius, find_callers, explore_symbol, type_hierarchy, get_cross_repo_references | **79-84%** |
 | Graph + session dedup | Same, via [gcf-proxy](https://github.com/blackwell-systems/gcf-proxy) `--session` | **92.7%** (5th call) |
 
-Grouped/nested responses (callers under a symbol, diagnostics with related info) tabularize too, for ~14% over JSON on that shape ([details](./docs/guide/gcf-integration.md#nested-container-responses-grouped-data)).
+Workspace edits (rename and `refactor` previews) are always JSON, so they round-trip into `apply_edit` byte-exact. Grouped/nested responses (callers under a symbol, diagnostics with related info) tabularize too, for ~14% over JSON on that shape ([details](./docs/guide/gcf-integration.md#nested-container-responses-grouped-data)).
 
 GCF is enabled by default. To revert to JSON:
 
@@ -144,7 +144,15 @@ Python and TypeScript projects need minutes of background indexing before `find_
 
 Skills tell agents the correct order of operations. Phase enforcement makes the runtime *block* violations instead of trusting the agent to follow instructions.
 
-When an agent activates a skill, every tool call is checked against the current phase's permissions. Calling `apply_edit` during blast-radius analysis doesn't silently proceed; it returns an error with specific recovery guidance ("complete the blast_radius phase first, allowed tools: [blast_radius, find_references]"). Phases advance automatically as the agent calls tools from later phases.
+When an agent activates a skill, every tool call is checked against the current phase's permissions. Calling `apply_edit` during blast-radius analysis doesn't silently proceed; it returns an error with specific recovery guidance, followed by a JSON copy of the same fields:
+
+```
+Phase violation: apply_edit is forbidden in the "blast_radius" phase
+
+Recovery: apply_edit becomes available in the "apply" phase. Next phase is "speculative_preview". Allowed tools: [open_document get_diagnostics preview_edit simulate_chain]
+```
+
+Phases advance automatically as the agent calls tools from later phases.
 
 No other MCP tool provider enforces workflow ordering at runtime. See [docs/guide/phase-enforcement.md](./docs/guide/phase-enforcement.md).
 
@@ -163,7 +171,7 @@ The inspector includes 4 concurrency checks that work across 25 languages in 4 c
 
 Symbol edit tools (`replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, `safe_delete_symbol`) automatically return `errors_after` and `warnings_after` counts. Agents know immediately whether an edit broke something without a separate `get_diagnostics` call.
 
-`safe_apply_edit` combines preview + apply in one call: previews speculatively, applies to disk only if `net_delta == 0` (no new errors). One tool call instead of three.
+`safe_apply_edit` combines preview + apply in one call: previews speculatively, applies to disk only if `net_delta == 0` (no new errors). It also refuses edits it could not verify (a timed-out preview or a server still indexing) and writes only the content it previewed: if the file changed in between, nothing is written. One tool call instead of three.
 
 ### Works with
 
@@ -173,10 +181,10 @@ Symbol edit tools (`replace_symbol_body`, `insert_after_symbol`, `insert_before_
 | [Cursor](https://cursor.com) | stdio | `agent-lsp init` |
 | [Windsurf](https://windsurf.com) | stdio | `agent-lsp init` |
 | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | stdio | `agent-lsp init` |
-| [Continue](https://continue.dev) | stdio | `agent-lsp init` |
+| [Continue](https://continue.dev) | stdio | [manual config](./docs/getting-started/mcp-clients.md) |
 | [Cline](https://github.com/cline/cline) | stdio | `agent-lsp init` |
 | [Pi](https://github.com/earendil-works/pi) | stdio | `agent-lsp init` + `pi install npm:pi-mcp-adapter` |
-| Any MCP client | HTTP+SSE | `agent-lsp --http --port 8080` |
+| Any MCP client | Streamable HTTP | `AGENT_LSP_TOKEN=secret agent-lsp --http --port 8080` |
 
 See [docs/getting-started/mcp-clients.md](./docs/getting-started/mcp-clients.md) for copy-paste configs.
 
@@ -208,6 +216,7 @@ See [docs/guide/skills.md](./docs/guide/skills.md) for full descriptions and usa
 
 | Skill | Purpose |
 |-------|---------|
+| `/lsp-architecture` | Structural architecture overview: languages, package map, entry points, dependency graph, and hotspots |
 | `/lsp-onboard` | First-session project onboarding: detect languages, map packages, find entry points and hotspots, check diagnostics |
 
 **Understanding unfamiliar code**
@@ -259,7 +268,7 @@ docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-l
 docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:python python:pyright-langserver,--stdio
 ```
 
-**HTTP mode** (persistent service, remote clients connect over HTTP+SSE):
+**HTTP mode** (persistent service, remote clients connect over Streamable HTTP):
 
 ```bash
 docker run --rm \
@@ -267,10 +276,10 @@ docker run --rm \
   -v /your/project:/workspace \
   -e AGENT_LSP_TOKEN=your-secret-token \
   ghcr.io/blackwell-systems/agent-lsp:go \
-  --http --port 8080 go:gopls
+  --http --port 8080 --listen-addr 0.0.0.0 go:gopls
 ```
 
-Images run as a non-root user (uid 65532) by default. Set `AGENT_LSP_TOKEN` via environment variable, never `--token` on the command line. Images are also mirrored to Docker Hub (`blackwellsystems/agent-lsp`). See [DOCKER.md](./DOCKER.md) for the full tag list, HTTP mode setup, and security hardening options.
+The server binds `127.0.0.1` by default, so pass `--listen-addr 0.0.0.0` inside a container for the port mapping to reach it. Images run as a non-root user (uid 65532) by default. Set `AGENT_LSP_TOKEN` via environment variable, never `--token` on the command line. Images are also mirrored to Docker Hub (`blackwellsystems/agent-lsp`). See [DOCKER.md](./DOCKER.md) for the full tag list, HTTP mode setup, and security hardening options.
 
 ## Setup
 
@@ -324,12 +333,14 @@ Install the servers for your stack. Common ones:
 
 | Language | Server | Install |
 |----------|--------|---------|
-| TypeScript / JavaScript | `typescript-language-server` | `npm i -g typescript-language-server typescript` |
+| TypeScript / JavaScript | `typescript-language-server` | `npm i -g typescript-language-server typescript@6` |
 | Python | `pyright-langserver` | `npm i -g pyright` |
 | Go | `gopls` | `go install golang.org/x/tools/gopls@latest` |
 | Rust | `rust-analyzer` | `rustup component add rust-analyzer` |
 | C / C++ | `clangd` | `apt install clangd` / `brew install llvm` |
 | Ruby | `solargraph` | `gem install solargraph` |
+
+TypeScript 7 ships without `tsserver`, which typescript-language-server needs, so install TypeScript 6 (`typescript@6`) until that changes. A project with TypeScript 6 in its own `node_modules` works either way.
 
 Full list of 32 supported languages in [docs/reference/language-support.md](./docs/reference/language-support.md).
 
@@ -366,7 +377,7 @@ The generated config looks like:
 ```json
 {
   "mcpServers": {
-    "lsp": {
+    "agent-lsp": {
       "type": "stdio",
       "command": "agent-lsp",
       "args": [
@@ -396,13 +407,13 @@ Skills are also available as **MCP prompts**: any MCP client can discover them v
 
 ### Step 6: Allow tool permissions (Claude Code)
 
-For Claude Code, add `mcp__lsp__*` to your permissions allow list so all 67 tools are available without per-tool approval prompts:
+For Claude Code, add `mcp__agent-lsp__*` to your permissions allow list so all 66 tools are available without per-tool approval prompts:
 
 ```json
 // ~/.claude/settings.json
 {
   "permissions": {
-    "allow": ["mcp__lsp__*"]
+    "allow": ["mcp__agent-lsp__*"]
   }
 }
 ```
@@ -419,13 +430,13 @@ Your AI agent calls tools automatically. The first call initializes the workspac
 start_lsp(root_dir="/your/project")
 ```
 
-This is what the agent does, not something you type. Then use any of the 67 tools. The session stays warm; no restart needed when switching files.
+This is what the agent does, not something you type. Then use any of the 66 tools. The session stays warm; no restart needed when switching files.
 
 ## What's unique about agent-lsp
 
 | Capability | Details |
 |------------|---------|
-| Tools | **67** |
+| Tools | **66** |
 | Languages (CI-verified) | **32**, end-to-end integration tests on every push |
 | Agent workflows (skills) | **24**, named multi-step procedures, discoverable via MCP `prompts/list` |
 | Speculative execution | **8 tools**, simulate changes before writing to disk |
@@ -435,8 +446,9 @@ This is what the agent does, not something you type. Then use any of the 67 tool
 | Call hierarchy | **✓**, single tool, direction param |
 | Type hierarchy | **✓**, CI-verified |
 | Cross-repo references | **✓**, multi-root workspace |
+| Multi-server queries | **✓**, `find_symbol` and `get_server_capabilities` ask every running language server |
 | Auto-watch | **✓**, always-on, debounced file watching |
-| HTTP+SSE transport | **✓**, bearer token auth, non-root Docker |
+| Streamable HTTP transport | **✓**, bearer token auth, non-root Docker |
 | Distribution | **single Go binary**, 10 install channels |
 
 ## Use Cases
@@ -452,13 +464,13 @@ This is what the agent does, not something you type. Then use any of the 67 tool
 
 32 languages, CI-verified end-to-end against real language servers on every CI run. No other MCP-LSP implementation tests a single language in CI.
 
-Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, Clojure, Dart, Terraform, Nix, Prisma, SQL, MongoDB, JavaScript, YAML, JSON, Dockerfile, CSS, HTML, MQL.
+Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, Clojure, Dart, Terraform, Nix, Prisma, SQL, MongoDB, JavaScript, YAML, JSON, Dockerfile, CSS, HTML, MQL, Luau.
 
 See [docs/reference/language-support.md](./docs/reference/language-support.md) for the full coverage matrix.
 
 ## Tools
 
-67 tools covering navigation, analysis, refactoring, symbol editing, composite exploration, safe editing, speculative execution, and session lifecycle. All CI-verified.
+66 tools covering navigation, analysis, refactoring, symbol editing, composite exploration, safe editing, speculative execution, and session lifecycle. All CI-verified.
 
 See [docs/reference/tools.md](./docs/reference/tools.md) for the full reference with parameters and examples.
 

@@ -4,7 +4,7 @@
 
 | Language | Server | Install |
 |----------|--------|---------|
-| TypeScript / JavaScript | `typescript-language-server` | `npm i -g typescript-language-server typescript` |
+| TypeScript / JavaScript | `typescript-language-server` | `npm i -g typescript-language-server typescript@6` |
 | Python | `pyright-langserver` | `npm i -g pyright` |
 | Go | `gopls` | `go install golang.org/x/tools/gopls@latest` |
 | Rust | `rust-analyzer` | `rustup component add rust-analyzer` |
@@ -33,7 +33,31 @@
 | Clojure | `clojure-lsp` | [GitHub releases](https://github.com/clojure-lsp/clojure-lsp/releases) |
 | Nix | `nil` | [GitHub releases](https://github.com/oxalica/nil/releases) |
 | Dart | `dart language-server` | Ships with Dart SDK (`brew install dart`) |
-| MongoDB | `mongodb-language-server` | `npm i -g @mongodb-js/mongodb-language-server` |
+| MongoDB | `mongodb-language-server` | Extract from the MongoDB VS Code extension VSIX (not published on npm); see [MongoDB](#mongodb-mongodb-language-server) below |
+
+TypeScript 7 ships without `tsserver`, which typescript-language-server needs, so install TypeScript 6 (`typescript@6`) until that changes. A project with TypeScript 6 in its own `node_modules` works either way.
+
+### Auto-detection coverage
+
+Running agent-lsp with no arguments (or `--auto`) auto-detects only the servers listed in `internal/config/autodetect.go`: `gopls` (Go), `typescript-language-server` (TypeScript, JavaScript), `pyright-langserver` (Python), `rust-analyzer` (Rust), `clangd` (C, C++), `solargraph` (Ruby), `yaml-language-server` (YAML), `vscode-json-language-server` (JSON), `docker-langserver` (Dockerfile), `csharp-ls` (C#), `jdtls` (Java), `kotlin-language-server` (Kotlin), `intelephense` (PHP), and `mql-lsp-server` (MQL4/MQL5).
+
+Every other language in the table above needs an explicit server: pass `language:binary` arguments (for example `agent-lsp lua:lua-language-server`, with extra server args after commas: `css:vscode-css-language-server,--stdio`), or a config file with `--config /path/to/lsp-mcp.json` (or `--merge-config` to overlay it on the auto-detected servers).
+
+### MongoDB (mongodb-language-server)
+
+`@mongodb-js/mongodb-language-server` is not on npm. The server ships inside the [mongodb-js/vscode](https://github.com/mongodb-js/vscode/releases) extension; CI extracts it from the VSIX and wraps it in a `mongodb-language-server` script:
+
+```bash
+MDBVSC_VERSION=1.18.0   # CI pins this version and verifies the VSIX sha256
+wget -q "https://github.com/mongodb-js/vscode/releases/download/v${MDBVSC_VERSION}/mongodb-vscode-${MDBVSC_VERSION}.vsix" -O /tmp/mongodb-vscode.vsix
+sudo mkdir -p /opt/mongodb-vscode
+sudo unzip -q /tmp/mongodb-vscode.vsix -d /opt/mongodb-vscode
+printf '#!/bin/bash\nexec node /opt/mongodb-vscode/extension/dist/languageServer.js "$@"\n' \
+  | sudo tee /usr/local/bin/mongodb-language-server > /dev/null
+sudo chmod +x /usr/local/bin/mongodb-language-server
+```
+
+Requires Node.js on `PATH`. MongoDB is not auto-detected, so pass it explicitly, for example `agent-lsp mongodb:mongodb-language-server,--stdio` (see [Auto-detection coverage](#auto-detection-coverage)).
 
 ### MQL (mql-lsp-server)
 
@@ -171,7 +195,7 @@ See [ci-notes.md](../architecture/ci-notes.md) for per-language CI quirks.
 
 Each new language needs three things:
 
-1. **`langConfig` entry** in `test/multi_lang_test.go` `buildLanguageConfigs()`:
+1. **`langConfig` entry** in `buildLanguageConfigs()` in `test/lang_configs_test.go` (the `langConfig` type itself is defined in `test/multi_lang_test.go`):
    - `binary` (language server executable name)
    - `serverArgs` (e.g. `[]string{"--stdio"}`)
    - `fixture` directory path

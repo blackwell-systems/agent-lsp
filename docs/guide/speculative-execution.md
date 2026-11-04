@@ -137,25 +137,25 @@ The baseline is the code state at the moment `create_simulation_session` is call
 
 This is the primary unresolved architectural tension.
 
-**Logical isolation (current design):** a single LSP server instance handles all sessions. Concurrent sessions on the same server are serialized; only one session may hold mutated in-memory state at a time. The mutex enforces ordering; sessions do not run truly in parallel against the same server.
+**Logical isolation (current design):** a single LSP server instance handles all sessions. Locking is per session, not per server: `SerializedExecutor` (`internal/session/executor.go`) gives each session its own semaphore, so operations within one session (`simulate_edit`, `evaluate_session`) never interleave, while independent sessions do not block each other, even on the same server.
 
 ```
 session_a and session_b on same server:
-  → session_a acquires lock, mutates, evaluates, reverts, releases
-  → session_b acquires lock (was blocked), mutates, evaluates, reverts, releases
+  → session_a acquires its own lock, mutates, evaluates, releases
+  → session_b acquires its own lock concurrently; it is not blocked by session_a
 ```
 
-This provides **correct results** and **no state leakage**, but sessions are sequential, not parallel.
+Because sessions on the same server share one LSP client and its in-memory document buffers, isolation holds when concurrent sessions touch different files. Two sessions that edit the same file on the same server at the same time can observe each other's buffer; nothing serializes them. Run such sessions one after another.
 
 **Physical isolation (future path):** each session gets its own LSP server instance. Sessions run truly in parallel with no serialization. Cost: LSP startup per session (~1-3s, memory per server), which makes it impractical for short-lived sessions.
 
 **Current choice: logical isolation.**
 
-Reasoning: for the primary use cases (single-agent planning, sequential comparison), serialization is not a bottleneck. The ~500ms per simulation is fast enough that the queue rarely matters. Physical isolation is the right upgrade path if parallel multi-agent simulation becomes a real workload.
+Reasoning: for the primary use cases (single-agent planning, sequential comparison), per-session locking is enough and avoids per-session server startup. Physical isolation is the right upgrade path if parallel multi-agent simulation on the same files becomes a real workload.
 
 This is explicitly documented, not hidden:
 
-> Speculative code sessions use serialized access to a shared language server to guarantee isolation. This provides deterministic behavior without the overhead of per-session LSP instances. True parallel execution with per-session language servers may be introduced in future versions if workload characteristics justify it.
+> Speculative code sessions share a language server and lock per session. Operations inside a session are serialized; different sessions run concurrently and are isolated as long as they touch different files. True parallel execution with per-session language servers may be introduced in future versions if workload characteristics justify it.
 
 ---
 
@@ -166,8 +166,8 @@ Multiple sessions may exist simultaneously:
 - Each session has independent semantic state
 - Evaluation results are comparable across sessions (different strategies, same baseline)
 - No cross-session visibility
-- Sessions on different language servers may evaluate concurrently
-- Sessions on the same language server are serialized within that server's scope (V1)
+- Sessions may evaluate concurrently, on different language servers or the same one (locking is per session)
+- Sessions on the same language server share its document buffers, so concurrent sessions should touch different files
 
 This enables consumers (like Scout-and-Wave) to run strategy comparison:
 
@@ -205,7 +205,10 @@ Mutates session state. Pushes `textDocument/didChange` to the language server's 
 
 **`evaluate_session(session_id)` → evaluation_result**
 
-Observes current session state. Calls `WaitForDiagnostics`, diffs against baseline, returns impact summary. Does not mutate state.
+Observes current session state, diffs against baseline, returns impact summary. Does not mutate state. How the current diagnostics are collected depends on the server:
+
+- **gopls** (started with the `pullDiagnostics` initialization option): diagnostics are pulled with `textDocument/diagnostic` for each touched file, which gives the final answer for the current version. If a pull fails, evaluation falls back to waiting on published diagnostics.
+- **Other servers:** the wait (`WaitForDiagnosticsSettled`) requires published diagnostics that cover the edited document version, followed by a 500ms quiet window. A wait that ends without them counts as a timeout (`timeout: true`, `confidence: "partial"`), because the cache may still hold pre-edit diagnostics. The one exception: for servers that publish nothing when an edit leaves diagnostics unchanged (for example typescript-language-server, rust-analyzer, Dart), silence until the deadline counts as settled, provided no stale publication arrived.
 
 ```json
 {
@@ -256,7 +259,7 @@ This matters for:
 - Commit is only allowed from a session in `evaluated` or `mutated` state
 - Commit is prohibited on `dirty` sessions because the state may be corrupt
 - Commit is prohibited on `created` sessions because no edits have been applied
-- A timed-out evaluation does not block commit, but the session carries `confidence: "partial"`
+- A timed-out evaluation does not block `commit_session`, but the evaluation carries `confidence: "partial"`. `safe_apply_edit` is stricter; see **Timeout Behavior**
 
 **After commit:**
 
@@ -280,23 +283,24 @@ This matters for:
 | `simulate_edit` | Server rejects `didChange` | Abort; session state unchanged; return error |
 | `evaluate_session` timeout | Diagnostics did not settle | Return snapshot with `confidence: "partial"`, `timeout: true`; session remains usable |
 | `evaluate_session` connection failure | After mutation | Attempt internal revert; mark session `dirty` if revert fails |
-| `commit_session` | Write failure | Return error; session state preserved; retry allowed |
+| `commit_session` | Write failure (or a path outside the workspace) | Return error; session is marked `dirty`, so a retry is rejected; destroy the session and start over |
 | `discard_session` | Revert failure | Mark session `dirty`; error returned; call `destroy_session` to force cleanup |
-| Concurrent mutation detected | Another `didChange` arrived during evaluation | Mark result `confidence: "partial"`; session remains usable; do not retry automatically |
 
 ### Session dirty state
 
 A session becomes `dirty` when:
 
 - An internal revert fails during `discard_session`
-- A connection failure occurs while the session holds mutated state
-- Document version tracking detects a gap (concurrent external mutation)
+- Reading the file, opening the document, or sending `didChange` fails during `simulate_edit`
+- A disk write fails (or a path falls outside the workspace) during `commit_session`, or the server notification after a committed write fails
 
 A dirty session:
 
 - Must not be committed; state may not reflect intended mutations
 - Must be destroyed via `destroy_session` (forced cleanup)
-- Reports `session_dirty: true` on all subsequent operation calls
+- Rejects further `simulate_edit`, `evaluate_session`, and `commit_session` calls with an error
+
+Not implemented: concurrent-mutation detection and version-gap detection. agent-lsp does not watch for external `didChange` traffic during evaluation, and there is no `session_dirty` response field; a dirty session shows up as an error on the next call.
 
 **Guarantee:** the system will not silently continue in a corrupted state. Any unrecoverable failure surfaces immediately.
 
@@ -440,6 +444,8 @@ Position matching uses post-edit coordinates. Baseline diagnostics reflect pre-e
 - `"eventual"`: workspace scope, cross-file propagation may be incomplete
 - `"low"`: a clean result (`net_delta <= 0`) read while the server still had active `$/progress` work (indexing, cache priming, `cargo check`). "No errors" may just mean the analysis had not run yet, so do not treat it as an all-clear. A result that surfaced errors (`net_delta > 0`) is never downgraded — errors do not appear spuriously.
 
+`safe_apply_edit` only writes when the preview is verified: it refuses when `net_delta > 0`, when `timeout` is true, or when `confidence` is `"partial"` or `"low"` (`internal/tools/safe_edit.go`).
+
 Note: `affected_symbols` and `edit_risk_score` were planned fields that were not implemented. The shipped `EvaluationResult` type contains only the fields shown above.
 
 ---
@@ -467,9 +473,9 @@ This is the correct strategy for all cases: pay per touched file, not per sessio
 
 ### What "settled" means
 
-Diagnostics are considered settled when no new `textDocument/publishDiagnostics` notification has arrived for the target file within a quiet window (default: 500ms). The existing `WaitForDiagnostics` implementation handles this.
+For gopls, the baseline is pulled with `textDocument/diagnostic` after the document is opened with its original content (falling back to the push wait below if the pull fails).
 
-A settle timeout (default: 3000ms) caps the wait. If the server has not published anything within the timeout, use whatever is cached, and mark the baseline with `baseline_confidence: "partial"` to flag that the diff may contain false positives.
+For other servers, the baseline is taken after `WaitForDiagnostics` sees no new `textDocument/publishDiagnostics` notification for the target file within a quiet window (500ms). A settle timeout (3000ms) caps the wait. If the wait times out, the cached diagnostics are used as the baseline and the timeout is only logged (`session.baseline_timeout`); the baseline is not marked partial, so a slow server can still produce false positives in `errors_introduced`.
 
 ---
 
@@ -479,6 +485,7 @@ If diagnostics do not settle within the timeout window:
 
 - Return the current diagnostic snapshot (whatever the server has published so far)
 - Set `confidence: "partial"` and `timeout: true` in the response
+- `safe_apply_edit` refuses to write the edit when the preview has `timeout: true` or `confidence` of `"partial"` or `"low"`, since `net_delta: 0` then means nothing was verified. Retry once the server is ready, or use `apply_edit` to write without verification
 - Internal revert still executes; timeout applies only to diagnostic collection, not session cleanup
 - No automatic retry
 
@@ -655,7 +662,7 @@ Version must increment on each change. Tracked per open document on `SimulationS
 
 **1. Isolation model: logical vs physical** ✅ Resolved
 
-Shipped as logical isolation (serialized shared LSP). Constraint is documented. `SessionExecutor` interface is the upgrade seam for per-session LSP instances if workload justifies it.
+Shipped as logical isolation (shared LSP, per-session locking). Constraint is documented. `SessionExecutor` interface is the upgrade seam for per-session LSP instances if workload justifies it.
 
 **2. Workspace evaluation: best-effort or deterministic?** ✅ Resolved
 
@@ -685,7 +692,7 @@ These are intentional deferrals with designed seams for future upgrade, not miss
 
 ### Physical isolation (per-session LSP instances)
 
-**Deferred.** Serialized execution provides correctness. The `SessionExecutor` interface is the upgrade seam; swap `SerializedExecutor` for `IsolatedExecutor` without API changes.
+**Deferred.** Per-session locking on a shared server is correct for sessions that touch different files. The `SessionExecutor` interface is the upgrade seam; swap `SerializedExecutor` for `IsolatedExecutor` without API changes.
 
 **Revisit triggers:**
 - p95 queue wait > 1s
@@ -716,5 +723,5 @@ These are intentional deferrals with designed seams for future upgrade, not miss
 
 ## See also
 
-- [Phase Enforcement](phase-enforcement.md): when speculative execution tools are used within `/lsp-safe-edit` or `/lsp-refactor`, phase enforcement prevents agents from calling `apply_edit` before completing the simulation phase.
+- [Phase Enforcement](phase-enforcement.md): when speculative execution tools are used within `/lsp-safe-edit` or `/lsp-refactor`, phase enforcement blocks `apply_edit` while the workflow is still in its analysis or simulation phase (see that guide for what it does and does not guarantee).
 - [Skills Reference](skills.md): skill workflows that compose speculative execution tools into safe multi-step operations.

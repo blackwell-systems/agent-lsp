@@ -55,7 +55,7 @@ type RenameSymbolArgs struct {
 	Column          int      `json:"column,omitempty" jsonschema:"1-indexed column (character offset) in the line"`
 	NewName         string   `json:"new_name" jsonschema:"New name for the symbol"`
 	PositionPattern string   `json:"position_pattern,omitempty" jsonschema:"Alternative to line/column: use @@pattern@@ syntax to match text near the target position"`
-	DryRun          bool     `json:"dry_run,omitempty" jsonschema:"If true\\, return the edit without applying. Always true for this read-only tool"`
+	DryRun          bool     `json:"dry_run,omitempty" jsonschema:"If true\\, return the edit as a preview without writing it"`
 	ExcludeGlobs    []string `json:"exclude_globs,omitempty" jsonschema:"Glob patterns for files to exclude from rename (e.g. vendor/**\\, *_gen.go)"`
 }
 
@@ -98,7 +98,7 @@ type CallHierarchyArgs struct {
 	LanguageID      string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
 	Line            int    `json:"line" jsonschema:"1-indexed line number in the file"`
 	Column          int    `json:"column" jsonschema:"1-indexed column (character offset) in the line"`
-	Direction       string `json:"direction,omitempty" jsonschema:"Direction: incoming\\, outgoing\\, or both (default: both)"`
+	Direction       string `json:"direction,omitempty" enum:"incoming,outgoing,both" jsonschema:"Direction: incoming\\, outgoing\\, or both (default: both)"`
 	CrossConcurrent bool   `json:"cross_concurrent,omitempty" jsonschema:"If true\\, annotate callers that cross concurrent boundaries (goroutines\\, threads\\, async tasks). Returns concurrent_callers with the detected pattern."`
 }
 
@@ -107,7 +107,7 @@ type TypeHierarchyArgs struct {
 	LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
 	Line       int    `json:"line" jsonschema:"1-indexed line number in the file"`
 	Column     int    `json:"column" jsonschema:"1-indexed column (character offset) in the line"`
-	Direction  string `json:"direction,omitempty" jsonschema:"Direction: incoming\\, outgoing\\, or both (default: both)"`
+	Direction  string `json:"direction,omitempty" enum:"supertypes,subtypes,both" jsonschema:"Direction: supertypes\\, subtypes\\, or both (default: both)"`
 }
 
 func registerNavigationTools(d toolDeps) {
@@ -183,11 +183,11 @@ func registerNavigationTools(d toolDeps) {
 
 	addToolWithPhaseCheck(d, &mcp.Tool{
 		Name:        "rename_symbol",
-		Description: "Rename a symbol across the entire workspace via LSP. Returns a WorkspaceEdit (not applied automatically). Always use dry_run=true first to preview changes. Call find_references before renaming exported symbols to understand blast radius. After applying via apply_edit, call get_diagnostics to verify no errors were introduced.",
+		Description: "Rename a symbol across the entire workspace via LSP and write the edits to disk. Use dry_run=true first to preview the changes without writing them (files, locations, and the edit). Call find_references before renaming exported symbols to understand blast radius. The result reports diagnostics for the renamed file after the edit; call get_diagnostics on other affected files to confirm no errors were introduced.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Rename Symbol",
-			ReadOnlyHint:    true,
-			DestructiveHint: boolPtr(false),
+			ReadOnlyHint:    false,
+			DestructiveHint: boolPtr(true),
 			OpenWorldHint:   boolPtr(false),
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args RenameSymbolArgs) (*mcp.CallToolResult, any, error) {
@@ -230,7 +230,7 @@ func registerNavigationTools(d toolDeps) {
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Refactor",
 			ReadOnlyHint:    false,
-			DestructiveHint: boolPtr(false),
+			DestructiveHint: boolPtr(true),
 			OpenWorldHint:   boolPtr(false),
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args RefactorArgs) (*mcp.CallToolResult, any, error) {

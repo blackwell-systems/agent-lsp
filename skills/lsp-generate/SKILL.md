@@ -3,7 +3,7 @@ name: lsp-generate
 description: Trigger language server code generation — implement interface stubs, generate test skeletons, add missing methods, generate mock types. Uses suggest_fixes to surface generator options and execute_command to run them.
 argument-hint: "[file-path:line:col] [generation-intent]"
 user-invocable: true
-allowed-tools: mcp__lsp__suggest_fixes mcp__lsp__execute_command mcp__lsp__apply_edit mcp__lsp__format_document mcp__lsp__get_diagnostics mcp__lsp__open_document mcp__lsp__get_server_capabilities mcp__lsp__go_to_symbol
+allowed-tools: mcp__agent-lsp__suggest_fixes mcp__agent-lsp__execute_command mcp__agent-lsp__apply_edit mcp__agent-lsp__format_document mcp__agent-lsp__get_diagnostics mcp__agent-lsp__open_document mcp__agent-lsp__get_server_capabilities mcp__agent-lsp__go_to_symbol
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -33,7 +33,7 @@ mocks, implementations of interfaces, test functions. It is distinct from
 ## Prerequisites
 
 LSP must be running for the target workspace. If not yet initialized, call
-`mcp__lsp__start_lsp` with the workspace root before proceeding.
+`mcp__agent-lsp__start_lsp` with the workspace root before proceeding.
 
 Auto-init note: agent-lsp supports workspace auto-inference from file paths.
 Explicit `start_lsp` is only needed when switching workspace roots.
@@ -44,10 +44,10 @@ Explicit `start_lsp` is only needed when switching workspace roots.
 
 ### Step 1 — Open document and locate position
 
-Call `mcp__lsp__open_document` for the target file:
+Call `mcp__agent-lsp__open_document` for the target file:
 
 ```
-mcp__lsp__open_document(file_path: "/abs/path/to/file.go", language_id: "go")
+mcp__agent-lsp__open_document(file_path: "/abs/path/to/file.go", language_id: "go")
 ```
 
 If using `position_pattern`, use the @@ marker convention from
@@ -60,7 +60,7 @@ If using `position_pattern`, use the @@ marker convention from
 ### Step 2 — Get code actions at target position
 
 ```
-mcp__lsp__suggest_fixes({
+mcp__agent-lsp__suggest_fixes({
   "file_path": "...",
   "start_line": N,
   "start_column": C,
@@ -87,15 +87,15 @@ before executing — do NOT auto-select when multiple candidates exist.
 
 Execute one generator at a time. Do NOT batch multiple `execute_command` calls.
 
-- If the action has a `command` field: run via `mcp__lsp__execute_command`
-- If the action has an `edit` field: apply via `mcp__lsp__apply_edit`
+- If the action has a `command` field: run via `mcp__agent-lsp__execute_command`
+- If the action has an `edit` field: apply via `mcp__agent-lsp__apply_edit`
 - If the action has both: apply the edit first, then run the command
 
 ### Step 5 — Format and verify
 
 ```
-mcp__lsp__format_document({ "file_path": "..." })
-mcp__lsp__get_diagnostics({ "file_path": "..." })
+mcp__agent-lsp__format_document({ "file_path": "..." })
+mcp__agent-lsp__get_diagnostics({ "file_path": "..." })
 ```
 
 Report remaining diagnostics. Stub methods typically leave TODO comments or
@@ -125,12 +125,12 @@ workspace may not support server-side generation for this intent. Explain this
 to the user and suggest a manual approach specific to the intent:
 
 - **Interface implementation:** Look up the interface definition first using
-  `mcp__lsp__go_to_symbol` to discover all required methods, then implement
+  `mcp__agent-lsp__go_to_symbol` to discover all required methods, then implement
   them manually.
-- **Test skeleton:** Check `mcp__lsp__get_server_capabilities` to confirm
+- **Test skeleton:** Check `mcp__agent-lsp__get_server_capabilities` to confirm
   whether the server advertises code action support; if not, generate the test
   skeleton manually using standard testing package conventions.
-- **Missing methods:** Use `mcp__lsp__get_diagnostics` to enumerate the missing
+- **Missing methods:** Use `mcp__agent-lsp__get_diagnostics` to enumerate the missing
   symbols by name, then implement them one at a time.
 
 ---

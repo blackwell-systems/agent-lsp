@@ -2,7 +2,7 @@
 
 **MCP server for language intelligence.** Give AI agents structured access to language servers: go-to-definition, find-all-references, rename, diagnostics, completions, call hierarchy, and speculative execution.
 
-67 tools. 23 agent workflows. 30 CI-verified languages. Single Go binary.
+66 tools. 24 agent workflows. 30 CI-verified languages. Single Go binary.
 
 ## Why
 
@@ -31,16 +31,16 @@ agent-lsp
 # Explicit language server
 agent-lsp go:gopls typescript:typescript-language-server,--stdio
 
-# HTTP mode
-agent-lsp --http --port 8080 go:gopls
+# HTTP mode (requires a bearer token)
+AGENT_LSP_TOKEN=your-secret-token agent-lsp --http --port 8080 go:gopls
 ```
 
 Then configure your AI tool's MCP settings to point at agent-lsp.
 
 ## What it does
 
-- **67 tools** covering navigation, analysis, refactoring, diagnostics, formatting, speculative execution, composite exploration, safe editing, build, test, and more
-- **23 agent workflows** (skills) that encode correct multi-step operations: rename safely, analyze blast radius, simulate edits before applying
+- **66 tools** covering navigation, analysis, refactoring, diagnostics, formatting, speculative execution, composite exploration, safe editing, build, test, and more
+- **24 agent workflows** (skills) that encode correct multi-step operations: rename safely, analyze blast radius, simulate edits before applying
 - **30 CI-verified languages**: Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, and more
 - **Speculative execution**: preview edits in memory, see what breaks before touching disk
 - **Phase enforcement**: blocks out-of-order operations so agents follow correct workflows
@@ -57,7 +57,7 @@ Measured across 5 codebases (Go, TypeScript, Python):
 | Next.js (TypeScript) | 196K | 5x |
 | HashiCorp Consul (Go) | 319K | 34x |
 
-Full experiment: [agent-lsp.com/token-savings](https://agent-lsp.com/token-savings)
+Full experiment: [agent-lsp.com/guide/token-savings](https://agent-lsp.com/guide/token-savings/)
 
 ## Works with
 
@@ -67,5 +67,5 @@ Claude Code, Cursor, Windsurf, GitHub Copilot, and any MCP-compatible client.
 
 - [GitHub](https://github.com/blackwell-systems/agent-lsp)
 - [Documentation](https://agent-lsp.com)
-- [Token savings experiment](https://agent-lsp.com/token-savings)
+- [Token savings experiment](https://agent-lsp.com/guide/token-savings/)
 - [Changelog](https://github.com/blackwell-systems/agent-lsp/blob/main/CHANGELOG.md)

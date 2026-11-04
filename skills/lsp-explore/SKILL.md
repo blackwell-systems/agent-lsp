@@ -3,7 +3,7 @@ name: lsp-explore
 description: '"Tell me about this symbol": hover + implementations + call hierarchy + references in one pass — for navigating unfamiliar code.'
 argument-hint: "[symbol-name]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__go_to_symbol mcp__lsp__inspect_symbol mcp__lsp__go_to_implementation mcp__lsp__find_callers mcp__lsp__find_references mcp__lsp__open_document mcp__lsp__get_server_capabilities
+allowed-tools: mcp__agent-lsp__start_lsp mcp__agent-lsp__go_to_symbol mcp__agent-lsp__inspect_symbol mcp__agent-lsp__go_to_implementation mcp__agent-lsp__find_callers mcp__agent-lsp__find_references mcp__agent-lsp__open_document mcp__agent-lsp__get_server_capabilities
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -30,17 +30,17 @@ to scope the search.
 
 ## Prerequisites
 
-If LSP is not yet initialized, call `mcp__lsp__start_lsp` with the workspace
+If LSP is not yet initialized, call `mcp__agent-lsp__start_lsp` with the workspace
 root first. Auto-inference applies when file paths are provided.
 
 ---
 
 ## Phase 1 — Locate the symbol
 
-Call `mcp__lsp__go_to_symbol` with `symbol_path` set to the user-provided name:
+Call `mcp__agent-lsp__go_to_symbol` with `symbol_path` set to the user-provided name:
 
 ```
-mcp__lsp__go_to_symbol({
+mcp__agent-lsp__go_to_symbol({
   "symbol_path": "Package.SymbolName",   // dot notation; e.g. "codec.Encode"
   "workspace_root": "<root>"             // optional
 })
@@ -59,7 +59,7 @@ Stop immediately — do not proceed to Phase 2.
 Then open the file so the language server has it in view:
 
 ```
-mcp__lsp__open_document({
+mcp__agent-lsp__open_document({
   "file_path": "<file from go_to_symbol>"
 })
 ```
@@ -68,10 +68,10 @@ mcp__lsp__open_document({
 
 ## Phase 2 — Hover (always available)
 
-Call `mcp__lsp__inspect_symbol` at the definition location:
+Call `mcp__agent-lsp__inspect_symbol` at the definition location:
 
 ```
-mcp__lsp__inspect_symbol({
+mcp__agent-lsp__inspect_symbol({
   "file_path": "<file from Phase 1>",
   "line": <line from Phase 1>,
   "column": <column from Phase 1>
@@ -85,17 +85,17 @@ Store the result as `hover_text`. If the call fails or returns nothing, set
 
 ## Phase 3 — Implementations (capability-gated)
 
-Call `mcp__lsp__get_server_capabilities` to see what the server supports:
+Call `mcp__agent-lsp__get_server_capabilities` to see what the server supports:
 
 ```
-mcp__lsp__get_server_capabilities()
+mcp__agent-lsp__get_server_capabilities()
 → returns: supported_tools list
 ```
 
 If `go_to_implementation` appears in `supported_tools`, call it:
 
 ```
-mcp__lsp__go_to_implementation({
+mcp__agent-lsp__go_to_implementation({
   "file_path": "<file from Phase 1>",
   "line": <line from Phase 1>,
   "column": <column from Phase 1>
@@ -117,7 +117,7 @@ Issue both calls in the same message — they are independent:
 Only if `find_callers` appears in `supported_tools`:
 
 ```
-mcp__lsp__find_callers({
+mcp__agent-lsp__find_callers({
   "file_path": "<file from Phase 1>",
   "line": <line from Phase 1>,
   "column": <column from Phase 1>,
@@ -132,7 +132,7 @@ If `find_callers` is **not** in `supported_tools`, note
 ### 4b — All reference sites
 
 ```
-mcp__lsp__find_references({
+mcp__agent-lsp__find_references({
   "file_path": "<file from Phase 1>",
   "line": <line from Phase 1>,
   "column": <column from Phase 1>,

@@ -34,7 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # npm-based language servers
 RUN npm install -g \
-    typescript-language-server typescript \
+    typescript-language-server@6.0.3 typescript@6.0.3 \
     pyright \
     intelephense \
     yaml-language-server \

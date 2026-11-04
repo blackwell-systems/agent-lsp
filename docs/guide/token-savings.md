@@ -162,12 +162,12 @@ go run ./experiments/token-savings --root /path/to/python/project --language pyt
 go run ./experiments/token-savings --root /path/to/ts/project/src --language typescript
 
 # Append results to the doc
-go run ./experiments/token-savings --root /path/to/project --output docs/token-savings.md
+go run ./experiments/token-savings --root /path/to/project --output docs/guide/token-savings.md
 ```
 
 Prerequisites: language server on PATH (`gopls`, `pyright-langserver`, or `typescript-language-server`).
 
-Source: [`experiments/token-savings/main.go`](../experiments/token-savings/main.go)
+Source: [`experiments/token-savings/main.go`](../../experiments/token-savings/main.go)
 ### src (196,523 lines, 1201 files)
 
 **Simple tasks**

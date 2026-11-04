@@ -10,6 +10,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
@@ -17,11 +18,14 @@ import (
 // generateFixedSchema generates a JSON Schema for type T and fixes nullable
 // array properties. The returned schema is safe to assign to Tool.InputSchema
 // before calling mcp.AddTool (which skips generation when InputSchema is set).
-// enumFields maps struct field names to their allowed enum values.
+// enumFields maps JSON property names to their allowed enum values.
 // google/jsonschema-go does not support enum via struct tags, so we
-// inject them after schema generation.
+// inject them after schema generation. A field whose values differ between
+// tools declares them with an `enum:"a,b,c"` struct tag instead, which takes
+// precedence: "direction" means incoming/outgoing for call hierarchy but
+// supertypes/subtypes for type hierarchy, and a shared entry here made the
+// schema reject type_hierarchy's own values.
 var enumFields = map[string][]any{
-	"direction":    {"incoming", "outgoing", "both"},
 	"detail_level": {"basic", "hover"},
 	"level":        {"emergency", "alert", "critical", "error", "warning", "notice", "info", "debug"},
 }
@@ -36,8 +40,36 @@ func generateFixedSchema[T any]() *jsonschema.Schema {
 		return nil // fall back to auto-generation
 	}
 	fixNullableArrays(schema)
+	injectTagEnums(schema, rt)
 	injectEnums(schema)
 	return schema
+}
+
+// injectTagEnums sets Enum from `enum:"a,b,c"` struct tags on rt's fields.
+func injectTagEnums(schema *jsonschema.Schema, rt reflect.Type) {
+	if schema == nil || schema.Properties == nil || rt.Kind() != reflect.Struct {
+		return
+	}
+	for i := 0; i < rt.NumField(); i++ {
+		f := rt.Field(i)
+		tag := f.Tag.Get("enum")
+		if tag == "" {
+			continue
+		}
+		name := strings.Split(f.Tag.Get("json"), ",")[0]
+		if name == "" {
+			name = f.Name
+		}
+		prop, ok := schema.Properties[name]
+		if !ok {
+			continue
+		}
+		var vals []any
+		for _, v := range strings.Split(tag, ",") {
+			vals = append(vals, strings.TrimSpace(v))
+		}
+		prop.Enum = vals
+	}
 }
 
 // injectEnums sets the Enum field on schema properties that match enumFields.

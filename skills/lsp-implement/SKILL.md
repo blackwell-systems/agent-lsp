@@ -3,7 +3,7 @@ name: lsp-implement
 description: Find all concrete implementations of an interface or abstract type. Use when you need to know what types satisfy an interface, or what subtypes exist before changing a base type.
 argument-hint: "[interface-or-type-name]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__get_server_capabilities mcp__lsp__go_to_symbol mcp__lsp__go_to_implementation mcp__lsp__type_hierarchy mcp__lsp__open_document
+allowed-tools: mcp__agent-lsp__start_lsp mcp__agent-lsp__get_server_capabilities mcp__agent-lsp__go_to_symbol mcp__agent-lsp__go_to_implementation mcp__agent-lsp__type_hierarchy mcp__agent-lsp__open_document
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -33,7 +33,7 @@ Check server capabilities — `go_to_implementation` and `type_hierarchy` are
 optional features not implemented by all language servers:
 
 ```
-mcp__lsp__get_server_capabilities()
+mcp__agent-lsp__get_server_capabilities()
 ```
 
 Note which of `go_to_implementation` and `type_hierarchy` appear in
@@ -47,7 +47,7 @@ lookup"` and stop.
 ## Step 1 — Locate the interface or type
 
 ```
-mcp__lsp__go_to_symbol({
+mcp__agent-lsp__go_to_symbol({
   "symbol_path": "<TypeName>",
   "workspace_root": "/abs/path"   // optional
 })
@@ -57,7 +57,7 @@ mcp__lsp__go_to_symbol({
 Open the file so the language server tracks it:
 
 ```
-mcp__lsp__open_document({
+mcp__agent-lsp__open_document({
   "file_path": "<file from go_to_symbol>"
 })
 ```
@@ -71,7 +71,7 @@ Record `file`, `line`, `column` for subsequent steps.
 Only if `go_to_implementation` appears in `supported_tools`.
 
 ```
-mcp__lsp__go_to_implementation({
+mcp__agent-lsp__go_to_implementation({
   "file_path": "<file>",
   "line": <line>,
   "column": <column>
@@ -90,7 +90,7 @@ If `go_to_implementation` is **not** supported: skip; note in report.
 Only if `type_hierarchy` appears in `supported_tools`.
 
 ```
-mcp__lsp__type_hierarchy({
+mcp__agent-lsp__type_hierarchy({
   "file_path": "<file>",
   "line": <line>,
   "column": <column>,

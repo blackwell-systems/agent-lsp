@@ -3,7 +3,7 @@ name: lsp-fix-all
 description: Apply available quick-fix code actions for all current diagnostics in a file, one at a time with re-collection between each fix. Use to bulk-resolve errors and warnings the language server can fix automatically.
 argument-hint: "[file-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__get_diagnostics mcp__lsp__suggest_fixes mcp__lsp__apply_edit mcp__lsp__open_document mcp__lsp__format_document
+allowed-tools: mcp__agent-lsp__get_diagnostics mcp__agent-lsp__suggest_fixes mcp__agent-lsp__apply_edit mcp__agent-lsp__open_document mcp__agent-lsp__format_document
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -47,8 +47,8 @@ bulk-fixing of existing issues, independent of any edit session.
 
 ### Step 1 — Open and collect initial diagnostics
 
-Call `mcp__lsp__open_document` with the target file path to ensure it is loaded
-in the language server. Then call `mcp__lsp__get_diagnostics` to retrieve all
+Call `mcp__agent-lsp__open_document` with the target file path to ensure it is loaded
+in the language server. Then call `mcp__agent-lsp__get_diagnostics` to retrieve all
 current diagnostics.
 
 If zero diagnostics are returned: report "No diagnostics found — file is clean."
@@ -60,7 +60,7 @@ Record the initial count of errors and warnings for the summary output.
 
 For EACH diagnostic (process one at a time, not in batch):
 
-1. Call `mcp__lsp__suggest_fixes` at the diagnostic's position/range.
+1. Call `mcp__agent-lsp__suggest_fixes` at the diagnostic's position/range.
 2. Filter the returned actions to quick-fix kind only.
 3. Skip any diagnostic for which no applicable quick-fix exists — note it in the summary.
 
@@ -96,14 +96,14 @@ iteration = 0
 max_iterations = 50
 
 while iteration < max_iterations:
-    diagnostics = mcp__lsp__get_diagnostics(file_path)
+    diagnostics = mcp__agent-lsp__get_diagnostics(file_path)
     if diagnostics is empty: break
 
     for each diagnostic in diagnostics:
-        actions = mcp__lsp__suggest_fixes(diagnostic.range)
+        actions = mcp__agent-lsp__suggest_fixes(diagnostic.range)
         applicable = filter to quickfix / source.organizeImports kinds (see Step 2)
         if applicable is not empty:
-            apply the first applicable action via mcp__lsp__apply_edit
+            apply the first applicable action via mcp__agent-lsp__apply_edit
             record: (line, message, action title) in "Fixed" list
             iteration += 1
             break  # restart the outer loop — line numbers have shifted
@@ -125,10 +125,10 @@ failure in the summary. Do not attempt further fixes.
 
 After the loop exits:
 
-1. Call `mcp__lsp__get_diagnostics` one final time to capture the post-fix state.
+1. Call `mcp__agent-lsp__get_diagnostics` one final time to capture the post-fix state.
 2. For any remaining diagnostics that had no applicable quick-fix, list them in
    the "Skipped" section with explanation.
-3. Call `mcp__lsp__format_document` to clean up any indentation drift introduced
+3. Call `mcp__agent-lsp__format_document` to clean up any indentation drift introduced
    by the applied edits.
 
 ### Output format
@@ -172,7 +172,7 @@ If `apply_edit` failed mid-loop, append:
 ## Prerequisites
 
 LSP must be running for the target workspace. If not yet initialized, call
-`mcp__lsp__start_lsp` with the workspace root before proceeding.
+`mcp__agent-lsp__start_lsp` with the workspace root before proceeding.
 
 Auto-init note: agent-lsp supports workspace auto-inference from file paths.
 Explicit `start_lsp` is only needed when switching workspace roots.

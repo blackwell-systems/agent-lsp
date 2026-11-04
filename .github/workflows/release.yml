@@ -94,7 +94,7 @@ jobs:
             platforms: linux/amd64,linux/arm64
             build_args: |
               LANG=typescript
-              LSP_PACKAGE=typescript-language-server typescript
+              LSP_PACKAGE=typescript-language-server@6.0.3 typescript@6.0.3
               PACKAGE_MGR=npm
               LSP_BINARY=typescript-language-server
           - tag: python
@@ -134,7 +134,7 @@ jobs:
             dockerfile: docker/Dockerfile.combo
             platforms: linux/amd64,linux/arm64
             build_args: |
-              NPM_PACKAGES=typescript-language-server typescript pyright
+              NPM_PACKAGES=typescript-language-server@6.0.3 typescript@6.0.3 pyright
               GO_PACKAGES=
           - tag: backend
             dockerfile: docker/Dockerfile.combo
@@ -146,7 +146,7 @@ jobs:
             dockerfile: docker/Dockerfile.combo
             platforms: linux/amd64,linux/arm64
             build_args: |
-              NPM_PACKAGES=typescript-language-server typescript pyright
+              NPM_PACKAGES=typescript-language-server@6.0.3 typescript@6.0.3 pyright
               GO_PACKAGES=golang.org/x/tools/gopls@latest
           # Full image (Dockerfile.full)
           - tag: full

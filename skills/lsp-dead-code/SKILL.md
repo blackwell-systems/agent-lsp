@@ -3,7 +3,7 @@ name: lsp-dead-code
 description: Enumerate exported symbols in a file and surface those with zero references across the workspace. Use when auditing for dead code, cleaning up APIs, or checking which exports are safe to remove.
 argument-hint: "[file-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__list_symbols mcp__lsp__find_references mcp__lsp__open_document mcp__lsp__safe_delete_symbol
+allowed-tools: mcp__agent-lsp__list_symbols mcp__agent-lsp__find_references mcp__agent-lsp__open_document mcp__agent-lsp__safe_delete_symbol
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -43,11 +43,11 @@ manually before deleting anything. See the Caveats section below.
 
 ## Prerequisites
 
-If LSP is not yet initialized, call `mcp__lsp__start_lsp` with the
+If LSP is not yet initialized, call `mcp__agent-lsp__start_lsp` with the
 workspace root first:
 
 ```
-mcp__lsp__start_lsp({ "root_dir": "/your/workspace" })
+mcp__agent-lsp__start_lsp({ "root_dir": "/your/workspace" })
 ```
 
 agent-lsp supports auto-inference from file paths, so explicit start is
@@ -62,7 +62,7 @@ Pick one symbol you know is actively used (e.g. the primary constructor,
 a widely-called utility function). Call `find_references` on it:
 
 ```
-mcp__lsp__find_references({
+mcp__agent-lsp__find_references({
   "file_path": "/abs/path/to/file.go",
   "line": <known-active symbol line>,
   "column": <known-active symbol column>,
@@ -73,16 +73,16 @@ mcp__lsp__find_references({
 **If this returns `[]`:** the workspace is not indexed. Wait 3–5 seconds
 and retry. Do not proceed until a known-active symbol returns ≥1 reference.
 If it never returns results after 15 seconds, restart the LSP server with
-`mcp__lsp__restart_lsp_server` and re-open the target file.
+`mcp__agent-lsp__restart_lsp_server` and re-open the target file.
 
 ## Step 1 — Open the file and enumerate symbols
 
 Open the file so the language server tracks it, then fetch all symbols:
 
 ```
-mcp__lsp__open_document({ "file_path": "/abs/path/to/file.go" })
+mcp__agent-lsp__open_document({ "file_path": "/abs/path/to/file.go" })
 
-mcp__lsp__list_symbols({ "file_path": "/abs/path/to/file.go" })
+mcp__agent-lsp__list_symbols({ "file_path": "/abs/path/to/file.go" })
 ```
 
 Collect the full symbol list. Filter to **exported symbols only** using the
@@ -112,7 +112,7 @@ For each exported symbol, call `find_references` with
 from the count. A count of 0 means no callers, not no occurrences.
 
 ```
-mcp__lsp__find_references({
+mcp__agent-lsp__find_references({
   "file_path": "/abs/path/to/file.go",
   "line": <selectionRange.start.line>,
   "column": <selectionRange.start.character>,
@@ -216,7 +216,7 @@ After reviewing the dead code report and confirming candidates with the user,
 you may offer to remove confirmed zero-reference symbols using `safe_delete_symbol`:
 
 ```
-mcp__lsp__safe_delete_symbol({
+mcp__agent-lsp__safe_delete_symbol({
   "file_path": "/abs/path/to/file.go",
   "symbol_path": "DeadFunction"
 })

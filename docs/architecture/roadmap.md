@@ -141,8 +141,8 @@ The gap between what clangd provides and what the broader toolchain offers is la
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **`get_editing_context` (composite tool)** | **Shipped** | Single "give me everything I need before editing this file" call. Returns: all symbols with signatures, callers (test/non-test partitioned), callees, imports. Supports `if_none_match` for conditional responses. Shipped as tool #61 in v0.10.0. |
-| **Token savings in responses** | **Shipped** | `list_symbols`, `get_symbol_source`, and `get_editing_context` include `_meta.token_savings` showing tokens returned vs full file size. Shipped in v0.10.0. |
+| **`get_editing_context` (composite tool)** | **Planned, not implemented** | Single "give me everything I need before editing this file" call: all symbols with signatures, callers (test/non-test partitioned), callees, imports, with `if_none_match` for conditional responses. Designed (see the context-efficiency IMPL doc) but never shipped; `explore_symbol` and `blast_radius` cover parts of it today. |
+| **Token savings in responses** | **Shipped** | `list_symbols` and `get_symbol_source` include `_meta.token_savings` showing tokens returned vs full file size. Shipped in v0.10.0. |
 | **ETag/conditional responses** | **Shipped** | File-scoped tools accept `if_none_match` parameter. When content hash matches, returns `not_modified` instead of recomputing. Shipped in v0.10.0. |
 | **Untested symbol filter** | **Shipped** | `filter: "untested"` parameter on `blast_radius`. Returns only exported symbols where `non_test_callers > 0 AND test_callers == 0` (active in production code but no test coverage). Complements `/lsp-dead-code` (zero references) with a coverage gap view (has callers, no tests). |
 

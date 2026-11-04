@@ -3,7 +3,7 @@ name: lsp-test-correlation
 description: Find and run the tests that cover a source file. Use after editing a file to discover exactly which test files and test functions need to run — without running the entire test suite.
 argument-hint: "[file-path] [optional: run=true]"
 user-invocable: true
-allowed-tools: mcp__lsp__get_tests_for_file mcp__lsp__find_symbol mcp__lsp__open_document mcp__lsp__run_tests
+allowed-tools: mcp__agent-lsp__get_tests_for_file mcp__agent-lsp__find_symbol mcp__agent-lsp__open_document mcp__agent-lsp__run_tests
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -38,7 +38,7 @@ scoped test execution.
 Call `get_tests_for_file` for each edited source file:
 
 ```
-mcp__lsp__get_tests_for_file({ "file_path": "/abs/path/to/source.go" })
+mcp__agent-lsp__get_tests_for_file({ "file_path": "/abs/path/to/source.go" })
 ```
 
 Returns the test files that correspond to the source file. For multiple edited
@@ -54,7 +54,7 @@ If `get_tests_for_file` returns test files, use `find_symbol` to list
 the test functions defined in those files:
 
 ```
-mcp__lsp__find_symbol({ "query": "Test" })
+mcp__agent-lsp__find_symbol({ "query": "Test" })
 ```
 
 Filter results to the correlated test files from Step 1. This gives you the
@@ -64,7 +64,7 @@ specific test function names to run rather than the whole test file.
 functions that contain the changed symbol's name:
 
 ```
-mcp__lsp__find_symbol({ "query": "Test<ChangedFunctionName>" })
+mcp__agent-lsp__find_symbol({ "query": "Test<ChangedFunctionName>" })
 ```
 
 This catches cases where `get_tests_for_file` misses indirect coverage.
@@ -94,7 +94,7 @@ Run only the correlated test files or functions. Scope as tightly as possible:
 
 **Go — run specific package:**
 ```
-mcp__lsp__run_tests({ "workspace_dir": "<root>", "test_filter": "TestHandleGetCodeActions|TestHandleGetCompletions" })
+mcp__agent-lsp__run_tests({ "workspace_dir": "<root>", "test_filter": "TestHandleGetCodeActions|TestHandleGetCompletions" })
 ```
 
 If `run_tests` does not support `test_filter`, pass the package path instead of

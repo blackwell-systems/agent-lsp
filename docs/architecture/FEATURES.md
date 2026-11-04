@@ -1,16 +1,16 @@
 # agent-lsp Features Dump
 
-Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. All 67 tools have `ToolAnnotations` (Title, ReadOnlyHint, DestructiveHint, IdempotentHint, OpenWorldHint) and 171+ `jsonschema` struct tags providing parameter semantics in the schema itself.
+Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. All 66 tools have `ToolAnnotations` (every tool sets `Title`, `ReadOnlyHint`, `DestructiveHint`, and `OpenWorldHint`; 7 also set `IdempotentHint`), and 219 `jsonschema` struct tags describe nearly all parameters in the schema itself.
 
 ---
 
-## Tools (66 total, 66 CI-verified)
+## Tools (66 total: 60 core tools, 3 intent aliases, 3 phase-enforcement tools)
 
 ### Session & Lifecycle (8 tools)
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `start_lsp` | Initialize LSP server with workspace root | `root_dir` (string, req), `language_id` (string, opt), `connect` (string, opt), `ready_timeout_seconds` (int, opt) |
+| `start_lsp` | Initialize LSP server with workspace root | `root_dir` (string, req), `language_id` (string, opt), `connect` (string, opt), `ready_timeout_seconds` (number, opt), `scope` (string or array, opt) |
 | `restart_lsp_server` | Restart current LSP server process | `root_dir` (string, opt) |
 | `open_document` | Register file with language server | `file_path` (string, req), `language_id` (string, opt), `text` (string, opt) |
 | `close_document` | Unregister file from language server | `file_path` (string, req) |
@@ -29,33 +29,33 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 
 **`restart_lsp_server` notes:**
 - Requires prior `start_lsp`; returns error if never called
-- All open documents lost after restart; must call `open_document` again
+- Re-opens the documents that were open before the restart (`replayOpenDocuments`), so workspace queries keep working without another `open_document`; readiness state is reset for the fresh server
 
 **`open_document` notes:**
 - Most analysis tools call this internally via `WithDocument` helper
 - Explicit call needed only to pre-warm files or keep open across multiple operations
-- Defaults to `"plaintext"` language_id if omitted
+- `language_id` is auto-detected from the file (`LanguageIDForFile`) when omitted
 
-### Navigation (10 tools)
+### Navigation (11 tools)
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `go_to_definition` | Jump to symbol definition | `file_path` (string, req), `line` (int, req), `column` (int, req), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
+| `go_to_definition` | Jump to symbol definition | `file_path` (string, req), `line` (int, req), `column` (int, req), `position_pattern` (string, opt) |
 | `go_to_type_definition` | Jump to type declaration | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `go_to_implementation` | Find all concrete implementations | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `go_to_declaration` | Jump to symbol declaration | `file_path` (string, req), `line` (int, req), `column` (int, req) |
-| `go_to_symbol` | Navigate by dot-notation symbol name | `symbol_path` (string, req), `workspace_root` (string, req), `language` (string, opt) |
-| `rename_symbol` | Rename symbol across workspace | `file_path` (string, req), `line` (int, req), `column` (int, req), `new_name` (string, req), `dry_run` (bool, opt), `exclude_globs` ([]string, opt), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
+| `go_to_symbol` | Navigate by dot-notation symbol name | `symbol_path` (string, req), `workspace_root` (string, opt), `language` (string, opt) |
+| `rename_symbol` | Rename symbol across workspace and apply the edit | `file_path` (string, req), `line` (int, opt), `column` (int, opt), `new_name` (string, req), `dry_run` (bool, opt), `exclude_globs` ([]string, opt), `position_pattern` (string, opt) |
 | `prepare_rename` | Validate rename at position | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `refactor` | Run a server refactoring at a position, answering its questions (gopls v0.24+ interactive refactorings) | `file_path` (string, req), `line`/`column` or `position_pattern`, `end_line`/`end_column` (int, opt), `action` (string, opt), `answers` (object, opt), `option_queries` (object, opt), `dry_run` (bool, opt) |
 | `get_document_highlights` | Find all local occurrences (file-scoped) | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `find_callers` | Show incoming/outgoing calls | `file_path` (string, req), `line` (int, req), `column` (int, req), `direction` (string, opt: "both", "incoming", "outgoing") |
-| `type_hierarchy` | Show supertypes/subtypes | `file_path` (string, req), `line` (int, req), `column` (int, req), `direction` (string, opt: "both", "supertypes", "subtypes") |
+| `type_hierarchy` | Show supertypes/subtypes | `file_path` (string, req), `line` (int, req), `column` (int, req), `direction` (string, opt: "supertypes", "subtypes", "both"; default "both") |
 
 **`rename_symbol` notes:**
-- `dry_run: true` returns `workspace_edit` preview without applying changes
+- Not read-only: without `dry_run`, the server applies the rename itself (`ApplyWorkspaceEdit`) and returns a text summary (`Renamed to "X" across N location(s) in M file(s)`) plus a post-edit diagnostics hint; no `apply_edit` call is needed
+- `dry_run: true` returns the edit preview (`workspace_edit` plus a `preview` block with file and location counts) as JSON and writes nothing; re-run without `dry_run` to apply rather than passing the preview to `apply_edit`
 - `exclude_globs`: array of glob patterns; matched against both full path and basename using `filepath.Match` syntax; useful for `**/*_gen.go`, `vendor/**`, `testdata/**`
-- Returns `workspace_edit` on both dry-run and live runs; caller passes to `apply_edit` to commit
 
 **`refactor` notes:**
 - Without `action`, lists the `refactor*` code actions at the position; with `action`, runs one (exact title or a unique part of it)
@@ -75,33 +75,32 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Single tool handles `textDocument/prepareTypeHierarchy` + `typeHierarchy/supertypes` + `typeHierarchy/subtypes`
 - Tested on Java (jdtls) and TypeScript; TypeScript skips when server does not return hierarchy item
 
-### Analysis (15 tools)
+### Analysis (14 tools)
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `inspect_symbol` | Hover information at position | `file_path` (string, req), `line` (int, opt), `column` (int, opt), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
+| `inspect_symbol` | Hover information at position | `file_path` (string, req), `line` (int, opt), `column` (int, opt), `position_pattern` (string, opt) |
 | `get_completions` | Code completions at position | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `get_signature_help` | Function signature at cursor | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `suggest_fixes` | Available refactorings/fixes | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req) |
 | `list_symbols` | All symbols in file | `file_path` (string, req), `language_id` (string, opt), `format` (string, opt: "outline") |
-| `find_symbol` | Symbols across workspace | `query` (string, req), `detail_level` (string, opt: "basic", "hover"), `limit` (int, opt), `offset` (int, opt) |
-| `find_references` | All usages of symbol | `file_path` (string, req), `line` (int, opt), `column` (int, opt), `include_declaration` (bool, opt), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
+| `find_symbol` | Symbols across workspace | `query` (string, opt), `detail_level` (string, opt: "basic", "hover"), `limit` (int, opt), `offset` (int, opt) |
+| `find_references` | All usages of symbol | `file_path` (string, req), `line` (int, opt), `column` (int, opt), `include_declaration` (bool, opt), `position_pattern` (string, opt) |
 | `get_inlay_hints` | Type annotations/param labels | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req) |
 | `get_semantic_tokens` | Token type classification | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req) |
-| `get_symbol_source` | Extract source text for symbol | `file_path` (string, req), `line` (int, req), `column` (int, opt), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
+| `get_symbol_source` | Extract source text for symbol | `file_path` (string, req), `line` (int, opt), `column` (int, opt), `position_pattern` (string, opt) |
 | `get_symbol_documentation` | Toolchain docs (go doc, pydoc, cargo doc) | `symbol` (string, req), `language_id` (string, req), `format` (string, opt) |
-| `blast_radius` | Blast-radius analysis | `changed_files` (array, req), `include_transitive` (bool, opt) |
+| `blast_radius` | Blast-radius analysis | `changed_files` (array, req), `include_transitive` (bool, opt), `scope` (string, opt: "exported" default, "all"), `filter` (string, opt: "untested") |
 | `get_cross_repo_references` | Find usages across consumer repos | `symbol_file` (string, req), `line` (int, req), `column` (int, req), `consumer_roots` (array, req), `language_id` (string, opt) |
 | `detect_changes` | Git diff + impact analysis + risk classification | `workspace_root` (string, opt), `scope` (string, opt: "unstaged", "staged", "committed"), `range` (string, opt) |
-| `get_editing_context` | Complete pre-edit context in one call | `file_path` (string, req), `language_id` (string, opt), `if_none_match` (string, opt) |
 
 **`detect_changes` notes:**
 - Runs `git diff --name-only` for the specified scope (default: unstaged)
 - `range` parameter (for "committed" scope only): accepts arbitrary git ranges like `"v0.7.0..HEAD"`, `"abc123..def456"`, or a single ref like `"main"` (expands to `main~1..main`). Ignored for unstaged/staged scopes.
 - Filters to recognized source files (skips plaintext, deleted files)
 - Feeds filtered files to `blast_radius` for symbol-level analysis
-- Enriches each symbol with risk classification: "high" (callers across multiple packages), "medium" (same-package callers only), "low" (zero non-test callers)
-- Returns `changed_files`, `affected_symbols` (with risk), and `scope`
+- In JSON output mode (`AGENT_LSP_OUTPUT_FORMAT=json`), adds a `risk` field to each entry in `changed_symbols`: "high" (callers across multiple packages), "medium" (same-package callers only), "low" (zero non-test callers), and adds `changed_files` and `scope` to the `blast_radius` result
+- In the default GCF output mode, risk classification is skipped and the `blast_radius` graph payload is returned as is
 
 **`suggest_fixes` notes:**
 - `CodeActionContext.diagnostics` auto-populated with overlapping diagnostics from current diagnostic state; enables diagnostic-specific quick fixes; empty array would suppress fixes tied to visible errors
@@ -135,22 +134,15 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - `include_transitive: true` follows one level of transitive callers
 - Errors from per-symbol reference lookups surfaced in `warnings` field (not silently discarded)
 
-**`get_editing_context` notes:**
-- Composite tool: returns file symbols with signatures, callers partitioned by test/non-test, callees, and imports in one call
-- Replaces the 3-5 tool sequence agents previously used to gather pre-edit context (`list_symbols` + `find_references` per symbol + `find_callers`)
-- Supports `if_none_match`: pass an ETag from a previous response; if the file content hash matches, returns `not_modified` without recomputing
-- Includes `_meta.token_savings` showing tokens returned vs full file size (via `AppendTokenMeta`)
-- Handler: `HandleGetEditingContextWithMeta` wraps the core handler with token metadata
-
 **`get_cross_repo_references` notes:**
 - Adds each consumer root as workspace folder via `add_workspace_folder`
 - Waits for indexing, runs `find_references` across all roots
-- Returns: `library_references` (within library), `consumer_references` (map of root → locations), `warnings` (failed roots)
-- Results partitioned by repo root prefix
+- Returns: `symbol`, `references` (flat list of `{file, line, column, repo}`), `summary` (reference and repo counts), and `warnings` (only when a root failed)
+- Each reference is tagged with the repo root whose prefix matches its file
 
 **`find_references` notes:**
 - Timeout: 120s (full workspace indexing window)
-- Waits for `$/progress end` before sending on gopls (via `waitForWorkspaceReady`)
+- Waits for active `$/progress` tokens to end before sending (via `ensureWorkspaceReady` / `waitForWorkspaceReady`, up to 60s); a token that already made an earlier wait time out is not waited on again
 - `include_declaration: false` excludes definition site from count
 
 ### Composite Exploration (1 tool)
@@ -173,13 +165,15 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 **`safe_apply_edit` notes:**
 - Internally calls `preview_edit` then `apply_edit` when safe
 - Returns `applied: true` on success, `applied: false` with preview diagnostics when the edit would introduce errors
+- Refuses to apply when the preview could not verify the edit: the diagnostics wait timed out (`timeout: true`, confidence `partial`) or the server was still indexing (confidence `low`); a `net_delta` of 0 from such a preview is not trusted
+- Applies only the content it previewed: if the file changed on disk after it was read, the write is refused rather than applied to content the preview never saw
+- With gopls, the preview pulls diagnostics (`textDocument/diagnostic`) for the edited version instead of waiting on published ones
 - Agents skip the manual preview-then-apply two-step
 
-### Intent Aliases (4 tools)
+### Intent Aliases (3 tools)
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `blast_radius` | Alias for `blast_radius` | Same as `blast_radius` |
 | `callers` | Find incoming callers (shortcut for `find_callers` with direction=incoming) | Same as `find_callers` |
 | `explore` | Composite symbol exploration (same handler as `explore_symbol`) | Same as `explore_symbol` |
 | `safe_edit` | Preview + apply when safe (same handler as `safe_apply_edit`) | Same as `safe_apply_edit` |
@@ -189,7 +183,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Same handlers and parameters as the underlying tools
 - Registered as separate MCP tools so agents can discover them by intent
 
-### Workspace & Diagnostics (8 tools)
+### Workspace & Diagnostics (9 tools, including `set_log_level`)
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
@@ -264,7 +258,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `simulate_edit` | Apply hypothetical edit to session | `session_id` (string, req), `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req), `new_text` (string, req) |
 | `evaluate_session` | Compute diagnostic delta | `session_id` (string, req), `scope` (string, opt: "file", "workspace"), `timeout_ms` (int, opt) |
 | `simulate_chain` | Apply sequence of edits, evaluate each | `session_id` (string, req), `edits` (array, req), `timeout_ms` (int, opt) |
-| `commit_session` | Materialize edits to disk | `session_id` (string, req), `target` (string, opt), `apply` (bool, opt) |
+| `commit_session` | Materialize edits to disk | `session_id` (string, req), `target` (string, opt; currently ignored), `apply` (bool, opt) |
 | `discard_session` | Revert all session edits | `session_id` (string, req) |
 | `destroy_session` | Cleanup session state | `session_id` (string, req) |
 | `preview_edit` | One-shot speculative edit | `file_path` (string, req), `start_line` (int, req), `start_column` (int, req), `end_line` (int, req), `end_column` (int, req), `new_text` (string, req), `workspace_root` (string, opt), `language` (string, opt), `session_id` (string, opt), `scope` (string, opt), `timeout_ms` (int, opt) |
@@ -289,7 +283,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 **`commit_session` semantics:**
 - Default (`apply: false`): returns `CommitResult{session_id, files_written: 0, patch}` (no disk write); `patch` is `map[string]string` (file URI → full file content)
 - `apply: true`: writes changed files to disk, notifies LSP via `didChange`, returns same `CommitResult` shape with `files_written > 0`
-- `target: "/path"`: writes to target path + returns patch
+- `target` is accepted but currently ignored: `SessionManager.Commit` takes it and never uses it, so files are written only to their own paths (with `apply: true`) and nothing is written to a target directory
 - Prohibited on `dirty` or `created` sessions; valid from `mutated` or `evaluated` state
 
 **`preview_edit` notes:**
@@ -302,15 +296,14 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Returns success with `status: "already_destroyed"` instead of an error when the session does not exist or was already cleaned up
 - Agents calling `destroy_session` after `preview_edit` (which auto-cleans up) no longer see a confusing error
 
-**Total: 67 tools** (64 core + 3 phase enforcement)
-- **CI-verified: 66 across the language matrix**, plus `refactor`, verified end to end against gopls v0.24 in the unit suite (including `set_log_level` verified separately across all 31 languages, and 3 phase enforcement tools verified via mcp-assert)
-- **ToolAnnotations:** All 67 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
-- **jsonschema struct tags:** 171+ tags across all Args structs; 100% parameter description coverage
+**Total: 66 tools** (60 core tools, 3 intent aliases, 3 phase-enforcement tools; 63 non-phase tools)
+- **CI-verified:** every tool except `refactor` across the language matrix (including `set_log_level` verified separately across all 31 languages, and the 3 phase enforcement tools verified via mcp-assert); `refactor` is verified end to end against gopls v0.24 in the unit suite
+- **ToolAnnotations:** All 66 tools set `Title`, `ReadOnlyHint`, `DestructiveHint`, and `OpenWorldHint` (`OpenWorldHint` is false on every tool). `ReadOnlyHint` is true on 37 tools, which MCP clients can auto-approve without human confirmation; `rename_symbol` is not one of them, since it writes unless `dry_run` is set. `DestructiveHint` is true on 10 tools (`apply_edit`, `rename_symbol`, `refactor`, `replace_symbol_body`, `safe_delete_symbol`, `safe_apply_edit`, `safe_edit`, `execute_command`, `did_change_watched_files`, `import_cache`). `IdempotentHint` is set on only 7 tools: true on `start_lsp`, `restart_lsp_server`, `add_workspace_folder`, `remove_workspace_folder`, `set_log_level`, `deactivate_skill`; false on `activate_skill`
+- **jsonschema struct tags:** 219 tags across the Args structs in `cmd/agent-lsp`; nearly all parameters carry a description (the `language_id` fields of `open_document`, `format_document`, and `format_range` do not)
 - **1-indexed coordinates:** All line/column parameters are 1-based (editor convention)
 - **0-based conversion:** `extractRange` helper converts to 0-based for LSP protocol internally
 - **Next-step hints:** Every tool response includes a contextual `hint` field suggesting the logical next tool call. For example, `find_references` hints "use blast_radius to see the full blast radius"; `detect_changes` hints "use blast_radius on specific files for detailed analysis." Helps agents chain tools correctly without skills, and helps less capable models navigate the 66-tool surface. Zero-cost addition: one extra field in the JSON response.
-- **Token savings metadata:** `list_symbols`, `get_symbol_source`, and `get_editing_context` include `_meta.token_savings` in responses, showing tokens returned vs full file size. Makes the efficiency story visible on every call.
-- **ETag/conditional responses:** `get_editing_context`, `list_symbols`, and `get_symbol_source` accept an `if_none_match` parameter. When the file's content hash matches, returns `not_modified` instead of recomputing. Eliminates redundant computation for unchanged files.
+- **Token savings metadata:** `list_symbols` and `get_symbol_source` include `_meta.token_savings` in responses (via `AppendTokenMeta`), showing tokens returned vs full file size.
 - **Position pattern without line/column:** `find_references` and `inspect_symbol` accept `position_pattern` without requiring `line`/`column` (fields are `*int` pointers, omittable). Agents can locate symbols by text pattern alone.
 - **Indexed indicator:** `blast_radius`, `find_references`, and `find_symbol` responses include `indexed: true/false` via `AppendIndexedField`, indicating whether the workspace was fully indexed when results were computed. Agents can decide whether to retry after indexing completes.
 - **Auto-diagnostics after symbol edits:** `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, and `safe_delete_symbol` responses include `errors_after` and `warnings_after` fields with post-edit diagnostic counts. Agents see whether an edit introduced problems without a separate `get_diagnostics` call.
@@ -318,34 +311,36 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 
 ---
 
-## Skills (23 total)
+## Skills (24 total)
+
+Allowed tools below mirror each skill's `allowed-tools` frontmatter (without the MCP server prefix, e.g. `mcp__lsp__`). Four skills (lsp-rename, lsp-refactor, lsp-safe-edit, lsp-verify) also have runtime phase enforcement (see Phase Enforcement).
 
 | Skill | Invocation | Allowed Tools | Description |
 |-------|-----------|---------------|-------------|
 | `/lsp-rename` | `[old-name] [new-name]` | go_to_symbol, prepare_rename, find_references, rename_symbol, apply_edit, get_diagnostics | Two-phase safe rename: prepare_rename safety gate → preview all sites → hard stop for user confirmation → apply atomically |
 | `/lsp-safe-edit` | target file(s) + intent | start_lsp, open_document, get_diagnostics, preview_edit, simulate_chain, suggest_fixes, format_document, apply_edit, Edit, Write, Bash | Speculative before/after diagnostic comparison; surfaces code actions on errors; multi-file aware; Step 3b uses simulate_chain for refactor preview |
 | `/lsp-simulate` | workspace + intent | start_lsp, create_simulation_session, simulate_edit, simulate_chain, evaluate_session, commit_session, discard_session, destroy_session, preview_edit | Full session lifecycle management; decision guide on net_delta; cleanup rule enforced |
-| `/lsp-impact` | `[symbol-name | file-path]` | go_to_symbol, find_callers, type_hierarchy, find_references, get_server_capabilities, blast_radius | Blast-radius analysis; file-level shortcut via blast_radius; symbol-level via Steps 1–5 |
+| `/lsp-impact` | `[symbol-name \| file-path]` | go_to_symbol, find_callers, type_hierarchy, find_references, get_server_capabilities, blast_radius | Blast-radius analysis; file-level shortcut via blast_radius; symbol-level via Steps 1–5 |
 | `/lsp-verify` | workspace_dir + changed_files | get_diagnostics, run_build, run_tests, get_tests_for_file, suggest_fixes, format_document, apply_edit | Three-layer verification: LSP diagnostics + build + tests; test correlation pre-step; code actions on errors |
 | `/lsp-dead-code` | `[file-path]` | list_symbols, find_references, open_document, safe_delete_symbol | Enumerate exported symbols, check each for zero references; Step 0 warm-up sanity check required; cross-check with grep for registration patterns; optional cleanup via safe_delete_symbol |
-| `/lsp-implement` | interface name | go_to_symbol, go_to_implementation, find_references | Find all concrete implementations of an interface before changing it |
-| `/lsp-edit-export` | symbol name | go_to_symbol, find_references, get_diagnostics, run_build, replace_symbol_body | Safe editing of public APIs; finds all callers first; supports replace_symbol_body for full-body edits |
-| `/lsp-edit-symbol` | symbol name + intent | find_symbol, list_symbols, apply_edit, replace_symbol_body | Edit named symbol without knowing file or position; primary path via replace_symbol_body |
-| `/lsp-docs` | symbol name | go_to_symbol, inspect_symbol, get_symbol_documentation, get_symbol_source | Three-tier documentation: hover → offline toolchain (go doc/pydoc/cargo doc) → source |
-| `/lsp-cross-repo` | symbol + consumer-roots | start_lsp, find_symbol, get_cross_repo_references, add_workspace_folder, list_workspace_folders, go_to_implementation, find_callers, inspect_symbol | Multi-root cross-repo caller analysis; results partitioned by repo |
+| `/lsp-implement` | `[interface-or-type-name]` | start_lsp, get_server_capabilities, go_to_symbol, go_to_implementation, type_hierarchy, open_document | Find all concrete implementations of an interface before changing it |
+| `/lsp-edit-export` | symbol name | go_to_symbol, open_document, find_references, get_diagnostics, run_build, replace_symbol_body, Edit, Write | Safe editing of public APIs; finds all callers first; supports replace_symbol_body for full-body edits |
+| `/lsp-edit-symbol` | `[symbol-name] [new-body-or-signature]` | find_symbol, list_symbols, apply_edit, replace_symbol_body | Edit named symbol without knowing file or position; primary path via replace_symbol_body |
+| `/lsp-docs` | symbol name | inspect_symbol, get_symbol_documentation, go_to_definition, get_symbol_source | Three-tier documentation: hover → offline toolchain (go doc/pydoc/cargo doc) → source |
+| `/lsp-cross-repo` | `[symbol-name] in [library-file:line:col] used by [consumer-root ...]` | start_lsp, find_symbol, get_cross_repo_references, add_workspace_folder, list_workspace_folders, go_to_implementation, find_callers, inspect_symbol | Multi-root cross-repo caller analysis; results partitioned by repo |
 | `/lsp-explore` | `[symbol-name]` | start_lsp, go_to_symbol, inspect_symbol, go_to_implementation, find_callers, find_references, open_document, get_server_capabilities | hover + implementations + call hierarchy + references in one pass; capability-gated steps; produces Explore Report |
-| `/lsp-local-symbols` | `[file-path]` | list_symbols, find_references, inspect_symbol | File-scoped symbol list, usages within file, type info; faster than workspace search |
-| `/lsp-test-correlation` | `[source-file]` | get_tests_for_file, run_tests | Find and run only tests covering an edited file |
-| `/lsp-format-code` | `[file-path]` | format_document, format_range, apply_edit | Format file or selection via language server formatter; applies edits to disk |
+| `/lsp-local-symbols` | `[symbol-name] in [file-path]` | open_document, list_symbols, inspect_symbol, get_document_highlights | File-scoped symbol list, usages within file, type info; faster than workspace search |
+| `/lsp-test-correlation` | `[file-path] [optional: run=true]` | get_tests_for_file, find_symbol, open_document, run_tests | Find and run only tests covering an edited file |
+| `/lsp-format-code` | `[file-path] [optional: start_line-end_line]` | open_document, format_document, format_range, apply_edit, get_diagnostics, get_server_capabilities | Format file or selection via language server formatter; applies edits to disk |
 | `/lsp-fix-all` | `[file-path]` | get_diagnostics, suggest_fixes, apply_edit, open_document, format_document | Sequential quick-fix loop: collect diagnostics → apply one fix → re-collect; quick-fix kind only; never batches |
-| `/lsp-refactor` | `[symbol-or-file] [intent]` | blast_radius, preview_edit, simulate_chain, get_diagnostics, run_build, run_tests, get_tests_for_file, apply_edit, replace_symbol_body, format_document | End-to-end refactor: blast-radius, speculative preview, apply, build verify, affected tests; supports replace_symbol_body for full-body edits |
-| `/lsp-extract-function` | `[file-path] [start-line] [end-line] [name]` | list_symbols, suggest_fixes, execute_command, apply_edit, get_diagnostics, format_document | Extract code block into named function; LSP code action primary, manual fallback with captured-variable analysis |
-| `/lsp-generate` | `[file-path:line:col] [intent]` | suggest_fixes, execute_command, apply_edit, format_document, get_diagnostics, go_to_symbol | Language server code generation: interface stubs, test skeletons, missing methods, mocks |
-| `/lsp-understand` | `[symbol-name \| file-path]` | inspect_symbol, go_to_implementation, find_callers, find_references, get_symbol_source, list_symbols, go_to_symbol | Deep Code Map: type info + implementations + call hierarchy (2-level) + references + source; synthesizes cross-symbol relationships |
-| `/lsp-inspect` | `<file-or-directory> [--checks <types>] [--json] [--top N] [--diff]` | blast_radius, find_references, list_symbols, inspect_symbol, get_diagnostics, find_callers, go_to_definition, get_server_capabilities | Full code quality audit (12 check types): dead symbols, test coverage, silent failures, error wrapping, doc drift, panics, context propagation, unrecovered concurrent entry, unchecked shared state, channel never closed, shared field without sync; batch mode with --top ranking; comparison mode with --diff; blast-radius severity calibration; fix suggestions; confidence tiers (verified/suspected/advisory); result persistence via inspect://last resource |
+| `/lsp-refactor` | `[symbol-or-file] [intent]` | blast_radius, preview_edit, simulate_chain, get_diagnostics, run_build, run_tests, get_tests_for_file, apply_edit, refactor, replace_symbol_body, open_document, format_document, Edit, Write | End-to-end refactor: blast-radius, speculative preview, apply, build verify, affected tests; supports replace_symbol_body for full-body edits |
+| `/lsp-extract-function` | `[file-path] [start-line] [end-line] [new-function-name]` | list_symbols, suggest_fixes, execute_command, apply_edit, get_diagnostics, open_document, format_document, get_server_capabilities | Extract code block into named function; LSP code action primary, manual fallback with captured-variable analysis |
+| `/lsp-generate` | `[file-path:line:col] [generation-intent]` | suggest_fixes, execute_command, apply_edit, format_document, get_diagnostics, open_document, get_server_capabilities, go_to_symbol | Language server code generation: interface stubs, test skeletons, missing methods, mocks |
+| `/lsp-understand` | `[symbol-name \| file-path]` | inspect_symbol, go_to_implementation, find_callers, find_references, get_symbol_source, list_symbols, open_document, go_to_symbol, get_server_capabilities | Deep Code Map: type info + implementations + call hierarchy (2-level) + references + source; synthesizes cross-symbol relationships |
+| `/lsp-inspect` | `<file-or-directory> [--checks <type1>,<type2>] [--json] [--top N] [--diff]` | start_lsp, open_document, blast_radius, find_references, list_symbols, inspect_symbol, get_diagnostics, find_callers, go_to_definition, get_server_capabilities, get_cross_repo_references, Bash | Full code quality audit (12 check types): dead symbols, test coverage, silent failures, error wrapping, doc drift, panics, context propagation, unrecovered concurrent entry, unchecked shared state, channel never closed, shared field without sync; batch mode with --top ranking; comparison mode with --diff; blast-radius severity calibration; fix suggestions; confidence tiers (verified/suspected/advisory); result persistence via inspect://last resource |
 | `/lsp-architecture` | `[workspace-root-path]` | start_lsp, list_symbols, blast_radius, detect_lsp_servers, find_symbol | Project-level architecture overview: language distribution, package map (capped at 30), entry points, hotspots (top 10 by reference count), dependency flow. Read-only. |
-| `/lsp-onboard` | `[workspace-root-path]` | start_lsp, detect_lsp_servers, list_symbols, find_symbol, blast_radius, run_build, run_tests, get_diagnostics, get_editing_context | First-session project onboarding: detect languages, build system, entry points, package map, hotspots, diagnostics baseline. Produces a structured project profile. |
-| `/lsp-concurrency-audit` | `[type-name]` | find_callers, blast_radius, list_symbols, inspect_symbol, find_references | Field-level concurrency safety audit: maps all fields on a type, traces concurrent access via find_callers(cross_concurrent) + blast_radius(sync_guarded), classifies each field as SAFE/UNSAFE/WRITE-CONCURRENT/READ-ONLY. Language-agnostic across 4 concurrency families. |
+| `/lsp-onboard` | `[workspace-root-path]` | start_lsp, detect_lsp_servers, list_symbols, find_symbol, blast_radius, run_build, run_tests, get_diagnostics | First-session project onboarding: detect languages, build system, entry points, package map, hotspots, diagnostics baseline. Produces a structured project profile. |
+| `/lsp-concurrency-audit` | `<file-path> [--type <TypeName>]` | start_lsp, open_document, blast_radius, find_callers, list_symbols, get_symbol_source, find_references | Field-level concurrency safety audit: maps the fields of the types in a file (or one type with `--type`), traces concurrent access via find_callers(cross_concurrent) + blast_radius(sync_guarded), classifies each field as SAFE/UNSAFE/WRITE-CONCURRENT/READ-ONLY. Language-agnostic across 4 concurrency families. |
 
 **User-facing reference:** `docs/skills.md` (one-page skill catalog with usage examples and trigger conditions)
 
@@ -371,21 +366,24 @@ metadata:
 # skill body (prompt for agent)
 ```
 
-**Capability metadata:** All 24 skills declare `required-capabilities` and `optional-capabilities` in frontmatter. Maps directly to LSP server capability keys from `get_server_capabilities`. Agents can check before activation whether the current language server supports the skill's requirements. Skills with zero required capabilities (lsp-safe-edit, lsp-simulate, lsp-verify, lsp-test-correlation) work with any language server.
+**Capability metadata:** Skills declare `required-capabilities` and `optional-capabilities` under `metadata` in frontmatter, mapping directly to LSP server capability keys from `get_server_capabilities`, so agents can check before activation whether the current language server supports a skill. Coverage is uneven: `lsp-simulate` has empty metadata (`metadata: {}`); `lsp-dead-code`, `lsp-edit-symbol`, and `lsp-rename` declare only required capabilities; `lsp-safe-edit`, `lsp-verify`, and `lsp-test-correlation` declare only optional ones. Skills with zero required capabilities (lsp-safe-edit, lsp-simulate, lsp-verify, lsp-test-correlation) work with any language server.
 
 **Runtime skill classification:** `get_server_capabilities` now includes a `skills` array in its response, classifying every skill as `supported` (all required capabilities present), `partial` (required present, some optional missing), or `unsupported` (missing required capabilities). One call at session start tells the agent exactly which skills to use and which to skip.
 
 | Capability | Skills that require it | Skills that optionally use it |
 |---|---|---|
-| `referencesProvider` | lsp-rename, lsp-impact, lsp-dead-code, lsp-edit-export, lsp-cross-repo, lsp-refactor | lsp-explore, lsp-understand |
-| `codeActionProvider` | lsp-fix-all, lsp-extract-function, lsp-generate | lsp-safe-edit, lsp-verify |
-| `workspaceSymbolProvider` | lsp-rename, lsp-edit-symbol | lsp-impact, lsp-implement, lsp-cross-repo, lsp-generate, lsp-understand, lsp-test-correlation, lsp-edit-export |
+| `referencesProvider` | lsp-concurrency-audit, lsp-cross-repo, lsp-dead-code, lsp-edit-export, lsp-impact, lsp-inspect, lsp-refactor, lsp-rename | lsp-architecture, lsp-explore, lsp-onboard, lsp-understand |
+| `documentSymbolProvider` | lsp-architecture, lsp-concurrency-audit, lsp-dead-code, lsp-inspect, lsp-local-symbols, lsp-onboard | lsp-extract-function, lsp-understand |
+| `codeActionProvider` | lsp-extract-function, lsp-fix-all, lsp-generate | lsp-safe-edit, lsp-verify |
+| `workspaceSymbolProvider` | lsp-edit-symbol, lsp-rename | lsp-architecture, lsp-cross-repo, lsp-edit-export, lsp-generate, lsp-impact, lsp-implement, lsp-test-correlation, lsp-understand |
 | `hoverProvider` | lsp-docs, lsp-explore, lsp-understand | lsp-local-symbols |
-| `documentSymbolProvider` | lsp-dead-code, lsp-local-symbols | lsp-extract-function, lsp-understand |
 | `implementationProvider` | lsp-implement | lsp-cross-repo, lsp-explore, lsp-understand |
-| `documentFormattingProvider` | lsp-format-code | lsp-safe-edit, lsp-verify, lsp-fix-all, lsp-refactor, lsp-extract-function, lsp-generate |
+| `documentFormattingProvider` | lsp-format-code | lsp-extract-function, lsp-fix-all, lsp-generate, lsp-refactor, lsp-safe-edit, lsp-verify |
+| `documentRangeFormattingProvider` | (none) | lsp-format-code |
 | `renameProvider` | lsp-rename | (none) |
-| `callHierarchyProvider` | (none) | lsp-impact, lsp-cross-repo, lsp-explore, lsp-understand |
+| `definitionProvider` | (none) | lsp-docs |
+| `documentHighlightProvider` | (none) | lsp-local-symbols |
+| `callHierarchyProvider` | (none) | lsp-concurrency-audit, lsp-cross-repo, lsp-explore, lsp-impact, lsp-inspect, lsp-onboard, lsp-understand |
 | `typeHierarchyProvider` | (none) | lsp-impact, lsp-implement |
 
 **Provider-agnostic:** Skills conform to the AgentSkills open standard and work with any conforming agent (Claude Code, Cursor, GitHub Copilot, Gemini CLI, OpenAI Codex, JetBrains Junie, and 30+ others). The `--dest` flag on `install.sh` installs to any agent's skill directory. The installer updates CLAUDE.md, AGENTS.md (Codex), and GEMINI.md instruction files when present.
@@ -415,7 +413,7 @@ metadata:
 **`/lsp-rename` phase structure:**
 1. Phase 1 (preview): go_to_symbol → prepare_rename → find_references → rename_symbol(dry_run=true) → hard stop (must confirm)
 2. Edge case: 0 references → warning + confirmation required
-3. Phase 2 (execute): capture pre-rename diagnostics → rename_symbol → apply_edit → post-rename diagnostics diff
+3. Phase 2 (execute): capture pre-rename diagnostics → rename_symbol without dry_run (applies the edit itself; no apply_edit) → post-rename diagnostics diff
 
 **`/lsp-safe-edit` step structure:**
 1. open_document for each target file
@@ -483,7 +481,7 @@ warnings: [roots that failed indexing]
 
 | Language | Server Binary | CI Status | Notes |
 |----------|---------------|-----------|-------|
-| TypeScript | `typescript-language-server` | passing | `npm i -g typescript-language-server typescript` |
+| TypeScript | `typescript-language-server` | passing | `npm i -g typescript-language-server typescript@6` |
 | Python | `pyright-langserver` | passing | `npm i -g pyright`; **daemon mode**: persistent broker for large repos (validated on FastAPI, 1,119 files) |
 | Go | `gopls` | passing | `go install golang.org/x/tools/gopls@latest` |
 | Rust | `rust-analyzer` | passing | `rustup component add rust-analyzer` |
@@ -612,7 +610,7 @@ warnings: [roots that failed indexing]
 
 - **Lifecycle:** `initialize` → `initialized` → `shutdown` fully implemented; graceful async shutdown via SIGINT/SIGTERM; subprocess never orphaned
 - **Initialize timeout:** 300s to accommodate JVM servers (jdtls cold-start 60–90s)
-- **Progress:** `$/progress` begin/report/end + `window/workDoneProgress/create`; token pre-registered before response; `waitForWorkspaceReady` blocks references until all progress tokens complete
+- **Progress:** `$/progress` begin/report/end + `window/workDoneProgress/create`; token pre-registered before response; `waitForWorkspaceReady` blocks queries until active progress tokens complete (up to 60s), skipping tokens that already made an earlier wait time out; the server's first progress `begin` clears a "loaded" mark set by a wait that ran before indexing started; restart resets readiness
 - **Server-initiated:** `workspace/configuration` (null×items), `client/registerCapability` (null), `window/workDoneProgress/create` (null) all handled; unrecognized requests get null to unblock server
 - **Capability check:** server capabilities checked before sending requests; unsupported features skipped rather than sent to fail silently
 - **Message framing:** Content-Length with UTF-8 byte counts (not character counts), `\r\n\r\n` delimiter; buffer overflow >10MB discards entire buffer
@@ -726,6 +724,7 @@ type SimulationSession struct {
 **`confidence` values:**
 - `"high"` — single-file, diagnostics settled within timeout
 - `"partial"` — timed out, returned snapshot may be incomplete
+- `"low"`: clean result (`net_delta <= 0`) while the server still has active `$/progress` work, so "no errors" may only mean the edit was not analysed yet
 - `"eventual"` — workspace scope, cross-file propagation may be incomplete
 
 **Not shipped:** `affected_symbols` and `edit_risk_score` (planned, never implemented)
@@ -1145,14 +1144,18 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Luau, Elixir, Clojure, Zig, Haskell, S
 ### Package Structure
 
 **cmd/agent-lsp:**
-- `main.go` — CLI entrypoint; argument parsing; signal handling; panic recovery via `runWithRecovery`; `--version` flag; `LOG_LEVEL` env; `--http`/`--port` flags for HTTP+SSE transport
+- `main.go` — CLI entrypoint; argument parsing; signal handling; panic recovery via `runWithRecovery`; `--version` flag; `LOG_LEVEL` env; `--http`/`--port`/`--listen-addr`/`--no-auth` flags for Streamable HTTP transport
 - `version.go` — `var Version = "dev"`; set at build time via `-ldflags="-X main.Version=x.y.z"` by GoReleaser
 - `server.go` — MCP server construction; `toolDeps` struct; `mcpSessionSender`; `InitializedHandler` wires logging bridge; `csResolver` wrapper; HTTP server setup with `/health` endpoint
 - `doctor.go` — `agent-lsp doctor` subcommand; probes each configured language server, reports version + supported capabilities, exits 1 on failure
-- `tools_navigation.go` — 10 navigation tools
-- `tools_analysis.go` — 14 analysis tools (includes `detect_changes`)
+- `tools_navigation.go` — 11 navigation tools (includes `refactor`)
+- `tools_analysis.go` — 14 analysis tools (includes `blast_radius`, `detect_changes`)
 - `tools_workspace.go` — 21 workspace/lifecycle tools (includes `set_log_level`, `export_cache`, `import_cache`)
 - `tools_session.go` — 8 simulation/session tools
+- `tools_symbol_edit.go`: 4 symbol-level editing tools
+- `tools_explore.go`: `explore_symbol`
+- `tools_safe_edit.go`: `safe_apply_edit`
+- `tools_aliases.go`: 3 intent aliases (`callers`, `explore`, `safe_edit`)
 - `tools_phase.go` — 3 phase enforcement tools; `checkPhasePermission` helper
 
 **internal/phase:**
@@ -1172,7 +1175,8 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Luau, Elixir, Clojure, Zig, Haskell, S
 - `manager.go` — `ServerManager`: multi-server registry, `ClientForFile` routing by extension (linear scan, first match wins, fallback to `entries[0]`)
 - `resolver.go` — `ClientResolver` interface: `ClientForFile`, `DefaultClient`, `AllClients`, `Shutdown`
 - `framing.go` — Content-Length framing (`FrameReader`/`FrameWriter`)
-- `diagnostics.go` — `WaitForDiagnostics`: 500ms stabilization window; empty URIs slice resolves immediately
+- `diagnostics.go` — `DiagnosticsMark`/`MarkDiagnostics` and `WaitForDiagnosticsSettled` (diagnostics must cover the marked document version, then a 500ms quiet window; reports `settled`); `WaitForDiagnostics` wraps it; empty URIs slice resolves immediately
+- `interactive.go`: client side of interactive refactorings (`command/resolve`, `interactive/listEnum`) used by the `refactor` tool
 - `normalize.go` — `NormalizeDocumentSymbols`, `NormalizeCompletion`, `NormalizeCodeActions`
 
 **internal/session:**
@@ -1181,8 +1185,12 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Luau, Elixir, Clojure, Zig, Haskell, S
 - `executor.go` — `SerializedExecutor`: per-session `chan struct{}` in `map[string]chan struct{}`; `SessionExecutor` interface
 - `differ.go` — `DiffDiagnostics`: O(n+m) fingerprint-keyed counter map
 
-**internal/tools (27 files):**
-`helpers.go`, `analysis.go`, `navigation.go`, `callhierarchy.go`, `typehierarchy.go`, `inlayhints.go`, `highlights.go`, `semantic_tokens.go`, `capabilities.go`, `detect.go`, `documentation.go`, `symbol_source.go`, `symbol_path.go`, `simulation.go`, `build.go`, `change_impact.go`, `cross_repo.go`, `detect_changes.go`, `cache_artifact.go`, `workspace_folders.go`, `utilities.go`, `fuzzy.go`, `position_pattern.go`, `runner.go`, `workspace.go` (rename_symbol, prepare_rename, format_document, format_range, apply_edit, execute_command), `session.go`, `doc.go`
+**internal/tools (34 files):**
+`helpers.go`, `analysis.go`, `navigation.go`, `callhierarchy.go`, `typehierarchy.go`, `inlayhints.go`, `highlights.go`, `semantic_tokens.go`, `capabilities.go`, `detect.go`, `documentation.go`, `symbol_source.go`, `symbol_path.go`, `symbol_edit.go`, `simulation.go`, `build.go`, `change_impact.go`, `cross_repo.go`, `detect_changes.go`, `cache_artifact.go`, `workspace_folders.go`, `utilities.go` (did_change_watched_files, set_log_level), `fuzzy.go`, `position_pattern.go`, `runner.go`, `workspace.go` (rename_symbol, prepare_rename, format_document, format_range, apply_edit, execute_command), `refactor.go` (`HandleRefactor`), `safe_edit.go` (`HandleSafeApplyEdit`), `explore.go` (`HandleExploreSymbol`), `indexed.go` (`AppendIndexedField`), `index_coverage.go` (bounded filesystem probe behind the indexed indicator), `token_savings.go` (`AppendTokenMeta`), `session.go`, `doc.go`
+
+**internal/encoding/gcf:**
+- `encode.go`: `Encode`: structured data to GCF tabular text (default output format; `AGENT_LSP_OUTPUT_FORMAT=json` switches to JSON)
+- `graph.go`: `BuildGraphPayload`, `EncodeGraph`, `MapSymbolKind`, `QualifiedName` for graph-shaped results (`blast_radius`)
 
 **internal/resources:**
 - `resources.go` — `HandleDiagnosticsResource`, `HandleHoverResource`, `HandleCompletionsResource`; three resource templates
@@ -1221,15 +1229,15 @@ Rust, Java, C#, Kotlin, Dart, Scala, Lua, Luau, Elixir, Clojure, Zig, Haskell, S
 - **Persistent session:** LSP subprocess stays warm across all requests
 - **Multi-server routing:** single process routes by file extension/language ID; `ClientForFile` linear scan, first match wins
 - **Auto-init:** `clientForFileWithAutoInit` — if no `start_lsp` called, walks up from file path to find workspace root and starts automatically
-- **Auto-watch:** fsnotify, always-on, 150ms debounce; exclusions: `.git`, `node_modules`, `target`, `build`, `dist`, `vendor`, `__pycache__`, `.venv`, `venv`, dot-prefixed dirs; `addWatcherRoot` for `add_workspace_folder` (adds to live watcher, does not restart)
+- **Auto-watch:** fsnotify (kqueue on macOS; FSEvents would need cgo), on by default (`AGENT_LSP_DISABLE_WATCHER` turns it off), 150ms debounce timer that signals the event loop, which runs the flush; skips `watcherSkipDirs` (`.git`, `node_modules`, `target`, `build`, `dist`, `vendor`, `__pycache__`, `.venv`, `venv`, `.next`, `.cache`, `.idea`, `.vscode`) and dot-prefixed dirs; startup walk capped by `loadWatcherLimits` (`AGENT_LSP_WATCH_MAX_DIR_ENTRIES`, default 2048 per directory; `AGENT_LSP_WATCH_MAX_ENTRIES`, default 50000 total); runtime fd guard tears the watcher down above `AGENT_LSP_WATCH_MAX_FDS` (default 60000) open fds; `addWatcherRoot` for `add_workspace_folder` (adds to live watcher, does not restart)
 - **`stopWatcher`:** closes stop channel, triggers final flush before goroutine exits; called during `Shutdown` and at start of each `startWatcher` on reinit
 - **Speculative execution:** isolated in-memory session layer on top of LSP
 - **Serialized concurrency:** sessions logically isolated, physically serialized per-server via per-session `chan struct{}`
-- **Progress protocol:** `waitForWorkspaceReady` uses `sync.Cond` (not polling); `handleProgress` broadcasts when `progressTokens` becomes empty; 60s deadline timer goroutine prevents indefinite block
+- **Progress protocol:** `waitForWorkspaceReady` calls `waitForProgress(skipStale=true)`, which waits on a `sync.Cond` (not polling); `handleProgress` broadcasts when no non-stale tokens remain; a 60s deadline timer goroutine prevents an indefinite block, and tokens still active when a wait times out go into `staleProgress` so later waits do not block on them again (a new `begin` or `end` for the token clears it); the first progress `begin` from the server resets `workspaceLoaded`, undoing a wait that finished before indexing started; restart clears tokens, `staleProgress`, and `workspaceLoaded`; `WaitForWorkspaceReadyTimeout` (long waits such as `ready_timeout_seconds`) waits on every token, stale or not
 - **Server-initiated requests:** all three types gopls sends handled
 - **Normalization layer:** `normalize.go` centralizes polymorphic response handling
 - **Fuzzy matching:** workspace symbol lookup with `position_pattern` fallback
-- **LineScope:** `line_scope_start`/`line_scope_end` parameters restrict `position_pattern` matching to a line range; eliminates false matches when the same token appears multiple times in a file
+- **LineScope:** `position_pattern.go` can restrict `position_pattern` matching to a line range (`line_scope_start`/`line_scope_end`), but no MCP tool's Args struct exposes these fields, so agents cannot pass them today
 - **1-based coordinates:** all line/column inputs 1-indexed; `WithDocument` converts to 0-based for LSP
 - **Static binary:** `CGO_ENABLED=0`, no runtime dependency
 - **GOWORK stripping:** subprocess environment has `GOWORK` stripped via `removeEnv` to prevent gopls from loading wrong workspace
@@ -1282,12 +1290,12 @@ MCP client receives JSON-RPC response
 
 ### WaitForDiagnostics
 
-Resolves when:
-1. All target URIs received ≥1 diagnostic notification *after* initial snapshot
-2. No further notifications for 500ms (stabilization window)
-3. OR `timeoutMs` exceeded
+`WaitForDiagnosticsSettled(ctx, client, uris, marks, timeoutMs)` resolves when:
+1. Every target URI has diagnostics that cover its `DiagnosticsMark` (taken with `MarkDiagnostics` before the edit was sent): a publication for at least the marked document version when the server reports versions, otherwise any publication after the mark (a URI without a mark needs a publication during the wait)
+2. No further notifications for 500ms (quiet window)
+3. OR `timeoutMs` exceeded: the wait returns `settled=false` if a publication for an older version arrived, or if the server is known to publish for every version (gopls) and stayed silent; for servers that publish nothing when diagnostics are unchanged (typescript-language-server, rust-analyzer, Dart), silence until the deadline counts as settled
 
-Empty `targetURIs` slice → resolves immediately.
+`WaitForDiagnostics` wraps it without marks and ignores `settled`. Empty `uris` slice resolves immediately. Speculative evaluation (`evaluate_session`, `preview_edit`, `safe_apply_edit`) pulls diagnostics (`textDocument/diagnostic`) instead for servers whose pull answer is final for the current version (gopls), and falls back to the marked push wait if a pull fails; an unsettled wait is reported as a timeout (`timeout: true`, confidence `partial`).
 
 ### Extension System
 
@@ -1312,7 +1320,7 @@ type Extension interface {
 
 ### Layer Rules
 
-- `cmd/agent-lsp/` owns MCP server lifecycle; routes via five tool registration files
+- `cmd/agent-lsp/` owns MCP server lifecycle; routes via nine `tools_*.go` registration files
 - `internal/tools/` + `internal/resources/` import from `internal/lsp/`, `internal/session/`, `internal/types/` — not from each other
 - `internal/lsp/` imports: `internal/types/`, `internal/logging/`, `internal/uri/` — no upward deps
 - `internal/session/` imports: `internal/lsp/`, `internal/types/`, `internal/logging/`, `internal/uri/`
@@ -1330,7 +1338,7 @@ type Extension interface {
 | `agent-lsp <lang> <server>` | Start MCP server (legacy single-server mode, stdio) |
 | `agent-lsp --config /path/to/agent-lsp.json` | Start MCP server from JSON config |
 | `agent-lsp` | Start MCP server with auto-detected language servers |
-| `agent-lsp --http [--port N] <lang:server...>` | Start MCP server over HTTP+SSE |
+| `agent-lsp --http [--port N] <lang:server...>` | Start MCP server over Streamable HTTP |
 | `agent-lsp doctor` | Probe each configured language server; report version + capabilities; exit 1 on failure |
 | `agent-lsp init` | Interactive setup wizard |
 | `agent-lsp init --non-interactive` | CI/scripted setup |
@@ -1345,11 +1353,13 @@ type Extension interface {
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--http` | off | Enable HTTP+SSE transport instead of stdio |
+| `--http` | off | Enable Streamable HTTP transport (`mcp.NewStreamableHTTPHandler`) instead of stdio |
 | `--port N` | `8080` | TCP port to listen on (1–65535) |
-| `AGENT_LSP_TOKEN` (env) | — | Bearer token for auth; empty = unauthenticated (warns on start) |
+| `--listen-addr ADDR` | `127.0.0.1` | Bind address |
+| `AGENT_LSP_TOKEN` (env) | — | Bearer token for auth; required in HTTP mode unless `--no-auth` is passed |
+| `--no-auth` | off | Run HTTP mode without a token (warns on start); only allowed with a loopback bind address |
 
-| `--audit-log PATH` | off | JSONL audit log path (or `AGENT_LSP_AUDIT_LOG` env var) |
+| `--audit-log PATH` | `~/.agent-lsp/audit.jsonl` | JSONL audit log path (or `AGENT_LSP_AUDIT_LOG` env var); audit logging is on by default |
 
 Auth token must be set via environment variable — not `--token` flag — to avoid credential exposure in the process list.
 
@@ -1412,12 +1422,12 @@ locs, err := client.GetDefinition(ctx, fileURI, lsp.Position{Line: 10, Character
 | `multi-lang-java` | Java | ubuntu-latest | continue-on-error; `-Xmx2G`; 15min timeout; isolated from `multi-lang-core` to avoid OOM |
 | `multi-lang-mongodb` | MongoDB | ubuntu-latest | continue-on-error; mongo:7 service container; mongosh health check |
 | `speculative-test` | session lifecycle (8 languages: Go, TypeScript, Python, Rust, C++, C#, Dart, Java) | ubuntu-latest | `TestSpeculativeSessions` table-driven in `test/speculative_test.go`; 20min timeout; Java 300s extended timeout for JVM startup |
-| `mcp-assert-trajectory` | (skill protocols, all 24 skills) | ubuntu-latest | inline traces, no server needed, 0ms per assertion; total under 60s |
+| `mcp-assert-trajectory` | (skill protocols, 20 of 24 skills) | ubuntu-latest | inline traces, no server needed, 0ms per assertion; total under 60s |
 | `mcp-assert` | Go (tool correctness via gopls) | ubuntu-latest | full MCP stdio transport; 120s per assertion; ~2min total |
 
 **Test files:**
-- `test/multi_lang_test.go` — `TestMultiLanguage` (1573 lines after extraction)
-- `test/lang_configs_test.go` — `buildLanguageConfigs()` (840 lines; extracted from multi_lang_test.go)
+- `test/multi_lang_test.go` — `TestMultiLanguage`
+- `test/lang_configs_test.go` — `buildLanguageConfigs()` (extracted from multi_lang_test.go)
 - `test/speculative_test.go` — `TestSpeculativeSessions` (table-driven, 8 languages)
 - `test/error_paths_test.go` — 11 subtests covering bad input across `go_to_definition`, `get_diagnostics`, `simulate_edit`, `preview_edit`, `find_references`, `rename_symbol`; asserts well-formed error responses, never nil/crashes
 - `test/consistency_test.go` — parallel structural shape validation across Go, TypeScript, Python, Rust for `list_symbols`, `go_to_definition`, `get_diagnostics`, `inspect_symbol`; verifies response shape contracts hold across language servers
@@ -1428,7 +1438,7 @@ locs, err := client.GetDefinition(ctx, fileURI, lsp.Position{Line: 10, Character
 ## Audit Trail
 
 - **JSONL logging** for mutating operations: `apply_edit`, `rename_symbol`, `commit_session`
-- **Configurable:** `--audit-log /path/to/file.jsonl` flag or `AGENT_LSP_AUDIT_LOG` env var
+- **On by default:** writes to `~/.agent-lsp/audit.jsonl`; override with the `--audit-log /path/to/file.jsonl` flag or `AGENT_LSP_AUDIT_LOG` env var (`audit.ResolvePath`)
 - **Non-blocking:** channel-buffered writer; tool handlers never block on I/O
 - **Record fields:** timestamp, files touched, edit summary, pre/post diagnostic state, `net_delta`
 - **Implementation:** `internal/audit/audit.go`
@@ -1443,7 +1453,7 @@ agent-lsp is tested through the MCP protocol layer using [mcp-assert](https://gi
 
 **Two CI jobs run mcp-assert on every push and PR:**
 
-**`mcp-assert-trajectory`** — validates that all 24 skills follow correct tool call sequences. Uses inline traces embedded in YAML files; no live language server needed. Each assertion completes in 0ms. Total job runtime under 60 seconds. Assertion files: `examples/mcp-assert/trajectory/` (24 files, one per skill). Trajectory assertions check `presence` (required tools appear), `absence` (forbidden tools do not appear), `order` (correct sequence), and `args_contain` (specific argument values).
+**`mcp-assert-trajectory`** — validates that 20 of the 24 skills follow correct tool call sequences (lsp-architecture, lsp-concurrency-audit, lsp-inspect, and lsp-onboard have no trajectory assertions yet). Uses inline traces embedded in YAML files; no live language server needed. Each assertion completes in 0ms. Total job runtime under 60 seconds. Assertion files: `examples/mcp-assert/trajectory/` (22 files: one `*_protocol.yaml` per covered skill, plus `*_enforced.yaml` phase-enforcement traces for lsp-rename and lsp-refactor). Trajectory assertions check `presence` (required tools appear), `absence` (forbidden tools do not appear), `order` (correct sequence), and `args_contain` (specific argument values).
 
 **`mcp-assert`** — tests tool correctness through the full MCP stdio transport against real gopls. Assertion files: `examples/mcp-assert/go/*.yaml`. 120s per-assertion timeout; total runtime ~2 minutes.
 

@@ -7,6 +7,9 @@ agent-lsp ships pre-built images on [GitHub Container Registry](https://github.c
 | Tag | Contents | Approx. Size |
 |-----|----------|--------------|
 | `latest` | agent-lsp binary only | ~50 MB |
+| `base` | Same image as `latest` (used by `docker/docker-compose.yml`) | ~50 MB |
+| `<version>` (e.g. `0.24.0`) | `latest` pinned to a release | ~50 MB |
+| `<major>.<minor>` (e.g. `0.24`) | `latest` pinned to a minor release line | ~50 MB |
 | `go` | Go + gopls | ~200 MB |
 | `typescript` | Node.js + typescript-language-server | ~300 MB |
 | `python` | Node.js + pyright-langserver | ~300 MB |
@@ -159,7 +162,7 @@ Without the volume, `LSP_SERVERS` installs run on every container start.
 ```json
 {
   "mcpServers": {
-    "lsp": {
+    "agent-lsp": {
       "type": "stdio",
       "command": "docker",
       "args": [
@@ -178,7 +181,7 @@ Without the volume, `LSP_SERVERS` installs run on every container start.
 ```json
 {
   "mcpServers": {
-    "lsp": {
+    "agent-lsp": {
       "command": "docker",
       "args": [
         "compose",
@@ -196,7 +199,7 @@ Without the volume, `LSP_SERVERS` installs run on every container start.
 
 ## HTTP Mode
 
-By default agent-lsp communicates over stdio — the MCP client spawns the process directly. HTTP mode lets agent-lsp run as a persistent service that remote clients connect to over HTTP+SSE. This is the right choice when:
+By default agent-lsp communicates over stdio — the MCP client spawns the process directly. HTTP mode lets agent-lsp run as a persistent service that remote clients connect to over Streamable HTTP. This is the right choice when:
 
 - The container runs on a remote host or VM and the MCP client is elsewhere
 - You want a shared server for multiple agents connecting concurrently
@@ -211,10 +214,12 @@ docker run --rm \
   -v /your/project:/workspace \
   -e AGENT_LSP_TOKEN=your-secret-token \
   ghcr.io/blackwell-systems/agent-lsp:go \
-  --http --port 8080 go:gopls
+  --http --port 8080 --listen-addr 0.0.0.0 go:gopls
 ```
 
-> **Auth token:** Always set `AGENT_LSP_TOKEN`. When unset, the server starts unauthenticated and logs a warning. Pass the token as an environment variable — never via `--token` on the command line, which would expose it in `ps` output.
+> **Bind address:** The server binds `127.0.0.1` by default, which a Docker port mapping cannot reach. Pass `--listen-addr 0.0.0.0` inside the container, as above.
+
+> **Auth token:** Always set `AGENT_LSP_TOKEN`. Without a token the server refuses to start in HTTP mode. `--no-auth` turns auth off on purpose, but only with a loopback bind address (`127.0.0.1`), so it cannot be combined with `--listen-addr 0.0.0.0`. Pass the token as an environment variable, never via `--token` on the command line, which would expose it in `ps` output.
 
 ### Hardened run (recommended for production)
 
@@ -227,7 +232,7 @@ docker run --rm \
   --read-only \
   --tmpfs /tmp \
   ghcr.io/blackwell-systems/agent-lsp:go \
-  --http --port 8080 go:gopls
+  --http --port 8080 --listen-addr 0.0.0.0 go:gopls
 ```
 
 The image already runs as uid/gid 65532 (`nonroot`) — `--cap-drop=ALL` drops all remaining Linux capabilities. Mount the workspace `:ro` if you only need read-only analysis.
@@ -237,7 +242,7 @@ The image already runs as uid/gid 65532 (`nonroot`) — `--cap-drop=ALL` drops a
 ```json
 {
   "mcpServers": {
-    "lsp": {
+    "agent-lsp": {
       "type": "http",
       "url": "http://localhost:8080",
       "headers": {
@@ -267,9 +272,12 @@ The service binds `${AGENT_LSP_HTTP_PORT:-8080}:8080` and reads the token from `
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--http` | — | Enable HTTP+SSE transport (off by default) |
+| `--http` | — | Enable Streamable HTTP transport (off by default) |
 | `--port N` | `8080` | TCP port to listen on (1–65535) |
-| `AGENT_LSP_TOKEN` | — | Bearer token for auth (empty = no auth, not recommended) |
+| `--listen-addr IP` | `127.0.0.1` | Address to bind; use `0.0.0.0` inside a container |
+| `--no-auth` | off | Run without a token; only allowed with a loopback bind address |
+| `--audit-log PATH` | `~/.agent-lsp/audit.jsonl` | JSONL audit trail of edits and phase events (also `AGENT_LSP_AUDIT_LOG`) |
+| `AGENT_LSP_TOKEN` | — | Bearer token for auth (required in HTTP mode unless `--no-auth`) |
 
 ## docker-compose Setup
 
@@ -286,7 +294,7 @@ The service binds `${AGENT_LSP_HTTP_PORT:-8080}:8080` and reads the token from `
    docker compose -f docker/docker-compose.yml up
    ```
 
-The `docker/docker-compose.yml` uses the `web` combo image by default (TypeScript + Python). Edit the `image:` field to use a different tag.
+The `docker/docker-compose.yml` uses the `base` image by default (agent-lsp binary only; add servers with `LSP_SERVERS`). Edit the `image:` field to use a per-language or combo tag.
 
 ## Resource Limits
 

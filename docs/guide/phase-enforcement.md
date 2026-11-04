@@ -1,6 +1,6 @@
 # Skill Phase Enforcement
 
-**Status:** Shipped. 3 tools, 4 skills with phase configs, 17 unit tests.
+**Status:** Shipped. 3 tools, 4 skills with phase configs, 18 unit tests.
 **Tools:** `activate_skill`, `deactivate_skill`, `get_skill_phase`
 **Skills with enforcement:** `lsp-rename` (3 phases), `lsp-refactor` (5 phases), `lsp-safe-edit` (4 phases), `lsp-verify` (5 phases)
 
@@ -32,8 +32,8 @@ Agent calls prepare_rename(...)
     -> allowed (in current phase)
 
 Agent calls apply_edit(...)
-    -> BLOCKED: "apply_edit is forbidden in the preview phase"
-    -> recovery: "Complete the preview phase first. Allowed tools: [go_to_symbol, prepare_rename, find_references, rename_symbol]"
+    -> BLOCKED: apply_edit is forbidden in the "preview" phase
+    -> recovery: Complete the "execute" phase first. Allowed tools: [get_diagnostics rename_symbol apply_edit]
 
 Agent calls get_diagnostics(...)
     -> auto-advance to phase 3: "execute" (get_diagnostics is in phase 3's allowed list)
@@ -85,18 +85,23 @@ deactivate_skill()
 | `warn` | Logs the violation, allows the call to proceed | Default. Learning mode; see violations in logs without breaking the workflow. |
 | `block` | Returns an error with recovery guidance; tool call does not execute | Production safety. Prevents ordering violations from reaching the tool handler. |
 
-In `block` mode, the error response includes structured JSON with the violation details and recovery guidance:
+In `block` mode, the tool returns an error result whose text is a short summary followed by structured JSON with the violation details and recovery guidance:
 
-```json
-{
-  "error": "phase_violation",
-  "tool": "apply_edit",
-  "skill": "lsp-rename",
-  "current_phase": "preview",
-  "reason": "apply_edit is forbidden in the \"preview\" phase",
-  "recovery": "Complete the \"preview\" phase first. Allowed tools: [go_to_symbol, prepare_rename, find_references, rename_symbol]"
-}
 ```
+Phase violation: apply_edit is forbidden in the "preview" phase
+
+Recovery: Complete the "execute" phase first. Allowed tools: [get_diagnostics rename_symbol apply_edit]
+
+{"current_phase":"preview","error":"phase_violation","reason":"apply_edit is forbidden in the \"preview\" phase","recovery":"Complete the \"execute\" phase first. Allowed tools: [get_diagnostics rename_symbol apply_edit]","skill":"lsp-rename","tool":"apply_edit"}
+```
+
+The recovery text (built by `buildRecovery` in `internal/phase/tracker.go`) always names the **next** phase and that phase's allowed tools, which are the calls that advance the tracker:
+
+- If the blocked tool is allowed in the next phase: `Complete the "<next>" phase first. Allowed tools: [<next phase tools>]`
+- If it is allowed in a phase further on: `<tool> becomes available in the "<phase>" phase. Next phase is "<next>". Allowed tools: [<next phase tools>]`
+- If no later phase allows it: `Complete the current "<current>" phase using: [<current phase tools>]`
+
+A globally forbidden tool gets `This tool is not used in the <skill> workflow.` instead.
 
 ---
 
@@ -130,7 +135,7 @@ prerequisites -> preview -> execute
 |-------|---------|-----------|---------|
 | prerequisites | start_lsp | (none) | Initialize LSP if needed |
 | preview | go_to_symbol, prepare_rename, find_references, rename_symbol | apply_edit, Edit, Write | Locate symbol, validate, enumerate references |
-| execute | get_diagnostics, rename_symbol, apply_edit | simulate_*, run_build | Apply the rename and verify |
+| execute | get_diagnostics, rename_symbol, apply_edit | simulate_*, preview_edit, run_build | Apply the rename and verify |
 
 **Global forbidden:** format_document, run_tests (rename does not format or test)
 
@@ -144,15 +149,20 @@ blast_radius -> speculative_preview -> apply -> build_verification -> test_execu
 
 | Phase | Allowed | Forbidden | Purpose |
 |-------|---------|-----------|---------|
-| blast_radius | blast_radius, go_to_symbol, find_references | apply_edit, simulate_*, Edit, Write | Analyze impact before any edits |
+| blast_radius | blast_radius, go_to_symbol, find_references | apply_edit, simulate_*, preview_edit, Edit, Write | Analyze impact before any edits |
 | speculative_preview | open_document, get_diagnostics, preview_edit, simulate_chain | apply_edit, Edit, Write | Simulate edits in memory |
-| apply | apply_edit, format_document, Edit, Write | simulate_*, rename_symbol | Write changes to disk |
+| apply | apply_edit, refactor, format_document, Edit, Write | simulate_*, preview_edit, rename_symbol | Write changes to disk |
 | build_verification | get_diagnostics, run_build | apply_edit, Edit, Write | Check the build |
 | test_execution | get_tests_for_file, run_tests | apply_edit, Edit, Write | Run affected tests |
 
 **Global forbidden:** rename_symbol (refactor uses direct edits, not rename)
 
-**Key safety property:** `apply_edit` is forbidden in `blast_radius` and `speculative_preview`. The agent cannot write to disk until it has both analyzed impact and simulated the change.
+**Ordering guidance, not a sandbox:** `apply_edit` is forbidden while the tracker is in `blast_radius` or `speculative_preview`, so a direct `apply_edit` from those phases is blocked (in `block` mode). This does not guarantee that impact was analyzed and the change simulated before anything reaches disk:
+
+- Calling any tool from a later phase advances the tracker. For example, `refactor` or `format_document` in `blast_radius` moves straight to `apply`, after which `apply_edit` is allowed.
+- Tools not listed in any phase pass through unchecked, including tools that write to disk such as `safe_apply_edit`, `replace_symbol_body`, `insert_before_symbol`, `insert_after_symbol`, and `commit_session` (with `apply: true`).
+
+Phase enforcement blocks the forbidden tools of the current phase and guides the agent through the intended order. Treat it as a guardrail for well-behaved agents, not as an isolation boundary.
 
 ---
 
@@ -166,8 +176,8 @@ setup -> speculative_preview -> apply -> verify_and_fix
 |-------|---------|-----------|---------|
 | setup | start_lsp, open_document, get_diagnostics | apply_edit, Edit, Write | Capture baseline diagnostics |
 | speculative_preview | preview_edit, simulate_chain | apply_edit, Edit, Write | Simulate before touching disk |
-| apply | apply_edit, Edit, Write | simulate_* | Write the change |
-| verify_and_fix | get_diagnostics, suggest_fixes, apply_edit, format_document | simulate_*, run_build, run_tests | Post-edit verification and fixes |
+| apply | apply_edit, Edit, Write | simulate_*, preview_edit | Write the change |
+| verify_and_fix | get_diagnostics, suggest_fixes, apply_edit, format_document | simulate_*, preview_edit, run_build, run_tests | Post-edit verification and fixes |
 
 **Global forbidden:** rename_symbol, blast_radius
 
@@ -185,9 +195,9 @@ test_correlation -> diagnostics -> build -> tests -> fix_and_format
 | diagnostics | start_lsp, get_diagnostics | apply_edit, Edit, Write | Layer 1: LSP diagnostics |
 | build | run_build | apply_edit, Edit, Write | Layer 2: compiler build |
 | tests | run_tests, Bash | apply_edit, Edit, Write | Layer 3: test suite |
-| fix_and_format | suggest_fixes, apply_edit, format_document, get_diagnostics | simulate_*, run_build, run_tests | Apply fixes and format |
+| fix_and_format | suggest_fixes, apply_edit, format_document, get_diagnostics | simulate_*, preview_edit, run_build, run_tests | Apply fixes and format |
 
-**Global forbidden:** simulate_* (verify is post-edit, not speculative), rename_symbol
+**Global forbidden:** simulate_*, preview_edit (verify is post-edit, not speculative), rename_symbol
 
 ---
 
@@ -205,7 +215,7 @@ For full enforcement of external tools, the agent must self-enforce based on the
 
 ## Audit Trail
 
-Phase events are logged to the JSONL audit trail (when `--audit-log` is configured):
+Phase events are logged to the JSONL audit trail. Audit logging is on by default, writing to `~/.agent-lsp/audit.jsonl` (override with `--audit-log` or `AGENT_LSP_AUDIT_LOG`):
 
 | Event | Logged when |
 |-------|-------------|

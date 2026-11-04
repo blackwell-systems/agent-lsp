@@ -3,7 +3,7 @@ name: lsp-understand
 description: "Deep-dive exploration of unfamiliar code — given a symbol or file, builds a complete Code Map showing type info, implementations, call hierarchy (2-level depth limit), all references, and source. Broader than lsp-explore: accepts files, synthesizes multi-symbol relationships, and produces a navigable dependency map."
 argument-hint: "[symbol-name | file-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__inspect_symbol mcp__lsp__go_to_implementation mcp__lsp__find_callers mcp__lsp__find_references mcp__lsp__get_symbol_source mcp__lsp__list_symbols mcp__lsp__open_document mcp__lsp__go_to_symbol mcp__lsp__get_server_capabilities
+allowed-tools: mcp__agent-lsp__inspect_symbol mcp__agent-lsp__go_to_implementation mcp__agent-lsp__find_callers mcp__agent-lsp__find_references mcp__agent-lsp__get_symbol_source mcp__agent-lsp__list_symbols mcp__agent-lsp__open_document mcp__agent-lsp__go_to_symbol mcp__agent-lsp__get_server_capabilities
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -55,7 +55,7 @@ the file become the entry points.
 
 ## Prerequisites
 
-Call `mcp__lsp__get_server_capabilities` before Step 2 to determine which
+Call `mcp__agent-lsp__get_server_capabilities` before Step 2 to determine which
 capabilities are available. Skip steps that require missing capabilities:
 
 - `go_to_implementation`: skip Step 2b if `implementationProvider: false`
@@ -68,10 +68,10 @@ capabilities are available. Skip steps that require missing capabilities:
 
 ### Mode A: Single Symbol
 
-Call `mcp__lsp__go_to_symbol` to locate the symbol definition:
+Call `mcp__agent-lsp__go_to_symbol` to locate the symbol definition:
 
 ```
-mcp__lsp__go_to_symbol({
+mcp__agent-lsp__go_to_symbol({
   "symbol_path": "<dot-notation name>",   // e.g. "codec.Encode"
   "workspace_root": "<root>"              // optional
 })
@@ -91,12 +91,12 @@ The single symbol becomes the sole entry point.
 
 ### Mode B: File Path
 
-Call `mcp__lsp__open_document` then `mcp__lsp__list_symbols`:
+Call `mcp__agent-lsp__open_document` then `mcp__agent-lsp__list_symbols`:
 
 ```
-mcp__lsp__open_document({ "file_path": "<absolute path>" })
+mcp__agent-lsp__open_document({ "file_path": "<absolute path>" })
 
-mcp__lsp__list_symbols({ "file_path": "<absolute path>" })
+mcp__agent-lsp__list_symbols({ "file_path": "<absolute path>" })
 → returns: list of symbols with kind, line, column
 ```
 
@@ -120,11 +120,11 @@ calls within each step.
 
 ### 2a — Type Info and Docs
 
-Call `mcp__lsp__inspect_symbol` using `position_pattern` with the `@@`
+Call `mcp__agent-lsp__inspect_symbol` using `position_pattern` with the `@@`
 marker (see references/patterns.md):
 
 ```
-mcp__lsp__inspect_symbol({
+mcp__agent-lsp__inspect_symbol({
   "file_path": "<file>",
   "position_pattern": "<symbol@@name>",
   "line_scope_start": <line - 5>,
@@ -141,7 +141,7 @@ Store result as `hover_text`. If the call fails or returns nothing, set
 If `implementationProvider` is available in server capabilities:
 
 ```
-mcp__lsp__go_to_implementation({
+mcp__agent-lsp__go_to_implementation({
   "file_path": "<file>",
   "line": <line>,
   "column": <column>
@@ -159,7 +159,7 @@ If `callHierarchyProvider` is available:
 **Level 1 — Direct callers:**
 
 ```
-mcp__lsp__find_callers({
+mcp__agent-lsp__find_callers({
   "file_path": "<file>",
   "line": <line>,
   "column": <column>,
@@ -170,10 +170,10 @@ mcp__lsp__find_callers({
 
 **Level 2 — Callers of callers:**
 
-For each Level 1 caller, call `mcp__lsp__find_callers` once more:
+For each Level 1 caller, call `mcp__agent-lsp__find_callers` once more:
 
 ```
-mcp__lsp__find_callers({
+mcp__agent-lsp__find_callers({
   "file_path": "<caller file>",
   "line": <caller line>,
   "column": <caller column>,
@@ -191,7 +191,7 @@ If Level 2 callers > 10: summarize by count and file, do not list individually.
 If `callHierarchyProvider` is available:
 
 ```
-mcp__lsp__find_callers({
+mcp__agent-lsp__find_callers({
   "file_path": "<file>",
   "line": <line>,
   "column": <column>,
@@ -205,7 +205,7 @@ mcp__lsp__find_callers({
 ### 2e — All References
 
 ```
-mcp__lsp__find_references({
+mcp__agent-lsp__find_references({
   "file_path": "<file>",
   "line": <line>,
   "column": <column>,
@@ -219,7 +219,7 @@ Group by file and count distinct files.
 ### 2f — Source
 
 ```
-mcp__lsp__get_symbol_source({
+mcp__agent-lsp__get_symbol_source({
   "file_path": "<file>",
   "line": <line>,
   "column": <column>

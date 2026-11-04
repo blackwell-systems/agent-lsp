@@ -3,7 +3,7 @@ name: lsp-onboard
 description: First-session project onboarding. Explores the project structure, detects build system, test runner, entry points, and key architecture patterns. Produces a structured project profile the agent can reference throughout the session.
 argument-hint: "[workspace-root-path]"
 user-invocable: true
-allowed-tools: mcp__lsp__start_lsp mcp__lsp__detect_lsp_servers mcp__lsp__list_symbols mcp__lsp__find_symbol mcp__lsp__blast_radius mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_diagnostics mcp__lsp__get_editing_context
+allowed-tools: mcp__agent-lsp__start_lsp mcp__agent-lsp__detect_lsp_servers mcp__agent-lsp__list_symbols mcp__agent-lsp__find_symbol mcp__agent-lsp__blast_radius mcp__agent-lsp__run_build mcp__agent-lsp__run_tests mcp__agent-lsp__get_diagnostics
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -35,7 +35,7 @@ Do NOT run this on every session. It's a one-time exploration.
 ## Step 1: Detect languages and servers
 
 ```
-mcp__lsp__detect_lsp_servers({ "workspace_dir": "<root>" })
+mcp__agent-lsp__detect_lsp_servers({ "workspace_dir": "<root>" })
 ```
 
 Record which languages are present and which servers are available.
@@ -44,7 +44,7 @@ This tells you what the project is built with.
 ## Step 2: Initialize and verify
 
 ```
-mcp__lsp__start_lsp({ "root_dir": "<root>" })
+mcp__agent-lsp__start_lsp({ "root_dir": "<root>" })
 ```
 
 Wait for initialization. Call `list_symbols` on one key file to verify
@@ -55,9 +55,9 @@ the workspace is indexed.
 Search for common entry point patterns:
 
 ```
-mcp__lsp__find_symbol({ "query": "main" })
-mcp__lsp__find_symbol({ "query": "Run" })
-mcp__lsp__find_symbol({ "query": "Handler" })
+mcp__agent-lsp__find_symbol({ "query": "main" })
+mcp__agent-lsp__find_symbol({ "query": "Run" })
+mcp__agent-lsp__find_symbol({ "query": "Handler" })
 ```
 
 Record entry points with their file paths. These are where execution starts.
@@ -68,7 +68,7 @@ For each top-level directory that contains source files, call `list_symbols`
 on one representative file:
 
 ```
-mcp__lsp__list_symbols({ "file_path": "<dir>/main.go", "format": "outline" })
+mcp__agent-lsp__list_symbols({ "file_path": "<dir>/main.go", "format": "outline" })
 ```
 
 Build a mental map: which packages exist, what they export, how they relate.
@@ -77,8 +77,8 @@ Cap at 10 packages to avoid spending too long.
 ## Step 5: Detect build and test commands
 
 ```
-mcp__lsp__run_build({ "workspace_dir": "<root>" })
-mcp__lsp__run_tests({ "workspace_dir": "<root>" })
+mcp__agent-lsp__run_build({ "workspace_dir": "<root>" })
+mcp__agent-lsp__run_tests({ "workspace_dir": "<root>" })
 ```
 
 Record whether build and tests pass, and what language/toolchain was detected.
@@ -90,7 +90,7 @@ Pick the 3-5 files that appear most central (entry points, shared types,
 core logic). For each:
 
 ```
-mcp__lsp__blast_radius({ "changed_files": ["<file>"] })
+mcp__agent-lsp__blast_radius({ "changed_files": ["<file>"] })
 ```
 
 Files with the most non-test callers are the architectural hotspots.
@@ -99,7 +99,7 @@ Changes to these files have the widest blast radius.
 ## Step 7: Check for diagnostics
 
 ```
-mcp__lsp__get_diagnostics({ "file_path": "<entry-point>" })
+mcp__agent-lsp__get_diagnostics({ "file_path": "<entry-point>" })
 ```
 
 Note any pre-existing errors or warnings. This sets the baseline

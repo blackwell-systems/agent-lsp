@@ -3,7 +3,7 @@ name: lsp-extract-function
 description: Extract a selected code block into a named function. Primary path uses the language server's extract-function code action; falls back to manual extraction when no code action is available. Validates captured variables, scope shadowing, and compilation after extraction.
 argument-hint: "[file-path] [start-line] [end-line] [new-function-name]"
 user-invocable: true
-allowed-tools: mcp__lsp__list_symbols mcp__lsp__suggest_fixes mcp__lsp__execute_command mcp__lsp__apply_edit mcp__lsp__get_diagnostics mcp__lsp__open_document mcp__lsp__format_document mcp__lsp__get_server_capabilities
+allowed-tools: mcp__agent-lsp__list_symbols mcp__agent-lsp__suggest_fixes mcp__agent-lsp__execute_command mcp__agent-lsp__apply_edit mcp__agent-lsp__get_diagnostics mcp__agent-lsp__open_document mcp__agent-lsp__format_document mcp__agent-lsp__get_server_capabilities
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -29,7 +29,7 @@ extracted function).
 
 ## Prerequisites
 
-If LSP is not yet initialized, call `mcp__lsp__start_lsp` with the workspace
+If LSP is not yet initialized, call `mcp__agent-lsp__start_lsp` with the workspace
 root first. Auto-inference applies when file paths are provided, but an explicit
 start is required when switching workspaces.
 
@@ -37,12 +37,12 @@ start is required when switching workspaces.
 
 ## Step 1 — Get context (document symbols)
 
-Call `mcp__lsp__open_document` to open the file, then call
-`mcp__lsp__list_symbols` to understand the containing function and scope:
+Call `mcp__agent-lsp__open_document` to open the file, then call
+`mcp__agent-lsp__list_symbols` to understand the containing function and scope:
 
 ```
-mcp__lsp__open_document({ "file_path": "<file_path>" })
-mcp__lsp__list_symbols({ "file_path": "<file_path>" })
+mcp__agent-lsp__open_document({ "file_path": "<file_path>" })
+mcp__agent-lsp__list_symbols({ "file_path": "<file_path>" })
 ```
 
 This establishes:
@@ -59,11 +59,11 @@ symbol in the document symbols list, report the conflict and stop immediately:
 
 ## Step 2 — Check server capabilities
 
-Call `mcp__lsp__get_server_capabilities` to understand what the language server
+Call `mcp__agent-lsp__get_server_capabilities` to understand what the language server
 supports:
 
 ```
-mcp__lsp__get_server_capabilities({})
+mcp__agent-lsp__get_server_capabilities({})
 ```
 
 Check for `codeActionProvider` in the response. Note whether `execute_command`
@@ -74,10 +74,10 @@ primary path (Step 3) is available.
 
 ## Step 3 — Primary path: LSP code action
 
-Call `mcp__lsp__suggest_fixes` with the selection range:
+Call `mcp__agent-lsp__suggest_fixes` with the selection range:
 
 ```
-mcp__lsp__suggest_fixes({
+mcp__agent-lsp__suggest_fixes({
   "file_path": "<file_path>",
   "start_line": N,
   "start_column": 1,
@@ -94,16 +94,16 @@ whose `kind` contains `"refactor.extract"` OR whose `title` contains both
 - Display the action title to the user
 - If the action proposes a different name than `new_function_name`, ask for
   confirmation before proceeding
-- Execute via `mcp__lsp__execute_command` if the action has a `command` field:
+- Execute via `mcp__agent-lsp__execute_command` if the action has a `command` field:
   ```
-  mcp__lsp__execute_command({
+  mcp__agent-lsp__execute_command({
     "command": "<action.command.command>",
     "arguments": <action.command.arguments>
   })
   ```
-- OR apply directly via `mcp__lsp__apply_edit` if the action has an `edit` field:
+- OR apply directly via `mcp__agent-lsp__apply_edit` if the action has an `edit` field:
   ```
-  mcp__lsp__apply_edit({ "workspace_edit": <action.edit> })
+  mcp__agent-lsp__apply_edit({ "workspace_edit": <action.edit> })
   ```
 - Skip to Step 5 after applying.
 
@@ -147,7 +147,7 @@ single `apply_edit` call:
 
 1. **First:** Replace the selected lines with a call to the new function:
    ```
-   mcp__lsp__apply_edit({
+   mcp__agent-lsp__apply_edit({
      "workspace_edit": {
        "changes": {
          "<file_path>": [{
@@ -163,7 +163,7 @@ single `apply_edit` call:
 2. **Second:** Insert the new function definition after the containing function's
    closing brace:
    ```
-   mcp__lsp__apply_edit({
+   mcp__agent-lsp__apply_edit({
      "workspace_edit": {
        "changes": {
          "<file_path>": [{
@@ -189,7 +189,7 @@ After extraction via either path:
 ### 1. Check diagnostics
 
 ```
-mcp__lsp__get_diagnostics({ "file_path": "<file_path>" })
+mcp__agent-lsp__get_diagnostics({ "file_path": "<file_path>" })
 ```
 
 If errors are reported, display them with the table of common causes below.
@@ -206,7 +206,7 @@ If errors are reported, display them with the table of common causes below.
 ### 3. Format the document
 
 ```
-mcp__lsp__format_document({ "file_path": "<file_path>" })
+mcp__agent-lsp__format_document({ "file_path": "<file_path>" })
 ```
 
 This cleans up indentation introduced by the extraction.

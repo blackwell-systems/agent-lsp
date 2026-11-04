@@ -3,7 +3,7 @@ name: lsp-refactor
 description: End-to-end safe refactor workflow — blast-radius analysis, speculative preview, apply to disk, verify build, run affected tests. Inlines lsp-impact + lsp-safe-edit + lsp-verify + lsp-test-correlation into one coordinated sequence.
 argument-hint: "[symbol-or-file] [intent]"
 user-invocable: true
-allowed-tools: mcp__lsp__blast_radius mcp__lsp__preview_edit mcp__lsp__simulate_chain mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__apply_edit mcp__lsp__refactor mcp__lsp__replace_symbol_body mcp__lsp__open_document mcp__lsp__format_document Edit Write
+allowed-tools: mcp__agent-lsp__blast_radius mcp__agent-lsp__preview_edit mcp__agent-lsp__simulate_chain mcp__agent-lsp__get_diagnostics mcp__agent-lsp__run_build mcp__agent-lsp__run_tests mcp__agent-lsp__get_tests_for_file mcp__agent-lsp__apply_edit mcp__agent-lsp__refactor mcp__agent-lsp__replace_symbol_body mcp__agent-lsp__open_document mcp__agent-lsp__format_document Edit Write
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -14,56 +14,58 @@ metadata:
       blast_radius:
         description: "Phase 1: analyze impact before any edits"
         allowed:
-          - "mcp__lsp__blast_radius"
-          - "mcp__lsp__go_to_symbol"
-          - "mcp__lsp__find_references"
+          - "mcp__agent-lsp__blast_radius"
+          - "mcp__agent-lsp__go_to_symbol"
+          - "mcp__agent-lsp__find_references"
         forbidden:
-          - "mcp__lsp__apply_edit"
-          - "mcp__lsp__simulate_*"
+          - "mcp__agent-lsp__apply_edit"
+          - "mcp__agent-lsp__simulate_*"
           - "Edit"
           - "Write"
+          - "mcp__agent-lsp__preview_edit"
       speculative_preview:
         description: "Phase 2: simulate edits in memory, compare diagnostics"
         allowed:
-          - "mcp__lsp__open_document"
-          - "mcp__lsp__get_diagnostics"
-          - "mcp__lsp__preview_edit"
-          - "mcp__lsp__simulate_chain"
+          - "mcp__agent-lsp__open_document"
+          - "mcp__agent-lsp__get_diagnostics"
+          - "mcp__agent-lsp__preview_edit"
+          - "mcp__agent-lsp__simulate_chain"
         forbidden:
-          - "mcp__lsp__apply_edit"
+          - "mcp__agent-lsp__apply_edit"
           - "Edit"
           - "Write"
       apply:
         description: "Phase 3: write changes to disk and format"
         allowed:
-          - "mcp__lsp__apply_edit"
-          - "mcp__lsp__refactor"
-          - "mcp__lsp__format_document"
+          - "mcp__agent-lsp__apply_edit"
+          - "mcp__agent-lsp__refactor"
+          - "mcp__agent-lsp__format_document"
           - "Edit"
           - "Write"
         forbidden:
-          - "mcp__lsp__simulate_*"
-          - "mcp__lsp__rename_symbol"
+          - "mcp__agent-lsp__simulate_*"
+          - "mcp__agent-lsp__rename_symbol"
+          - "mcp__agent-lsp__preview_edit"
       build_verification:
         description: "Phase 4: check diagnostics and run the build"
         allowed:
-          - "mcp__lsp__get_diagnostics"
-          - "mcp__lsp__run_build"
+          - "mcp__agent-lsp__get_diagnostics"
+          - "mcp__agent-lsp__run_build"
         forbidden:
-          - "mcp__lsp__apply_edit"
+          - "mcp__agent-lsp__apply_edit"
           - "Edit"
           - "Write"
       test_execution:
         description: "Phase 5: find and run affected tests"
         allowed:
-          - "mcp__lsp__get_tests_for_file"
-          - "mcp__lsp__run_tests"
+          - "mcp__agent-lsp__get_tests_for_file"
+          - "mcp__agent-lsp__run_tests"
         forbidden:
-          - "mcp__lsp__apply_edit"
+          - "mcp__agent-lsp__apply_edit"
           - "Edit"
           - "Write"
     global_forbidden:
-      - "mcp__lsp__rename_symbol"        # refactor uses edit, not rename
+      - "mcp__agent-lsp__rename_symbol"        # refactor uses edit, not rename
 ---
 
 > Requires the agent-lsp MCP server.
@@ -99,13 +101,13 @@ coordinated pass.
 
 **This phase is mandatory. Do not skip it, even for "small" refactors.**
 
-Call `mcp__lsp__blast_radius` with `changed_files` set to the file
+Call `mcp__agent-lsp__blast_radius` with `changed_files` set to the file
 containing the target symbol. If the user provided a file path directly, use it.
 If the user provided a symbol name, resolve the file first (e.g. via
-`mcp__lsp__go_to_symbol`).
+`mcp__agent-lsp__go_to_symbol`).
 
 ```
-mcp__lsp__blast_radius({
+mcp__agent-lsp__blast_radius({
   "changed_files": ["/abs/path/to/file"],
   "include_transitive": false
 })
@@ -140,8 +142,8 @@ Only reached if Phase 1 blast radius is acceptable (≤ 20 callers, or user conf
 ### 2a — Open file and capture baseline diagnostics
 
 ```
-mcp__lsp__open_document({ "file_path": "/abs/path/to/file", "language_id": "go" })
-mcp__lsp__get_diagnostics({ "file_path": "/abs/path/to/file" })
+mcp__agent-lsp__open_document({ "file_path": "/abs/path/to/file", "language_id": "go" })
+mcp__agent-lsp__get_diagnostics({ "file_path": "/abs/path/to/file" })
 ```
 
 Store baseline diagnostics as BEFORE.
@@ -151,7 +153,7 @@ Store baseline diagnostics as BEFORE.
 For a **single-file change**: use `preview_edit`:
 
 ```
-mcp__lsp__preview_edit({
+mcp__agent-lsp__preview_edit({
   "file_path": "/abs/path/to/file",
   "start_line": <N>,
   "start_column": <col>,
@@ -164,7 +166,7 @@ mcp__lsp__preview_edit({
 For a **multi-file change** (e.g. rename + call site updates): use `simulate_chain`:
 
 ```
-mcp__lsp__simulate_chain({
+mcp__agent-lsp__simulate_chain({
   "workspace_root": "/abs/path/to/workspace",
   "language": "go",
   "edits": [
@@ -201,18 +203,18 @@ introduced. Do not proceed to Phase 3.
 Only reached if Phase 2 `net_delta <= 0`.
 
 Apply the change using the Edit or Write tool. When the edit targets a complete
-function or method body, `mcp__lsp__replace_symbol_body` is an alternative that
+function or method body, `mcp__agent-lsp__replace_symbol_body` is an alternative that
 resolves the symbol by name and replaces its full range without position math:
 
 ```
-mcp__lsp__replace_symbol_body({
+mcp__agent-lsp__replace_symbol_body({
   "file_path": "/abs/path/to/file",
   "symbol_path": "Package.Function",
   "new_body": "func Function() error {\n\treturn nil\n}"
 })
 ```
 
-For edits computed by simulation, `mcp__lsp__apply_edit` may be used directly if
+For edits computed by simulation, `mcp__agent-lsp__apply_edit` may be used directly if
 the simulation returned an edit object:
 
 ```
@@ -222,17 +224,17 @@ Edit(file_path: "/abs/path/to/file", old_string: "...", new_string: "...")
 When the change is one the language server offers as a refactoring
 (implement an interface, add or remove struct tags, extract declarations to a
 new file, move a declaration), let the server compute it with
-`mcp__lsp__refactor` instead of writing the edit by hand:
+`mcp__agent-lsp__refactor` instead of writing the edit by hand:
 
 ```
-mcp__lsp__refactor({ "file_path": "/abs/path/to/file", "line": 12, "column": 6 })
+mcp__agent-lsp__refactor({ "file_path": "/abs/path/to/file", "line": 12, "column": 6 })
 # lists the refactorings at the position; pick one by title
 
-mcp__lsp__refactor({ "file_path": "/abs/path/to/file", "line": 12, "column": 6,
+mcp__agent-lsp__refactor({ "file_path": "/abs/path/to/file", "line": 12, "column": 6,
   "action": "implement an interface", "option_queries": { "interface": "Greeter" } })
 # status "needs_input": answer the returned fields
 
-mcp__lsp__refactor({ "file_path": "/abs/path/to/file", "line": 12, "column": 6,
+mcp__agent-lsp__refactor({ "file_path": "/abs/path/to/file", "line": 12, "column": 6,
   "action": "implement an interface", "answers": { "interface": "x.Greeter" },
   "dry_run": true })
 # check the edit, then repeat without dry_run to apply
@@ -247,10 +249,10 @@ If any individual apply fails, stop and report before applying remaining files.
 After applying, format the changed file(s):
 
 ```
-mcp__lsp__format_document({ "file_path": "/abs/path/to/file" })
+mcp__agent-lsp__format_document({ "file_path": "/abs/path/to/file" })
 ```
 
-Apply the returned `TextEdit[]` via `mcp__lsp__apply_edit` if non-empty.
+Apply the returned `TextEdit[]` via `mcp__agent-lsp__apply_edit` if non-empty.
 
 ---
 
@@ -259,8 +261,8 @@ Apply the returned `TextEdit[]` via `mcp__lsp__apply_edit` if non-empty.
 Run in this order — LSP diagnostics first, then the compiler build:
 
 ```
-mcp__lsp__get_diagnostics({ "file_path": "/abs/path/to/file" })
-mcp__lsp__run_build({ "workspace_root": "/abs/path/to/workspace" })
+mcp__agent-lsp__get_diagnostics({ "file_path": "/abs/path/to/file" })
+mcp__agent-lsp__run_build({ "workspace_root": "/abs/path/to/workspace" })
 ```
 
 **Decision:**
@@ -281,14 +283,14 @@ is skipped until build passes.
 For each file changed in Phase 3, find correlated test files:
 
 ```
-mcp__lsp__get_tests_for_file({ "file_path": "/abs/path/to/changed/file" })
+mcp__agent-lsp__get_tests_for_file({ "file_path": "/abs/path/to/changed/file" })
 ```
 
 Deduplicate the resulting test files if multiple source files were changed.
 Run only the correlated test files:
 
 ```
-mcp__lsp__run_tests({ "workspace_root": "/abs/path/to/workspace", "test_files": [...] })
+mcp__agent-lsp__run_tests({ "workspace_root": "/abs/path/to/workspace", "test_files": [...] })
 ```
 
 **If no correlated test files are found:** note "No test correlation found —

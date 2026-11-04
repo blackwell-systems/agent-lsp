@@ -1,8 +1,18 @@
 # agent-lsp Tool Reference
 
-All 67 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
-both `line` and `column` in every tool call; the server converts internally to
-the 0-based values the LSP spec requires.
+All 66 tools exposed by the agent-lsp MCP server: 60 core tools, 3 intent
+aliases (`callers`, `explore`, `safe_edit`), and 3 phase-enforcement tools
+(`activate_skill`, `deactivate_skill`, `get_skill_phase`). Coordinates are
+**1-based** for both `line` and `column` in every tool call; the server converts
+internally to the 0-based values the LSP spec requires.
+
+**Output format.** Structured results in this reference are shown as JSON for
+readability. The default wire format is GCF, a compact text encoding that uses
+fewer tokens; set `AGENT_LSP_OUTPUT_FORMAT=json` in the server's environment to
+get JSON instead. Results that must round-trip exactly are always JSON whatever
+the setting: the `rename_symbol` dry-run preview and the `refactor` results.
+Plain-text results (status messages such as `Document opened: ...`) are the same
+in both formats.
 
 ---
 
@@ -10,10 +20,9 @@ the 0-based values the LSP spec requires.
 
 - [Session tools](#session-tools): `start_lsp`, `restart_lsp_server`, `open_document`, `close_document`, `add_workspace_folder`, `remove_workspace_folder`, `list_workspace_folders`
 - [Analysis tools](#analysis-tools): `get_diagnostics`, `inspect_symbol`, `get_completions`, `get_signature_help`, `suggest_fixes`, `list_symbols`, `find_symbol`, `blast_radius`, `get_cross_repo_references`, `detect_changes`
-- [Context tools](#context-tools): `get_editing_context`
 - [Composite exploration tools](#composite-exploration-tools): `explore_symbol`
 - [Safe editing tools](#safe-editing-tools): `safe_apply_edit`
-- [Intent aliases](#intent-aliases): `blast_radius`, `callers`, `explore`, `safe_edit`
+- [Intent aliases](#intent-aliases): `callers`, `explore`, `safe_edit`
 - [Navigation tools](#navigation-tools): `find_references`, `go_to_definition`, `go_to_type_definition`, `go_to_implementation`, `go_to_declaration`
 - [Refactoring tools](#refactoring-tools): `rename_symbol`, `prepare_rename`, `refactor`, `format_document`, `format_range`, `apply_edit`, `execute_command`
 - [Symbol editing tools](#symbol-editing-tools): `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, `safe_delete_symbol`
@@ -48,6 +57,7 @@ workspace root at runtime.
 | `language_id` | string | no | In multi-server mode, selects a specific configured server (e.g. `"go"` targets gopls, `"typescript"` targets typescript-language-server). Without this, all configured servers are started. Use `get_server_capabilities` to diagnose which server is active. |
 | `connect` | string | no | Connect to an already-running language server at this TCP address (e.g. `localhost:9999`) instead of spawning a new process. Reuses the existing server's warm index with zero duplicate memory. Supported by gopls (`gopls -listen=:9999`), clangd, and other servers with TCP listen mode. |
 | `ready_timeout_seconds` | number | no | If > 0, blocks until all `$/progress` workspace-indexing tokens complete or this many seconds elapse. Useful for servers like jdtls that index asynchronously after initialize. Fires as soon as indexing completes (does not always wait the full timeout). |
+| `scope` | string | no | Limit indexing to specific subdirectories of `root_dir`: one relative path, or a JSON array of paths encoded as a string (e.g. `"[\"services/api\", \"libs/core\"]"`). Generates a temporary language-server config (`pyrightconfig.json`, `tsconfig.json`) that restricts analysis scope. Use on large monorepos to prevent reference-query timeouts. |
 
 **Example call**
 
@@ -60,8 +70,11 @@ workspace root at runtime.
 **Actual output**
 
 ```
-LSP server initialized with root: /home/user/projects/agent-lsp/test/ts-project
+LSP server started successfully
 ```
+
+The result also carries a second text item with a next-step hint. With
+`connect`, the message is `Connected to existing language server at <address>`.
 
 **Notes**
 
@@ -95,15 +108,17 @@ changes (adding a new module, moving files).
 **Actual output**
 
 ```
-LSP server restarted successfully
+LSP server restarted successfully. Note: in multi-server configurations only the default server was restarted; other configured servers are unaffected. Re-opened 2 document(s) from the previous session on the fresh server.
 ```
 
 **Notes**
 
 - Requires the LSP client to already be initialized. Returns an error if
   `start_lsp` has never been called.
-- All open documents are lost after restart; call `open_document` again for
-  any files you need.
+- Documents that were open before the restart are re-opened on the fresh
+  server automatically; the message reports how many. You do not need to call
+  `open_document` again for them.
+- In multi-server mode only the default server is restarted.
 
 ---
 
@@ -120,7 +135,8 @@ operations.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
-| `language_id` | string | no | Language identifier (`typescript`, `javascript`, `go`, `python`, `rust`, etc.). Defaults to `"plaintext"` when omitted; auto-detected from extension by most analysis tools. |
+| `language_id` | string | no | Language identifier (`typescript`, `javascript`, `go`, `python`, `rust`, etc.). Auto-detected from the file extension when omitted. |
+| `text` | string | no | File content to send instead of reading the file from disk. |
 
 **Example call**
 
@@ -134,14 +150,14 @@ operations.
 **Actual output**
 
 ```
-File successfully opened: /home/user/projects/agent-lsp/test/ts-project/src/example.ts
+Document opened: /home/user/projects/agent-lsp/test/ts-project/src/example.ts
 ```
 
 **Notes**
 
 - Idempotent: opening an already-open file is safe; it re-sends `didOpen` so
   the server refreshes its view of the file content.
-- The file must exist on disk; the tool reads its content before sending it to the language server.
+- Without `text`, the file must exist on disk; the tool reads its content before sending it to the language server.
 - The server tracks `file_path` and `language_id` internally so it can
   `reopenDocument` when `get_diagnostics` is called.
 
@@ -169,7 +185,7 @@ Remove a file from the language server's open-document set. Sends
 **Actual output**
 
 ```
-File successfully closed: /home/user/projects/agent-lsp/test/ts-project/src/consumer.ts
+Document closed: /home/user/projects/agent-lsp/test/ts-project/src/consumer.ts
 ```
 
 **Notes**
@@ -266,6 +282,7 @@ language server to publish diagnostics, then returns them.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | no | Absolute path to a specific file. Omit to get diagnostics for all open files. |
+| `group_by` | string | no | Set to `"symbol"` to group diagnostics by their owning symbol (function, type) instead of returning a flat list per file. Helps show which symbol is broken. |
 
 **Example call (single file)**
 
@@ -334,9 +351,12 @@ contextual detail that the language server provides on hover.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
-| `language_id` | string | yes | Language identifier |
-| `line` | number | yes | Line number (1-based) |
-| `column` | number | yes | Column position (1-based) |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
+| `line` | number | yes* | Line number (1-based) |
+| `column` | number | yes* | Column position (1-based) |
+| `position_pattern` | string | no | Alternative to `line`/`column`: text with `@@` marking the cursor (see [Position-pattern parameter](#position-pattern-parameter-position_pattern)) |
+
+\* Not needed when `position_pattern` is provided.
 
 **Example call**
 
@@ -388,7 +408,7 @@ from a module, or valid identifiers in scope.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
-| `language_id` | string | yes | Language identifier |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
 | `line` | number | yes | Line number (1-based) |
 | `column` | number | yes | Column position (1-based), typically just after a `.` or at the start of a partial identifier |
 
@@ -449,7 +469,7 @@ highlights the active parameter.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
-| `language_id` | string | yes | Language identifier |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
 | `line` | number | yes | Line of the call site (1-based) |
 | `column` | number | yes | Column inside the argument list (1-based) |
 
@@ -506,7 +526,7 @@ diagnostics that overlap it, then returns a list of applicable actions.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
-| `language_id` | string | yes | Language identifier |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
 | `start_line` | number | yes | Start line of the selection (1-based) |
 | `start_column` | number | yes | Start column (1-based) |
 | `end_line` | number | yes | End line (1-based) |
@@ -577,7 +597,7 @@ methods, etc.) via `textDocument/documentSymbol`. Returns a hierarchical
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
-| `language_id` | string | yes | Language identifier |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
 | `format` | string | no | `"json"` (default) returns the full DocumentSymbol tree. `"outline"` returns a compact Markdown representation (`name [Kind] :line`, indented for children), ~5x fewer tokens; useful for structural surveys before targeted navigation. |
 
 **Example call**
@@ -736,6 +756,8 @@ understand blast radius.
 |------|------|----------|-------------|
 | `changed_files` | string[] | yes | Absolute paths to the files whose exported symbols should be analyzed |
 | `include_transitive` | boolean | no | Set to `true` to also resolve references for each caller (second-order callers). Default: `false` |
+| `scope` | string | no | `"exported"` (default) analyzes exported symbols only. `"all"` also includes unexported symbols, for dead-code detection. |
+| `filter` | string | no | `"untested"` keeps only symbols that have production callers but zero test callers. |
 
 **Example call**
 
@@ -753,6 +775,20 @@ understand blast radius.
   "changed_symbols": [
     { "name": "LSPClient", "file": "internal/lsp/client.go", "line": 14 }
   ],
+  "affected_symbols": [
+    {
+      "name": "LSPClient",
+      "file": "internal/lsp/client.go",
+      "line": 14,
+      "test_callers": [
+        { "name": "TestGetReferences", "file": "internal/lsp/client_test.go", "line": 42 }
+      ],
+      "non_test_callers": [
+        { "name": "HandleGetReferences", "file": "internal/tools/analysis.go", "line": 67 }
+      ],
+      "sync_guarded": true
+    }
+  ],
   "test_files": [
     "internal/lsp/client_test.go"
   ],
@@ -760,21 +796,25 @@ understand blast radius.
     { "name": "TestGetReferences", "file": "internal/lsp/client_test.go", "line": 42 }
   ],
   "non_test_callers": [
-    { "name": "LSPClient", "file": "internal/tools/analysis.go", "line": 67, "sync_guarded": true }
+    { "name": "HandleGetReferences", "file": "internal/tools/analysis.go", "line": 67 }
   ],
   "summary": "Found 1 changed symbols with 1 test references across 1 test files.",
   "warnings": []
 }
 ```
 
+In the default GCF format the result is a graph: changed symbols, their
+callers, and test functions as nodes, with caller-to-symbol edges.
+
 **Notes**
 
-- Only exported symbols are analyzed (uppercase identifiers in Go; all public symbols in other languages).
+- By default only exported symbols are analyzed (uppercase identifiers in Go; all public symbols in other languages). Pass `scope: "all"` to include unexported ones.
 - `changed_symbols` lists each analyzed symbol with its file and 1-based line number.
+- `affected_symbols` gives each symbol its own `test_callers` and `non_test_callers`, so you can see which tests cover which function. `filter: "untested"` applies to this list.
 - `test_functions` contains the enclosing test function name for each test file reference.
 - `test_files` is the deduplicated set of test files that reference any changed symbol.
-- `non_test_callers` is the blast radius for production code.
-- `sync_guarded`: present and `true` on symbols that are methods on types containing synchronization primitives (Mutex, RWMutex, Lock, atomic). Covers Go, Java, Rust, Python, C/C++ primitives. Helps agents distinguish mutex-guarded code from pure functions when assessing risk.
+- `non_test_callers` (top level) is the flat blast radius for production code across all symbols.
+- `sync_guarded`: present and `true` on an `affected_symbols` entry that is a method on a type containing synchronization primitives (Mutex, RWMutex, Lock, atomic). Covers Go, Java, Rust, Python, C/C++ primitives. Helps agents distinguish mutex-guarded code from pure functions when assessing risk.
 - `warnings` contains messages for any `GetReferences` calls that failed (non-fatal).
 
 ---
@@ -794,7 +834,7 @@ Use before changing a shared library API to find all downstream callers.
 | `line` | integer | yes | 1-based line number of the symbol |
 | `column` | integer | yes | 1-based column number of the symbol |
 | `consumer_roots` | string[] | yes | Absolute paths to consumer repo roots to search |
-| `language_id` | string | no | Language ID (e.g. `"go"`); default `"plaintext"` |
+| `language_id` | string | no | Language identifier (e.g. `"go"`). Auto-detected from the file extension when omitted. |
 
 **Example call**
 
@@ -811,26 +851,25 @@ Use before changing a shared library API to find all downstream callers.
 
 ```json
 {
-  "library_references": [
-    { "file": "pkg/config/parser_test.go", "line": 18, "column": 3 }
+  "symbol": "Parse",
+  "references": [
+    { "file": "/repos/config-lib/pkg/config/parser_test.go", "line": 18, "column": 3, "repo": "primary" },
+    { "file": "/repos/api-service/main.go", "line": 14, "column": 9, "repo": "/repos/api-service" },
+    { "file": "/repos/worker-service/runner.go", "line": 8, "column": 5, "repo": "/repos/worker-service" }
   ],
-  "consumer_references": {
-    "/repos/api-service": [
-      { "file": "/repos/api-service/main.go", "line": 14, "column": 9 }
-    ],
-    "/repos/worker-service": [
-      { "file": "/repos/worker-service/runner.go", "line": 8, "column": 5 }
-    ]
-  },
-  "warnings": []
+  "summary": "Found 3 references across 3 repos."
 }
 ```
 
 **Notes**
 
-- `library_references` covers references within the primary (library) workspace.
-- `consumer_references` maps each consumer root to its reference list.
-- `warnings` lists roots that could not be indexed; re-add manually if non-empty.
+- `references` is one flat list; each entry's `repo` names the consumer root
+  that contains the file, or `"primary"` for references in the library
+  workspace itself. All positions are 1-based.
+- `warnings` is present only when a consumer root could not be added as a
+  workspace folder; re-add it manually if so.
+- In the default GCF format the result is a graph of the symbol and its
+  referencing locations.
 - Requires `start_lsp` on the library root first.
 
 ---
@@ -858,7 +897,7 @@ call that answers "what did I break?" without manually listing changed files.
 }
 ```
 
-**Returns**
+**Returns** (with `AGENT_LSP_OUTPUT_FORMAT=json`; abbreviated)
 
 ```json
 {
@@ -873,55 +912,15 @@ call that answers "what did I break?" without manually listing changed files.
 }
 ```
 
+The JSON result carries the rest of the `blast_radius` fields
+(`affected_symbols`, `test_files`, `test_functions`, `summary`, `warnings`) as
+well.
+
 **Notes**
 
-- Risk classification: `"high"` (callers from multiple packages), `"medium"` (callers from the same package only), `"low"` (zero non-test callers).
+- Risk classification is added to each `changed_symbols` entry in JSON mode only: `"high"` (callers from multiple packages), `"medium"` (callers from the same package only), `"low"` (zero non-test callers). In the default GCF format, `detect_changes` returns the `blast_radius` graph as is, without `risk`, `changed_files`, or `scope`.
 - Filters out non-source files (plaintext, deleted) before analysis.
 - Delegates to `blast_radius` internally, so results benefit from the persistent reference cache.
-
----
-
-## Context tools
-
-### `get_editing_context`
-
-Get complete editing context for a file in one call: all symbols with signatures,
-callers partitioned by test/non-test, callees, and imports. Use before making
-changes to understand the file structure and blast radius without multiple
-round-trips.
-
-**Parameters**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `file_path` | string | yes | Absolute path to the file to get editing context for |
-| `language_id` | string | no | Language identifier. Optional; auto-detected from file extension |
-| `if_none_match` | string | no | ETag from a previous response. If file has not changed, returns a short `not_modified` response instead of recomputing |
-
-**Example call**
-
-```json
-{
-  "file_path": "/home/user/projects/myapp/internal/hub.go"
-}
-```
-
-**Actual output**
-
-Returns a structured response containing:
-- `symbols`: all symbols in the file with signatures
-- `callers`: per-symbol caller lists partitioned into `test_callers` and `non_test_callers`
-- `callees`: outgoing calls from each function
-- `imports`: file import list
-- `_meta.token_savings`: tokens returned vs full file size
-- `etag`: content hash for use in subsequent `if_none_match` calls
-
-**Notes**
-
-- Replaces the 3-5 tool sequence agents previously used (`list_symbols` + `find_references` per symbol + `find_callers`).
-- Includes `_meta.token_savings` showing tokens returned vs full file size (via `AppendTokenMeta`).
-- When `if_none_match` matches the current file content hash, returns `not_modified` immediately without recomputing.
-- Handler: `HandleGetEditingContextWithMeta` wraps the core handler with token metadata.
 
 ---
 
@@ -1062,12 +1061,9 @@ returns the preview result with `applied: false` so you can decide.
 
 ## Intent aliases
 
-Shorter, intent-oriented tool names for common operations. Same handlers and
-parameters as the underlying tools.
-
-### `blast_radius`
-
-Alias for `blast_radius`. Same parameters and behavior.
+Three shorter, intent-oriented tool names for common operations. Same handlers
+and parameters as the underlying tools. (`blast_radius` is a core tool, not an
+alias; see [Analysis tools](#analysis-tools).)
 
 ### `callers`
 
@@ -1098,10 +1094,13 @@ Find all locations where a symbol is referenced across the workspace, via
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | File containing the symbol |
-| `language_id` | string | yes | Language identifier |
-| `line` | number | yes | Line of the symbol (1-based) |
-| `column` | number | yes | Column of the symbol (1-based) |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
+| `line` | number | yes* | Line of the symbol (1-based) |
+| `column` | number | yes* | Column of the symbol (1-based) |
 | `include_declaration` | boolean | no | Include the symbol's own declaration. Default `false`. |
+| `position_pattern` | string | no | Alternative to `line`/`column`: text with `@@` marking the cursor (see [Position-pattern parameter](#position-pattern-parameter-position_pattern)) |
+
+\* Not needed when `position_pattern` is provided.
 
 **Example call**
 
@@ -1171,7 +1170,7 @@ Jump to where a symbol is defined, via `textDocument/definition`.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | File containing the usage |
-| `language_id` | string | yes | Language identifier |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
 | `line` | number | yes | Line of the symbol (1-based) |
 | `column` | number | yes | Column (1-based) |
 
@@ -1339,20 +1338,25 @@ declared in a header and defined in a source file.
 
 ### `rename_symbol`
 
-Compute a `WorkspaceEdit` for renaming a symbol everywhere it is used in the
-workspace, via `textDocument/rename`. The edit is returned for inspection and
-is **not applied automatically**. Pass it to `apply_edit` to commit the changes.
+Rename a symbol everywhere it is used in the workspace, via
+`textDocument/rename`. The tool computes the `WorkspaceEdit` and **applies it to
+disk** itself, then returns a text summary. Pass `dry_run: true` to preview the
+edit without writing anything.
 
 **Parameters**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | File containing the symbol to rename |
-| `language_id` | string | yes | Language identifier |
-| `line` | number | yes | Line of the symbol (1-based) |
-| `column` | number | yes | Column (1-based) |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
+| `line` | number | yes* | Line of the symbol (1-based) |
+| `column` | number | yes* | Column (1-based) |
+| `position_pattern` | string | no | Alternative to `line`/`column`: text with `@@` marking the cursor (see [Position-pattern parameter](#position-pattern-parameter-position_pattern)) |
 | `new_name` | string | yes | The replacement name |
-| `exclude_globs` | array of strings | no | Glob patterns for files to skip (e.g. ["vendor/**", "**/*_gen.go"]). Matching files are excluded from the returned WorkspaceEdit. Uses filepath.Match syntax; also matched against the file's basename. |
+| `dry_run` | boolean | no | If `true`, return the edit preview without writing to disk. Default `false`. See [Dry-run preview](#dry-run-preview-for-rename_symbol). |
+| `exclude_globs` | array of strings | no | Glob patterns for files to skip (e.g. ["vendor/**", "**/*_gen.go"]). Matching files are left out of the edit. Uses filepath.Match syntax; also matched against the file's basename. |
+
+\* Not needed when `position_pattern` is provided.
 
 **Example call** (rename `add` to `sum`)
 
@@ -1368,48 +1372,28 @@ is **not applied automatically**. Pass it to `apply_edit` to commit the changes.
 
 **Expected output**
 
-```json
-{
-  "changes": {
-    "file:///home/user/projects/agent-lsp/test/ts-project/src/example.ts": [
-      {
-        "range": {
-          "start": { "line": 3, "character": 16 },
-          "end": { "line": 3, "character": 19 }
-        },
-        "newText": "sum"
-      }
-    ],
-    "file:///home/user/projects/agent-lsp/test/ts-project/src/consumer.ts": [
-      {
-        "range": {
-          "start": { "line": 0, "character": 9 },
-          "end": { "line": 0, "character": 12 }
-        },
-        "newText": "sum"
-      },
-      {
-        "range": {
-          "start": { "line": 3, "character": 12 },
-          "end": { "line": 3, "character": 15 }
-        },
-        "newText": "sum"
-      }
-    ]
-  }
-}
+```
+Renamed to "sum" across 3 location(s) in 2 file(s): example.ts, consumer.ts
 ```
 
-The output is a raw `WorkspaceEdit` object. Coordinates are 0-based (LSP
-native).
+A second text item reports the post-edit diagnostics, for example
+`Next step: errors_after: 0, warnings_after: 0. Run get_diagnostics for details.`
+When the rename edits files other than `file_path` and their diagnostics could
+not be verified, the hint names them.
 
 **Notes**
 
-- Returns `"Rename not supported or symbol cannot be renamed at this location"`
-  as a string when the server returns `null`.
-- Returns `null` if the server does not declare `renameProvider`.
-- Use `prepare_rename` first to validate the rename before calling this.
-- Pass the returned object directly to `apply_edit` to write the changes to disk.
+- When the server produces no edit (nothing to rename, the position does not
+  resolve to a renameable symbol, or the server does not declare
+  `renameProvider`), the tool returns
+  `No rename edits produced for the symbol at <file>:<line>:<column> ...` and
+  writes nothing.
+- If the exact position yields no edit, the tool retries by looking the symbol
+  up by its hover name before giving up.
+- Use `prepare_rename` first to validate the position, and `dry_run: true` to
+  see every site before applying.
+- Do not pass the dry-run preview to `apply_edit`. To apply, call
+  `rename_symbol` again without `dry_run`.
 - `exclude_globs` patterns match against both the full file path and the
   basename. Common patterns: "vendor/**" (Go vendor tree),
   "**/*_generated.go" (codegen), "testdata/**" (test fixtures).
@@ -1427,7 +1411,7 @@ would be renamed and a suggested placeholder name.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | File containing the symbol |
-| `language_id` | string | yes | Language identifier |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
 | `line` | number | yes | Line (1-based) |
 | `column` | number | yes | Column (1-based) |
 
@@ -1456,11 +1440,12 @@ would be renamed and a suggested placeholder name.
 
 **Notes**
 
-- Returns `"Rename not supported at this position"` as a string when the server
-  returns `null`.
-- Returns `null` if the server does not declare `renameProvider` with
-  `prepareProvider: true`. The tool checks this flag explicitly and skips the
-  request if it is absent.
+- When the server answers `null` for the position, returns
+  `{"supported": true, "message": "The server returned no rename range at this position; a rename here may not be valid."}`.
+- When the server does not support `textDocument/prepareRename` (no
+  `renameProvider` with `prepareProvider: true`, or the method is not
+  implemented), returns `{"supported": false, "message": "prepare_rename is not supported by this language server; rename_symbol may still work."}`.
+  The tool checks the flag explicitly and skips the request if it is absent.
 - Coordinates in the result are 0-based.
 
 ---
@@ -1555,6 +1540,11 @@ Applied "Add struct tags": <n> location(s) in 1 file(s): main.go
   questions.
 - `execute_command` on a command that needs input returns an error pointing
   here, instead of running it without answers.
+- With `dry_run: true` the result is the edit preview, nothing is written. To
+  apply, re-run `refactor` with the same `action` and `answers` and without
+  `dry_run`; do not pass the preview to `apply_edit`.
+- The list, `needs_input`, and dry-run results are always JSON, whatever
+  `AGENT_LSP_OUTPUT_FORMAT` says.
 
 ---
 
@@ -1570,7 +1560,7 @@ write the formatted output to disk.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
-| `language_id` | string | yes | Language identifier |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
 | `tab_size` | number | no | Spaces per tab. Default `2`. |
 | `insert_spaces` | boolean | no | Use spaces instead of tabs. Default `true`. |
 
@@ -1612,6 +1602,10 @@ Each `TextEdit` has a 0-based `range` and a `newText` replacement string.
 - Returns `[]` if the server does not declare `documentFormattingProvider`.
 - The returned `TextEdit[]` can be wrapped in a `WorkspaceEdit` for `apply_edit`:
   `{ "changes": { "file:///path/to/file.ts": [ ...edits ] } }`.
+- Unlike the `rename_symbol` preview, this result follows the output format, so
+  it is GCF by default. If you plan to pass the edits to `apply_edit`, run the
+  server with `AGENT_LSP_OUTPUT_FORMAT=json` so the edits come back as JSON you
+  can copy exactly. The same applies to `format_range`.
 
 ---
 
@@ -1626,7 +1620,7 @@ scoped to specific lines.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
-| `language_id` | string | yes | Language identifier |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
 | `start_line` | number | yes | Start line (1-based) |
 | `start_column` | number | yes | Start column (1-based) |
 | `end_line` | number | yes | End line (1-based) |
@@ -1668,8 +1662,9 @@ Range start must not be after range end (schema-validated).
 ### `apply_edit`
 
 Write a `WorkspaceEdit` to disk and notify the language server of the changes.
-Pass the object returned by `rename_symbol`, `format_document`, or
-`format_range` directly.
+Use it for edits returned by `format_document`, `format_range`, or a code
+action from `suggest_fixes`. `rename_symbol` and `refactor` apply their own
+edits, so do not pass their dry-run previews here.
 
 **Parameters**
 
@@ -1680,9 +1675,9 @@ Pass the object returned by `rename_symbol`, `format_document`, or
 | `old_text` | string | — | **Text-match mode:** exact text to find and replace. First tries exact byte match; falls back to whitespace-normalised line match (tolerates indentation differences). |
 | `new_text` | string | — | **Text-match mode:** replacement text. |
 
-Use either `workspace_edit` (positional mode, for edits returned by `rename_symbol`/`format_document`) or the `file_path`+`old_text`+`new_text` triple (text-match mode, for AI-generated edits where exact line/column are unknown).
+Use either `workspace_edit` (positional mode, for edits returned by `format_document`/`format_range` or a code action) or the `file_path`+`old_text`+`new_text` triple (text-match mode, for AI-generated edits where exact line/column are unknown).
 
-**Example call** (applying a rename edit)
+**Example call** (applying a single text edit)
 
 ```json
 {
@@ -1705,8 +1700,13 @@ Use either `workspace_edit` (positional mode, for edits returned by `rename_symb
 **Actual output**
 
 ```
-Workspace edit applied successfully
+Edit applied successfully
 ```
+
+In text-match mode the message is the same, followed by a note when `old_text`
+and `new_text` differ in whether they end with a line break. When `new_text` equals
+the matched text, the tool writes nothing and returns
+`No change applied: new_text is identical to the matched text, so the file was not modified.`
 
 **Notes**
 
@@ -1732,44 +1732,52 @@ may also be listed in the server's `executeCommandProvider.commands` capability.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `command` | string | yes | Command identifier (e.g., `_typescript.applyRefactoring`) |
-| `arguments` | array | no | Arguments to pass to the command |
+| `arguments` | array of objects | no | Arguments to pass to the command. Each element must be a JSON object; the schema rejects strings, numbers, and other non-object values. |
 
-**Example call** (triggering a TypeScript refactoring command)
+**Example call** (running `go mod tidy` through gopls)
 
 ```json
 {
-  "command": "_typescript.applyRefactoring",
+  "command": "gopls.tidy",
   "arguments": [
-    "/path/to/file.ts",
-    "refactorRewrite",
-    "Add return type",
-    { "startLine": 35, "startOffset": 1, "endLine": 37, "endOffset": 2 }
+    { "URIs": ["file:///home/user/projects/myproject/go.mod"] }
   ]
 }
 ```
 
 **Expected output (command with a result)**
 
+The command's result, encoded in the output format. For example,
+`gopls.list_known_packages` with `[{ "URI": "file:///path/to/main.go" }]`
+returns (shown as JSON):
+
 ```json
 {
-  "edits": [
-    {
-      "fileName": "/path/to/file.ts",
-      "textChanges": [ "..." ]
-    }
-  ]
+  "Packages": ["bufio", "bytes", "context", "..."]
 }
 ```
 
 **Expected output (command with no result)**
 
+When the server returns no result (as `gopls.tidy` does), the tool returns the
+text `null`:
+
 ```
-Command executed successfully (no result returned)
+null
 ```
 
 **Notes**
 
-- Returns `null` if the server does not declare `executeCommandProvider`.
+- The request is sent as is; if the server does not support the command (or
+  `workspace/executeCommand` at all), the server's error is returned as a tool
+  error.
+- Because each argument must be an object, commands whose arguments are plain
+  strings or numbers (for example `_typescript.applyRefactoring`) cannot be run
+  through this tool.
+- A command that needs interactive input (gopls v0.24+ interactive
+  refactorings) is not run. The tool returns an error that names the input
+  fields and points to [`refactor`](#refactor), which asks the questions and
+  accepts answers.
 - The available commands and their argument shapes are server-specific. Use
   `suggest_fixes` to discover commands rather than constructing them manually.
 - Some commands apply changes server-side and push `workspace/applyEdit`
@@ -1785,17 +1793,19 @@ internally.
 
 ### `replace_symbol_body`
 
-Replace a symbol's entire body (function, method, type) by name. Resolves the
-symbol within the file using document symbols, finds its full range, and replaces
-it with the provided text.
+Replace the body of a symbol (function, method, type) by name, keeping its
+declaration line. Resolves the symbol within the file using document symbols,
+then replaces everything from the line after the symbol's name through the end
+of the symbol with the provided text.
 
 **Parameters**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file containing the symbol |
-| `symbol_path` | string | yes | Symbol name in dot notation (e.g. `"MyFunc"`, `"MyStruct.Method"`) |
-| `new_body` | string | yes | Complete replacement text for the symbol (including signature) |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
+| `symbol_path` | string | yes | Symbol name in dot notation (e.g. `"MyFunc"`, `"MyStruct.Method"`, `"Method[0]"` to pick one overload) |
+| `new_body` | string | yes | Replacement body. Do not include the signature line; it is kept. |
 
 **Example call**
 
@@ -1803,13 +1813,20 @@ it with the provided text.
 {
   "file_path": "/home/user/project/pkg/handler.go",
   "symbol_path": "Handler.ServeHTTP",
-  "new_body": "func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {\n\tw.WriteHeader(http.StatusOK)\n}"
+  "new_body": "\tw.WriteHeader(http.StatusOK)\n}"
 }
 ```
 
 **Notes**
 
-- The `new_body` must include the full definition (signature + body), not just the interior.
+- The declaration line (the line holding the symbol's name, for example
+  `func (h *Handler) ServeHTTP(...) {`) is kept. `new_body` replaces the lines
+  after it through the symbol's end, so for brace languages it must end with
+  the closing brace, as in the example.
+- If a signature spans several lines, only the line holding the name is kept;
+  the continuation lines are part of the replaced range.
+- Output: `Replaced body of "Handler.ServeHTTP" in /home/user/project/pkg/handler.go`,
+  plus a hint with the post-edit error and warning counts.
 - For methods, use `Type.Method` dot notation.
 - Fails if the symbol cannot be found in the file's document symbol tree.
 - After replacement, the language server is notified via `didChange`.
@@ -1826,6 +1843,7 @@ after an existing one, or appending related code near a symbol.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
 | `symbol_path` | string | yes | Symbol name in dot notation |
 | `code` | string | yes | Code to insert after the symbol |
 
@@ -1857,6 +1875,7 @@ decorators, or related code above an existing definition.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
 | `symbol_path` | string | yes | Symbol name in dot notation |
 | `code` | string | yes | Code to insert before the symbol |
 
@@ -1888,6 +1907,7 @@ Delete a symbol only if it has zero references across the workspace. Performs a
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file containing the symbol |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
 | `symbol_path` | string | yes | Symbol name in dot notation |
 
 **Example call**
@@ -1902,13 +1922,13 @@ Delete a symbol only if it has zero references across the workspace. Performs a
 **Expected output (success)**
 
 ```
-Symbol "DeprecatedHelper" deleted (0 references found)
+Deleted symbol "DeprecatedHelper" from /home/user/project/pkg/legacy.go
 ```
 
-**Expected output (refused)**
+**Expected output (refused, returned as a tool error)**
 
 ```
-Cannot delete "DeprecatedHelper": 3 references found in 2 files
+symbol has 3 references; cannot safely delete. Use find_references to see callers, update them first, then retry safe_delete_symbol.
 ```
 
 **Notes**
@@ -1955,7 +1975,7 @@ server refreshes its caches.
 **Actual output**
 
 ```
-Notified server of 2 file change(s)
+File change notifications sent
 ```
 
 **Notes**
@@ -1998,7 +2018,7 @@ Levels from least to most verbose: `emergency` → `alert` → `critical` →
 **Actual output**
 
 ```
-Log level set to: warning
+Log level set to "warning"
 ```
 
 **Notes**
@@ -2032,10 +2052,11 @@ via `textDocument/prepareCallHierarchy`, `callHierarchy/incomingCalls`, and
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
-| `language_id` | string | yes | Language identifier |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
 | `line` | number | yes | Line of the symbol (1-based) |
 | `column` | number | yes | Column of the symbol (1-based) |
 | `direction` | string | no | `"incoming"` (callers), `"outgoing"` (callees), or `"both"` (default) |
+| `cross_concurrent` | boolean | no | If `true`, also flag callers whose call site crosses a concurrency boundary (goroutine, thread spawn, async task). Adds a `concurrent_callers` list; each entry has `caller`, `pattern` (the detected spawn pattern), `file`, and `line`. |
 
 **Example call**
 
@@ -2100,7 +2121,7 @@ subtypes (implementations/subclasses), via `textDocument/prepareTypeHierarchy`,
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `file_path` | string | yes | Absolute path to the file |
-| `language_id` | string | yes | Language identifier |
+| `language_id` | string | no | Language identifier. Auto-detected from the file extension when omitted. |
 | `line` | number | yes | Line of the symbol (1-based) |
 | `column` | number | yes | Column of the symbol (1-based) |
 | `direction` | string | no | `"supertypes"` (parents), `"subtypes"` (implementations), or `"both"` (default) |
@@ -2805,7 +2826,7 @@ Materialize the session's accumulated speculative state. By default returns a pa
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `session_id` | string | yes | Session ID |
-| `target` | string | no | Target path override for writing files |
+| `target` | string | no | Currently unused: the value is accepted but has no effect. Use `apply` to choose between returning the patch and writing to disk. |
 | `apply` | boolean | no | If `true`, write changes to disk. Default `false`. |
 
 **Example call (patch only, default)**
@@ -2825,19 +2846,25 @@ Materialize the session's accumulated speculative state. By default returns a pa
 }
 ```
 
-**Actual output**
+**Output** (with `apply: true`)
 
 ```json
 {
   "session_id": "a3f2-4b91-...",
-  "files_written": [],
-  "patch": { "changes": { "file:///path/to/file.go": [ { "...": "..." } ] } }
+  "files_written": 1,
+  "patch": {
+    "file:///path/to/file.go": "package main\n\n// full file content after the session's edits\n..."
+  }
 }
 ```
 
 **Notes**
 
 - Default is functional (patch only, no disk writes). Callers opt into disk writes explicitly with `apply: true`.
+- `patch` maps each file URI in the session to that file's **full content**
+  after the session's edits. It is not a `WorkspaceEdit` or a diff.
+- `files_written` is the number of files written to disk. It is omitted when
+  zero (the default, patch-only call).
 - Commit is only allowed from a session in `evaluated` or `mutated` state; prohibited on `dirty` or `created` sessions.
 - Call `destroy_session` after committing to release resources.
 
@@ -3059,7 +3086,7 @@ etc.) whose range contains a given cursor position. Composes
 | `file_path` | string | yes | Absolute path to the file |
 | `language_id` | string | no | Language identifier (used for document open) |
 | `line` | number | no | 1-based line number of the cursor position |
-| `character` | number | no | 1-based character offset of the cursor (aliased from `column`) |
+| `column` | number | no | 1-based column of the cursor. Defaults to `1`. |
 | `position_pattern` | string | no | `@@`-syntax pattern for cursor placement (see Position-pattern section) |
 
 **Example call**
@@ -3069,7 +3096,7 @@ etc.) whose range contains a given cursor position. Composes
   "file_path": "/home/user/projects/myproject/main.go",
   "language_id": "go",
   "line": 12,
-  "character": 5
+  "column": 5
 }
 ```
 
@@ -3089,7 +3116,7 @@ etc.) whose range contains a given cursor position. Composes
 
 - `findInnermostSymbol` walks the DocumentSymbol tree recursively and returns the deepest symbol whose range contains the cursor, so clicking inside a method body returns the method, not the enclosing class.
 - `start_line` and `end_line` are 1-based.
-- Provide `line`+`character`, or `position_pattern` with `@@`. At least one position input is required.
+- Provide `line` (and optionally `column`), or `position_pattern` with `@@`. At least one position input is required. The older name `character` is still accepted as an alias for `column`.
 - CI-verified across all 31 languages via `testGetSymbolSource`.
 
 ---
@@ -3158,9 +3185,12 @@ Dispatches to a per-language toolchain command based on `language_id`:
 
 ### Position-pattern parameter (`position_pattern`)
 
-Five tools accept an optional `position_pattern` field:
-`inspect_symbol`, `find_references`, `go_to_definition`,
-`rename_symbol`, and `get_symbol_source`. When provided, it replaces the `line`/`column` pair.
+Seven tools accept an optional `position_pattern` field: `inspect_symbol`,
+`find_references`, `rename_symbol`, `get_symbol_source`, `explore_symbol`,
+`explore`, and `refactor`. When provided, it replaces the `line`/`column` pair.
+
+`go_to_definition` also lists `position_pattern` in its schema, but its handler
+currently ignores the field and requires `line` and `column`.
 
 **How it works**
 
@@ -3190,17 +3220,42 @@ passing the line/column manually, but resistant to line number drift.
 
 ### Dry-run preview for `rename_symbol`
 
-`rename_symbol` now accepts an optional `dry_run` boolean parameter.
+`rename_symbol` applies its edit to disk unless `dry_run` is `true`.
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `dry_run` | boolean | no | If true, return the workspace edit preview without writing to disk (default: false) |
+| `dry_run` | boolean | no | If `true`, return the edit preview without writing to disk. Default `false`. |
+
+**Dry-run output** (always JSON, whatever `AGENT_LSP_OUTPUT_FORMAT` says)
+
+```json
+{
+  "workspace_edit": { "changes": { "file:///project/pkg/types.go": [ { "...": "..." } ] } },
+  "preview": {
+    "files": 2,
+    "locations": 5,
+    "file_names": ["types.go", "session.go"],
+    "note": "dry_run=true: preview only, nothing written. Re-run rename_symbol without dry_run to apply."
+  }
+}
+```
+
+`workspace_edit` is the raw LSP edit (0-based coordinates), included so you can
+inspect every site. `preview.files` and `preview.locations` count the edited
+files and edit sites; `preview.file_names` lists the edited files' base names.
+
+To apply, call `rename_symbol` again with the same arguments and without
+`dry_run`. Do not reconstruct the preview into an `apply_edit` call.
+
+**Normal mode** (`dry_run` omitted or `false`): the edit is written to disk and
+the tool returns a text summary, such as
+`Renamed to "SessionToken" across 5 location(s) in 2 file(s): types.go, session.go`.
 
 ### Glob exclusions for `rename_symbol`
 
 `rename_symbol` accepts an optional `exclude_globs` array. Files matching
-any pattern are excluded from the returned WorkspaceEdit. The rename
-still executes on all other files.
+any pattern are left out of the edit (and out of the dry-run preview). The
+rename still executes on all other files.
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
@@ -3217,20 +3272,6 @@ still executes on all other files.
   "exclude_globs": ["vendor/**", "**/*_gen.go", "**/*_generated.go"]
 }
 ```
-
-**Dry-run output**
-
-```json
-{
-  "workspace_edit": { "...": "full WorkspaceEdit as usual" },
-  "preview": {
-    "note": "Dry run, no files were modified. Call apply_edit with workspace_edit to commit."
-  }
-}
-```
-
-**Normal mode** (`dry_run` omitted or false): behavior unchanged, returns the
-`WorkspaceEdit` directly, ready for `apply_edit`.
 
 ---
 
@@ -3331,7 +3372,7 @@ allowed and forbidden tools, and the full tool call history since activation.
 
 ## Skills
 
-Twenty-two agent-native skills compose agent-lsp tools into single-command
+Twenty-four agent-native skills compose agent-lsp tools into single-command
 workflows. Install with `cd skills && ./install.sh`.
 
 | Skill | Tools used | Purpose |
@@ -3339,7 +3380,7 @@ workflows. Install with `cd skills && ./install.sh`.
 | `/lsp-safe-edit` | `preview_edit`, `get_diagnostics`, `suggest_fixes`, `apply_edit` | Speculative preview before disk write (`preview_edit`); before/after diagnostic diff; surfaces code actions on introduced errors; handles multi-file edits |
 | `/lsp-edit-export` | `find_references`, `inspect_symbol`, `preview_edit` | Safe editing of exported symbols. Finds all callers first, then validates the edit |
 | `/lsp-edit-symbol` | `find_symbol`, `list_symbols`, `apply_edit` | Edit a named symbol without knowing its file or position. Resolves name to definition, retrieves full range, applies edit |
-| `/lsp-rename` | `prepare_rename`, `rename_symbol` (dry_run), `apply_edit`, `get_diagnostics` | Two-phase rename: `prepare_rename` validates position first, then preview all sites, confirm, apply atomically |
+| `/lsp-rename` | `prepare_rename`, `rename_symbol` (`dry_run` preview, then apply), `get_diagnostics` | Two-phase rename: `prepare_rename` validates position first, then preview all sites with `dry_run`, confirm, and re-run `rename_symbol` to apply |
 | `/lsp-verify` | `get_diagnostics`, `run_build`, `run_tests` | Full three-layer check: LSP diagnostics + build + tests, summarizes pass/fail |
 | `/lsp-simulate` | `create_simulation_session`, `preview_edit`, `simulate_chain`, `evaluate_session` | Speculative editing: test changes without touching the file; supports single edits, sessions, and chained multi-edit sequences |
 | `/lsp-impact` | `find_references`, `find_callers`, `type_hierarchy` | Blast-radius analysis before renaming or deleting. Maps all callers, implementors, and subtypes |
@@ -3356,6 +3397,10 @@ workflows. Install with `cd skills && ./install.sh`.
 | `/lsp-extract-function` | `list_symbols`, `suggest_fixes`, `execute_command`, `apply_edit`, `get_diagnostics`, `format_document` | Extract a code block into a named function; primary path uses LSP code action, falls back to manual extraction |
 | `/lsp-fix-all` | `get_diagnostics`, `suggest_fixes`, `apply_edit`, `format_document` | Bulk-apply quick-fix code actions for all diagnostics in a file |
 | `/lsp-generate` | `suggest_fixes`, `execute_command`, `apply_edit`, `format_document`, `get_diagnostics` | Trigger LSP code generation: implement interface stubs, generate test skeletons, add missing methods |
+| `/lsp-architecture` | `start_lsp`, `detect_lsp_servers`, `list_symbols`, `find_symbol`, `blast_radius` | Structural architecture overview of a codebase: languages, package map, entry points, dependency graph, and hotspots |
+| `/lsp-concurrency-audit` | `list_symbols`, `find_references`, `find_callers`, `blast_radius`, `get_symbol_source` | Concurrency safety audit for a type or file: maps fields, traces which are accessed from concurrent contexts (goroutines, threads, async tasks), and flags fields that lack synchronization |
+| `/lsp-inspect` | `blast_radius`, `find_references`, `list_symbols`, `inspect_symbol`, `get_diagnostics`, `find_callers`, `go_to_definition`, `get_cross_repo_references` | Full code quality audit for a file, package, or directory (dead symbols, silent failures, error wrapping, coverage gaps, doc drift, concurrency safety), with batch and diff modes and a severity-tiered report |
+| `/lsp-onboard` | `start_lsp`, `detect_lsp_servers`, `list_symbols`, `find_symbol`, `blast_radius`, `run_build`, `run_tests`, `get_diagnostics` | First-session project onboarding: detects build system, test runner, entry points, and key architecture patterns, and produces a project profile for the session |
 
 Skills work with any MCP client that supports tool use, not just Claude Code.
 

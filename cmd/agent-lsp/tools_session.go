@@ -41,13 +41,13 @@ type SimulateEditArgs struct {
 type EvaluateSessionArgs struct {
 	SessionID string `json:"session_id" jsonschema:"Session identifier returned by create_simulation_session"`
 	Scope     string `json:"scope,omitempty" jsonschema:"Evaluation scope: file (fast, single file) or workspace (full, all files). Default: file"`
-	TimeoutMs int    `json:"timeout_ms,omitempty" jsonschema:"Timeout in milliseconds for LSP diagnostics collection. Default: 5000"`
+	TimeoutMs int    `json:"timeout_ms,omitempty" jsonschema:"Timeout in milliseconds for LSP diagnostics collection. Default: 3000 for file scope\\, 8000 for workspace scope"`
 }
 
 type SimulateChainArgs struct {
 	SessionID string           `json:"session_id" jsonschema:"Session identifier returned by create_simulation_session"`
 	Edits     []map[string]any `json:"edits" jsonschema:"Array of edit objects, each with file_path, start_line, start_column, end_line, end_column, new_text"`
-	TimeoutMs int              `json:"timeout_ms,omitempty" jsonschema:"Timeout in milliseconds for LSP diagnostics collection. Default: 5000"`
+	TimeoutMs int              `json:"timeout_ms,omitempty" jsonschema:"Timeout in milliseconds for LSP diagnostics collection. Default: 3000 for file scope\\, 8000 for workspace scope"`
 }
 
 type CommitSessionArgs struct {
@@ -75,7 +75,7 @@ type SimulateEditAtomicArgs struct {
 	EndColumn     int    `json:"end_column" jsonschema:"1-indexed end column of the range to replace"`
 	NewText       string `json:"new_text" jsonschema:"Replacement text for the specified range"`
 	Scope         string `json:"scope,omitempty" jsonschema:"Evaluation scope: file (fast, single file) or workspace (full, all files). Default: file"`
-	TimeoutMs     int    `json:"timeout_ms,omitempty" jsonschema:"Timeout in milliseconds for LSP diagnostics collection. Default: 5000"`
+	TimeoutMs     int    `json:"timeout_ms,omitempty" jsonschema:"Timeout in milliseconds for LSP diagnostics collection. Default: 3000 for file scope\\, 8000 for workspace scope"`
 }
 
 func registerSessionTools(d toolDeps) {

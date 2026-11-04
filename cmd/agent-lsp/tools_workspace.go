@@ -66,8 +66,8 @@ type ApplyEditArgs struct {
 }
 
 type ExecuteCommandArgs struct {
-	Command   string           `json:"command" jsonschema:"LSP command identifier (from code action's command field)"`
-	Arguments []map[string]any `json:"arguments,omitempty" jsonschema:"Command arguments as array of JSON objects"`
+	Command   string `json:"command" jsonschema:"LSP command identifier (from code action's command field)"`
+	Arguments []any  `json:"arguments,omitempty" jsonschema:"Command arguments: an array of JSON values (objects\\, strings\\, numbers\\, ...)\\, passed to the server as is"`
 }
 
 type DidChangeWatchedFilesArgs struct {
@@ -81,7 +81,7 @@ type SetLogLevelArgs struct {
 type FormatDocumentArgs struct {
 	FilePath     string `json:"file_path" jsonschema:"Absolute path to the file to format"`
 	LanguageID   string `json:"language_id,omitempty"`
-	TabSize      int    `json:"tab_size,omitempty" jsonschema:"Tab size in spaces. Default: 4"`
+	TabSize      int    `json:"tab_size,omitempty" jsonschema:"Tab size in spaces. Default: 2"`
 	InsertSpaces *bool  `json:"insert_spaces,omitempty" jsonschema:"Use spaces instead of tabs. Default: true"`
 }
 
@@ -92,7 +92,7 @@ type FormatRangeArgs struct {
 	StartColumn  int    `json:"start_column" jsonschema:"1-indexed start column of the range to format"`
 	EndLine      int    `json:"end_line" jsonschema:"1-indexed end line of the range to format"`
 	EndColumn    int    `json:"end_column" jsonschema:"1-indexed end column of the range to format"`
-	TabSize      int    `json:"tab_size,omitempty" jsonschema:"Tab size in spaces. Default: 4"`
+	TabSize      int    `json:"tab_size,omitempty" jsonschema:"Tab size in spaces. Default: 2"`
 	InsertSpaces *bool  `json:"insert_spaces,omitempty" jsonschema:"Use spaces instead of tabs. Default: true"`
 }
 

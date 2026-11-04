@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-67%2F67-brightgreen.svg" alt="CI Coverage"></a>
+  <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-66%2F66-brightgreen.svg" alt="CI Coverage"></a>
   <a href="#multi-language-support"><img src="https://img.shields.io/badge/languages-30_CI--verified-brightgreen.svg" alt="Languages"></a>
   <a href="https://github.com/blackwell-systems/mcp-assert"><img src="https://raw.githubusercontent.com/blackwell-systems/mcp-assert/main/assets/badge-passing.svg?v=3" alt="mcp-assert: passing" height="20"></a>
   <a href="https://agentskills.io"><img src="../../assets/badge-agentskills.svg" alt="Agent Skills"></a>
@@ -17,7 +17,7 @@
   <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
 </p>
 
-**面向 AI 智能体的代码智能基础设施。** 67 个工具，32 种经 CI 验证的语言，24 个智能体工作流。单个 Go 二进制文件。
+**面向 AI 智能体的代码智能基础设施。** 66 个工具，32 种经 CI 验证的语言，24 个智能体工作流。单个 Go 二进制文件。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh && agent-lsp init
@@ -102,8 +102,8 @@ agent-lsp 的 CI 在每次推送时都会针对真实的固定装置代码库运
 
 | 配置 | 工具 | 相对 JSON 的节省 |
 |---------|-------|----------------|
-| Tabular | 全部 66 个工具 | **30-51%** |
-| Graph | blast_radius、find_callers、explore_symbol、find_references、type_hierarchy、cross_repo、detect_changes、list_symbols | **79-84%** |
+| Tabular | find_references、get_diagnostics、detect_changes 等 | **30-51%** |
+| Graph | list_symbols、find_symbol、blast_radius、find_callers、explore_symbol、type_hierarchy、get_cross_repo_references | **79-84%** |
 | Graph + 会话去重 | 相同，通过 [gcf-proxy](https://github.com/blackwell-systems/gcf-proxy) `--session` | **92.7%**（第 5 次调用） |
 
 分组/嵌套的响应（符号下的调用方、带相关信息的诊断）也会被表格化，在该形态下相对 JSON 约节省 14%（[详情](../../docs/guide/gcf-integration.md#nested-container-responses-grouped-data)）。
@@ -132,7 +132,7 @@ Python 和 TypeScript 项目在 `find_references` 可用之前需要数分钟的
 
 技能告知智能体正确的操作顺序。阶段强制让运行时*阻止*违规操作，而不是信任智能体去遵循指令。
 
-当智能体激活一个技能时，每一次工具调用都会根据当前阶段的权限进行检查。在影响范围分析期间调用 `apply_edit` 不会悄然继续；它会返回一个带有具体恢复指引的错误（“请先完成 blast_radius 阶段，允许的工具：[blast_radius, find_references]”）。随着智能体调用后续阶段的工具，阶段会自动推进。
+当智能体激活一个技能时，每一次工具调用都会根据当前阶段的权限进行检查。在影响范围分析期间调用 `apply_edit` 不会悄然继续；它会返回一个带有具体恢复指引的错误（`Recovery: apply_edit becomes available in the "apply" phase. Next phase is "speculative_preview". Allowed tools: [open_document get_diagnostics preview_edit simulate_chain]`）。随着智能体调用后续阶段的工具，阶段会自动推进。
 
 没有其他 MCP 工具提供方在运行时强制工作流顺序。参见 [docs/guide/phase-enforcement.md](../../docs/guide/phase-enforcement.md)。
 
@@ -161,9 +161,9 @@ Python 和 TypeScript 项目在 `find_references` 可用之前需要数分钟的
 | [Cursor](https://cursor.com) | stdio | `agent-lsp init` |
 | [Windsurf](https://windsurf.com) | stdio | `agent-lsp init` |
 | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | stdio | `agent-lsp init` |
-| [Continue](https://continue.dev) | stdio | `agent-lsp init` |
+| [Continue](https://continue.dev) | stdio | [mcp-clients.md](../getting-started/mcp-clients.md) |
 | [Cline](https://github.com/cline/cline) | stdio | `agent-lsp init` |
-| 任何 MCP 客户端 | HTTP+SSE | `agent-lsp --http --port 8080` |
+| 任何 MCP 客户端 | Streamable HTTP | `AGENT_LSP_TOKEN=secret agent-lsp --http --port 8080` |
 
 复制粘贴即用的配置参见 [docs/getting-started/mcp-clients.md](../../docs/getting-started/mcp-clients.md)。
 
@@ -195,6 +195,7 @@ Python 和 TypeScript 项目在 `find_references` 可用之前需要数分钟的
 
 | 技能 | 用途 |
 |-------|---------|
+| `/lsp-architecture` | Structural architecture overview: languages, package map, entry points, dependency graph, and hotspots |
 | `/lsp-onboard` | 首次会话的项目上手：检测语言、映射包、查找入口点和热点、检查诊断 |
 
 **理解不熟悉的代码**
@@ -246,7 +247,7 @@ docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-l
 docker run --rm -i -v /your/project:/workspace ghcr.io/blackwell-systems/agent-lsp:python python:pyright-langserver,--stdio
 ```
 
-**HTTP 模式**（持久服务，远程客户端通过 HTTP+SSE 连接）：
+**HTTP 模式**（持久服务，远程客户端通过 Streamable HTTP 连接）：
 
 ```bash
 docker run --rm \
@@ -254,7 +255,7 @@ docker run --rm \
   -v /your/project:/workspace \
   -e AGENT_LSP_TOKEN=your-secret-token \
   ghcr.io/blackwell-systems/agent-lsp:go \
-  --http --port 8080 go:gopls
+  --http --port 8080 --listen-addr 0.0.0.0 go:gopls
 ```
 
 镜像默认以非 root 用户（uid 65532）运行。请通过环境变量设置 `AGENT_LSP_TOKEN`，切勿在命令行上使用 `--token`。镜像同时镜像到 Docker Hub（`blackwellsystems/agent-lsp`）。完整标签列表、HTTP 模式设置和安全加固选项参见 [DOCKER.md](../../DOCKER.md)。
@@ -311,7 +312,7 @@ go install github.com/blackwell-systems/agent-lsp/cmd/agent-lsp@latest
 
 | 语言 | 服务器 | 安装 |
 |----------|--------|---------|
-| TypeScript / JavaScript | `typescript-language-server` | `npm i -g typescript-language-server typescript` |
+| TypeScript / JavaScript | `typescript-language-server` | `npm i -g typescript-language-server typescript@6` |
 | Python | `pyright-langserver` | `npm i -g pyright` |
 | Go | `gopls` | `go install golang.org/x/tools/gopls@latest` |
 | Rust | `rust-analyzer` | `rustup component add rust-analyzer` |
@@ -341,7 +342,7 @@ agent-lsp init
 ```json
 {
   "mcpServers": {
-    "lsp": {
+    "agent-lsp": {
       "type": "stdio",
       "command": "agent-lsp",
       "args": [
@@ -369,13 +370,13 @@ cd /tmp/agent-lsp-skills/skills && ./install.sh --copy
 
 ### 第 6 步：允许工具权限（Claude Code）
 
-对于 Claude Code，将 `mcp__lsp__*` 添加到你的权限允许列表，使全部 67 个工具无需逐工具的批准提示即可使用：
+对于 Claude Code，将 `mcp__agent-lsp__*` 添加到你的权限允许列表，使全部 66 个工具无需逐工具的批准提示即可使用：
 
 ```json
 // ~/.claude/settings.json
 {
   "permissions": {
-    "allow": ["mcp__lsp__*"]
+    "allow": ["mcp__agent-lsp__*"]
   }
 }
 ```
@@ -392,13 +393,13 @@ cd /tmp/agent-lsp-skills/skills && ./install.sh --copy
 start_lsp(root_dir="/your/project")
 ```
 
-这是智能体所做的事，而非你需要输入的内容。然后即可使用全部 67 个工具中的任意一个。会话保持热状态；切换文件时无需重启。
+这是智能体所做的事，而非你需要输入的内容。然后即可使用全部 66 个工具中的任意一个。会话保持热状态；切换文件时无需重启。
 
 ## agent-lsp 的独特之处
 
 | 能力 | 详情 |
 |------------|---------|
-| 工具 | **67** |
+| 工具 | **66** |
 | 语言（经 CI 验证） | **32**，每次推送均进行端到端集成测试 |
 | 智能体工作流（技能） | **24**，命名的多步骤流程，可通过 MCP `prompts/list` 发现 |
 | 推测式执行 | **8 个工具**，在写入磁盘前模拟更改 |
@@ -408,7 +409,7 @@ start_lsp(root_dir="/your/project")
 | 类型层次 | **✓**，经 CI 验证 |
 | 跨仓库引用 | **✓**，多根工作区 |
 | 自动监听 | **✓**，始终开启、去抖的文件监听 |
-| HTTP+SSE 传输 | **✓**，bearer token 鉴权，非 root Docker |
+| Streamable HTTP 传输 | **✓**，bearer token 鉴权，非 root Docker |
 | 分发 | **单个 Go 二进制文件**，10 个安装渠道 |
 
 ## 使用场景
@@ -424,13 +425,13 @@ start_lsp(root_dir="/your/project")
 
 32 种语言，在每次 CI 运行时都针对真实的语言服务器进行端到端的 CI 验证。没有其他 MCP-LSP 实现在 CI 中测试哪怕一种语言。
 
-Go、Python、TypeScript、Rust、Java、C、C++、C#、Ruby、PHP、Kotlin、Swift、Scala、Zig、Lua、Elixir、Gleam、Clojure、Dart、Terraform、Nix、Prisma、SQL、MongoDB、JavaScript、YAML、JSON、Dockerfile、CSS、HTML、MQL。
+Go、Python、TypeScript、Rust、Java、C、C++、C#、Ruby、PHP、Kotlin、Swift、Scala、Zig、Lua、Elixir、Gleam、Clojure、Dart、Terraform、Nix、Prisma、SQL、MongoDB、JavaScript、YAML、JSON、Dockerfile、CSS、HTML、MQL、Luau。
 
 完整的覆盖矩阵参见 [docs/reference/language-support.md](../../docs/reference/language-support.md)。
 
 ## 工具
 
-67 个工具，涵盖导航、分析、重构、符号编辑、组合式探索、安全编辑、推测式执行以及会话生命周期。全部经 CI 验证。
+66 个工具，涵盖导航、分析、重构、符号编辑、组合式探索、安全编辑、推测式执行以及会话生命周期。全部经 CI 验证。
 
 带参数和示例的完整参考参见 [docs/reference/tools.md](../../docs/reference/tools.md)。
 

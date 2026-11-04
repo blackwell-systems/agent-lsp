@@ -3,7 +3,7 @@ name: lsp-edit-export
 description: Safe workflow for editing exported symbols or public APIs. Use when changing a function signature, modifying a public type, or altering any symbol used outside its own package — finds all callers first so nothing breaks silently.
 argument-hint: "[symbol-name]"
 user-invocable: true
-allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__open_document mcp__lsp__find_references mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__replace_symbol_body Edit Write
+allowed-tools: mcp__agent-lsp__go_to_symbol mcp__agent-lsp__open_document mcp__agent-lsp__find_references mcp__agent-lsp__get_diagnostics mcp__agent-lsp__run_build mcp__agent-lsp__replace_symbol_body Edit Write
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -42,7 +42,7 @@ The confirmation gate in step 3 exists precisely for that case.
 
 ## Workflow
 
-**If LSP is not yet initialized**, call `mcp__lsp__start_lsp` with the
+**If LSP is not yet initialized**, call `mcp__agent-lsp__start_lsp` with the
 workspace root first. (agent-lsp supports auto-inference from file paths, so
 explicit start is only required when switching workspaces or on a cold session.)
 
@@ -52,7 +52,7 @@ Use `go_to_symbol` to find the symbol's definition by name, without needing to
 know its file path or line number in advance:
 
 ```
-mcp__lsp__go_to_symbol({
+mcp__agent-lsp__go_to_symbol({
   "symbol_path": "PackageName.ExportedFunction",
   "workspace_root": "/abs/path/to/repo"   // optional, narrows scope
 })
@@ -73,7 +73,7 @@ position as a readable text pattern rather than raw coordinates. The `@@` marker
 indicates exactly where the cursor sits (the character immediately after `@@`):
 
 ```
-mcp__lsp__find_references({
+mcp__agent-lsp__find_references({
   "file_path": "<definition file from step 1>",
   "position_pattern": "func @@ExportedFunction(",
   "include_declaration": false
@@ -130,7 +130,7 @@ function or method body, `replace_symbol_body` is an option that resolves the
 symbol by name and replaces its full range without position math:
 
 ```
-mcp__lsp__replace_symbol_body({
+mcp__agent-lsp__replace_symbol_body({
   "file_path": "<definition file>",
   "symbol_path": "ExportedFunction",
   "new_body": "<new full definition>"
@@ -145,7 +145,7 @@ Collect diagnostics **before** the edit so you have a baseline for comparison
 in step 5:
 
 ```
-mcp__lsp__get_diagnostics({
+mcp__agent-lsp__get_diagnostics({
   "file_path": "<definition file>"
 })
 ```
@@ -163,7 +163,7 @@ known diagnostic errors outstanding.
 ### Step 6 — Run the build
 
 ```
-mcp__lsp__run_build({
+mcp__agent-lsp__run_build({
   "workspace_root": "/abs/path/to/repo"
 })
 ```

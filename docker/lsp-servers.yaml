@@ -11,7 +11,7 @@ servers:
   - name: typescript-language-server
     language: typescript
     package_manager: npm
-    install_command: "npm install -g typescript-language-server typescript"
+    install_command: "npm install -g typescript-language-server@6.0.3 typescript@6.0.3"
     binary: typescript-language-server
   - name: pyright-langserver
     language: python

@@ -36,13 +36,13 @@ Detects amd64/arm64, downloads the matching zip from GitHub Releases, installs t
 scoop bucket add blackwell-systems https://github.com/blackwell-systems/agent-lsp
 scoop install blackwell-systems/agent-lsp
 ```
-Manifest at `bucket/agent-lsp.json` in this repo (the repo doubles as the Scoop bucket). `autoupdate` is configured, so `scoop update agent-lsp` picks up new releases automatically.
+Manifest at `bucket/agent-lsp.json` in this repo (the repo doubles as the Scoop bucket). The manifest declares `checkver` and `autoupdate` blocks, but no release job rewrites it: the committed manifest is still pinned to v0.2.1, so `scoop install` and `scoop update` currently get v0.2.1 unless the manifest is bumped by hand. The release pipeline does not update this channel today, and nothing in this repo runs Scoop's `checkver`/autoupdate tooling.
 
 ### Winget (Windows)
 ```powershell
 winget install BlackwellSystems.agent-lsp
 ```
-Manifests at `winget/manifests/b/BlackwellSystems/agent-lsp/`. Submit new versions as a PR to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs). Copy the `winget/manifests/` directory structure, update version and hashes.
+Published by the `winget` job in `release.yml` after GoReleaser completes: `vedantmgoyal9/winget-releaser` opens a PR to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) from the `blackwell-systems` fork, using the Windows zips from the GitHub Release and keeping the 5 most recent versions. The job is non-core: it often reports failure while every other channel succeeds. Reference manifests live at `winget/manifests/b/BlackwellSystems/agent-lsp/`.
 
 ### npm
 ```bash
@@ -81,7 +81,9 @@ docker pull ghcr.io/blackwell-systems/agent-lsp:python
 docker pull ghcr.io/blackwell-systems/agent-lsp:fullstack
 ```
 
-All images are multi-arch (`linux/amd64` + `linux/arm64`) via Docker manifest lists. Native performance on Apple Silicon and AWS Graviton, with no Rosetta/QEMU emulation. Built and pushed to both registries automatically by GoReleaser on every `v*` tag. Tags: `latest`, `base`, semver (`0.1.2`, `0.1`), and per-language (`go`, `typescript`, `python`, `ruby`, `cpp`, `php`, `web`, `backend`, `fullstack`, `full`).
+All images are multi-arch (`linux/amd64` + `linux/arm64`). Native performance on Apple Silicon and AWS Graviton, with no Rosetta/QEMU emulation at runtime. Pushed to both registries automatically on every `v*` tag:
+- **Base image** (GoReleaser `dockers:` + `docker_manifests:`): tags `latest`, `base`, and semver (`0.1.2`, `0.1`).
+- **Language, combo, and full images** (the `docker-images` matrix job in `release.yml`, `docker/build-push-action` with QEMU): tags `go`, `typescript`, `python`, `ruby`, `cpp`, `php`, `web`, `backend`, `fullstack`, `full`. These tags are rolling (no per-version tag).
 
 ## MCP registries
 
@@ -145,16 +147,20 @@ Built with mkdocs-material from the `docs/` folder. Deployed to GitHub Pages aut
 
 ## Release pipeline
 
-Every `git tag v*` push triggers three sequential CI jobs:
+Every `git tag v*` push runs `.github/workflows/release.yml`:
 
 ```
-release              → GoReleaser: binaries, GitHub Release, Homebrew formula,
-                       all 11 Docker images (GHCR + Docker Hub)
-npm-publish          → downloads binaries from GitHub Release, publishes 7 npm packages
-mcp-registry-publish → publishes metadata to official MCP Registry (GitHub OIDC)
+release              → tests, then GoReleaser: binaries, GitHub Release, Homebrew
+                       formula, base Docker image (GHCR + Docker Hub)
+docker-images        → (needs release) matrix build of the 10 language/combo/full images
+winget               → (needs release) PR to microsoft/winget-pkgs
+npm-publish          → (needs release) publishes 7 npm packages (OIDC trusted publishing)
+pypi-publish         → (needs release) builds platform wheels, uploads with twine
+mcp-registry-publish → (needs npm-publish) waits for npm to serve the version, then
+                       publishes server.json to the official MCP Registry (GitHub OIDC)
 ```
 
-Docker images are built inside the `release` job by GoReleaser (`dockers:` section). 22 images (11 tags × 2 architectures) are built and combined into 11 multi-arch manifest lists via `docker_manifests`. Base images build first so downstream images can pull them as their `FROM` layer.
+The base image is built inside the `release` job by GoReleaser (`dockers:` section) as per-arch images combined into multi-arch manifest lists via `docker_manifests`. The other 10 images are built by the `docker-images` job after `release`, one matrix entry per tag. Scoop is not part of the pipeline (see above).
 
 ## Marketing and Discovery
 

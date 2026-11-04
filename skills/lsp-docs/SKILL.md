@@ -3,7 +3,7 @@ name: lsp-docs
 description: Three-tier documentation lookup for any symbol — hover → offline toolchain doc → source definition. Use when hover text is absent, insufficient, or the symbol is in an unindexed dependency.
 argument-hint: "[symbol-name]"
 user-invocable: true
-allowed-tools: mcp__lsp__inspect_symbol mcp__lsp__get_symbol_documentation mcp__lsp__go_to_definition mcp__lsp__get_symbol_source
+allowed-tools: mcp__agent-lsp__inspect_symbol mcp__agent-lsp__get_symbol_documentation mcp__agent-lsp__go_to_definition mcp__agent-lsp__get_symbol_source
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -44,7 +44,7 @@ Read-only — does not modify any files.
 Call `inspect_symbol` with the file path and cursor position (1-based).
 
 ```
-mcp__lsp__inspect_symbol({
+mcp__agent-lsp__inspect_symbol({
   "file_path": "/abs/path/to/file.go",
   "line": 42,
   "column": 8
@@ -68,7 +68,7 @@ pydoc, cargo doc) without requiring an LSP session. Works for transitive
 dependencies that the language server does not index.
 
 ```
-mcp__lsp__get_symbol_documentation({
+mcp__agent-lsp__get_symbol_documentation({
   "symbol": "fmt.Println",
   "language_id": "go",
   "file_path": "/abs/path/to/any/file/in/the/module.go",  // optional, improves Go pkg resolution
@@ -93,14 +93,14 @@ Call `go_to_definition` to navigate to the symbol definition, then call
 symbol exists in the workspace or module cache, even without a language server.
 
 ```
-mcp__lsp__go_to_definition({
+mcp__agent-lsp__go_to_definition({
   "file_path": "/abs/path/to/caller.go",
   "line": 42,
   "column": 8
 })
 // → returns definition location
 
-mcp__lsp__get_symbol_source({
+mcp__agent-lsp__get_symbol_source({
   "file_path": "<definition file from above>",
   "line": <definition line from above>
 })

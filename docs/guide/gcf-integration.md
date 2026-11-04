@@ -2,7 +2,9 @@
 
 ## Goal
 
-Add GCF (Graph Compact Format) as a native output format for agent-lsp's MCP tool responses. Tool responses currently serialized as JSON can optionally be emitted as GCF tabular format, saving 34-44% tokens on structured data.
+**Status:** Shipped (v0.13.0). GCF (Graph Compact Format) is the default output format for agent-lsp's MCP tool responses. Graph-shaped tools emit the GCF graph profile; everything else emits the GCF tabular profile, saving 30-51% tokens on structured data. JSON remains available via `AGENT_LSP_OUTPUT_FORMAT=json`.
+
+Sections below that describe the original plan are kept for history; each is marked with what actually shipped.
 
 ## Quick Start
 
@@ -46,7 +48,7 @@ These savings depend on the gcf-go **v1.7.1** encoder (the v1.5.1 nested-contain
 ## Why
 
 1. **34-44% fewer tokens on structured data.** Most agent-lsp tools return arrays of objects (symbols, references, diagnostics, callers). GCF tabular encoding eliminates field name repetition and structural delimiters.
-2. **Session dedup compounds.** Multi-turn code exploration reuses symbols. By the 5th tool call, 92.7% savings vs JSON.
+2. **Session dedup could compound (not implemented).** Multi-turn exploration reuses symbols, and gcf-go sessions can turn repeated symbols into bare references. agent-lsp does not do this today; see [Phase 4](#phase-4-session-deduplication-not-implemented).
 3. **Competitive moat.** No other MCP code intelligence server has token-optimized output.
 4. **We own both projects.** No external approval needed. Ship when ready.
 
@@ -54,21 +56,29 @@ These savings depend on the gcf-go **v1.7.1** encoder (the v1.5.1 nested-contain
 
 GCF has two encoding profiles. agent-lsp's data model determines which one applies.
 
-### Graph profile (Sections 3-6): Does NOT fit natively
+### Graph profile (Sections 3-6): Used for graph-shaped tools
 
-The graph profile has a **fixed schema**: `@id kind qualified_name score provenance`
+The graph profile has a fixed schema: `@id kind qualified_name score provenance`, plus edges (`@target<@source type`). The original plan rejected it because LSP results carry no relevance score or provenance. As shipped, agent-lsp fills those fields itself:
 
-agent-lsp's tools **do not compute** scores or provenance:
+| GCF graph field | How agent-lsp fills it |
+|----------------|------------------------|
+| `qualified_name` | Last two directory segments of the file plus the symbol name (`tools/change_impact.HandleGetChangeImpact`); spaces become underscores (`internal/encoding/gcf/graph.go`) |
+| `kind` | Mapped from LSP `SymbolKind` (`blast_radius` reports every symbol as `fn`) |
+| `score` | Positional heuristic, not a relevance model: the query target is `1.0`; related symbols score lower by distance and result order (for example call-hierarchy callers start at `0.9` and step down by `0.05`; symbol lists step down by `0.02` per position, floor `0.1`; `blast_radius` uses fixed `0.9` for callers and `0.7` for test functions) |
+| `provenance` | `lsp_resolved` (all results come from the language server); multi-server `find_symbol` results use `lsp_resolved@<server>` |
+| `distance` | `0` for the target, `1` for directly related symbols |
 
-| GCF graph field | knowing (has it) | agent-lsp (has it) |
-|----------------|-----------------|-------------------|
-| `qualified_name` | Yes | Partial (has name + file, not always qualified) |
-| `kind` | Yes | Yes (from LSP SymbolKind) |
-| `score` | Yes (relevance ranking) | **No** (LSP doesn't score results) |
-| `provenance` | Yes (lsp_resolved, ast_inferred) | **No** (all results come from LSP) |
-| `distance` | Yes (graph distance from query) | **No** (no graph distance model) |
+When the output format is `gcf`, these tools build a `*gcf.Payload` (via `gcf.BuildGraphPayload`) and `EncodeResult` (`internal/tools/helpers.go`) encodes it with the graph profile:
 
-**Bottom line:** The graph profile was designed for knowing's data model (scored, ranked, distance-grouped symbols). Forcing it onto agent-lsp would require either fake values or adding a scoring layer, both of which are wrong for this phase.
+| Tool | Edge types |
+|------|-----------|
+| `list_symbols` | (symbols only) |
+| `find_symbol` | (symbols only) |
+| `blast_radius` | `calls` |
+| `find_callers` | `calls` |
+| `explore_symbol` | `calls` |
+| `type_hierarchy` | `extends`, `implements` |
+| `get_cross_repo_references` | `references` |
 
 ### Tabular profile (Section 6a): Fits naturally
 
@@ -81,7 +91,7 @@ NewServer|fn|server.go|12|1|8
 HandleRequest|method|handler.go|78|3|12
 ```
 
-This maps directly to every agent-lsp tool response:
+Every other structured tool response goes through the tabular profile:
 
 | Tool | Current JSON shape | Tabular fit |
 |------|-------------------|-------------|
@@ -93,22 +103,18 @@ This maps directly to every agent-lsp tool response:
 | explore_symbol | `{hover, impls, calls, refs}` | Object with nested arrays |
 | get_completions | `[{label, kind, detail}]` | Direct: flat array |
 
-### Future: Graph profile as opt-in upgrade
-
-If agent-lsp later adds relevance scoring (e.g., ranking blast_radius results by caller count, or scoring symbols by distance from query center), the graph profile becomes a natural fit. This is a separate feature decision, not a serialization concern.
-
 ## Current State
 
 ### Serialization Layer
 
-All 66 tool handlers follow the same pattern:
+Tool handlers encode their responses with `EncodeResult(ctx, data)` (`internal/tools/helpers.go`), which picks the format from the request context:
 
-```go
-// internal/tools/*.go (53 json.Marshal call sites)
-response := map[string]any{ ... }
-data, err := json.Marshal(response)
-return types.TextResult(string(data)), nil
-```
+- `gcf` (default): a `*gcf.Payload` is encoded with the graph profile; any other value is encoded with the tabular profile (`internal/encoding/gcf/encode.go`). If GCF encoding fails, the response falls back to JSON.
+- `json`: plain `json.Marshal`.
+
+The format is read once at startup from `AGENT_LSP_OUTPUT_FORMAT` (default `gcf`, `cmd/agent-lsp/server.go`) and injected into each tool call's context by the tool registration wrapper. There is no per-session or per-tool negotiation.
+
+Payloads a caller must round-trip byte-exact (a `WorkspaceEdit` handed back to `apply_edit`) always use `EncodeResultJSON`, regardless of the format, because LLM callers corrupt the tabular form of a text edit (issue #12).
 
 The response type is always:
 
@@ -143,9 +149,11 @@ blast_radius, find_references, list_symbols, and find_callers produce the larges
 
 ## Architecture
 
-### Phase 1: Format negotiation
+The phases below are the original plan. Shipped: a process-wide format switch (instead of negotiation), the encoding package, the `EncodeResult` helper, and graph-profile payloads for graph-shaped tools. Not implemented: session deduplication and delta encoding.
 
-Add format preference to the MCP session:
+### Phase 1: Format negotiation (not implemented; replaced by an env var)
+
+Planned: add format preference to the MCP session:
 
 ```go
 // Option A: Per-tool parameter
@@ -156,11 +164,11 @@ Add format preference to the MCP session:
 {"capabilities": {"experimental": {"output_format": "gcf"}}}
 ```
 
-Option B is cleaner: set once, applies to all tool responses. Agent-lsp reads the capability during session init and stores it.
+Neither option shipped. The format is set process-wide with `AGENT_LSP_OUTPUT_FORMAT` and defaults to `gcf`.
 
-### Phase 2: Encoding layer
+### Phase 2: Encoding layer (shipped)
 
-New package: `internal/encoding/gcf/`
+Package: `internal/encoding/gcf/` (`encode.go` for the tabular profile via `EncodeGenericChecked`, `graph.go` for graph payloads). Original sketch:
 
 ```go
 // internal/encoding/gcf/encode.go
@@ -175,9 +183,9 @@ func Encode(tool string, data any) (string, error) {
 }
 ```
 
-### Phase 3: Migration helper
+### Phase 3: Migration helper (shipped as `EncodeResult`)
 
-Replace the 53 `json.Marshal` calls with a format-aware helper:
+Shipped as `EncodeResult(ctx, data)` in `internal/tools/helpers.go`, described under [Serialization Layer](#serialization-layer). Original sketch:
 
 ```go
 // internal/tools/helpers.go
@@ -203,25 +211,9 @@ func encodeResult(ctx context.Context, tool string, data any) (types.ToolResult,
 }
 ```
 
-### Phase 4: Session deduplication
+### Phase 4: Session deduplication (not implemented)
 
-agent-lsp already has session state (`internal/session/`). Add GCF session tracking so that symbols sent in prior responses become bare references:
-
-```go
-// internal/session/gcf_state.go
-type GCFState struct {
-    mu      sync.Mutex
-    session *gcfgo.Session
-}
-
-func (s *GCFState) Encode(data any) string {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    return s.session.EncodeGeneric(data)
-}
-```
-
-Session dedup is where the compounding savings happen. Multi-turn exploration (blast_radius then explore then find_callers then inspect) reuses records automatically. By the 5th call, 92.7% cumulative savings vs JSON.
+Planned: track symbols sent in prior responses with a gcf-go session so repeats become bare references (`internal/session/gcf_state.go`). This was never built; there is no `gcf_state.go`, and each tool response is encoded independently. The projected compounding savings (92.7% cumulative by the 5th call) are a gcf-go benchmark figure, not something agent-lsp delivers today.
 
 ### Phase 5: Delta encoding (future)
 
@@ -229,7 +221,9 @@ When a user re-queries after an edit, delta encoding sends only what changed. Th
 
 **Decision:** Defer until tabular delta encoding is specified and implemented in gcf-go.
 
-## Example: blast_radius Before and After
+## Example: tabular encoding of a blast_radius-shaped response
+
+With the default `gcf` format, `blast_radius` itself now emits the graph profile (see [Graph Profile Output](#graph-profile-output)). This example shows how the tabular profile encodes the same nested shape, as it does for other grouped responses such as `detect_changes`.
 
 ### Current JSON output (estimated ~2,400 tokens for 12 symbols)
 
@@ -295,52 +289,21 @@ Setup|setup.go|20
 
 The field declarations (`{name,file,line}`) appear once per section. Each record is just pipe-separated values. For a blast_radius response with 50 symbols, the savings grow linearly because the eliminated waste is per-record.
 
-## Rollout Plan
+## Rollout Status
 
-### Milestone 1: Format negotiation (2 days)
-
-- [ ] Add `output_format` field to session config
-- [ ] Read format preference from MCP experimental capabilities
-- [ ] Thread format through context to tool handlers
-- [ ] Add `--format gcf` flag to CLI for testing
-
-### Milestone 2: Tabular encoding for high-value tools (3 days)
-
-- [ ] Add `internal/encoding/gcf/` package
-- [ ] Add `encodeResult` helper to `internal/tools/helpers.go`
-- [ ] Migrate blast_radius (change_impact.go)
-- [ ] Migrate find_references, list_symbols, find_symbol (navigation.go, analysis.go)
-- [ ] Migrate find_callers, call_hierarchy (callhierarchy.go)
-- [ ] Migrate cross_repo (cross_repo.go)
-- [ ] Integration tests: verify GCF output decodes to equivalent data
-
-### Milestone 3: Tabular encoding for remaining tools (2 days)
-
-- [ ] Migrate get_diagnostics, suggest_fixes
-- [ ] Migrate explore_symbol, detect_changes
-- [ ] Migrate simulation tools (simulate_edit, preview_edit, etc.)
-- [ ] Migrate remaining tools (get_completions, semantic_tokens, etc.)
-- [ ] Skip scalar/text tools (hover, format_document, etc.)
-
-### Milestone 4: Session deduplication (2 days)
-
-- [ ] Add GCFState to session manager
-- [ ] Wire session encoding through tool handlers
-- [ ] Test: multi-turn exploration shows dedup in action
-- [ ] Benchmark: measure actual token savings across 5-call session
-
-### Milestone 5: Benchmarks and documentation (1 day)
-
-- [ ] Benchmark: JSON vs GCF token counts on real tool responses (all tool categories)
-- [ ] Update agent-lsp README with measured savings ("Token-Optimized Output" section)
-- [ ] Update GCF README to list agent-lsp as production consumer
-- [ ] Publish results
+| Planned milestone | Status |
+|-------------------|--------|
+| M1: Format negotiation | Replaced by `AGENT_LSP_OUTPUT_FORMAT` (default `gcf`); no capability negotiation, no `--format` flag |
+| M2: Tabular encoding for high-value tools | Shipped; graph-shaped tools went further and use the graph profile |
+| M3: Tabular encoding for remaining tools | Shipped via `EncodeResult`; edits that must round-trip stay JSON |
+| M4: Session deduplication | Not implemented |
+| M5: Benchmarks and documentation | Shipped: `scripts/gcf-benchmark.go` and the measured savings above |
 
 ## Dependencies
 
 | Dependency | Version | Purpose |
 |-----------|---------|---------|
-| `github.com/blackwell-systems/gcf-go` | v0.1.0 | Tabular encoding via `EncodeGeneric`, session management |
+| `github.com/blackwell-systems/gcf-go` | v1.7.1 | Tabular encoding (`EncodeGenericChecked`) and graph encoding (`Encode` on a `Payload`) |
 
 Zero additional runtime dependencies (gcf-go is zero-dep itself).
 
@@ -349,7 +312,7 @@ Zero additional runtime dependencies (gcf-go is zero-dep itself).
 ### 1. MCP clients that can't handle non-JSON text
 
 **Risk:** Some MCP clients might parse the `text` field as JSON and break on GCF output.
-**Mitigation:** GCF is opt-in via capabilities. Default remains JSON. Clients that don't negotiate get JSON.
+**Mitigation:** GCF is the default, so affected clients must set `AGENT_LSP_OUTPUT_FORMAT=json`. When GCF is active, the server instructions describe the format so agents can read it.
 
 ### 2. Comprehension regression on tabular format
 
@@ -359,7 +322,7 @@ Zero additional runtime dependencies (gcf-go is zero-dep itself).
 ### 3. Debugging difficulty
 
 **Risk:** GCF output is less familiar than JSON for debugging.
-**Mitigation:** GCF is human-readable by design. Keep JSON as default. Add `gcf decode` CLI command for debugging. Consider a `--verbose` mode that emits both formats.
+**Mitigation:** GCF is human-readable by design. Set `AGENT_LSP_OUTPUT_FORMAT=json` when debugging needs JSON.
 
 ### 4. Tabular profile maturity
 
@@ -377,42 +340,34 @@ Zero additional runtime dependencies (gcf-go is zero-dep itself).
 |--------|--------|---------------|
 | Token savings (high-value tools) | >30% vs JSON | Benchmark blast_radius, find_references, list_symbols |
 | Token savings (medium-value tools) | >20% vs JSON | Benchmark get_diagnostics, explore_symbol |
-| Session dedup (5-call session) | >80% cumulative | Benchmark multi-turn exploration |
+| Session dedup (5-call session) | >80% cumulative | Not applicable: session dedup is not implemented |
 | Comprehension accuracy | 100% on extraction tasks | Run extraction eval with real agent-lsp GCF output |
 | Zero regressions | All existing tests pass | CI green after migration |
 
-## Timeline
+## Graph Profile Output
 
-**Total: ~10 days of focused work**
-
-| Week | Milestones | Deliverable |
-|------|-----------|-------------|
-| Week 1 | M1 + M2 | Format negotiation, high-value tool encoding |
-| Week 2 | M3 + M4 + M5 | Remaining tools, session dedup, benchmarks |
-
-## Future: Graph Profile Upgrade Path
-
-If agent-lsp later adds relevance scoring (ranking symbols by caller count, blast radius, recency), the graph profile becomes viable:
+Graph-shaped tools emit the graph profile (see [Profile Fit Analysis](#graph-profile-sections-3-6-used-for-graph-shaped-tools)). Its shape:
 
 ```
-GCF tool=blast_radius budget=5000 tokens=847 symbols=12
+GCF profile=graph tool=blast_radius symbols=5 edges=3
 ## targets
-@0 fn auth.go:AuthMiddleware 0.95 lsp
-@1 fn server.go:NewServer 0.72 lsp
+@0 fn api/auth.AuthMiddleware 1.00 lsp_resolved
+@1 fn api/server.NewServer 1.00 lsp_resolved
 ## related
-@2 fn main.go:main 0.40 lsp
-@3 fn setup.go:Setup 0.35 lsp
-## edges
-@0<@2 called_by
-@0<@3 called_by
-@1<@2 called_by
+@2 fn cmd/app.main 0.90 lsp_resolved
+@3 fn api/setup.Setup 0.90 lsp_resolved
+@4 fn api/auth_test.TestAuth 0.70 lsp_resolved
+## edges [3]
+@0<@2 calls
+@1<@2 calls
+@1<@3 calls
 ```
 
-This would unlock 79-84% savings on graph tools. The scoring model is a separate feature decision tracked in the roadmap; the encoding infrastructure built in this plan will support it when it arrives.
+Symbols are grouped by distance (`targets` at distance 0, `related` at distance 1) and sorted by score within a group. For `blast_radius`, changed symbols score `1.00`, non-test callers `0.90`, and test functions `0.70`. Edges read `@target<@source type`. (Illustrative values; the qualified names depend on your file layout.)
 
 ## Open Questions
 
-1. **Should GCF be the default?** No. Opt-in via capabilities. Make default only after comprehension validation across Claude, GPT, Gemini.
+1. **Should GCF be the default?** Resolved: yes, since v0.13.0. JSON is available with `AGENT_LSP_OUTPUT_FORMAT=json`.
 2. **MCP spec alignment?** Is there an emerging standard for output format negotiation in MCP? Check with spec contributors (Sam Morrow is one).
-3. **Per-tool opt-in?** Scalar/text tools don't benefit. Format negotiation should be global with per-tool fallback to JSON when GCF adds no value.
+3. **Per-tool opt-in?** Resolved: the format is global; individual tools return JSON where GCF would hurt (edits that must round-trip) and fall back to JSON when GCF encoding fails.
 4. **Tabular delta encoding?** Currently only the graph profile supports delta. Should GCF spec add tabular deltas? If so, agent-lsp would benefit from re-query efficiency.

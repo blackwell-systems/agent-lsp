@@ -58,7 +58,7 @@ brews:
       token: "{{ .Env.GORELEASER_TAP_TOKEN }}"
     directory: Formula
     homepage: "https://github.com/blackwell-systems/agent-lsp"
-    description: "MCP server exposing 50+ language server protocol tools to AI agents"
+    description: "MCP server exposing 66 language server protocol tools to AI agents"
     license: "MIT"
     install: |
       bin.install "agent-lsp"

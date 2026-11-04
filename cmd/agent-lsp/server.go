@@ -307,7 +307,25 @@ type toolDeps struct {
 	auditLogger               *audit.Logger
 	phaseTracker              *phase.Tracker
 	notifyHub                 *notify.Hub
-	outputFormat              string // "json" (default) or "gcf"; set via AGENT_LSP_OUTPUT_FORMAT
+	outputFormat              string // "gcf" (default) or "json"; set via AGENT_LSP_OUTPUT_FORMAT
+}
+
+// registeredToolCount is the number of MCP tools registerAllTools registers.
+// It appears in the server instructions and in the rules `agent-lsp init`
+// writes; TestRegisteredToolCount fails when it drifts from the registry.
+const registeredToolCount = 66
+
+// registerAllTools registers every MCP tool on deps.server.
+func registerAllTools(deps toolDeps) {
+	registerWorkspaceTools(deps)
+	registerNavigationTools(deps)
+	registerSymbolEditTools(deps)
+	registerAnalysisTools(deps)
+	registerSessionTools(deps)
+	registerPhaseTools(deps)
+	registerExploreTools(deps)
+	registerSafeEditTools(deps)
+	registerAliasTools(deps)
 }
 
 // getOutputFormat reads the output format from the AGENT_LSP_OUTPUT_FORMAT
@@ -345,7 +363,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	outputFormat := getOutputFormat()
 
-	instructions := "This server provides 67 code intelligence tools and 24 multi-step workflow skills across 31 languages. " +
+	instructions := fmt.Sprintf("This server provides %d code intelligence tools and %d multi-step workflow skills across 31 languages. ", registeredToolCount, len(loadSkills())) +
 		"IMPORTANT: call blast_radius before editing any file. It returns all exported symbols with their callers partitioned into test vs non-test in one call. This replaces manual loops over find_references. Pass scope='all' to include unexported symbols for dead code detection. " +
 		"Task-to-tool mapping: " +
 		"all callers of all exports in a file -> blast_radius (one call); " +
@@ -401,15 +419,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		outputFormat:              outputFormat,
 	}
 
-	registerWorkspaceTools(deps)
-	registerNavigationTools(deps)
-	registerSymbolEditTools(deps)
-	registerAnalysisTools(deps)
-	registerSessionTools(deps)
-	registerPhaseTools(deps)
-	registerExploreTools(deps)
-	registerSafeEditTools(deps)
-	registerAliasTools(deps)
+	registerAllTools(deps)
 
 	// ------- Register prompts (skills as MCP prompts) -------
 	registerPrompts(server)

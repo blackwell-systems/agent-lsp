@@ -3,7 +3,7 @@ name: lsp-rename
 description: Two-phase safe rename across the entire workspace. Use when renaming any symbol, function, method, variable, type, or identifier — shows all affected sites before executing atomically via LSP. Never renames without confirmation.
 argument-hint: "[old-name] [new-name]"
 user-invocable: true
-allowed-tools: mcp__lsp__go_to_symbol mcp__lsp__prepare_rename mcp__lsp__find_references mcp__lsp__rename_symbol mcp__lsp__apply_edit mcp__lsp__get_diagnostics
+allowed-tools: mcp__agent-lsp__go_to_symbol mcp__agent-lsp__prepare_rename mcp__agent-lsp__find_references mcp__agent-lsp__rename_symbol mcp__agent-lsp__apply_edit mcp__agent-lsp__get_diagnostics
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -12,31 +12,32 @@ metadata:
     phases:
       prerequisites:
         description: Initialize LSP if needed
-        allowed: ["mcp__lsp__start_lsp"]
+        allowed: ["mcp__agent-lsp__start_lsp"]
         forbidden: []
       preview:
         description: "Locate symbol, validate rename, enumerate references, dry-run"
         allowed:
-          - "mcp__lsp__go_to_symbol"
-          - "mcp__lsp__prepare_rename"
-          - "mcp__lsp__find_references"
-          - "mcp__lsp__rename_symbol"    # dry_run=true only
+          - "mcp__agent-lsp__go_to_symbol"
+          - "mcp__agent-lsp__prepare_rename"
+          - "mcp__agent-lsp__find_references"
+          - "mcp__agent-lsp__rename_symbol"    # dry_run=true only
         forbidden:
-          - "mcp__lsp__apply_edit"
+          - "mcp__agent-lsp__apply_edit"
           - "Edit"
           - "Write"
       execute:
         description: "Capture pre-rename diagnostics, execute rename (applies directly), verify"
         allowed:
-          - "mcp__lsp__get_diagnostics"
-          - "mcp__lsp__rename_symbol"    # dry_run=false
-          - "mcp__lsp__apply_edit"
+          - "mcp__agent-lsp__get_diagnostics"
+          - "mcp__agent-lsp__rename_symbol"    # dry_run=false
+          - "mcp__agent-lsp__apply_edit"
         forbidden:
-          - "mcp__lsp__simulate_*"
-          - "mcp__lsp__run_build"
+          - "mcp__agent-lsp__simulate_*"
+          - "mcp__agent-lsp__run_build"
+          - "mcp__agent-lsp__preview_edit"
     global_forbidden:
-      - "mcp__lsp__format_document"      # rename does not format
-      - "mcp__lsp__run_tests"            # rename does not run tests
+      - "mcp__agent-lsp__format_document"      # rename does not format
+      - "mcp__agent-lsp__run_tests"            # rename does not run tests
 ---
 
 > Requires the agent-lsp MCP server.
@@ -53,7 +54,7 @@ only after explicit confirmation. Never renames without showing impact.
 
 ## Prerequisites
 
-If LSP is not yet initialized, call `mcp__lsp__start_lsp` with the workspace
+If LSP is not yet initialized, call `mcp__agent-lsp__start_lsp` with the workspace
 root first. Auto-inference applies when file paths are provided, but an explicit
 start is required when switching workspaces.
 
@@ -66,10 +67,10 @@ Find the symbol, enumerate all references, and produce a dry-run preview.
 
 ### Step 1 — Locate the symbol
 
-Call `mcp__lsp__go_to_symbol` with `symbol_path` set to `old_name`:
+Call `mcp__agent-lsp__go_to_symbol` with `symbol_path` set to `old_name`:
 
 ```
-mcp__lsp__go_to_symbol
+mcp__agent-lsp__go_to_symbol
   symbol_path: "old_name"        # or "Package.OldName" for qualified paths
   workspace_root: "<root>"       # optional; omit to search entire workspace
 ```
@@ -79,10 +80,10 @@ the error and stop.
 
 ### Step 2 — Validate rename is possible
 
-Call `mcp__lsp__prepare_rename` at the definition location from Step 1:
+Call `mcp__agent-lsp__prepare_rename` at the definition location from Step 1:
 
 ```
-mcp__lsp__prepare_rename
+mcp__agent-lsp__prepare_rename
   file_path: "<file from Step 1>"
   line: <line from Step 1>
   column: <column from Step 1>
@@ -100,10 +101,10 @@ Only proceed to Step 3 if `prepare_rename` succeeds.
 
 ### Step 3 — Enumerate references
 
-Call `mcp__lsp__find_references` at the definition location from Step 1:
+Call `mcp__agent-lsp__find_references` at the definition location from Step 1:
 
 ```
-mcp__lsp__find_references
+mcp__agent-lsp__find_references
   file_path: "<file from Step 1>"
   position_pattern: "<symbol>@@"   # @@ immediately after the symbol name
   # fallback: use line/column from Step 1 if position_pattern is unavailable
@@ -113,10 +114,10 @@ Collect all returned locations. Note the total count and the distinct files.
 
 ### Step 4 — Dry-run preview
 
-Call `mcp__lsp__rename_symbol` with `dry_run=true`. **Do not call `apply_edit`.**
+Call `mcp__agent-lsp__rename_symbol` with `dry_run=true`. **Do not call `apply_edit`.**
 
 ```
-mcp__lsp__rename_symbol
+mcp__agent-lsp__rename_symbol
   file_path: "<file from Step 1>"
   line: <line from Step 1>
   column: <column from Step 1>
@@ -175,7 +176,7 @@ prompt in Phase 1.
 Before applying changes, capture the current diagnostic state:
 
 ```
-mcp__lsp__get_diagnostics
+mcp__agent-lsp__get_diagnostics
   file_path: "<one or more files in the workspace_edit>"
 ```
 
@@ -183,10 +184,10 @@ Store the result as `before_diagnostics`.
 
 ### Step 2 — Execute rename (applies directly)
 
-Call `mcp__lsp__rename_symbol` without `dry_run` (or with `dry_run=false`):
+Call `mcp__agent-lsp__rename_symbol` without `dry_run` (or with `dry_run=false`):
 
 ```
-mcp__lsp__rename_symbol
+mcp__agent-lsp__rename_symbol
   file_path: "<file from Phase 1 Step 1>"
   line: <line from Phase 1 Step 1>
   column: <column from Phase 1 Step 1>
@@ -203,11 +204,11 @@ committing a rename.
 
 ### Step 3 — Check diagnostics
 
-Call `mcp__lsp__get_diagnostics` on the affected files and compare against
+Call `mcp__agent-lsp__get_diagnostics` on the affected files and compare against
 `before_diagnostics`:
 
 ```
-mcp__lsp__get_diagnostics
+mcp__agent-lsp__get_diagnostics
   file_path: "<affected files>"
 ```
 
@@ -242,5 +243,5 @@ rename is safe.
 Tested with `gopls`, `typescript-language-server`, and `rust-analyzer`. Most
 LSP-compliant servers support `textDocument/rename` — agent-lsp works with
 any of the 30+ supported language servers that advertise rename capability.
-Check your server's capability list via `mcp__lsp__get_server_capabilities` if
+Check your server's capability list via `mcp__agent-lsp__get_server_capabilities` if
 you are unsure.

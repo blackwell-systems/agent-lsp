@@ -4,7 +4,9 @@ Copy-paste configs for connecting agent-lsp to your AI tool.
 
 ## Claude Code
 
-Add to your project's `.mcp.json` or global `~/.claude/settings.json`:
+The easiest path is `agent-lsp init`, which writes the entry for you. Or register it with the Claude Code CLI: `claude mcp add agent-lsp -- agent-lsp` (or `claude mcp add --scope user agent-lsp -- agent-lsp` for all projects).
+
+To edit the config by hand, add this to your project's `.mcp.json` (Claude Code keeps user-scoped servers in `~/.claude.json`; `~/.claude/settings.json` is not read for MCP servers):
 
 ```json
 {
@@ -143,8 +145,11 @@ extends it.
 For remote deployments or shared servers, run agent-lsp in HTTP mode:
 
 ```bash
-agent-lsp --http --port 8080 --token "$AGENT_LSP_TOKEN"
+export AGENT_LSP_TOKEN=your-secret-token
+agent-lsp --http --port 8080
 ```
+
+The token is read from `AGENT_LSP_TOKEN`. Avoid the `--token` flag: it exposes the credential in the process list. Without a token the server refuses to start. The server binds `127.0.0.1` by default; pass `--listen-addr 0.0.0.0` to accept remote connections.
 
 Then configure your MCP client to connect via HTTP:
 
@@ -161,7 +166,7 @@ Then configure your MCP client to connect via HTTP:
 }
 ```
 
-See [Docker documentation](../../DOCKER.md) for containerized deployments.
+See [Docker documentation](https://github.com/blackwell-systems/agent-lsp/blob/main/DOCKER.md) for containerized deployments.
 
 ## Verifying the Connection
 

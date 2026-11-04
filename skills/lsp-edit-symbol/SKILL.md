@@ -4,10 +4,10 @@ description: "Edit a named symbol without knowing its file or position. Use when
 argument-hint: "[symbol-name] [new-body-or-signature]"
 user-invocable: true
 allowed-tools:
-  - mcp__lsp__find_symbol
-  - mcp__lsp__list_symbols
-  - mcp__lsp__apply_edit
-  - mcp__lsp__replace_symbol_body
+  - mcp__agent-lsp__find_symbol
+  - mcp__agent-lsp__list_symbols
+  - mcp__agent-lsp__apply_edit
+  - mcp__agent-lsp__replace_symbol_body
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:

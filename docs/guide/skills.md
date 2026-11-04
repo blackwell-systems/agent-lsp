@@ -27,7 +27,9 @@ See the [Setup guide](../getting-started/quickstart.md) for installation instruc
 ## Before you change anything
 
 Understanding blast radius before touching code prevents broken builds and missed
-callers. These three skills are read-only and never modify files.
+callers. These skills are read-only, with one exception: `/lsp-dead-code` can remove
+confirmed zero-reference symbols with `safe_delete_symbol`, and only after the user
+explicitly confirms.
 
 ### `/lsp-impact`
 
@@ -118,7 +120,7 @@ Edit a named symbol without knowing its file path or line number.
 - Changing only the signature line (not the body) of a function you can name precisely.
 
 **What it does that raw tools miss:**
-Composes `find_symbol` → `list_symbols` → `apply_edit` to resolve a symbol name to its exact range. Supports text-match apply (no position math needed) and positional apply (when you need to replace a full body). This removes the "find the file, find the line" manual step that agents frequently get wrong.
+Resolves the symbol by name with `find_symbol`, then replaces it in one call with `replace_symbol_body` (the primary path). If `replace_symbol_body` cannot resolve the symbol, it falls back to `find_symbol` → `list_symbols` → `apply_edit`, with text-match apply (no position math needed) or positional apply. This removes the "find the file, find the line" manual step that agents frequently get wrong.
 
 ---
 
@@ -373,6 +375,8 @@ lsp-safe-edit, lsp-verify, and lsp-test-correlation in one coordinated sequence.
 **What it does that raw tools miss:**
 Enforces gate conditions at each phase. Phase 1 halts on high blast radius (> 20 callers) unless confirmed; Phase 2 halts if simulation introduces errors; Phase 4 halts if the build fails. No phase executes if its predecessor fails. Individual skills can be used independently, but lsp-refactor is the correct choice when you want the entire sequence enforced without manual orchestration.
 
+When the language server offers the refactoring itself (implement an interface, add or remove struct tags, extract to a new file, move a declaration), the apply phase can let the server compute the edit with the `refactor` tool; refactorings that ask for input (interactive refactorings) need gopls v0.24+.
+
 ---
 
 ## Skill composition
@@ -455,15 +459,18 @@ LSP session directly.
 ## Phase enforcement
 
 Four skills have runtime phase enforcement via `tool_permissions` metadata: ordering
-constraints that prevent agents from calling tools out of sequence. For example,
-`/lsp-refactor` blocks `apply_edit` until blast-radius analysis and speculative preview
-are complete.
+constraints that block a phase's forbidden tools and guide agents through the intended
+order. For example, `/lsp-refactor` blocks `apply_edit` while the tracker is in its
+blast-radius or speculative-preview phase. This is a guardrail, not a sandbox: calling
+a tool from a later phase advances the tracker, and tools not listed in any phase (such
+as `safe_apply_edit`, `replace_symbol_body`, `insert_*`, `commit_session`) pass through.
+See [Phase Enforcement](phase-enforcement.md).
 
 | Skill | Phases | Key safety gate |
 |-------|--------|-----------------|
-| `/lsp-rename` | 3: prerequisites, preview, execute | `apply_edit` blocked until preview complete |
-| `/lsp-refactor` | 5: blast_radius, speculative_preview, apply, build_verification, test_execution | Edits blocked until impact analyzed and simulated |
-| `/lsp-safe-edit` | 4: setup, speculative_preview, apply, verify_and_fix | Disk writes blocked until simulation complete |
+| `/lsp-rename` | 3: prerequisites, preview, execute | `apply_edit` blocked in the preview phase |
+| `/lsp-refactor` | 5: blast_radius, speculative_preview, apply, build_verification, test_execution | `apply_edit` blocked in the blast_radius and speculative_preview phases |
+| `/lsp-safe-edit` | 4: setup, speculative_preview, apply, verify_and_fix | `apply_edit` blocked in the setup and speculative_preview phases |
 | `/lsp-verify` | 5: test_correlation, diagnostics, build, tests, fix_and_format | Speculative tools globally forbidden (verify is post-edit) |
 
 To activate enforcement, call `activate_skill` at the start of a skill workflow:
