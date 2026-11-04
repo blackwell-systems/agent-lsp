@@ -434,6 +434,10 @@ jobs:
           sudo mv /tmp/metals /usr/local/bin/metals
           sudo chmod +x /usr/local/bin/metals
 
+      # Metals imports the fixture's sbt build (agent-lsp sets autoImportBuilds),
+      # which needs sbt; the fixture pins its sbt version in build.properties.
+      - uses: sbt/setup-sbt@v1
+
       - name: Run Scala tests
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Scala$" ./test/ -timeout 30m
 

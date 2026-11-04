@@ -25,6 +25,15 @@ test/fixtures/kotlin/.gradle/
 test/fixtures/kotlin/.project
 test/fixtures/kotlin/.settings/
 test/fixtures/swift/.build/
+# Metals / sbt / Bloop output from the Scala fixture's build import
+test/fixtures/scala/.metals/
+test/fixtures/scala/.bloop/
+test/fixtures/scala/.bsp/
+test/fixtures/scala/target/
+test/fixtures/scala/project/.bloop/
+test/fixtures/scala/project/metals.sbt
+test/fixtures/scala/project/project/
+test/fixtures/scala/project/target/
 /agent-lsp
 
 # SAW state files generated during wave execution

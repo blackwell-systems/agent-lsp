@@ -249,35 +249,73 @@ func textFromResult(res *mcp.CallToolResult) (string, error) {
 }
 
 // runLanguageTest runs Tier 1 and Tier 2 tests for a single language.
-// restoreFixtureAfter snapshots every regular file under dir and registers a
-// t.Cleanup that rewrites any file the test mutated back to its original bytes.
-// The Tier-2 suite applies real edits to fixtures on disk (rename_symbol renames
-// symbols across files, apply_edit / format_document rewrite files), which would
-// otherwise leave the working tree dirty and make repeat runs non-idempotent.
-// Files created during the test (server artifacts) are left untouched.
-func restoreFixtureAfter(t *testing.T, dir string) {
-	t.Helper()
-	snapshot := map[string][]byte{}
+// fixtureSnapshot records every regular file under a fixture directory so the
+// directory can be put back after a test edits it.
+type fixtureSnapshot struct {
+	dir   string
+	files map[string][]byte
+}
+
+func takeFixtureSnapshot(dir string) *fixtureSnapshot {
+	snap := &fixtureSnapshot{dir: dir, files: map[string][]byte{}}
 	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
 		if b, rerr := os.ReadFile(path); rerr == nil {
-			snapshot[path] = b
+			snap.files[path] = b
 		}
 		return nil
 	})
-	t.Cleanup(func() {
-		for path, orig := range snapshot {
-			cur, err := os.ReadFile(path)
-			if err != nil || bytes.Equal(cur, orig) {
-				continue
+	return snap
+}
+
+// restore rewrites changed files and recreates missing ones, then removes new
+// source files a rename created: a file not in the snapshot, next to a
+// snapshotted file with the same extension (Metals renames Person.scala to
+// RenamedPerson.scala along with the class). Other new files, such as build
+// and index artifacts in dot or target directories, are left alone.
+func (s *fixtureSnapshot) restore(t *testing.T) {
+	t.Helper()
+	sourceExts := map[string]bool{} // "dir|.ext" pairs present in the snapshot
+	for path, orig := range s.files {
+		sourceExts[filepath.Dir(path)+"|"+filepath.Ext(path)] = true
+		cur, err := os.ReadFile(path)
+		if err == nil && bytes.Equal(cur, orig) {
+			continue
+		}
+		if werr := os.WriteFile(path, orig, 0o644); werr != nil {
+			t.Logf("fixture restore: could not restore %s: %v", path, werr)
+		}
+	}
+	_ = filepath.Walk(s.dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			if base := info.Name(); path != s.dir && (strings.HasPrefix(base, ".") || base == "target" || base == "node_modules") {
+				return filepath.SkipDir
 			}
-			if werr := os.WriteFile(path, orig, 0o644); werr != nil {
-				t.Logf("restoreFixtureAfter: could not restore %s: %v", path, werr)
+			return nil
+		}
+		if _, known := s.files[path]; !known && filepath.Ext(path) != "" && sourceExts[filepath.Dir(path)+"|"+filepath.Ext(path)] {
+			if rerr := os.Remove(path); rerr != nil {
+				t.Logf("fixture restore: could not remove %s: %v", path, rerr)
 			}
 		}
+		return nil
 	})
+}
+
+// restoreFixtureAfter snapshots the fixture and restores it when the test ends.
+// The Tier-2 suite applies real edits to fixtures on disk (rename_symbol renames
+// symbols, and with some servers files, across the fixture; apply_edit and
+// format_document rewrite files), which would otherwise leave the working tree
+// dirty and make repeat runs non-idempotent.
+func restoreFixtureAfter(t *testing.T, dir string) {
+	t.Helper()
+	snap := takeFixtureSnapshot(dir)
+	t.Cleanup(func() { snap.restore(t) })
 }
 
 func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestResult {
@@ -330,8 +368,10 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 	// For Java, pass ready_timeout_seconds so start_lsp blocks on $/progress
 	// completion instead of returning immediately after initialize. This replaces
 	// a fixed sleep and fires as soon as jdtls finishes workspace indexing.
+	// Scala's Metals imports the sbt build on first open (agent-lsp sets its
+	// autoImportBuilds), which takes a minute or more; wait for it the same way.
 	startArgs := map[string]any{"root_dir": lang.fixture}
-	if lang.id == "java" {
+	if lang.id == "java" || lang.id == "scala" {
 		startArgs["ready_timeout_seconds"] = float64(240)
 	}
 	res, err := callTool(ctx, session, "start_lsp", startArgs)
@@ -1171,12 +1211,27 @@ func testPrepareRename(t *testing.T, ctx context.Context, session *mcp.ClientSes
 	return toolResult{tool: "prepare_rename", status: "pass"}
 }
 
-// testRenameSymbol tests the rename_symbol tool (returns WorkspaceEdit, does not apply it).
+// testRenameSymbol tests the rename_symbol tool, which applies the rename to the
+// fixture on disk (the fixture is restored afterwards).
 func testRenameSymbol(t *testing.T, ctx context.Context, session *mcp.ClientSession, lang langConfig) toolResult {
 	t.Helper()
 	if lang.renameSymbolLine == 0 || lang.renameSymbolName == "" {
 		return toolResult{tool: "rename_symbol", status: "skip", detail: "rename position or name not configured"}
 	}
+	// rename_symbol writes to disk, and some servers also rename the file that
+	// declares the symbol; restore the fixture right away so the tools that run
+	// after this one still find the files they are configured with.
+	snap := takeFixtureSnapshot(lang.fixture)
+	defer func() {
+		snap.restore(t)
+		// The server's open buffers still hold the renamed text: reopen the
+		// fixture's files so it reads them back from disk.
+		for _, f := range []string{lang.file, lang.secondFile, lang.callSiteFile, lang.completionFile} {
+			if f != "" {
+				_, _ = callTool(ctx, session, "open_document", map[string]any{"file_path": f, "language_id": lang.id})
+			}
+		}
+	}()
 	res, err := callTool(ctx, session, "rename_symbol", map[string]any{
 		"file_path":   lang.file,
 		"language_id": lang.id,
@@ -1716,8 +1771,12 @@ func testRestartLspServer(t *testing.T, ctx context.Context, session *mcp.Client
 		"column":      lang.hoverColumn,
 	})
 	if err != nil || verify.IsError {
+		why := fmt.Sprint(err)
+		if err == nil {
+			why, _ = textFromResult(verify)
+		}
 		return toolResult{tool: "restart_lsp_server", status: "fail",
-			detail: "server unresponsive after restart"}
+			detail: "server unresponsive after restart: " + why}
 	}
 	return toolResult{tool: "restart_lsp_server", status: "pass"}
 }

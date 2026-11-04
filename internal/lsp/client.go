@@ -670,8 +670,12 @@ func (c *LSPClient) dispatch(raw []byte) {
 				logging.Log(logging.LevelDebug, fmt.Sprintf("workspace/configuration: unmarshal params: %v", err))
 			}
 			results := make([]any, len(p.Items))
-			for i := range results {
-				results[i] = map[string]any{}
+			for i, item := range p.Items {
+				if cfg, ok := serverSectionDefaults[item.Section]; ok {
+					results[i] = cfg
+				} else {
+					results[i] = map[string]any{}
+				}
 			}
 			c.sendResponse(msg.ID, results)
 		}
@@ -741,6 +745,18 @@ func (c *LSPClient) dispatch(raw []byte) {
 			c.sendResponse(msg.ID, nil)
 		}
 	}
+}
+
+// serverSectionDefaults answers workspace/configuration for sections whose
+// server needs a setting an agent cannot give interactively. Each section is
+// read only by its own server.
+//
+// "metals": Metals asks the editor whether to import the build and, without
+// an answer (agent-lsp has no one to click it), never imports it, so it only
+// answers from a fallback compiler without the project's build. Importing on
+// first open is what an agent wants.
+var serverSectionDefaults = map[string]any{
+	"metals": map[string]any{"autoImportBuilds": "initial"},
 }
 
 // sendResponse sends a JSON-RPC response for a server-initiated request.
