@@ -12,5 +12,6 @@
     "fixture"
   ],
   "author": "Test",
-  "license": "MIT"
+  "license": "MIT",
+  "$schema": "./package.schema.json"
 }

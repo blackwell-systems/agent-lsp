@@ -538,10 +538,23 @@ func (c *LSPClient) stderrSummary() string {
 		return ""
 	}
 	lines := strings.Split(tail, "\n")
-	if len(lines) > 8 {
-		lines = lines[len(lines)-8:]
+	// A Java stack trace ends in "at ..." frames; the line that names the
+	// exception comes first. Keep it, then the last lines.
+	var cause string
+	for _, l := range lines {
+		if t := strings.TrimSpace(l); !strings.HasPrefix(t, "at ") &&
+			(strings.Contains(t, "Exception") || strings.Contains(t, "Error") || strings.HasPrefix(strings.ToLower(t), "error")) {
+			cause = t
+			break
+		}
+	}
+	if len(lines) > 6 {
+		lines = lines[len(lines)-6:]
 	}
 	out := strings.Join(lines, " | ")
+	if cause != "" && !strings.Contains(out, cause) {
+		out = cause + " | ... | " + out
+	}
 	if len(out) > 800 {
 		out = "..." + out[len(out)-800:]
 	}

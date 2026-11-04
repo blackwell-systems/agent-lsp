@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Test fixture package manifest",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "name": { "type": "string", "description": "The name of the package." },
+    "version": { "type": "string", "description": "Version of the package, in semver form." },
+    "description": { "type": "string", "description": "A short description of the package." },
+    "main": { "type": "string", "description": "Entry point of the package." },
+    "scripts": {
+      "type": "object",
+      "description": "Script commands run with npm run.",
+      "additionalProperties": { "type": "string" }
+    },
+    "keywords": { "type": "array", "items": { "type": "string" }, "description": "Search keywords." },
+    "author": { "type": "string", "description": "Author of the package." },
+    "license": { "type": "string", "description": "License identifier, such as MIT." }
+  },
+  "additionalProperties": false
+}

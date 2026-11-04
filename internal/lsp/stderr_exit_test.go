@@ -36,3 +36,16 @@ func TestInitialize_ServerExitIncludesStderr(t *testing.T) {
 		t.Fatalf("error = %v, want it to include the server's stderr", err)
 	}
 }
+
+func TestStderrSummary_KeepsExceptionLine(t *testing.T) {
+	c := NewLSPClient("x", nil)
+	trace := "starting\nException in thread \"main\" java.lang.IllegalArgumentException: 25.0.1\n"
+	for i := 0; i < 20; i++ {
+		trace += fmt.Sprintf("\tat org.example.Frame%d(Frame.kt:%d)\n", i, i)
+	}
+	_, _ = stderrTail{c}.Write([]byte(trace))
+	got := c.stderrSummary()
+	if !strings.Contains(got, "IllegalArgumentException: 25.0.1") || !strings.Contains(got, "Frame19") {
+		t.Fatalf("summary = %q, want the exception line and the last frames", got)
+	}
+}

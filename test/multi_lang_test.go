@@ -112,10 +112,15 @@ func graphSymbolCount(p *gcfgo.Payload) int {
 
 // langConfig holds per-language test configuration.
 type langConfig struct {
-	name                string
-	id                  string
-	binary              string
-	serverArgs          []string
+	name       string
+	id         string
+	binary     string
+	serverArgs []string
+	// tier1Completion marks a server that offers completion but neither hover
+	// nor diagnostics (mongodb-language-server). Its Tier 1 check is a
+	// non-empty completion at completionLine/completionColumn instead of the
+	// hover-or-diagnostics check, which such a server can never pass.
+	tier1Completion     bool
 	javaHome            string
 	fixture             string // absolute path to fixture dir
 	file                string // absolute path to primary source file
@@ -445,7 +450,23 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		t.Errorf("[%s] inspect_symbol: %v", lang.name, err)
 		return langTestResult{tier1: "fail"}
 	}
-	if len(hoverText) == 0 {
+	if len(hoverText) == 0 && lang.tier1Completion {
+		res, err := callTool(ctx, session, "get_completions", map[string]any{
+			"file_path":   lang.file,
+			"language_id": lang.id,
+			"line":        lang.completionLine,
+			"column":      lang.completionColumn,
+		})
+		if err != nil || res.IsError {
+			t.Errorf("[%s] get_completions (Tier 1) failed: err=%v result=%v", lang.name, err, res)
+			return langTestResult{tier1: "fail"}
+		}
+		if text, _ := textFromResult(res); strings.TrimSpace(text) == "" || strings.TrimSpace(text) == "[]" {
+			t.Errorf("[%s] get_completions (Tier 1) returned no items", lang.name)
+			return langTestResult{tier1: "fail"}
+		}
+		t.Logf("[%s] Tier 1 verified through completion (server offers no hover or diagnostics)", lang.name)
+	} else if len(hoverText) == 0 {
 		if diagCount == 0 {
 			// Both diagnostics and hover are empty: server likely hasn't finished
 			// indexing the workspace. Skip rather than fail.
