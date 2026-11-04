@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-65%2F65-brightgreen.svg" alt="CI Coverage"></a>
+  <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-67%2F67-brightgreen.svg" alt="CI Coverage"></a>
   <a href="#multi-language-support"><img src="https://img.shields.io/badge/languages-30_CI--verified-brightgreen.svg" alt="Languages"></a>
   <a href="https://github.com/blackwell-systems/mcp-assert"><img src="https://raw.githubusercontent.com/blackwell-systems/mcp-assert/main/assets/badge-passing.svg?v=3" alt="mcp-assert: passing" height="20"></a>
   <a href="https://agentskills.io"><img src="assets/badge-agentskills.svg" alt="Agent Skills"></a>
@@ -17,7 +17,7 @@
   <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
 </p>
 
-**Code intelligence infrastructure for AI agents.** 65 tools, 32 CI-verified languages, 24 agent workflows. Single Go binary.
+**Code intelligence infrastructure for AI agents.** 67 tools, 32 CI-verified languages, 24 agent workflows. Single Go binary.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh && agent-lsp init
@@ -91,6 +91,18 @@ Simulate changes in memory before writing to disk. No other MCP-LSP implementati
 `preview_edit` previews the diagnostic impact of any edit. You see exactly what breaks before the file is touched. `simulate_chain` evaluates a sequence of dependent edits (rename a function, update all callers, change the return type) and reports which step first introduces an error.
 
 8 speculative execution tools. See [docs/guide/speculative-execution.md](./docs/guide/speculative-execution.md) for the full workflow.
+
+### Interactive refactoring
+
+Some refactorings need answers before the language server can compute them: which struct tags to add and how to name them, which interface to implement, where a declaration should move. gopls v0.24 asks these questions through a new LSP extension ([golang/go#76331](https://github.com/golang/go/issues/76331)), which editors show as dialogs. agent-lsp is a client for it built for agents: `refactor` returns the questions as a typed form (choices, defaults, a searchable list for the interface), the agent answers, and the server computes the edit. agent-lsp captures that edit before it is written, so `dry_run` previews it.
+
+```
+refactor(file, line, column)                          → available refactorings
+refactor(..., action: "Add struct tags")              → questions: tags (default "json"), naming style (camelCase, snake_case, ...)
+refactor(..., answers: {addTags: "json", transform: "snakecase"})  → applied
+```
+
+See [`refactor`](./docs/reference/tools.md#refactor) in the tool reference.
 
 ### Token savings
 
@@ -384,7 +396,7 @@ Skills are also available as **MCP prompts**: any MCP client can discover them v
 
 ### Step 6: Allow tool permissions (Claude Code)
 
-For Claude Code, add `mcp__lsp__*` to your permissions allow list so all 65 tools are available without per-tool approval prompts:
+For Claude Code, add `mcp__lsp__*` to your permissions allow list so all 67 tools are available without per-tool approval prompts:
 
 ```json
 // ~/.claude/settings.json
@@ -407,16 +419,17 @@ Your AI agent calls tools automatically. The first call initializes the workspac
 start_lsp(root_dir="/your/project")
 ```
 
-This is what the agent does, not something you type. Then use any of the 65 tools. The session stays warm; no restart needed when switching files.
+This is what the agent does, not something you type. Then use any of the 67 tools. The session stays warm; no restart needed when switching files.
 
 ## What's unique about agent-lsp
 
 | Capability | Details |
 |------------|---------|
-| Tools | **65** |
+| Tools | **67** |
 | Languages (CI-verified) | **32**, end-to-end integration tests on every push |
 | Agent workflows (skills) | **24**, named multi-step procedures, discoverable via MCP `prompts/list` |
 | Speculative execution | **8 tools**, simulate changes before writing to disk |
+| Interactive refactoring | **✓**, answers the language server's refactoring questions (gopls v0.24+) |
 | Phase enforcement | **4 skills**, runtime blocks out-of-order tool calls with recovery guidance |
 | Connection model | **persistent**, warm index across files and projects |
 | Call hierarchy | **✓**, single tool, direction param |
@@ -445,7 +458,7 @@ See [docs/reference/language-support.md](./docs/reference/language-support.md) f
 
 ## Tools
 
-65 tools covering navigation, analysis, refactoring, symbol editing, composite exploration, safe editing, speculative execution, and session lifecycle. All CI-verified.
+67 tools covering navigation, analysis, refactoring, symbol editing, composite exploration, safe editing, speculative execution, and session lifecycle. All CI-verified.
 
 See [docs/reference/tools.md](./docs/reference/tools.md) for the full reference with parameters and examples.
 

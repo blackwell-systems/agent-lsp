@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-65%2F65-brightgreen.svg" alt="CI Coverage"></a>
+  <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-67%2F67-brightgreen.svg" alt="CI Coverage"></a>
   <a href="#multi-language-support"><img src="https://img.shields.io/badge/languages-30_CI--verified-brightgreen.svg" alt="Languages"></a>
   <a href="https://github.com/blackwell-systems/mcp-assert"><img src="https://raw.githubusercontent.com/blackwell-systems/mcp-assert/main/assets/badge-passing.svg?v=3" alt="mcp-assert: passing" height="20"></a>
   <a href="https://agentskills.io"><img src="../../assets/badge-agentskills.svg" alt="Agent Skills"></a>
@@ -17,7 +17,7 @@
   <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
 </p>
 
-**面向 AI 智能体的代码智能基础设施。** 65 个工具，32 种经 CI 验证的语言，24 个智能体工作流。单个 Go 二进制文件。
+**面向 AI 智能体的代码智能基础设施。** 67 个工具，32 种经 CI 验证的语言，24 个智能体工作流。单个 Go 二进制文件。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh && agent-lsp init
@@ -369,7 +369,7 @@ cd /tmp/agent-lsp-skills/skills && ./install.sh --copy
 
 ### 第 6 步：允许工具权限（Claude Code）
 
-对于 Claude Code，将 `mcp__lsp__*` 添加到你的权限允许列表，使全部 65 个工具无需逐工具的批准提示即可使用：
+对于 Claude Code，将 `mcp__lsp__*` 添加到你的权限允许列表，使全部 67 个工具无需逐工具的批准提示即可使用：
 
 ```json
 // ~/.claude/settings.json
@@ -392,13 +392,13 @@ cd /tmp/agent-lsp-skills/skills && ./install.sh --copy
 start_lsp(root_dir="/your/project")
 ```
 
-这是智能体所做的事，而非你需要输入的内容。然后即可使用全部 65 个工具中的任意一个。会话保持热状态；切换文件时无需重启。
+这是智能体所做的事，而非你需要输入的内容。然后即可使用全部 67 个工具中的任意一个。会话保持热状态；切换文件时无需重启。
 
 ## agent-lsp 的独特之处
 
 | 能力 | 详情 |
 |------------|---------|
-| 工具 | **65** |
+| 工具 | **67** |
 | 语言（经 CI 验证） | **32**，每次推送均进行端到端集成测试 |
 | 智能体工作流（技能） | **24**，命名的多步骤流程，可通过 MCP `prompts/list` 发现 |
 | 推测式执行 | **8 个工具**，在写入磁盘前模拟更改 |
@@ -430,7 +430,7 @@ Go、Python、TypeScript、Rust、Java、C、C++、C#、Ruby、PHP、Kotlin、Sw
 
 ## 工具
 
-65 个工具，涵盖导航、分析、重构、符号编辑、组合式探索、安全编辑、推测式执行以及会话生命周期。全部经 CI 验证。
+67 个工具，涵盖导航、分析、重构、符号编辑、组合式探索、安全编辑、推测式执行以及会话生命周期。全部经 CI 验证。
 
 带参数和示例的完整参考参见 [docs/reference/tools.md](../../docs/reference/tools.md)。
 

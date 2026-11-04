@@ -3,7 +3,7 @@ name: lsp-refactor
 description: End-to-end safe refactor workflow — blast-radius analysis, speculative preview, apply to disk, verify build, run affected tests. Inlines lsp-impact + lsp-safe-edit + lsp-verify + lsp-test-correlation into one coordinated sequence.
 argument-hint: "[symbol-or-file] [intent]"
 user-invocable: true
-allowed-tools: mcp__lsp__blast_radius mcp__lsp__preview_edit mcp__lsp__simulate_chain mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__apply_edit mcp__lsp__replace_symbol_body mcp__lsp__open_document mcp__lsp__format_document Edit Write
+allowed-tools: mcp__lsp__blast_radius mcp__lsp__preview_edit mcp__lsp__simulate_chain mcp__lsp__get_diagnostics mcp__lsp__run_build mcp__lsp__run_tests mcp__lsp__get_tests_for_file mcp__lsp__apply_edit mcp__lsp__refactor mcp__lsp__replace_symbol_body mcp__lsp__open_document mcp__lsp__format_document Edit Write
 license: MIT
 compatibility: Requires the agent-lsp MCP server (github.com/blackwell-systems/agent-lsp)
 metadata:
@@ -37,6 +37,7 @@ metadata:
         description: "Phase 3: write changes to disk and format"
         allowed:
           - "mcp__lsp__apply_edit"
+          - "mcp__lsp__refactor"
           - "mcp__lsp__format_document"
           - "Edit"
           - "Write"
@@ -217,6 +218,28 @@ the simulation returned an edit object:
 ```
 Edit(file_path: "/abs/path/to/file", old_string: "...", new_string: "...")
 ```
+
+When the change is one the language server offers as a refactoring
+(implement an interface, add or remove struct tags, extract declarations to a
+new file, move a declaration), let the server compute it with
+`mcp__lsp__refactor` instead of writing the edit by hand:
+
+```
+mcp__lsp__refactor({ "file_path": "/abs/path/to/file", "line": 12, "column": 6 })
+# lists the refactorings at the position; pick one by title
+
+mcp__lsp__refactor({ "file_path": "/abs/path/to/file", "line": 12, "column": 6,
+  "action": "implement an interface", "option_queries": { "interface": "Greeter" } })
+# status "needs_input": answer the returned fields
+
+mcp__lsp__refactor({ "file_path": "/abs/path/to/file", "line": 12, "column": 6,
+  "action": "implement an interface", "answers": { "interface": "x.Greeter" },
+  "dry_run": true })
+# check the edit, then repeat without dry_run to apply
+```
+
+A field returned with an `error` was rejected; correct that answer and call
+again. Phase 4 then verifies the result like any other edit.
 
 For multi-file changes, apply each file's edits before moving to Phase 4.
 If any individual apply fails, stop and report before applying remaining files.

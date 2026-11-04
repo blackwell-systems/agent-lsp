@@ -107,6 +107,7 @@ func skillRefactor() *SkillPhaseConfig {
 				Description: "Phase 3: write changes to disk and format",
 				Allowed: []string{
 					"apply_edit",
+					"refactor",
 					"format_document",
 					"Edit",
 					"Write",
