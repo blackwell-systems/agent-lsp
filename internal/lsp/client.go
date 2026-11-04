@@ -212,6 +212,13 @@ type LSPClient struct {
 	republishesUnchanged bool
 	diagSubs             []types.DiagnosticUpdateCallback
 
+	// interactive refactoring: while ExecuteCommandCapturingEdits runs, the
+	// edits the server sends through workspace/applyEdit are collected in
+	// capture instead of written. captureRunMu serializes captures.
+	captureRunMu sync.Mutex
+	captureMu    sync.Mutex
+	capture      *editCapture
+
 	// workspace readiness ($/progress)
 	progressMu     sync.Mutex
 	progressTokens map[any]struct{} // active begin tokens
@@ -637,7 +644,10 @@ func (c *LSPClient) dispatch(raw []byte) {
 				Edit any `json:"edit"`
 			}
 			var applyErr error
-			if err := json.Unmarshal(msg.Params, &p); err == nil && p.Edit != nil {
+			if err := json.Unmarshal(msg.Params, &p); err == nil && p.Edit != nil && c.captureEdit(p.Edit) {
+				// Collected for the command that is running; the caller
+				// previews or applies it (ExecuteCommandCapturingEdits).
+			} else if err == nil && p.Edit != nil {
 				// Fresh context: readLoop has no per-request context (it processes
 				// server-initiated requests outside any client call). context.Background()
 				// is intentional — consistent with H4 pattern in server.go.
@@ -1147,6 +1157,13 @@ func (c *LSPClient) Initialize(ctx context.Context, rootDir string) error {
 			"version": "0.1.0",
 		},
 		"capabilities": map[string]any{
+			// Interactive refactoring (golang/go#76331): the server may ask
+			// for input through command/resolve forms, which the refactor
+			// tool passes to the agent. Without this, gopls bakes default
+			// choices into its interactive code actions.
+			"experimental": map[string]any{
+				"interactiveResolve": map[string]any{"inputTypes": interactiveInputTypes},
+			},
 			"workspace": map[string]any{
 				"configuration":    true,
 				"workDoneProgress": true,
@@ -3402,10 +3419,14 @@ func (c *LSPClient) startWatcher(rootDir string) {
 		watched := addWatchedTree(watcher, rootDir, lim, 0)
 		logging.Log(logging.LevelDebug, fmt.Sprintf("auto-watcher: watching ~%d entries under %s", watched, rootDir))
 
-		// debounce: collect events for 150ms then flush as a batch.
+		// debounce: collect events for 150ms then flush as a batch. The timer
+		// only signals this loop (flushC); flush runs here, never on the
+		// timer's goroutine, because it swaps pending while the loop writes
+		// to it (a data race when flush ran from time.AfterFunc).
 		const debounce = 150 * time.Millisecond
 		pending := make(map[string]fsnotify.Op)
 		var timer *time.Timer
+		var flushC <-chan time.Time
 		flush := func() {
 			if len(pending) == 0 {
 				return
@@ -3456,6 +3477,9 @@ func (c *LSPClient) startWatcher(rootDir string) {
 
 		for {
 			select {
+			case <-flushC:
+				flushC = nil
+				flush()
 			case <-stop:
 				if timer != nil {
 					timer.Stop()
@@ -3494,7 +3518,8 @@ func (c *LSPClient) startWatcher(rootDir string) {
 				if timer != nil {
 					timer.Stop()
 				}
-				timer = time.AfterFunc(debounce, flush)
+				timer = time.NewTimer(debounce)
+				flushC = timer.C
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					return

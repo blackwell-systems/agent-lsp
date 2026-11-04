@@ -1,6 +1,6 @@
 # agent-lsp Tool Reference
 
-All 66 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
+All 67 tools exposed by the agent-lsp MCP server. Coordinates are **1-based** for
 both `line` and `column` in every tool call; the server converts internally to
 the 0-based values the LSP spec requires.
 
@@ -15,7 +15,7 @@ the 0-based values the LSP spec requires.
 - [Safe editing tools](#safe-editing-tools): `safe_apply_edit`
 - [Intent aliases](#intent-aliases): `blast_radius`, `callers`, `explore`, `safe_edit`
 - [Navigation tools](#navigation-tools): `find_references`, `go_to_definition`, `go_to_type_definition`, `go_to_implementation`, `go_to_declaration`
-- [Refactoring tools](#refactoring-tools): `rename_symbol`, `prepare_rename`, `format_document`, `format_range`, `apply_edit`, `execute_command`
+- [Refactoring tools](#refactoring-tools): `rename_symbol`, `prepare_rename`, `refactor`, `format_document`, `format_range`, `apply_edit`, `execute_command`
 - [Symbol editing tools](#symbol-editing-tools): `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, `safe_delete_symbol`
 - [Utilities](#utilities): `did_change_watched_files`, `set_log_level`
 - [Code Intelligence tools](#code-intelligence-tools): `find_callers`, `type_hierarchy`, `get_inlay_hints`, `get_semantic_tokens`, `get_document_highlights`
@@ -1462,6 +1462,99 @@ would be renamed and a suggested placeholder name.
   `prepareProvider: true`. The tool checks this flag explicitly and skips the
   request if it is absent.
 - Coordinates in the result are 0-based.
+
+---
+
+### `refactor`
+
+Run a refactoring the language server offers at a position, including the
+interactive refactorings that ask for input before computing their edit.
+gopls v0.24+ uses these for adding or removing struct tags, implementing an
+interface, and moving a declaration (move is experimental in gopls and needs
+its `moveDeclaration` setting). The server computes the edit; agent-lsp
+captures it before it is written, so `dry_run` can return it as a preview.
+
+The flow has up to three calls:
+
+1. Without `action`: list the refactorings at the position.
+2. With `action`: if the refactoring needs input, the result has
+   `"status": "needs_input"` and the questions (`fields`), each with an `id`,
+   `kind`, `default`, and `options` where the answer is a choice.
+3. With `action` and `answers`: run it. A rejected answer comes back as
+   `needs_input` again with an `error` on that field.
+
+Answers can be passed on the first call with `action` to skip step 2.
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `file_path` | string | yes | File containing the code |
+| `line` | number | yes* | Line (1-based) of the code, or the start of the selection |
+| `column` | number | yes* | Column (1-based) |
+| `position_pattern` | string | no | Alternative to `line`/`column` (`@@` syntax) |
+| `end_line` | number | no | End line of the selection; some refactorings need one (select struct fields to add tags) |
+| `end_column` | number | no | End column of the selection |
+| `action` | string | no | Title of the refactoring to run (exact, or a unique part of it). Omit to list |
+| `answers` | object | no | `{field id: value}` answers to the questions |
+| `option_queries` | object | no | `{field id: search text}` to search a `lazyEnum` field's options (for example the interface to implement) |
+| `dry_run` | boolean | no | Return the edit without writing it |
+| `language_id` | string | no | Language identifier; auto-detected from the extension |
+
+\* Or `position_pattern`.
+
+**Example: list**
+
+```json
+{ "file_path": "/repo/main.go", "line": 3, "column": 6 }
+```
+
+```json
+{"refactorings":[{"title":"Add methods to Person to implement an interface...","kind":"refactor.rewrite.implementInterface"}]}
+```
+
+**Example: questions**
+
+```json
+{ "file_path": "/repo/main.go", "line": 4, "column": 2, "end_line": 5, "end_column": 11, "action": "Add struct tags" }
+```
+
+```json
+{
+  "status": "needs_input",
+  "action": "Add struct tags",
+  "fields": [
+    {"id": "addTags", "description": "comma-separated list of tags to add; e.g.. \"json,xml\"", "kind": "string", "required": true, "default": "json"},
+    {"id": "transform", "kind": "enum", "required": true, "default": "camelcase",
+     "options": [{"value": "camelcase", "description": "camelCase"}, {"value": "snakecase", "description": "snake_case"}, "..."]}
+  ]
+}
+```
+
+**Example: run**
+
+```json
+{ "file_path": "/repo/main.go", "line": 4, "column": 2, "end_line": 5, "end_column": 11,
+  "action": "Add struct tags", "answers": {"addTags": "json", "transform": "snakecase"} }
+```
+
+```
+Applied "Add struct tags": <n> location(s) in 1 file(s): main.go
+```
+
+**Notes**
+
+- Only actions of kind `refactor*` are listed; quick fixes are in `suggest_fixes`.
+- Searchable fields (`lazyEnum`) return up to 50 options; narrow them with
+  `option_queries`.
+- `file` and `list` fields include their `type` (existence and extension
+  constraints, element type).
+- Interactive refactorings need a server that implements the protocol
+  extension (golang/go#76331, microsoft/language-server-protocol#1164);
+  currently gopls v0.24 or later. Other servers' refactorings run without
+  questions.
+- `execute_command` on a command that needs input returns an error pointing
+  here, instead of running it without answers.
 
 ---
 

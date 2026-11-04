@@ -59,6 +59,20 @@ type RenameSymbolArgs struct {
 	ExcludeGlobs    []string `json:"exclude_globs,omitempty" jsonschema:"Glob patterns for files to exclude from rename (e.g. vendor/**\\, *_gen.go)"`
 }
 
+type RefactorArgs struct {
+	FilePath        string            `json:"file_path" jsonschema:"Absolute path to the source file"`
+	LanguageID      string            `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript). Optional; auto-detected from file extension"`
+	Line            int               `json:"line,omitempty" jsonschema:"1-indexed line of the code to refactor (start of the selection)"`
+	Column          int               `json:"column,omitempty" jsonschema:"1-indexed column (start of the selection)"`
+	PositionPattern string            `json:"position_pattern,omitempty" jsonschema:"Alternative to line/column: @@pattern@@ syntax matching text at the position"`
+	EndLine         int               `json:"end_line,omitempty" jsonschema:"1-indexed end line of the selection. Some refactorings need one (e.g. select struct fields to add tags)"`
+	EndColumn       int               `json:"end_column,omitempty" jsonschema:"1-indexed end column of the selection"`
+	Action          string            `json:"action,omitempty" jsonschema:"Title of the refactoring to run (from the list this tool returns without action). Omit to list the refactorings available at the position"`
+	Answers         map[string]any    `json:"answers,omitempty" jsonschema:"Answers to the refactoring's questions: {field id: value}. Returned questions list the field ids\\, kinds\\, options and defaults"`
+	OptionQueries   map[string]string `json:"option_queries,omitempty" jsonschema:"Search text for searchable fields (kind lazyEnum): {field id: query}\\, to narrow the options returned"`
+	DryRun          bool              `json:"dry_run,omitempty" jsonschema:"If true\\, return the edit without writing it"`
+}
+
 type PrepareRenameArgs struct {
 	FilePath   string `json:"file_path" jsonschema:"Absolute path to the source file"`
 	LanguageID string `json:"language_id,omitempty" jsonschema:"Language identifier (e.g. go\\, typescript\\, python). Optional; auto-detected from file extension"`
@@ -207,6 +221,20 @@ func registerNavigationTools(d toolDeps) {
 		}
 		d.auditLogger.Log(record)
 
+		return makeCallToolResult(r), nil, err
+	})
+
+	addToolWithPhaseCheck(d, &mcp.Tool{
+		Name:        "refactor",
+		Description: "Run a language server refactoring at a position: implement an interface, add or remove struct tags, extract to a new file, move a declaration, and others the server offers there. Call without action to list the refactorings at the position (pass end_line/end_column to select a range, e.g. struct fields). Call with action to run one. Refactorings that need input (gopls v0.24+ interactive refactorings) return status needs_input with their questions: field ids, kinds, options and defaults; call again with answers {field id: value}, and option_queries to search a lazyEnum field's options. Rejected answers come back with an error on the field. The server computes the edit; dry_run=true returns it without writing, otherwise it is applied and diagnostics are reported.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Refactor",
+			ReadOnlyHint:    false,
+			DestructiveHint: boolPtr(false),
+			OpenWorldHint:   boolPtr(false),
+		},
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args RefactorArgs) (*mcp.CallToolResult, any, error) {
+		r, err := tools.HandleRefactor(ctx, d.clientForFileWithAutoInit(args.FilePath), toolArgsToMap(args))
 		return makeCallToolResult(r), nil, err
 	})
 

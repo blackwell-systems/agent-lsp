@@ -29,7 +29,7 @@ jobs:
         run: go vet ./...
 
       - name: Install gopls (for live rename integration test)
-        run: go install golang.org/x/tools/gopls@v0.23.0
+        run: go install golang.org/x/tools/gopls@v0.24.0
 
       - name: Unit tests
         run: go test ./internal/... ./cmd/...
@@ -55,7 +55,7 @@ jobs:
         run: GOWORK=off go build ./...
 
       - name: Install gopls
-        run: go install golang.org/x/tools/gopls@v0.23.0
+        run: go install golang.org/x/tools/gopls@v0.24.0
 
       - name: Install TypeScript language server
         run: npm install -g typescript-language-server typescript
@@ -531,7 +531,7 @@ jobs:
         run: GOWORK=off go build ./...
 
       - name: Install gopls
-        run: go install golang.org/x/tools/gopls@v0.23.0
+        run: go install golang.org/x/tools/gopls@v0.24.0
 
       - name: Install TypeScript language server
         run: npm install -g typescript-language-server typescript
@@ -810,7 +810,7 @@ jobs:
         run: GOWORK=off go build -o /usr/local/bin/agent-lsp ./cmd/agent-lsp
 
       - name: Install gopls
-        run: go install golang.org/x/tools/gopls@v0.23.0
+        run: go install golang.org/x/tools/gopls@v0.24.0
 
       - name: Install mcp-assert
         run: |
@@ -866,7 +866,7 @@ jobs:
         run: GOWORK=off go build ./...
 
       - name: Install gopls
-        run: go install golang.org/x/tools/gopls@v0.23.0
+        run: go install golang.org/x/tools/gopls@v0.24.0
 
       - name: Run get_change_impact test
         run: GOWORK=off go test -v -run TestGetChangeImpact ./test/ -timeout 8m
@@ -885,7 +885,7 @@ jobs:
         run: GOWORK=off go build ./...
 
       - name: Install gopls
-        run: go install golang.org/x/tools/gopls@v0.23.0
+        run: go install golang.org/x/tools/gopls@v0.24.0
 
       - name: Run get_cross_repo_references test
         run: GOWORK=off go test -v -run TestGetCrossRepoReferences ./test/ -timeout 5m

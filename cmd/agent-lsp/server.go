@@ -345,7 +345,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	outputFormat := getOutputFormat()
 
-	instructions := "This server provides 66 code intelligence tools and 24 multi-step workflow skills across 31 languages. " +
+	instructions := "This server provides 67 code intelligence tools and 24 multi-step workflow skills across 31 languages. " +
 		"IMPORTANT: call blast_radius before editing any file. It returns all exported symbols with their callers partitioned into test vs non-test in one call. This replaces manual loops over find_references. Pass scope='all' to include unexported symbols for dead code detection. " +
 		"Task-to-tool mapping: " +
 		"all callers of all exports in a file -> blast_radius (one call); " +
@@ -359,7 +359,8 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 		"delete unused code -> safe_delete_symbol; " +
 		"available quick fixes -> suggest_fixes; " +
 		"full context on a symbol -> explore_symbol (one call); " +
-		"safe edit (preview + apply) -> safe_apply_edit. " +
+		"safe edit (preview + apply) -> safe_apply_edit; " +
+		"server refactoring such as implement interface or add struct tags (answering its questions) -> refactor. " +
 		"Workflow: blast_radius before editing, preview_edit before applying, get_diagnostics after changes. " +
 		"Prefer these tools over text search for code intelligence tasks. " +
 		"Call prompts/get with a skill name (e.g. lsp-refactor, lsp-inspect, lsp-verify) for full workflow instructions."

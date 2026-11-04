@@ -1,6 +1,6 @@
 # agent-lsp Features Dump
 
-Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. All 66 tools have `ToolAnnotations` (Title, ReadOnlyHint, DestructiveHint, IdempotentHint, OpenWorldHint) and 171+ `jsonschema` struct tags providing parameter semantics in the schema itself.
+Machine-readable feature inventory for AI analysis. Dense structured lists for tool discovery and capability queries. All 67 tools have `ToolAnnotations` (Title, ReadOnlyHint, DestructiveHint, IdempotentHint, OpenWorldHint) and 171+ `jsonschema` struct tags providing parameter semantics in the schema itself.
 
 ---
 
@@ -47,6 +47,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 | `go_to_symbol` | Navigate by dot-notation symbol name | `symbol_path` (string, req), `workspace_root` (string, req), `language` (string, opt) |
 | `rename_symbol` | Rename symbol across workspace | `file_path` (string, req), `line` (int, req), `column` (int, req), `new_name` (string, req), `dry_run` (bool, opt), `exclude_globs` ([]string, opt), `position_pattern` (string, opt), `line_scope_start` (int, opt), `line_scope_end` (int, opt) |
 | `prepare_rename` | Validate rename at position | `file_path` (string, req), `line` (int, req), `column` (int, req) |
+| `refactor` | Run a server refactoring at a position, answering its questions (gopls v0.24+ interactive refactorings) | `file_path` (string, req), `line`/`column` or `position_pattern`, `end_line`/`end_column` (int, opt), `action` (string, opt), `answers` (object, opt), `option_queries` (object, opt), `dry_run` (bool, opt) |
 | `get_document_highlights` | Find all local occurrences (file-scoped) | `file_path` (string, req), `line` (int, req), `column` (int, req) |
 | `find_callers` | Show incoming/outgoing calls | `file_path` (string, req), `line` (int, req), `column` (int, req), `direction` (string, opt: "both", "incoming", "outgoing") |
 | `type_hierarchy` | Show supertypes/subtypes | `file_path` (string, req), `line` (int, req), `column` (int, req), `direction` (string, opt: "both", "supertypes", "subtypes") |
@@ -55,6 +56,12 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - `dry_run: true` returns `workspace_edit` preview without applying changes
 - `exclude_globs`: array of glob patterns; matched against both full path and basename using `filepath.Match` syntax; useful for `**/*_gen.go`, `vendor/**`, `testdata/**`
 - Returns `workspace_edit` on both dry-run and live runs; caller passes to `apply_edit` to commit
+
+**`refactor` notes:**
+- Without `action`, lists the `refactor*` code actions at the position; with `action`, runs one (exact title or a unique part of it)
+- Interactive refactorings (gopls v0.24+: struct tags, implement interface, move declaration) return `status: needs_input` with typed `fields` (`string`, `enum`, `lazyEnum`, `bool`, `number`, `file`, `list`), defaults and options; the agent answers with `answers: {id: value}`, and rejected answers come back with an `error` on the field
+- The server's edit is captured from `workspace/applyEdit` instead of written, so `dry_run: true` returns it; otherwise it is applied and diagnostics are reported
+- Implements the client side of golang/go#76331 / microsoft/language-server-protocol#1164 (`command/resolve`, `interactive/listEnum`, client capability `experimental.interactiveResolve`)
 
 **`go_to_symbol` notes:**
 - `symbol_path` uses dot notation: `"codec.Encode"`, `"Buffer.Reset"`, `"Package.OldName"`
@@ -295,9 +302,9 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Returns success with `status: "already_destroyed"` instead of an error when the session does not exist or was already cleaned up
 - Agents calling `destroy_session` after `preview_edit` (which auto-cleans up) no longer see a confusing error
 
-**Total: 66 tools** (63 core + 3 phase enforcement)
-- **CI-verified: 66** (including `set_log_level` verified separately across all 31 languages, and 3 phase enforcement tools verified via mcp-assert)
-- **ToolAnnotations:** All 66 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
+**Total: 67 tools** (64 core + 3 phase enforcement)
+- **CI-verified: 66 across the language matrix**, plus `refactor`, verified end to end against gopls v0.24 in the unit suite (including `set_log_level` verified separately across all 31 languages, and 3 phase enforcement tools verified via mcp-assert)
+- **ToolAnnotations:** All 67 tools declare `Title`, `ReadOnlyHint`, `DestructiveHint`, `IdempotentHint`, `OpenWorldHint`; MCP clients can auto-approve ~30 read-only tools without human confirmation
 - **jsonschema struct tags:** 171+ tags across all Args structs; 100% parameter description coverage
 - **1-indexed coordinates:** All line/column parameters are 1-based (editor convention)
 - **0-based conversion:** `extractRange` helper converts to 0-based for LSP protocol internally

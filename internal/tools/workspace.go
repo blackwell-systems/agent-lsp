@@ -798,6 +798,19 @@ func HandleExecuteCommand(ctx context.Context, client *lsp.LSPClient, args map[s
 		cmdArgs = v
 	}
 
+	// A command that asks for input (gopls's interactive refactorings) cannot
+	// run without its answers once agent-lsp declares form support. Say so and
+	// point to refactor, which carries the questions and answers.
+	if client.SupportsInteractiveResolve() {
+		if resolved, rErr := client.ResolveCommand(ctx, command, cmdArgs, nil); rErr == nil && len(resolved.FormFields) > 0 {
+			ids := make([]string, 0, len(resolved.FormFields))
+			for _, f := range resolved.FormFields {
+				ids = append(ids, f.ID)
+			}
+			return types.ErrorResult(fmt.Sprintf("execute_command: %s needs input (%s). Run it with the refactor tool at the code's position, using the code action's title as action; it returns the questions and accepts answers.", command, strings.Join(ids, ", "))), nil
+		}
+	}
+
 	result, err := client.ExecuteCommand(ctx, command, cmdArgs)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("execute_command: %s", err)), nil
