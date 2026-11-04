@@ -28,8 +28,24 @@ func (c *LSPClient) IsAlive() bool {
 	return c.cmd.ProcessState == nil
 }
 
-// IsWorkspaceLoaded returns true once the language server has finished
-// indexing the workspace (all $/progress tokens resolved).
+// IsWorkspaceLoaded reports whether the language server has finished
+// indexing the workspace. It is what tools report as "indexed".
+//
+// A readiness wait that ran to its cap marks the workspace loaded so later
+// queries do not wait again, but the server is still working: while any
+// progress token that outlasted a wait (a stale token) is active, this
+// returns false, so the agent is told its results may be incomplete instead
+// of the timeout being silently swallowed. (issue #77)
 func (c *LSPClient) IsWorkspaceLoaded() bool {
-	return c.workspaceLoaded.Load()
+	if !c.workspaceLoaded.Load() {
+		return false
+	}
+	c.progressMu.Lock()
+	defer c.progressMu.Unlock()
+	for tok := range c.staleProgress {
+		if _, active := c.progressTokens[tok]; active {
+			return false
+		}
+	}
+	return true
 }

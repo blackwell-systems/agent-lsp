@@ -148,3 +148,25 @@ func TestRestart_ResetsWorkspaceLoaded(t *testing.T) {
 		t.Errorf("progress state not reset: seen=%v stale=%v", client.seenProgress, client.staleProgress)
 	}
 }
+
+// A wait that ran to its cap must not be swallowed: indexed stays false
+// while the token that outlasted it is active, and turns true when it ends,
+// without later queries waiting on it again. (issue #77)
+func TestReadiness_TimedOutWaitSurfacesAsNotIndexed(t *testing.T) {
+	shortReadinessWait(t, 200*time.Millisecond)
+	c, serverW, _ := newTestClient(t)
+	ctx := context.Background()
+
+	sendProgress(t, serverW, "index", "begin")
+	waitFor(t, "begin", c.HasActiveProgress)
+	c.waitForWorkspaceReady(ctx) // times out: the token is still active
+	if c.IsWorkspaceLoaded() {
+		t.Fatal("indexed reported true while the server was still indexing past the wait")
+	}
+	if d := timed(func() { c.ensureWorkspaceReady(ctx) }); d > 100*time.Millisecond {
+		t.Fatalf("later query waited %v; a timed-out token must not be waited on again", d)
+	}
+
+	sendProgress(t, serverW, "index", "end")
+	waitFor(t, "indexed after the token ends", c.IsWorkspaceLoaded)
+}
