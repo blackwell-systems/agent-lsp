@@ -81,10 +81,18 @@ func runUninstall(args []string) {
 		removed += r
 		skipped += s
 	}
+	// Codex (and the ChatGPT desktop app) keep MCP servers in TOML.
+	for _, p := range []string{filepath.Join(codexHome(), "config.toml"), filepath.Join(cwd, ".codex", "config.toml")} {
+		r, s := cleanCodexConfig(p, dryRun)
+		removed += r
+		skipped += s
+	}
 	// Claude Code may rewrite ~/.claude.json from memory while running, so
-	// also remove the user-scope entry through its CLI when it is installed.
+	// also remove the user-scope entry through its CLI when it is installed;
+	// likewise for Codex.
 	if !dryRun {
 		_ = claudeCLI("mcp", "remove", "--scope", "user", "agent-lsp")
+		_ = codexCLI("mcp", "remove", codexServerName)
 	}
 
 	// Step 2: Skill directory cleanup (all managed destinations).
@@ -93,6 +101,7 @@ func runUninstall(args []string) {
 		filepath.Join(homeDir, ".pi", "agent", "skills"),
 		filepath.Join(homeDir, ".cursor", "skills"),
 		filepath.Join(homeDir, ".config", "gemini-cli", "skills"),
+		filepath.Join(codexHome(), "skills"),
 		filepath.Join(cwd, ".agents", "skills"),
 	}
 	for _, dir := range skillsDests {

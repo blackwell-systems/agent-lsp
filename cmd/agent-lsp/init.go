@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/blackwell-systems/agent-lsp/internal/config"
@@ -139,20 +140,11 @@ func runInit(args []string) {
 		fmt.Println("  8. Custom path")
 		fmt.Println("  9. Pi           (project .mcp.json in current directory)")
 		fmt.Println(" 10. Pi           (global ~/.config/mcp/mcp.json)")
-		fmt.Print("Choice [1-10]: ")
+		fmt.Println(" 11. Codex / ChatGPT desktop (user: $CODEX_HOME/config.toml, default ~/.codex/config.toml)")
+		fmt.Println(" 12. Codex        (project .codex/config.toml in current directory)")
+		fmt.Print("Choice [1-12]: ")
 		line, _ := reader.ReadString('\n')
-		line = strings.TrimSpace(line)
-		n := 0
-		if len(line) == 1 && line[0] >= '1' && line[0] <= '8' {
-			n = int(line[0] - '0')
-		}
-		if line == "9" {
-			n = 9
-		}
-		if line == "10" {
-			n = 10
-		}
-		if n >= 1 && n <= 10 {
+		if n, err := strconv.Atoi(strings.TrimSpace(line)); err == nil && n >= 1 && n <= 12 {
 			choice = n
 		}
 		if choice == 8 {
@@ -175,12 +167,24 @@ func runInit(args []string) {
 	// Step 7: Merge or create the config file.
 	// Claude Code's user scope is managed by the claude CLI, which owns
 	// ~/.claude.json and may rewrite it while running; prefer the CLI and
-	// fall back to editing the file only when it is not installed.
-	if choice == 2 && addClaudeUserScope(lspArgs) == nil {
+	// fall back to editing the file only when it is not installed. Codex's
+	// user config is likewise registered through its CLI when available, and
+	// both Codex targets are TOML rather than JSON.
+	switch {
+	case choice == 2 && addClaudeUserScope(lspArgs) == nil:
 		fmt.Println("Registered agent-lsp with Claude Code (user scope) via `claude mcp add`.")
-	} else if err := writeOrMergeConfig(targetPath, lspArgs); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing config: %v\n", err)
-		os.Exit(1)
+	case choice == 11 && addCodexUserScope(lspArgs) == nil:
+		fmt.Println("Registered agent-lsp with Codex via `codex mcp add` (shared with the ChatGPT desktop app).")
+	case isCodexChoice(choice):
+		if err := writeCodexConfig(targetPath, lspArgs); err != nil {
+			fmt.Fprintf(os.Stderr, "error writing config: %v\n", err)
+			os.Exit(1)
+		}
+	default:
+		if err := writeOrMergeConfig(targetPath, lspArgs); err != nil {
+			fmt.Fprintf(os.Stderr, "error writing config: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	// Step 8: Write provider-specific rules file for skill awareness.
@@ -234,6 +238,12 @@ func runInit(args []string) {
 		fmt.Println("Pi loads MCP servers through the pi-mcp-adapter package.")
 		fmt.Println("If it is not installed yet, run: pi install npm:pi-mcp-adapter")
 	}
+	if isCodexChoice(choice) {
+		fmt.Println("Codex, its IDE extension and the ChatGPT desktop app share this configuration.")
+		if choice == 12 {
+			fmt.Println("Codex reads a project's .codex/config.toml only for trusted projects.")
+		}
+	}
 	fmt.Println("Next: restart your AI tool to pick up the new MCP server.")
 }
 
@@ -276,6 +286,10 @@ func resolveTargetPath(choice int, customPath string) (string, error) {
 		return filepath.Join(cwd, ".mcp.json"), nil
 	case 10:
 		return filepath.Join(homeDir, ".config", "mcp", "mcp.json"), nil
+	case 11:
+		return filepath.Join(codexHome(), "config.toml"), nil
+	case 12:
+		return filepath.Join(cwd, ".codex", "config.toml"), nil
 	case 8:
 		if strings.HasPrefix(customPath, "~/") {
 			customPath = homeDir + "/" + customPath[2:]
@@ -414,6 +428,12 @@ func resolveRulesPath(choice int) string {
 	case 10:
 		// Pi user instructions: agent-directory AGENTS.md.
 		return filepath.Join(homeDir, ".pi", "agent", "AGENTS.md")
+	case 11:
+		// Codex global instructions.
+		return filepath.Join(codexHome(), "AGENTS.md")
+	case 12:
+		// Codex reads AGENTS.md from the repository.
+		return filepath.Join(cwd, "AGENTS.md")
 	default:
 		return ""
 	}
@@ -444,6 +464,11 @@ func isPiChoice(choice int) bool {
 	return choice == 9 || choice == 10
 }
 
+// isCodexChoice reports the Codex targets (user and project config.toml).
+func isCodexChoice(choice int) bool {
+	return choice == 11 || choice == 12
+}
+
 // resolveSkillsDest returns the skills directory for the given init choice,
 // or "" when the provider has no verified skills directory. Project-level
 // targets use the tool-agnostic AgentSkills location so the skill set can be
@@ -467,6 +492,8 @@ func resolveSkillsDest(choice int) string {
 		return filepath.Join(cwd, ".agents", "skills")
 	case 10:
 		return filepath.Join(homeDir, ".pi", "agent", "skills")
+	case 11:
+		return filepath.Join(codexHome(), "skills")
 	default:
 		return ""
 	}

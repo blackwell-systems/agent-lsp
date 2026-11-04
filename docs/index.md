@@ -54,6 +54,7 @@ No other MCP tool provider enforces workflow ordering at runtime. Read more in t
 | [Cursor](https://cursor.com) | stdio | `agent-lsp init` |
 | [Windsurf](https://windsurf.com) | stdio | `agent-lsp init` |
 | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | stdio | `agent-lsp init` |
+| [Codex](https://developers.openai.com/codex) and the ChatGPT desktop app | stdio | `agent-lsp init` |
 | [Continue](https://continue.dev) | stdio | `mcpServers` in `.continue/config.yaml` |
 | [Cline](https://github.com/cline/cline) | stdio | `agent-lsp init` |
 | [Pi](https://github.com/earendil-works/pi) | stdio | `agent-lsp init` + `pi install npm:pi-mcp-adapter` |

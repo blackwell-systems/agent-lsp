@@ -181,6 +181,7 @@ Symbol edit tools (`replace_symbol_body`, `insert_after_symbol`, `insert_before_
 | [Cursor](https://cursor.com) | stdio | `agent-lsp init` |
 | [Windsurf](https://windsurf.com) | stdio | `agent-lsp init` |
 | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | stdio | `agent-lsp init` |
+| [Codex](https://developers.openai.com/codex) and the ChatGPT desktop app | stdio | `agent-lsp init` |
 | [Continue](https://continue.dev) | stdio | [manual config](./docs/getting-started/mcp-clients.md) |
 | [Cline](https://github.com/cline/cline) | stdio | `agent-lsp init` |
 | [Pi](https://github.com/earendil-works/pi) | stdio | `agent-lsp init` + `pi install npm:pi-mcp-adapter` |
@@ -358,9 +359,11 @@ Probes each configured language server and reports capabilities. Fix any failure
 agent-lsp init
 ```
 
-Detects language servers on your PATH, asks which AI tool you use, writes the correct MCP config, and installs skill awareness rules for your AI provider (CLAUDE.md for Claude Code, `.cursor/rules/` for Cursor, `.clinerules` for Cline, `.windsurfrules` for Windsurf, `GEMINI.md` for Gemini CLI, `AGENTS.md` for Pi). For CI or scripted use: `agent-lsp init --non-interactive`.
+Detects language servers on your PATH, asks which AI tool you use, writes the correct MCP config, and installs skill awareness rules for your AI provider (CLAUDE.md for Claude Code, `.cursor/rules/` for Cursor, `.clinerules` for Cline, `.windsurfrules` for Windsurf, `GEMINI.md` for Gemini CLI, `AGENTS.md` for Pi and Codex). For CI or scripted use: `agent-lsp init --non-interactive`.
 
 For Claude Code, choose the project target (`1`, writes `.mcp.json` in the current directory) or the user scope (`2`, all projects: registers the server with `claude mcp add --scope user` when the `claude` CLI is installed, otherwise adds it to `~/.claude.json`). `init` only sets the `agent-lsp` entry; every other server and setting in an existing config file is kept.
+
+For Codex and the ChatGPT desktop app, which share one MCP configuration, choose the user target (`11`: registers the server with `codex mcp add` when the `codex` CLI is installed, otherwise adds an `[mcp_servers.agent-lsp]` table to `$CODEX_HOME/config.toml`, default `~/.codex/config.toml`) or the project target (`12`: `.codex/config.toml` in the current directory, read for trusted projects). The TOML file is edited in place, so your other settings and comments are kept.
 
 For [Pi](https://github.com/earendil-works/pi), choose the project (`9`) or global (`10`) target. Pi has no built-in MCP support; `init` writes the shared standard MCP files that the [`pi-mcp-adapter`](https://www.npmjs.com/package/pi-mcp-adapter) package reads — project `.mcp.json` (same file Claude Code uses, so one config serves both) or global `~/.config/mcp/mcp.json`. Skill awareness rules go into `AGENTS.md` (project) or `~/.pi/agent/AGENTS.md` (global). Install the adapter once with `pi install npm:pi-mcp-adapter`.
 
@@ -372,7 +375,7 @@ Add `--with-skills` to also install the embedded skill files (no repo clone need
 agent-lsp init --with-skills
 ```
 
-Skills are written to the destination matching the chosen target: only the Pi project target (`9`) uses the tool-agnostic `.agents/skills/` directory (versionable with the repo); the Pi global target (`10`) uses `~/.pi/agent/skills/`; the Claude Code targets (`1`/`2`) use `~/.claude/skills/`; Cursor (`4`) uses `~/.cursor/skills/`; and Gemini CLI (`7`) uses `~/.config/gemini-cli/skills/`. Providers without a verified skills directory are skipped with a pointer to `skills/install.sh --dest`. Re-running overwrites the managed skill files, keeping them in sync with the installed binary. `agent-lsp uninstall` removes them.
+Skills are written to the destination matching the chosen target: only the Pi project target (`9`) uses the tool-agnostic `.agents/skills/` directory (versionable with the repo); the Pi global target (`10`) uses `~/.pi/agent/skills/`; the Claude Code targets (`1`/`2`) use `~/.claude/skills/`; Cursor (`4`) uses `~/.cursor/skills/`; Gemini CLI (`7`) uses `~/.config/gemini-cli/skills/`; and the Codex user target (`11`) uses `$CODEX_HOME/skills/`. Providers without a verified skills directory are skipped with a pointer to `skills/install.sh --dest`. Re-running overwrites the managed skill files, keeping them in sync with the installed binary. `agent-lsp uninstall` removes them.
 
 The generated config looks like:
 

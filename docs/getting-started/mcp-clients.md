@@ -54,6 +54,26 @@ Add to your Windsurf MCP configuration:
 }
 ```
 
+## Codex and the ChatGPT desktop app
+
+Codex (CLI and IDE extension) and the ChatGPT desktop app share one MCP configuration. Run `agent-lsp init` and choose `11` (user: `$CODEX_HOME/config.toml`, default `~/.codex/config.toml`) or `12` (project: `.codex/config.toml`, read for trusted projects). With the `codex` CLI installed, the user target runs `codex mcp add` for you.
+
+To configure it by hand, either run:
+
+```bash
+codex mcp add agent-lsp -- agent-lsp go:gopls typescript:typescript-language-server,--stdio
+```
+
+or add a table to the config file:
+
+```toml
+[mcp_servers.agent-lsp]
+command = "agent-lsp"
+args = ["go:gopls", "typescript:typescript-language-server,--stdio"]
+```
+
+In the ChatGPT desktop app the server also appears under Settings, MCP servers. Codex reads skill awareness rules from `AGENTS.md`, which `init` writes (`$CODEX_HOME/AGENTS.md` for the user target, `AGENTS.md` in the project for the project target).
+
 ## Pi
 
 Pi has no built-in MCP support; install the adapter package once:

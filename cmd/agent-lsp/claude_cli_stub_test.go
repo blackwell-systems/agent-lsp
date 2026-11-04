@@ -7,4 +7,5 @@ import "errors"
 // their own fake.
 func init() {
 	claudeCLI = func(...string) error { return errors.New("claude CLI disabled in tests") }
+	codexCLI = func(...string) error { return errors.New("codex CLI disabled in tests") }
 }
