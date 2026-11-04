@@ -2,7 +2,7 @@
 
 **MCP server for language intelligence.** Give AI agents structured access to language servers: go-to-definition, find-all-references, rename, diagnostics, completions, call hierarchy, and speculative execution.
 
-66 tools. 24 agent workflows. 31 CI-verified languages. Single Go binary.
+66 tools. 24 agent workflows. 32 CI-verified languages. Single Go binary.
 
 ## Why
 
@@ -41,7 +41,7 @@ Then configure your AI tool's MCP settings to point at agent-lsp.
 
 - **66 tools** covering navigation, analysis, refactoring, diagnostics, formatting, speculative execution, composite exploration, safe editing, build, test, and more
 - **24 agent workflows** (skills) that encode correct multi-step operations: rename safely, analyze blast radius, simulate edits before applying
-- **31 CI-verified languages**: Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Zig, Lua, Elixir, Gleam, and more
+- **32 CI-verified languages**: Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, and more
 - **Speculative execution**: preview edits in memory, see what breaks before touching disk
 - **Phase enforcement**: blocks out-of-order operations so agents follow correct workflows
 

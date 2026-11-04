@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-65%2F65-brightgreen.svg" alt="CI Coverage"></a>
-  <a href="#multi-language-support"><img src="https://img.shields.io/badge/languages-31_CI--verified-brightgreen.svg" alt="Languages"></a>
+  <a href="#multi-language-support"><img src="https://img.shields.io/badge/languages-32_CI--verified-brightgreen.svg" alt="Languages"></a>
   <a href="https://github.com/blackwell-systems/mcp-assert"><img src="https://raw.githubusercontent.com/blackwell-systems/mcp-assert/main/assets/badge-passing.svg?v=3" alt="mcp-assert: passing" height="20"></a>
   <a href="https://agentskills.io"><img src="../../assets/badge-agentskills.svg" alt="Agent Skills"></a>
   <a href="https://github.com/blackwell-systems/agent-lsp"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/blackwell-systems/agent-lsp/badges/assets/downloads-badge.json" alt="downloads"></a>
@@ -17,7 +17,7 @@
   <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
 </p>
 
-**AI एजेंट्स के लिए कोड इंटेलिजेंस इंफ्रास्ट्रक्चर।** 66 टूल, 31 CI-सत्यापित भाषाएँ, 24 एजेंट वर्कफ़्लो। एकल Go बाइनरी।
+**AI एजेंट्स के लिए कोड इंटेलिजेंस इंफ्रास्ट्रक्चर।** 66 टूल, 32 CI-सत्यापित भाषाएँ, 24 एजेंट वर्कफ़्लो। एकल Go बाइनरी।
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh && agent-lsp init

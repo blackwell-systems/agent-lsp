@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-66%2F66-brightgreen.svg" alt="CI Coverage"></a>
-  <a href="#multi-language-support"><img src="https://img.shields.io/badge/languages-31_CI--verified-brightgreen.svg" alt="Languages"></a>
+  <a href="#multi-language-support"><img src="https://img.shields.io/badge/languages-32_CI--verified-brightgreen.svg" alt="Languages"></a>
   <a href="https://github.com/blackwell-systems/mcp-assert"><img src="https://raw.githubusercontent.com/blackwell-systems/mcp-assert/main/assets/badge-passing.svg?v=3" alt="mcp-assert: passing" height="20"></a>
   <a href="https://agentskills.io"><img src="assets/badge-agentskills.svg" alt="Agent Skills"></a>
   <a href="https://github.com/blackwell-systems/agent-lsp"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/blackwell-systems/agent-lsp/badges/assets/downloads-badge.json" alt="downloads"></a>
@@ -17,7 +17,7 @@
   <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
 </p>
 
-**Code intelligence infrastructure for AI agents.** 66 tools, 31 CI-verified languages, 24 agent workflows. Single Go binary.
+**Code intelligence infrastructure for AI agents.** 66 tools, 32 CI-verified languages, 24 agent workflows. Single Go binary.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh && agent-lsp init
@@ -82,7 +82,7 @@ We asked AI agents to evaluate agent-lsp across 10 coding tasks (find callers, r
 
 Every other MCP-LSP implementation lists supported languages in a config file. None of them run the actual language server in CI to verify it works.
 
-agent-lsp CI runs **32 real language servers** against real fixture codebases on every push, and 31 of them pass end to end (Scala's Metals is configured but not yet verified): Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, Clojure, Dart, Terraform, Nix, Prisma, SQL, MongoDB, MQL, and more. When we say "works with gopls," that's a verified, automated claim, not a hope.
+agent-lsp CI runs **32 real language servers** against real fixture codebases on every push, and all 32 pass end to end: Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, Clojure, Dart, Terraform, Nix, Prisma, SQL, MongoDB, MQL, and more. When we say "works with gopls," that's a verified, automated claim, not a hope.
 
 ### Speculative execution
 
@@ -439,7 +439,7 @@ This is what the agent does, not something you type. Then use any of the 66 tool
 | Capability | Details |
 |------------|---------|
 | Tools | **66** |
-| Languages (CI-verified) | **31**, end-to-end integration tests on every push (32 tested) |
+| Languages (CI-verified) | **32**, end-to-end integration tests on every push |
 | Agent workflows (skills) | **24**, named multi-step procedures, discoverable via MCP `prompts/list` |
 | Speculative execution | **8 tools**, simulate changes before writing to disk |
 | Interactive refactoring | **✓**, answers the language server's refactoring questions (gopls v0.24+) |
@@ -460,11 +460,11 @@ This is what the agent does, not something you type. Then use any of the 66 tool
 - **Large monorepos**: one server handles all languages, routes by file extension
 - **Code migration**: refactor across repos with full cross-repo reference tracking
 - **CI pipelines**: validate against real language server behavior
-- **Niche language stacks**: Gleam, Elixir, Prisma, Zig, Clojure, Nix, Dart, MongoDB, all CI-verified
+- **Niche language stacks**: Gleam, Elixir, Prisma, Zig, Clojure, Nix, Dart, Scala, MongoDB, all CI-verified
 
 ## Multi-Language Support
 
-31 languages CI-verified end to end against real language servers on every CI run, out of 32 tested (Scala is configured but not yet verified). A language that fails to start or answer fails CI rather than being skipped. No other MCP-LSP implementation tests a single language in CI.
+32 languages CI-verified end to end against real language servers on every CI run. A language that fails to start or answer fails CI rather than being skipped. No other MCP-LSP implementation tests a single language in CI.
 
 Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, Clojure, Dart, Terraform, Nix, Prisma, SQL, MongoDB, JavaScript, YAML, JSON, Dockerfile, CSS, HTML, MQL, Luau.
 

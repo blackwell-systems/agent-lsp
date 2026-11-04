@@ -1,6 +1,6 @@
 # agent-lsp
 
-**The most complete MCP server for language intelligence.** 66 tools, 31 CI-verified languages, 24 agent workflows. Single Go binary.
+**The most complete MCP server for language intelligence.** 66 tools, 32 CI-verified languages, 24 agent workflows. Single Go binary.
 
 ---
 
@@ -28,7 +28,7 @@ One agent-lsp process manages your language servers. Point your AI at `~/code/`.
 
 Every other MCP-LSP implementation lists supported languages in a config file. None of them run the actual language server in CI to verify it works.
 
-agent-lsp CI runs **32 real language servers** against real fixture codebases on every push, and 31 of them pass end to end (Scala is configured but not yet verified): Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, Clojure, Dart, Terraform, Nix, Prisma, SQL, MongoDB, and more. When we say "works with gopls," that's a verified, automated claim, not a hope.
+agent-lsp CI runs **32 real language servers** against real fixture codebases on every push, and all 32 pass end to end: Go, Python, TypeScript, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Scala, Zig, Lua, Elixir, Gleam, Clojure, Dart, Terraform, Nix, Prisma, SQL, MongoDB, and more. When we say "works with gopls," that's a verified, automated claim, not a hope.
 
 ## Speculative execution
 
@@ -66,7 +66,7 @@ See [MCP client configuration](getting-started/mcp-clients.md) for copy-paste co
 | Capability | Details |
 |------------|---------|
 | Tools | **66** |
-| Languages (CI-verified) | **31**, end-to-end integration tests on every push |
+| Languages (CI-verified) | **32**, end-to-end integration tests on every push |
 | Agent workflows (skills) | **24**, named multi-step procedures, discoverable via MCP `prompts/list` |
 | Speculative execution | **8 tools**, simulate changes before writing to disk |
 | Phase enforcement | **4 skills**, runtime blocks out-of-order tool calls with recovery guidance |

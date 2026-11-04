@@ -25,7 +25,7 @@
 | CSS | `vscode-css-language-server` | `npm i -g vscode-langservers-extracted` |
 | HTML | `vscode-html-language-server` | `npm i -g vscode-langservers-extracted` |
 | Terraform | `terraform-ls` | [releases.hashicorp.com](https://releases.hashicorp.com/terraform-ls/) |
-| Scala | `metals` | `cs install metals` ([Coursier](https://get-coursier.io)) |
+| Scala | `metals` | `cs install metals` ([Coursier](https://get-coursier.io)); importing an sbt project also needs `sbt` |
 | Gleam | `gleam` (built-in) | [GitHub releases](https://github.com/gleam-lang/gleam/releases) |
 | Elixir | `elixir-ls` | [GitHub releases](https://github.com/elixir-lsp/elixir-ls/releases) |
 | Prisma | `prisma-language-server` | `npm i -g @prisma/language-server` |
@@ -81,9 +81,9 @@ command. Verify with `agent-lsp doctor`.
 
 ## CI tool coverage matrix
 
-Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verified for 31 of the 32 languages tested (all but Scala; MongoDB is checked through completion, the only feature its server offers). Tier 2: 34 additional tools.
+Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verified for all 32 languages (MongoDB is checked through completion, the only feature its server offers). Tier 2: 34 additional tools.
 
-The cells below are generated from CI's own results (the summary table `TestMultiLanguage` prints), not written by hand: `pass` passed, `—` was skipped because the server does not support the feature or the test has no fixture position for it, `fail` failed. Scala did not run end to end, so its row is empty. Regenerate after a CI run with `gh run view <run-id> --log > ci.log && python3 scripts/update-coverage-matrix.py ci.log`.
+The cells below are generated from CI's own results (the summary table `TestMultiLanguage` prints), not written by hand: `pass` passed, `—` was skipped because the server does not support the feature or the test has no fixture position for it, `fail` failed. Regenerate after a CI run with `gh run view <run-id> --log > ci.log && python3 scripts/update-coverage-matrix.py ci.log`.
 
 | Language | Tier 1 | symbols | definition | references | completions | workspace | format | declaration | type_hierarchy | hover | call_hier | sem_tok | sig_help |
 |----------|--------|---------|------------|------------|-------------|-----------|--------|-------------|----------------|-------|-----------|---------|----------|
@@ -109,7 +109,7 @@ The cells below are generated from CI's own results (the summary table `TestMult
 | CSS | pass | pass | pass | pass | pass | — | pass | — | — | pass | — | — | — |
 | HTML | pass | — | — | — | pass | — | pass | — | — | pass | — | — | — |
 | Terraform | pass | pass | — | pass | pass | pass | — | — | — | pass | — | — | — |
-| Scala | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Scala | pass | — | pass | pass | pass | pass | pass | — | — | pass | pass | pass | — |
 | Gleam | pass | pass | pass | pass | pass | — | pass | — | — | pass | — | — | — |
 | Elixir | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | — | pass |
 | Prisma | pass | pass | pass | pass | pass | — | pass | — | — | pass | — | — | — |
@@ -126,7 +126,7 @@ See [ci-notes.md](../architecture/ci-notes.md) for per-language CI quirks.
 
 ---
 
-## Current (32 languages tested in CI, 31 verified)
+## Current (32 languages, CI-verified)
 
 **stable** = all Tier 1 tools pass CI. **experimental** = server works but CI results are informational.
 
@@ -154,7 +154,7 @@ See [ci-notes.md](../architecture/ci-notes.md) for per-language CI quirks.
 | CSS | vscode-css-language-server | stable |
 | HTML | vscode-html-language-server | stable |
 | Terraform | terraform-ls | stable |
-| Scala | metals | not verified: Metals starts but waits for a build import that agent-lsp does not yet trigger, so it answers only from its fallback compiler |
+| Scala | metals | stable (agent-lsp sets Metals `autoImportBuilds`, so the sbt build is imported on first open; the import takes a minute or more) |
 | Gleam | gleam (built-in lsp) | stable |
 | Elixir | elixir-ls | experimental |
 | Prisma | prisma-language-server | experimental |

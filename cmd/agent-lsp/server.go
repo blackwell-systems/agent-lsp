@@ -363,7 +363,7 @@ func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.
 
 	outputFormat := getOutputFormat()
 
-	instructions := fmt.Sprintf("This server provides %d code intelligence tools and %d multi-step workflow skills across 31 languages. ", registeredToolCount, len(loadSkills())) +
+	instructions := fmt.Sprintf("This server provides %d code intelligence tools and %d multi-step workflow skills across 32 languages. ", registeredToolCount, len(loadSkills())) +
 		"IMPORTANT: call blast_radius before editing any file. It returns all exported symbols with their callers partitioned into test vs non-test in one call. This replaces manual loops over find_references. Pass scope='all' to include unexported symbols for dead code detection. " +
 		"Task-to-tool mapping: " +
 		"all callers of all exports in a file -> blast_radius (one call); " +

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agent-lsp"
 version = "0.5.0"
-description = "MCP server for language intelligence. 66 tools, 31 CI-verified languages, speculative execution."
+description = "MCP server for language intelligence. 66 tools, 32 CI-verified languages, speculative execution."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.8"

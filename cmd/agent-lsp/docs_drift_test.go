@@ -96,7 +96,7 @@ func TestDocsHeadlineCounts(t *testing.T) {
 
 // notYetVerified lists the configured test languages that do not pass end to
 // end in CI. Remove a language when it does, and update the docs' counts.
-var notYetVerified = map[string]bool{"Scala": true}
+var notYetVerified = map[string]bool{}
 
 // Headline "N CI-verified languages" claims must match the languages that run
 // and pass in CI: the configured test languages minus notYetVerified. The
