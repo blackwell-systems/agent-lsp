@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.24.0] - 2026-11-03
 
 ### Added
 - **`refactor` tool: language server refactorings, including the interactive ones**: lists the refactorings a server offers at a position and runs one. gopls v0.24 introduced refactorings that ask for input before computing their edit (add or remove struct tags, implement an interface, move a declaration), through a proposed LSP extension ([golang/go#76331](https://github.com/golang/go/issues/76331), [microsoft/language-server-protocol#1164](https://github.com/microsoft/language-server-protocol/issues/1164)) that editors render as dialogs. agent-lsp now implements the client side for agents: the questions come back as a typed form (`status: needs_input`, with each field's kind, default and options, and a search for `lazyEnum` fields such as the interface to implement), the agent answers with `answers: {id: value}`, and rejected answers return with an error on the field. The edit the server computes is captured instead of written, so `dry_run` previews it; otherwise it is applied and diagnostics are reported. Without this, gopls ran these refactorings with fixed default choices baked into the code action. `execute_command` on a command that needs input now points to `refactor` rather than running it without answers. Move declaration is experimental in gopls and needs its `moveDeclaration` setting.
