@@ -9,7 +9,8 @@
 // Languages are sorted by score descending so the primary language appears first.
 //
 // The knownServers table maps languages to their LSP server binaries. When
-// multiple servers exist for a language, the first one found wins.
+// multiple servers exist for a language, they are tried in table order and
+// the first one on PATH wins.
 package tools
 
 import (
@@ -59,6 +60,8 @@ var knownServers = []lspServerDef{
 	{Language: "terraform", Binary: "terraform-ls", Args: []string{"serve"}, DisplayName: "terraform-ls"},
 	{Language: "scala", Binary: "metals", Args: nil, DisplayName: "metals"},
 	{Language: "mql", Binary: "mql-lsp-server", Args: nil, DisplayName: "mql-lsp-server"},
+	{Language: "sql", Binary: "postgres-language-server", Args: []string{"lsp-proxy"}, DisplayName: "postgres-language-server"},
+	{Language: "sql", Binary: "sqls", Args: nil, DisplayName: "sqls"},
 }
 
 // rootMarkers maps a project root file to the language it signals.
@@ -135,6 +138,7 @@ var extLanguages = map[string]string{
 	".mq4":    "mql",
 	".mq5":    "mql",
 	".mqh":    "mql",
+	".sql":    "sql",
 }
 
 // skipDirs are directory names that should never be walked.
@@ -239,29 +243,33 @@ func HandleDetectLspServers(ctx context.Context, _ *lsp.LSPClient, args map[stri
 
 	for _, ls := range ranked {
 		lang := ls.lang
+		if seen[lang] {
+			continue
+		}
+		seen[lang] = true
+		// Servers are tried in table order; the first on PATH wins.
+		var candidates []string
+		found := false
 		for _, def := range knownServers {
 			if def.Language != lang {
 				continue
 			}
-			if seen[def.Language] {
-				break
-			}
-			seen[def.Language] = true
-
+			candidates = append(candidates, def.Binary)
 			binPath, lookErr := exec.LookPath(def.Binary)
 			if lookErr != nil {
-				notInstalled = append(notInstalled, fmt.Sprintf("%s (%s)", lang, def.Binary))
-				break
+				continue
 			}
-
-			entry := buildConfigEntry(def)
 			installed = append(installed, DetectedServer{
 				Language:    lang,
 				Server:      def.Binary,
 				Path:        binPath,
-				ConfigEntry: entry,
+				ConfigEntry: buildConfigEntry(def),
 			})
+			found = true
 			break
+		}
+		if !found && len(candidates) > 0 {
+			notInstalled = append(notInstalled, fmt.Sprintf("%s (%s)", lang, strings.Join(candidates, " or ")))
 		}
 	}
 

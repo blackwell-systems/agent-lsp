@@ -656,8 +656,18 @@ jobs:
       - name: Install sqls
         run: go install github.com/sqls-server/sqls@v0.2.48
 
+      # Supabase's Postgres Language Server, pinned with a checksum like the
+      # other release-binary installs. Bump both together.
+      - name: Install postgres-language-server
+        run: |
+          PGLS_VERSION=0.28.2
+          PGLS_SHA256=82ff82e39be65824378afa5d02626a1b42e8d8e48f97cb4938e4d477c8a9be52
+          curl -fsSL "https://github.com/supabase-community/postgres-language-server/releases/download/${PGLS_VERSION}/postgres-language-server_x86_64-unknown-linux-gnu" -o /tmp/pgls
+          echo "${PGLS_SHA256}  /tmp/pgls" | sha256sum -c -
+          sudo install -m 755 /tmp/pgls /usr/local/bin/postgres-language-server
+
       - name: Run SQL tests
-        run: GOWORK=off go test -v -run "TestMultiLanguage/^SQL$" ./test/ -timeout 10m
+        run: GOWORK=off go test -v -run "TestMultiLanguage/^(SQL|PostgreSQL)$" ./test/ -timeout 10m
 
   # Clojure via clojure-lsp (native binary, no JVM needed)
   multi-lang-clojure:

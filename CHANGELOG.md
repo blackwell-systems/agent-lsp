@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+- **Postgres Language Server for SQL**: [Supabase's postgres-language-server](https://github.com/supabase-community/postgres-language-server) is supported and CI-verified alongside `sqls`. It parses SQL with Postgres's own parser and answers hover and completion from the connected database's schema (column types, keys, defaults, row-level security). Auto-detection now covers `.sql` files: it starts `postgres-language-server lsp-proxy` when installed and falls back to `sqls`, and `detect_lsp_servers` suggests them in the same order. The connection is read from `postgres-language-server.jsonc` or the standard `PG*` environment variables. See [Language Support](docs/reference/language-support.md#postgresql-postgres-language-server).
+
 ## [0.24.2] - 2026-11-04
 
 ### Added

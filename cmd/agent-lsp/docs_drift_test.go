@@ -103,7 +103,17 @@ var notYetVerified = map[string]bool{}
 // and pass in CI: the configured test languages minus notYetVerified. The
 // docs said 30, 31 and 32 in different places while 25 actually ran.
 func TestDocsLanguageCounts(t *testing.T) {
-	configs := regexp.MustCompile(`(?m)^\t\t\tname: +"([^"]+)"`).FindAllStringSubmatch(repoFile(t, "test/lang_configs_test.go"), -1)
+	// A language is counted once even when it has several server configs
+	// (SQL runs with sqls and with postgres-language-server).
+	all := regexp.MustCompile(`(?m)^\t\t\tname: +"([^"]+)",\n\t\t\tid: +"([^"]+)"`).FindAllStringSubmatch(repoFile(t, "test/lang_configs_test.go"), -1)
+	seen := map[string]bool{}
+	var configs [][]string
+	for _, c := range all {
+		if !seen[c[2]] {
+			seen[c[2]] = true
+			configs = append(configs, c)
+		}
+	}
 	if len(configs) == 0 {
 		t.Fatal("no language configs found in test/lang_configs_test.go")
 	}

@@ -30,6 +30,7 @@
 | Elixir | `elixir-ls` | [GitHub releases](https://github.com/elixir-lsp/elixir-ls/releases) |
 | Prisma | `prisma-language-server` | `npm i -g @prisma/language-server` |
 | SQL | `sqls` | `go install github.com/sqls-server/sqls@latest` |
+| SQL (PostgreSQL) | `postgres-language-server` | `brew install postgres-language-server`, `npm i -g @postgres-language-server/cli`, or [GitHub releases](https://github.com/supabase-community/postgres-language-server/releases); run as `postgres-language-server lsp-proxy`. See [PostgreSQL](#postgresql-postgres-language-server) below |
 | Clojure | `clojure-lsp` | [GitHub releases](https://github.com/clojure-lsp/clojure-lsp/releases) |
 | Nix | `nil` | [GitHub releases](https://github.com/oxalica/nil/releases) |
 | Dart | `dart language-server` | Ships with Dart SDK (`brew install dart`) |
@@ -39,9 +40,28 @@ TypeScript 7 ships without `tsserver`, which typescript-language-server needs, s
 
 ### Auto-detection coverage
 
-Running agent-lsp with no arguments (or `--auto`) auto-detects only the servers listed in `internal/config/autodetect.go`: `gopls` (Go), `typescript-language-server` (TypeScript, JavaScript), `pyright-langserver` (Python), `rust-analyzer` (Rust), `clangd` (C, C++), `solargraph` (Ruby), `yaml-language-server` (YAML), `vscode-json-language-server` (JSON), `docker-langserver` (Dockerfile), `csharp-ls` (C#), `jdtls` (Java), `kotlin-language-server` (Kotlin), `intelephense` (PHP), and `mql-lsp-server` (MQL4/MQL5).
+Running agent-lsp with no arguments (or `--auto`) auto-detects only the servers listed in `internal/config/autodetect.go`: `gopls` (Go), `typescript-language-server` (TypeScript, JavaScript), `pyright-langserver` (Python), `rust-analyzer` (Rust), `clangd` (C, C++), `solargraph` (Ruby), `yaml-language-server` (YAML), `vscode-json-language-server` (JSON), `docker-langserver` (Dockerfile), `csharp-ls` (C#), `jdtls` (Java), `kotlin-language-server` (Kotlin), `intelephense` (PHP), `mql-lsp-server` (MQL4/MQL5), and for SQL `postgres-language-server` (started with `lsp-proxy`), falling back to `sqls` when it is not installed.
 
 Every other language in the table above needs an explicit server: pass `language:binary` arguments (for example `agent-lsp lua:lua-language-server`, with extra server args after commas: `css:vscode-css-language-server,--stdio`), or a config file with `--config /path/to/lsp-mcp.json` (or `--merge-config` to overlay it on the auto-detected servers).
+
+### PostgreSQL (postgres-language-server)
+
+[Postgres Language Server](https://github.com/supabase-community/postgres-language-server) (from Supabase) parses SQL with Postgres's own parser and, when it can connect to a database, answers hover and completion from the live schema: column types, primary keys, defaults and row-level security policies. Start it with the `lsp-proxy` subcommand:
+
+```bash
+agent-lsp sql:postgres-language-server,lsp-proxy
+```
+
+Auto-detection does this for you and prefers it over `sqls` when both are installed. The database connection comes from `postgres-language-server.jsonc` in the workspace root (`--config-path` points elsewhere):
+
+```jsonc
+{
+  "$schema": "https://pg-language-server.com/latest/schema.json",
+  "db": { "host": "127.0.0.1", "port": 5432, "username": "postgres", "password": "postgres", "database": "mydb" }
+}
+```
+
+The standard `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD` and `PGDATABASE` variables override the file. Without a database the server still parses, but hover and schema-aware completion need one. It offers no go-to-definition, references or document symbols, so those tools return nothing for `.sql` files. CI runs it against the same postgres:16 database as `sqls` (see `test/fixtures/sql/`).
 
 ### MongoDB (mongodb-language-server)
 
@@ -114,6 +134,7 @@ The cells below are generated from CI's own results (the summary table `TestMult
 | Elixir | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | — | pass |
 | Prisma | pass | pass | pass | pass | pass | — | pass | — | — | pass | — | — | — |
 | SQL | pass | — | — | — | pass | — | — | — | — | pass | — | — | — |
+| PostgreSQL | pass | — | — | — | pass | — | — | — | — | pass | — | — | — |
 | Clojure | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
 | Nix | pass | — | — | — | pass | — | — | — | — | pass | — | pass | — |
 | Dart | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | pass |
@@ -159,6 +180,7 @@ See [ci-notes.md](../architecture/ci-notes.md) for per-language CI quirks.
 | Elixir | elixir-ls | experimental |
 | Prisma | prisma-language-server | experimental |
 | SQL | sqls | stable (postgres:16 service container) |
+| SQL | postgres-language-server | stable (postgres:16 service container; hover and completion from the live schema, no navigation) |
 | Clojure | clojure-lsp | stable |
 | Nix | nil | experimental |
 | Dart | dart language-server | stable |
@@ -184,7 +206,7 @@ See [ci-notes.md](../architecture/ci-notes.md) for per-language CI quirks.
 | `multi-lang-gleam` | Gleam | ubuntu-latest |
 | `multi-lang-elixir` | Elixir | ubuntu-latest (continue-on-error) |
 | `multi-lang-prisma` | Prisma | ubuntu-latest (continue-on-error) |
-| `multi-lang-sql` | SQL | ubuntu-latest (postgres:16 service) |
+| `multi-lang-sql` | SQL (sqls and postgres-language-server) | ubuntu-latest (postgres:16 service) |
 | `multi-lang-clojure` | Clojure | ubuntu-latest |
 | `multi-lang-nix` | Nix | ubuntu-latest (continue-on-error) |
 | `multi-lang-dart` | Dart | ubuntu-latest |

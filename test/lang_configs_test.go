@@ -781,6 +781,38 @@ func buildLanguageConfigs(fixtureBase string) []langConfig {
 			codeActionLine:     7,
 			codeActionEndLine:  9,
 		},
+		// SQL through Supabase's Postgres Language Server, on the same fixture
+		// and database as sqls (CI's postgres:16 service, schema.sql). Its
+		// config is test/fixtures/sql/postgres-language-server.jsonc. Hover
+		// answers from the live schema (types, keys, defaults, RLS); the
+		// server offers no definition, references or document symbols.
+		{
+			name:               "PostgreSQL",
+			id:                 "sql",
+			binary:             "postgres-language-server",
+			serverArgs:         []string{"lsp-proxy"},
+			fixture:            filepath.Join(fixtureBase, "sql"),
+			file:               filepath.Join(fixtureBase, "sql", "query.sql"),
+			hoverLine:          7,
+			hoverColumn:        7,
+			definitionLine:     7,
+			definitionColumn:   7,
+			callSiteLine:       8,
+			callSiteColumn:     6,
+			referenceLine:      7,
+			referenceColumn:    7,
+			completionLine:     4,
+			completionColumn:   5,
+			workspaceSymbol:    "person",
+			supportsFormatting: false,
+			symbolName:         "person",
+			highlightLine:      7,
+			highlightColumn:    7,
+			inlayHintEndLine:   0,
+			renameSymbolLine:   0,
+			codeActionLine:     7,
+			codeActionEndLine:  9,
+		},
 		{
 			name:               "Clojure",
 			id:                 "clojure",

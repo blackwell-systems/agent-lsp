@@ -323,7 +323,21 @@ var tier2Baseline = map[string]map[string]expectedTier2Status{
 		"format_document":  statusAllowedFail,
 	}),
 
-	"SQL":     defaultAllowedSkip(nil),
+	"SQL": defaultAllowedSkip(nil),
+	// PostgreSQL (Supabase's postgres-language-server) on the SQL fixture with
+	// CI's postgres:16 database: derived from AGENT_LSP_DUMP_BASELINE. Hover
+	// and completion answer from the live schema and are pinned "pass"; the
+	// server offers no definition, references, symbols or highlights.
+	"PostgreSQL": defaultAllowedSkip(map[string]expectedTier2Status{
+		"inspect_symbol":           statusPass,
+		"get_completions":          statusPass,
+		"suggest_fixes":            statusPass,
+		"get_server_capabilities":  statusPass,
+		"restart_lsp_server":       statusPass,
+		"close_document":           statusPass,
+		"did_change_watched_files": statusPass,
+		"workspace_folders":        statusPass,
+	}),
 	"Clojure": defaultAllowedSkip(nil),
 
 	// Nix: continue-on-error CI job (nil, experimental).

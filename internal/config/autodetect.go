@@ -13,6 +13,9 @@ type ServerSpec struct {
 	Binary     string   // e.g. "gopls", "typescript-language-server"
 	Args       []string // e.g. ["--stdio"] or nil for no args
 	Extensions []string // e.g. ["go"] or ["ts", "tsx"]
+	// Fallback is tried when Binary is not on PATH: a second server for the
+	// same language, used only when the preferred one is absent.
+	Fallback *ServerSpec
 }
 
 // knownServers maps language ID to server specification.
@@ -37,7 +40,12 @@ var knownServers = map[string]ServerSpec{
 	// "mql4"/"mql5": the server treats an unrecognized languageId as unknown and
 	// resolves the dialect per file (extension, includer edges, content sniffing),
 	// so one entry covers .mq4/.mq5/.mqh without misrouting .mqh headers.
-	"mql":        {Binary: "mql-lsp-server", Args: nil, Extensions: []string{"mq4", "mq5", "mqh"}},
+	"mql": {Binary: "mql-lsp-server", Args: nil, Extensions: []string{"mq4", "mq5", "mqh"}},
+	// SQL: Supabase's Postgres Language Server (Postgres's own parser, type
+	// checking against the database when one is configured) is preferred;
+	// sqls is the fallback for other databases.
+	"sql": {Binary: "postgres-language-server", Args: []string{"lsp-proxy"}, Extensions: []string{"sql"},
+		Fallback: &ServerSpec{Binary: "sqls", Args: nil, Extensions: []string{"sql"}}},
 }
 
 // AutodetectServers scans PATH for known language server binaries
@@ -57,9 +65,13 @@ func AutodetectServers() (*Config, error) {
 	for _, lang := range languages {
 		spec := knownServers[lang]
 		path, err := exec.LookPath(spec.Binary)
+		for err != nil && spec.Fallback != nil {
+			spec = *spec.Fallback
+			path, err = exec.LookPath(spec.Binary)
+		}
 		if err != nil {
 			// Server not found in PATH
-			logging.Log(logging.LevelWarning, fmt.Sprintf("language server not found: %s (for %s)", spec.Binary, lang))
+			logging.Log(logging.LevelWarning, fmt.Sprintf("language server not found: %s (for %s)", knownServers[lang].Binary, lang))
 			continue
 		}
 

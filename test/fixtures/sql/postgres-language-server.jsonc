@@ -1,0 +1,13 @@
+{
+  "$schema": "https://pg-language-server.com/latest/schema.json",
+  // The CI job's postgres:16 service, loaded with schema.sql. Locally,
+  // PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE override these.
+  "db": {
+    "host": "127.0.0.1",
+    "port": 5432,
+    "username": "postgres",
+    "password": "postgres",
+    "database": "testdb",
+    "connTimeoutSecs": 10
+  }
+}

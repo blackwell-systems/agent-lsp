@@ -508,6 +508,7 @@ warnings: [roots that failed indexing]
 | Elixir | `elixir-ls` | passing | continue-on-error job; `language_server.sh` symlinked as `elixir-ls`; 16 verified capabilities |
 | Prisma | `prisma-language-server` | passing | continue-on-error job; `npm i -g @prisma/language-server` |
 | SQL | `sqls` | passing | postgres:16 service container; `go install github.com/sqls-server/sqls@latest` |
+| SQL (PostgreSQL) | `postgres-language-server` | passing | same postgres:16 database; release binary pinned by sha256 |
 | Clojure | `clojure-lsp` | passing | native binary from GitHub releases |
 | Nix | `nil` | passing | `nix profile install github:oxalica/nil`; DeterminateSystems/nix-installer-action required in CI |
 | Dart | `dart` | passing | Ships with Dart SDK; `brew install dart` |
@@ -1384,7 +1385,7 @@ locs, err := client.GetDefinition(ctx, fileURI, lsp.Position{Line: 10, Character
 | `multi-lang-gleam` | Gleam | ubuntu-latest | |
 | `multi-lang-elixir` | Elixir | ubuntu-latest | continue-on-error; erlef/setup-beam@v1 (Elixir 1.16/OTP 26) |
 | `multi-lang-prisma` | Prisma | ubuntu-latest | continue-on-error |
-| `multi-lang-sql` | SQL | ubuntu-latest | postgres:16 service container; pg_isready health check |
+| `multi-lang-sql` | SQL (sqls, postgres-language-server) | ubuntu-latest | postgres:16 service container; pg_isready health check |
 | `multi-lang-clojure` | Clojure | ubuntu-latest | |
 | `multi-lang-nix` | Nix | ubuntu-latest | DeterminateSystems/nix-installer-action@v16 required |
 | `multi-lang-dart` | Dart | ubuntu-latest | |

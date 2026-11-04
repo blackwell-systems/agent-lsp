@@ -198,3 +198,41 @@ func TestSuggestedConfigDeduplication(t *testing.T) {
 		t.Errorf("expected at most 1 clangd entry in suggested_config, got %d", clangdCount)
 	}
 }
+
+// SQL has two servers: postgres-language-server is preferred, sqls is the
+// fallback, and when neither is on PATH both are named.
+func TestHandleDetectLspServers_SQLServerOrder(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "schema.sql"), []byte("create table t (id int);\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	detect := func(binaries ...string) DetectResult {
+		t.Helper()
+		bin := t.TempDir()
+		for _, b := range binaries {
+			if err := os.WriteFile(filepath.Join(bin, b), []byte("#!/bin/sh\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		t.Setenv("PATH", bin)
+		r, err := HandleDetectLspServers(context.Background(), nil, map[string]any{"workspace_dir": dir})
+		if err != nil || r.IsError {
+			t.Fatalf("detect: %v %v", err, r)
+		}
+		var result DetectResult
+		if err := json.Unmarshal([]byte(r.Content[0].Text), &result); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		return result
+	}
+
+	if got := detect("postgres-language-server", "sqls"); len(got.SuggestedConfig) != 1 || got.SuggestedConfig[0] != "sql:postgres-language-server,lsp-proxy" {
+		t.Errorf("both installed: suggested = %v, want postgres-language-server", got.SuggestedConfig)
+	}
+	if got := detect("sqls"); len(got.SuggestedConfig) != 1 || got.SuggestedConfig[0] != "sql:sqls" {
+		t.Errorf("sqls only: suggested = %v, want sqls", got.SuggestedConfig)
+	}
+	if got := detect(); len(got.NotInstalled) != 1 || got.NotInstalled[0] != "sql (postgres-language-server or sqls)" {
+		t.Errorf("none installed: not_installed = %v", got.NotInstalled)
+	}
+}

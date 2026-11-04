@@ -433,6 +433,8 @@ func LanguageIDFromPath(path string) string {
 		return "luau"
 	case ".lua":
 		return "lua"
+	case ".sql":
+		return "sql"
 	default:
 		return "plaintext"
 	}
