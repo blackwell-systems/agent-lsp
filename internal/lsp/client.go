@@ -1000,6 +1000,24 @@ func (c *LSPClient) writeRaw(body []byte) error {
 	}
 	_, err := w.Write(EncodeMessage(body))
 	if err != nil {
+		// A broken pipe usually means the server just died: wait briefly for
+		// the exit monitor and report why it exited (with its stderr) rather
+		// than the bare write error.
+		c.mu.Lock()
+		done := c.procDone
+		c.mu.Unlock()
+		if done != nil {
+			select {
+			case <-done:
+				c.mu.Lock()
+				exitErr := c.exitErr
+				c.mu.Unlock()
+				if exitErr != nil {
+					return fmt.Errorf("LSP process has exited: %w", exitErr)
+				}
+			case <-time.After(3 * time.Second):
+			}
+		}
 		return fmt.Errorf("writeRaw: %w", err)
 	}
 	return nil

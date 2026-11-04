@@ -83,40 +83,42 @@ command. Verify with `agent-lsp doctor`.
 
 Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verified for 31 of the 32 languages tested (all but Scala; MongoDB is checked through completion, the only feature its server offers). Tier 2: 34 additional tools.
 
+The cells below are generated from CI's own results (the summary table `TestMultiLanguage` prints), not written by hand: `pass` passed, `—` was skipped because the server does not support the feature or the test has no fixture position for it, `fail` failed. Scala did not run end to end, so its row is empty. Regenerate after a CI run with `gh run view <run-id> --log > ci.log && python3 scripts/update-coverage-matrix.py ci.log`.
+
 | Language | Tier 1 | symbols | definition | references | completions | workspace | format | declaration | type_hierarchy | hover | call_hier | sem_tok | sig_help |
 |----------|--------|---------|------------|------------|-------------|-----------|--------|-------------|----------------|-------|-----------|---------|----------|
-| TypeScript | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | pass |
-| Python | pass | pass | pass | pass | pass | pass | — | — | — | pass | pass | pass | — |
-| Go | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
-| Rust | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | — |
-| Java | pass | — | — | — | — | — | — | — | pass | pass | pass | — | — |
-| C | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
-| PHP | pass | pass | pass | pass | pass | pass | — | — | — | pass | pass | pass | pass |
-| C++ | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
-| JavaScript | pass | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
-| Ruby | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
-| YAML | pass | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
-| JSON | pass | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
-| Dockerfile | pass | — | — | — | pass | pass | — | — | — | pass | — | — | — |
-| C# | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
-| Kotlin | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
-| Lua | pass | pass | — | — | pass | pass | pass | — | — | pass | pass | pass | pass |
+| TypeScript | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
+| Python | pass | pass | pass | pass | pass | pass | — | — | — | pass | pass | — | pass |
+| Go | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | pass |
+| Rust | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
+| Java | pass | pass | — | pass | pass | pass | pass | — | — | pass | pass | pass | — |
+| C | pass | pass | — | pass | pass | pass | pass | pass | — | pass | — | pass | — |
+| PHP | pass | pass | pass | pass | pass | pass | — | — | — | pass | — | — | — |
+| C++ | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
+| JavaScript | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | — |
+| Ruby | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
+| YAML | pass | pass | — | — | pass | — | pass | — | — | pass | — | — | — |
+| JSON | pass | pass | — | — | pass | — | pass | — | — | pass | — | — | — |
+| Dockerfile | pass | pass | — | — | pass | — | — | — | — | pass | — | pass | — |
+| C# | pass | — | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
+| Kotlin | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
+| Lua | pass | pass | — | pass | pass | pass | pass | — | — | pass | — | pass | — |
 | Luau | pass | pass | pass | pass | pass | pass | — | — | — | pass | — | pass | — |
-| Swift | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
-| Zig | pass | pass | pass | pass | pass | fail | pass | — | — | pass | — | pass | pass |
-| CSS | pass | pass | — | — | pass | pass | pass | — | — | pass | — | — | — |
-| HTML | pass | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
-| Terraform | pass | pass | pass | — | pass | pass | pass | — | — | pass | — | — | — |
+| Swift | pass | pass | — | pass | pass | pass | pass | — | — | pass | pass | pass | — |
+| Zig | pass | pass | pass | pass | pass | — | pass | — | — | pass | — | pass | pass |
+| CSS | pass | pass | pass | pass | pass | — | pass | — | — | pass | — | — | — |
+| HTML | pass | — | — | — | pass | — | pass | — | — | pass | — | — | — |
+| Terraform | pass | pass | — | pass | pass | pass | — | — | — | pass | — | — | — |
 | Scala | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| Gleam | pass | pass | pass | pass | pass | fail | pass | — | — | pass | — | — | — |
-| Elixir | pass | fail | pass | pass | pass | pass | pass | — | — | pass | pass | — | pass |
-| Prisma | pass | pass | pass | pass | — | — | pass | — | — | pass | — | — | — |
-| SQL | pass | pass | pass | pass | pass | pass | — | — | — | pass | — | — | — |
-| Clojure | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
-| Nix | pass | pass | — | — | pass | pass | — | — | — | pass | — | — | — |
-| Dart | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
-| MongoDB | pass | — | — | — | pass | pass | — | — | — | pass | — | — | — |
-| MQL | pass | pass | pass | pass | pass | pass | — | — | — | pass | — | — | — |
+| Gleam | pass | pass | pass | pass | pass | — | pass | — | — | pass | — | — | — |
+| Elixir | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | — | pass |
+| Prisma | pass | pass | pass | pass | pass | — | pass | — | — | pass | — | — | — |
+| SQL | pass | — | — | — | pass | — | — | — | — | pass | — | — | — |
+| Clojure | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
+| Nix | pass | — | — | — | pass | — | — | — | — | pass | — | pass | — |
+| Dart | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | pass |
+| MongoDB | pass | — | — | — | pass | — | — | — | — | — | — | — | — |
+| MQL | pass | pass | pass | pass | pass | pass | — | — | — | pass | pass | — | pass |
 
 Note: MQL references and rename via `mql-lsp-server` are name-based (not type-resolved). This limitation is tracked upstream ([davalillo/mql-language-server#45](https://github.com/davalillo/mql-language-server/issues/45)).
 

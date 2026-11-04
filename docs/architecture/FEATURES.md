@@ -519,39 +519,7 @@ warnings: [roots that failed indexing]
 
 ### CI Tool Coverage Matrix (Tier 2)
 
-| Language | symbols | definition | references | completions | workspace | format | declaration | type_hier | hover | call_hier | sem_tok | sig_help |
-|----------|---------|------------|------------|-------------|-----------|--------|-------------|-----------|-------|-----------|---------|----------|
-| TypeScript | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | pass |
-| Python | pass | pass | pass | pass | pass | — | — | — | pass | pass | pass | — |
-| Go | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
-| Rust | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | — |
-| Java | — | — | — | — | — | — | — | pass | pass | pass | — | — |
-| C | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
-| PHP | pass | pass | pass | pass | pass | — | — | — | pass | pass | pass | pass |
-| C++ | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
-| JavaScript | pass | pass | pass | pass | pass | pass | pass | — | pass | pass | pass | — |
-| Ruby | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
-| YAML | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
-| JSON | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
-| Dockerfile | — | — | — | pass | pass | — | — | — | pass | — | — | — |
-| C# | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
-| Kotlin | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
-| Lua | pass | — | — | pass | pass | pass | — | — | pass | pass | pass | pass |
-| Luau | pass | pass | pass | pass | pass | — | — | — | pass | — | pass | — |
-| Swift | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
-| Zig | pass | pass | pass | pass | fail | pass | — | — | pass | — | pass | pass |
-| CSS | pass | — | — | pass | pass | pass | — | — | pass | — | — | — |
-| HTML | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
-| Terraform | pass | pass | — | pass | pass | pass | — | — | pass | — | — | — |
-| Scala | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
-| Gleam | pass | pass | pass | pass | fail | pass | — | — | pass | — | — | — |
-| Elixir | fail | pass | pass | pass | pass | pass | — | — | pass | pass | — | pass |
-| Prisma | pass | pass | pass | — | — | pass | — | — | pass | — | — | — |
-| SQL | pass | pass | pass | pass | pass | — | — | — | pass | — | — | — |
-| Clojure | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
-| Nix | pass | — | — | pass | pass | — | — | — | pass | — | — | — |
-| Dart | pass | pass | pass | pass | pass | pass | — | — | pass | — | — | — |
-| MongoDB | — | — | — | pass | pass | — | — | — | pass | — | — | — |
+The per-language, per-tool results are generated from CI's own summary table and kept in one place: see the [CI tool coverage matrix](../reference/language-support.md#ci-tool-coverage-matrix) in the language support reference.
 
 ### Language Expansion Tiers
 
