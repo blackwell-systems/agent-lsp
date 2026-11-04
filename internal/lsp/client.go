@@ -440,10 +440,12 @@ func (c *LSPClient) start() error {
 	if err != nil {
 		return fmt.Errorf("stdout pipe: %w", err)
 	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("stderr pipe: %w", err)
-	}
+	// stderr goes through a writer rather than a pipe: cmd.Wait then finishes
+	// copying it before returning, so the exit error can carry the server's
+	// last words (a pipe is closed by Wait and could lose them). WaitDelay
+	// bounds Wait if a child process keeps stderr open after the server exits.
+	cmd.Stderr = stderrTail{c}
+	cmd.WaitDelay = 2 * time.Second
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start process: %w", err)
@@ -461,7 +463,6 @@ func (c *LSPClient) start() error {
 	c.exited = false
 	c.mu.Unlock()
 
-	go c.drainStderr(stderr)
 	go c.readLoop(fr)
 
 	// Monitor process exit. This goroutine belongs to this process only: after
@@ -478,6 +479,11 @@ func (c *LSPClient) start() error {
 		exitErr := errors.New("lsp process exited")
 		if err != nil {
 			exitErr = fmt.Errorf("lsp process exited: %w", err)
+			// Include what the server printed last: "exit status 1" alone
+			// tells the caller nothing about why it failed to start.
+			if tail := c.stderrSummary(); tail != "" {
+				exitErr = fmt.Errorf("%w; server stderr: %s", exitErr, tail)
+			}
 		}
 		c.mu.Lock()
 		current := c.cmd == cmd
@@ -507,24 +513,39 @@ func (c *LSPClient) start() error {
 	return nil
 }
 
-// drainStderr reads stderr and buffers the last 4KB.
-func (c *LSPClient) drainStderr(r io.Reader) {
-	buf := make([]byte, 512)
-	for {
-		n, err := r.Read(buf)
-		if n > 0 {
-			c.stderrMu.Lock()
-			c.stderrBuf = append(c.stderrBuf, buf[:n]...)
-			if len(c.stderrBuf) > 4096 {
-				c.stderrBuf = c.stderrBuf[len(c.stderrBuf)-4096:]
-			}
-			c.stderrMu.Unlock()
-			logging.Log(logging.LevelDebug, "LSP stderr: "+string(buf[:n]))
-		}
-		if err != nil {
-			return
-		}
+// stderrTail is the server process's stderr: it keeps the last 4KB and logs
+// each chunk at debug level.
+type stderrTail struct{ c *LSPClient }
+
+func (w stderrTail) Write(p []byte) (int, error) {
+	w.c.stderrMu.Lock()
+	w.c.stderrBuf = append(w.c.stderrBuf, p...)
+	if len(w.c.stderrBuf) > 4096 {
+		w.c.stderrBuf = w.c.stderrBuf[len(w.c.stderrBuf)-4096:]
 	}
+	w.c.stderrMu.Unlock()
+	logging.Log(logging.LevelDebug, "LSP stderr: "+string(p))
+	return len(p), nil
+}
+
+// stderrSummary returns the last lines the server wrote to stderr, at most
+// about 800 bytes, on one line, for an error message.
+func (c *LSPClient) stderrSummary() string {
+	c.stderrMu.Lock()
+	tail := strings.TrimSpace(string(c.stderrBuf))
+	c.stderrMu.Unlock()
+	if tail == "" {
+		return ""
+	}
+	lines := strings.Split(tail, "\n")
+	if len(lines) > 8 {
+		lines = lines[len(lines)-8:]
+	}
+	out := strings.Join(lines, " | ")
+	if len(out) > 800 {
+		out = "..." + out[len(out)-800:]
+	}
+	return out
 }
 
 // readLoop reads and dispatches all incoming messages.
