@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -124,5 +125,19 @@ func TestDocsLanguageCounts(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// The MCP Registry rejects a server.json description over 100 characters
+// (it failed the v0.24.1 publish), so keep it within the limit.
+func TestServerJSONDescriptionLength(t *testing.T) {
+	var sj struct {
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal([]byte(repoFile(t, "server.json")), &sj); err != nil {
+		t.Fatal(err)
+	}
+	if n := len([]rune(sj.Description)); n > 100 {
+		t.Fatalf("server.json description is %d characters; the MCP Registry allows 100", n)
 	}
 }

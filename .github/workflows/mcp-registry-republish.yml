@@ -1,0 +1,48 @@
+name: Republish to MCP Registry
+# Publishes a released version to the MCP Registry from main's server.json,
+# for when the release job's publish failed (for example on registry
+# validation) and server.json had to be fixed after the tag.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag already on npm (e.g. v0.24.1)'
+        required: true
+
+jobs:
+  mcp-registry-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mcp-publisher
+        run: |
+          MCP_PUBLISHER_VERSION=v1.8.1
+          MCP_PUBLISHER_SHA256=a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" -o /tmp/mcp-publisher.tar.gz
+          echo "${MCP_PUBLISHER_SHA256}  /tmp/mcp-publisher.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/mcp-publisher.tar.gz mcp-publisher
+          sudo mv mcp-publisher /usr/local/bin/
+
+      - name: Set server.json version
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          VERSION="${TAG#v}"
+          node -e "
+            const fs = require('fs');
+            const s = JSON.parse(fs.readFileSync('server.json'));
+            s.version = process.argv[1];
+            s.packages[0].version = process.argv[1];
+            fs.writeFileSync('server.json', JSON.stringify(s, null, 2) + '\n');
+          " "$VERSION"
+          curl -fsS -o /dev/null "https://registry.npmjs.org/@blackwell-systems%2Fagent-lsp/${VERSION}" \
+            || { echo "::error::${VERSION} is not on npm"; exit 1; }
+
+      - name: Login to MCP Registry (GitHub OIDC)
+        run: mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        run: mcp-publisher publish
