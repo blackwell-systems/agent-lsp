@@ -71,6 +71,7 @@ func TestDocsHeadlineCounts(t *testing.T) {
 		"docs/getting-started/quickstart.md",
 		"docs/architecture/architecture.md",
 		"pypi/README.md",
+		"npm/agent-lsp/README.md",
 		"CLAUDE.md",
 	}
 	for _, f := range files {
@@ -88,6 +89,39 @@ func TestDocsHeadlineCounts(t *testing.T) {
 		for _, m := range skillRe.FindAllStringSubmatch(text, -1) {
 			if n, _ := strconv.Atoi(m[1]); n != skills {
 				t.Errorf("%s: %q, but there are %d skills", f, m[0], skills)
+			}
+		}
+	}
+}
+
+// notYetVerified lists the configured test languages that do not pass end to
+// end in CI. Remove a language when it does, and update the docs' counts.
+var notYetVerified = map[string]bool{"Scala": true}
+
+// Headline "N CI-verified languages" claims must match the languages that run
+// and pass in CI: the configured test languages minus notYetVerified. The
+// docs said 30, 31 and 32 in different places while 25 actually ran.
+func TestDocsLanguageCounts(t *testing.T) {
+	configs := regexp.MustCompile(`(?m)^\t\t\tname: +"([^"]+)"`).FindAllStringSubmatch(repoFile(t, "test/lang_configs_test.go"), -1)
+	if len(configs) == 0 {
+		t.Fatal("no language configs found in test/lang_configs_test.go")
+	}
+	verified := 0
+	for _, c := range configs {
+		if !notYetVerified[c[1]] {
+			verified++
+		}
+	}
+	re := regexp.MustCompile(`\b(\d+) CI-verified languages\b|languages-(\d+)_CI--verified|\| Languages \(CI-verified\) \| \*\*(\d+)\*\*`)
+	for _, f := range []string{"README.md", "docs/index.md", "pypi/README.md", "npm/agent-lsp/README.md", "server.json", "pypi/pyproject.toml"} {
+		for _, m := range re.FindAllStringSubmatch(repoFile(t, f), -1) {
+			for _, g := range m[1:] {
+				if g == "" {
+					continue
+				}
+				if n, _ := strconv.Atoi(g); n != verified {
+					t.Errorf("%s: %q, but %d of %d configured languages are verified in CI", f, m[0], verified, len(configs))
+				}
 			}
 		}
 	}

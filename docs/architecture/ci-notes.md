@@ -126,7 +126,7 @@ Runs deterministic assertions against agent-lsp through the MCP stdio transport 
 
 | File | Job | What it tests |
 |---|---|---|
-| `test/multi_lang_test.go` | `multi-lang-core`, `multi-lang-extended`, + per-language jobs | Tier 1 + 34 Tier 2 tools across 30 language servers |
+| `test/multi_lang_test.go` | `multi-lang-core`, `multi-lang-extended`, + per-language jobs | Tier 1 + 34 Tier 2 tools across 32 language servers |
 | `test/speculative_test.go` | `speculative-test` | All 8 simulation tools across 8 languages in parallel |
 | `test/error_paths_test.go` | `unit-and-smoke` | 11 bad-input subtests (out-of-bounds positions, nonexistent files, invalid session IDs); asserts well-formed errors, not crashes |
 | `test/consistency_test.go` | (none) | `TestCrossLanguageConsistency`: structural shape validation for 4 tools across Go, TypeScript, Python, Rust in parallel. Not run in CI: the `multi-lang-core` job's `-run "TestMultiLanguage/^(Go\|TypeScript\|Python\|Rust\|Kotlin)$"` pattern does not match it. Run locally with `go test -v -run TestCrossLanguageConsistency ./test/` |

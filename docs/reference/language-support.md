@@ -81,7 +81,7 @@ command. Verify with `agent-lsp doctor`.
 
 ## CI tool coverage matrix
 
-Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verified for all 32 languages. Tier 2: 34 additional tools.
+Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verified for 31 of the 32 languages tested (all but Scala; MongoDB is checked through completion, the only feature its server offers). Tier 2: 34 additional tools.
 
 | Language | Tier 1 | symbols | definition | references | completions | workspace | format | declaration | type_hierarchy | hover | call_hier | sem_tok | sig_help |
 |----------|--------|---------|------------|------------|-------------|-----------|--------|-------------|----------------|-------|-----------|---------|----------|
@@ -124,7 +124,7 @@ See [ci-notes.md](../architecture/ci-notes.md) for per-language CI quirks.
 
 ---
 
-## Current (32 languages, CI-tested)
+## Current (32 languages tested in CI, 31 verified)
 
 **stable** = all Tier 1 tools pass CI. **experimental** = server works but CI results are informational.
 

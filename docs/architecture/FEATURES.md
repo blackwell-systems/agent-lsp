@@ -229,7 +229,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Sets minimum log level: `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency`
 - Also configurable via `LOG_LEVEL` env var
 - Parameters: `level` (string, req)
-- No LSP required; CI-verified for all 31 languages
+- No LSP required; CI-tested across the language matrix
 
 ### Build & Test (4 tools)
 
@@ -297,7 +297,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Agents calling `destroy_session` after `preview_edit` (which auto-cleans up) no longer see a confusing error
 
 **Total: 66 tools** (60 core tools, 3 intent aliases, 3 phase-enforcement tools; 63 non-phase tools)
-- **CI-verified:** every tool except `refactor` across the language matrix (including `set_log_level` verified separately across all 31 languages, and the 3 phase enforcement tools verified via mcp-assert); `refactor` is verified end to end against gopls v0.24 in the unit suite
+- **CI-verified:** every tool except `refactor` across the language matrix (including `set_log_level` verified separately across the 31 verified languages, and the 3 phase enforcement tools verified via mcp-assert); `refactor` is verified end to end against gopls v0.24 in the unit suite
 - **ToolAnnotations:** All 66 tools set `Title`, `ReadOnlyHint`, `DestructiveHint`, and `OpenWorldHint` (`OpenWorldHint` is false on every tool). `ReadOnlyHint` is true on 37 tools, which MCP clients can auto-approve without human confirmation; `rename_symbol` is not one of them, since it writes unless `dry_run` is set. `DestructiveHint` is true on 10 tools (`apply_edit`, `rename_symbol`, `refactor`, `replace_symbol_body`, `safe_delete_symbol`, `safe_apply_edit`, `safe_edit`, `execute_command`, `did_change_watched_files`, `import_cache`). `IdempotentHint` is set on only 7 tools: true on `start_lsp`, `restart_lsp_server`, `add_workspace_folder`, `remove_workspace_folder`, `set_log_level`, `deactivate_skill`; false on `activate_skill`
 - **jsonschema struct tags:** 219 tags across the Args structs in `cmd/agent-lsp`; nearly all parameters carry a description (the `language_id` fields of `open_document`, `format_document`, and `format_range` do not)
 - **1-indexed coordinates:** All line/column parameters are 1-based (editor convention)
@@ -477,7 +477,7 @@ warnings: [roots that failed indexing]
 
 ---
 
-## Languages (31 CI-verified)
+## Languages (32 tested in CI, 31 verified)
 
 | Language | Server Binary | CI Status | Notes |
 |----------|---------------|-----------|-------|
@@ -485,17 +485,17 @@ warnings: [roots that failed indexing]
 | Python | `pyright-langserver` | passing | `npm i -g pyright`; **daemon mode**: persistent broker for large repos (validated on FastAPI, 1,119 files) |
 | Go | `gopls` | passing | `go install golang.org/x/tools/gopls@latest` |
 | Rust | `rust-analyzer` | passing | `rustup component add rust-analyzer` |
-| Java | `jdtls` | flaky | cold-start indexing; Tier 2 skipped on timeout; eclipse.jdt.ls snapshots |
+| Java | `jdtls` | passing | current eclipse.jdt.ls snapshots need Java 25; cold-start indexing is slow |
 | C | `clangd` | passing | `apt install clangd` / `brew install llvm` |
 | PHP | `intelephense` | passing | `npm i -g intelephense` |
 | C++ | `clangd` | passing | shared binary with C |
 | JavaScript | `typescript-language-server` | passing | shared binary with TypeScript |
 | Ruby | `solargraph` | passing | `gem install solargraph` |
 | YAML | `yaml-language-server` | passing | `npm i -g yaml-language-server` |
-| JSON | `vscode-json-language-server` | passing | `npm i -g vscode-langservers-extracted` |
+| JSON | `vscode-json-language-server` | passing | `npm i -g vscode-langservers-extracted`; hover and diagnostics need a JSON schema (`$schema`) |
 | Dockerfile | `docker-langserver` | passing | `npm i -g dockerfile-language-server-nodejs` |
 | C# | `csharp-ls` | passing | `dotnet tool install -g csharp-ls` |
-| Kotlin | `kotlin-language-server` | passing | GitHub releases |
+| Kotlin | `kotlin-language-server` | passing | GitHub releases; 1.3.13 runs on Java 21 |
 | Lua | `lua-language-server` | passing | GitHub releases |
 | Luau | `luau-lsp` | passing | GitHub releases; `supportsFormatting=false` (format tools skip) |
 | Swift | `sourcekit-lsp` | passing | macos-latest runner only; ships with Xcode |
@@ -503,17 +503,18 @@ warnings: [roots that failed indexing]
 | CSS | `vscode-css-language-server` | passing | `npm i -g vscode-langservers-extracted` |
 | HTML | `vscode-html-language-server` | passing | `npm i -g vscode-langservers-extracted` |
 | Terraform | `terraform-ls` | passing | releases.hashicorp.com |
-| Scala | `metals` | best-effort | cold-start; continue-on-error; `cs install metals` via Coursier |
+| Scala | `metals` | not verified | Metals starts but waits for a build import agent-lsp does not trigger; `cs install metals` via Coursier |
 | Gleam | `gleam` | passing | built-in LSP (`serverArgs: ["lsp"]`) |
-| Elixir | `elixir-ls` | best-effort | continue-on-error; `language_server.sh` symlinked as `elixir-ls`; 16 verified capabilities |
-| Prisma | `prisma-language-server` | investigating | requires VS Code extension host; `npm i -g @prisma/language-server` |
+| Elixir | `elixir-ls` | passing | continue-on-error job; `language_server.sh` symlinked as `elixir-ls`; 16 verified capabilities |
+| Prisma | `prisma-language-server` | passing | continue-on-error job; `npm i -g @prisma/language-server` |
 | SQL | `sqls` | passing | postgres:16 service container; `go install github.com/sqls-server/sqls@latest` |
 | Clojure | `clojure-lsp` | passing | native binary from GitHub releases |
 | Nix | `nil` | passing | `nix profile install github:oxalica/nil`; DeterminateSystems/nix-installer-action required in CI |
 | Dart | `dart` | passing | Ships with Dart SDK; `brew install dart` |
-| MongoDB | `mongodb-language-server` | investigating | extracted from vscode VSIX at `dist/languageServer.js`; mongo:7 service container |
+| MongoDB | `mongodb-language-server` | passing | completion only (no hover or diagnostics); extracted from the vscode VSIX at `dist/languageServer.js`; mongo:7 service container |
+| MQL | `mql-lsp-server` | passing | pinned release with sha256 check |
 
-**Tier 1 (Core 4 tools):** `start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`, verified for all 31 languages
+**Tier 1 (Core 4 tools):** `start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`, verified for 31 of the 32 languages (all but Scala); MongoDB is checked through completion, the only feature its server offers
 **Tier 2 (Extended 34 tools):** verified per-language; coverage varies by server capabilities
 
 ### CI Tool Coverage Matrix (Tier 2)

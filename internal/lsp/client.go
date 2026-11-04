@@ -177,6 +177,9 @@ type LSPClient struct {
 	// (stdin nulled because the process died) from one that was never started.
 	// Reset by start() so a restarted client does not inherit it.
 	exited bool
+	// exitErr is why the subprocess exited, including the tail of its stderr;
+	// requests sent after the exit return it. Guarded by c.mu.
+	exitErr error
 
 	// daemon mode fields
 	isDaemon   bool        // true if connected to a daemon broker (not a direct subprocess)
@@ -461,6 +464,7 @@ func (c *LSPClient) start() error {
 	c.frameReader = fr
 	c.procDone = done
 	c.exited = false
+	c.exitErr = nil
 	c.mu.Unlock()
 
 	go c.readLoop(fr)
@@ -490,6 +494,7 @@ func (c *LSPClient) start() error {
 		if current {
 			c.initialized = false
 			c.exited = true
+			c.exitErr = exitErr
 			// Null out stdin so later writeRaw calls return a clear "process has
 			// exited" error instead of writing to a closed pipe. Do not Close it
 			// here: the process already exited (pipe is closed) and Shutdown may
@@ -980,10 +985,15 @@ func (c *LSPClient) writeRaw(body []byte) error {
 	defer c.writeMu.Unlock()
 	c.mu.Lock()
 	w := c.stdin
-	exited := c.exited
+	exited, exitErr := c.exited, c.exitErr
 	c.mu.Unlock()
 	if w == nil {
 		if exited {
+			// Say why it exited (with the server's stderr), not only that it
+			// did: a server that dies before the first request lands here.
+			if exitErr != nil {
+				return fmt.Errorf("LSP process has exited: %w", exitErr)
+			}
 			return fmt.Errorf("LSP process has exited")
 		}
 		return fmt.Errorf("LSP client not started")

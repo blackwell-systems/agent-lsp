@@ -19,7 +19,7 @@ Install the servers for your stack:
 | C / C++ | `clangd` | `apt install clangd` / `brew install llvm` |
 | Ruby | `solargraph` | `gem install solargraph` |
 
-Full list of 30 supported languages in [language support](../reference/language-support.md).
+Full list of supported languages and their CI status in [language support](../reference/language-support.md).
 
 ## 2. Configure your AI tool
 

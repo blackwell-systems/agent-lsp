@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="#tools"><img src="https://img.shields.io/badge/CI--verified_tools-66%2F66-brightgreen.svg" alt="CI Coverage"></a>
-  <a href="#multi-language-support"><img src="https://img.shields.io/badge/languages-30_CI--verified-brightgreen.svg" alt="Languages"></a>
+  <a href="#multi-language-support"><img src="https://img.shields.io/badge/languages-31_CI--verified-brightgreen.svg" alt="Languages"></a>
   <a href="https://github.com/blackwell-systems/mcp-assert"><img src="https://raw.githubusercontent.com/blackwell-systems/mcp-assert/main/assets/badge-passing.svg?v=3" alt="mcp-assert: passing" height="20"></a>
   <a href="https://agentskills.io"><img src="../../assets/badge-agentskills.svg" alt="Agent Skills"></a>
   <a href="https://github.com/blackwell-systems/agent-lsp"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/blackwell-systems/agent-lsp/badges/assets/downloads-badge.json" alt="downloads"></a>
@@ -17,7 +17,7 @@
   <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
 </p>
 
-**面向 AI 智能体的代码智能基础设施。** 66 个工具，32 种经 CI 验证的语言，24 个智能体工作流。单个 Go 二进制文件。
+**面向 AI 智能体的代码智能基础设施。** 66 个工具，31 种经 CI 验证的语言，24 个智能体工作流。单个 Go 二进制文件。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/blackwell-systems/agent-lsp/main/install.sh | sh && agent-lsp init
@@ -319,7 +319,7 @@ go install github.com/blackwell-systems/agent-lsp/cmd/agent-lsp@latest
 | C / C++ | `clangd` | `apt install clangd` / `brew install llvm` |
 | Ruby | `solargraph` | `gem install solargraph` |
 
-32 种支持语言的完整列表参见 [docs/reference/language-support.md](../../docs/reference/language-support.md)。
+支持语言及其 CI 状态的完整列表参见 [docs/reference/language-support.md](../../docs/reference/language-support.md)。
 
 ### 第 3 步：验证设置
 
@@ -400,7 +400,7 @@ start_lsp(root_dir="/your/project")
 | 能力 | 详情 |
 |------------|---------|
 | 工具 | **66** |
-| 语言（经 CI 验证） | **32**，每次推送均进行端到端集成测试 |
+| 语言（经 CI 验证） | **31**，每次推送均进行端到端集成测试（共测试 32 种） |
 | 智能体工作流（技能） | **24**，命名的多步骤流程，可通过 MCP `prompts/list` 发现 |
 | 推测式执行 | **8 个工具**，在写入磁盘前模拟更改 |
 | 阶段强制 | **4 个技能**，运行时阻止乱序的工具调用并给出恢复指引 |
@@ -419,11 +419,11 @@ start_lsp(root_dir="/your/project")
 - **大型 monorepo**：一个服务器处理所有语言，按文件扩展名路由
 - **代码迁移**：以完整的跨仓库引用追踪跨仓库重构
 - **CI 流水线**：针对真实的语言服务器行为进行验证
-- **小众语言栈**：Gleam、Elixir、Prisma、Zig、Clojure、Nix、Dart、Scala、MongoDB，全部经 CI 验证
+- **小众语言栈**：Gleam、Elixir、Prisma、Zig、Clojure、Nix、Dart、MongoDB，全部经 CI 验证
 
 ## 多语言支持
 
-32 种语言，在每次 CI 运行时都针对真实的语言服务器进行端到端的 CI 验证。没有其他 MCP-LSP 实现在 CI 中测试哪怕一种语言。
+31 种语言在每次 CI 运行时都针对真实的语言服务器进行端到端的 CI 验证（共测试 32 种，Scala 尚未验证）。没有其他 MCP-LSP 实现在 CI 中测试哪怕一种语言。
 
 Go、Python、TypeScript、Rust、Java、C、C++、C#、Ruby、PHP、Kotlin、Swift、Scala、Zig、Lua、Elixir、Gleam、Clojure、Dart、Terraform、Nix、Prisma、SQL、MongoDB、JavaScript、YAML、JSON、Dockerfile、CSS、HTML、MQL、Luau。
 
