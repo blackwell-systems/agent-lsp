@@ -290,7 +290,7 @@ func runSpeculativeLanguageTest(t *testing.T, binaryPath string, lang speculativ
 	// start_lsp.
 	res, err := callTool(ctx, session, "start_lsp", map[string]any{"root_dir": lang.fixture})
 	if err != nil || res.IsError {
-		t.Skipf("[%s] start_lsp failed: err=%v isError=%v", lang.name, err, res.IsError)
+		skipOrFailInCI(t, "[%s] start_lsp failed: err=%v isError=%v", lang.name, err, res.IsError)
 		return
 	}
 	time.Sleep(lang.initWait)
@@ -301,7 +301,7 @@ func runSpeculativeLanguageTest(t *testing.T, binaryPath string, lang speculativ
 		"language_id": lang.id,
 	})
 	if err != nil || res.IsError {
-		t.Skipf("[%s] open_document failed: err=%v isError=%v", lang.name, err, res.IsError)
+		skipOrFailInCI(t, "[%s] open_document failed: err=%v isError=%v", lang.name, err, res.IsError)
 		return
 	}
 	time.Sleep(3 * time.Second)

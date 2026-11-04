@@ -11,12 +11,12 @@
 | C / C++ | `clangd` | `apt install clangd` / `brew install llvm` |
 | Ruby | `solargraph` | `gem install solargraph` |
 | PHP | `intelephense` | `npm i -g intelephense` |
-| Java | `jdtls` | [eclipse.jdt.ls snapshots](https://download.eclipse.org/jdtls/snapshots/) |
+| Java | `jdtls` | [eclipse.jdt.ls snapshots](https://download.eclipse.org/jdtls/snapshots/) (current snapshots need Java 25 to run) |
 | YAML | `yaml-language-server` | `npm i -g yaml-language-server` |
 | JSON | `vscode-json-language-server` | `npm i -g vscode-langservers-extracted` |
 | Dockerfile | `docker-langserver` | `npm i -g dockerfile-language-server-nodejs` |
 | C# | `csharp-ls` | `dotnet tool install -g csharp-ls` |
-| Kotlin | `kotlin-language-server` | [GitHub releases](https://github.com/fwcd/kotlin-language-server/releases) |
+| Kotlin | `kotlin-language-server` | [GitHub releases](https://github.com/fwcd/kotlin-language-server/releases) (1.3.13 runs on Java 21) |
 | Lua | `lua-language-server` | [GitHub releases](https://github.com/LuaLS/lua-language-server/releases) |
 | MQL4 / MQL5 | `mql-lsp-server` | [GitHub releases](https://github.com/davalillo/mql-language-server/releases) |
 | Luau | `luau-lsp` | [GitHub releases](https://github.com/JohnnyMorganz/luau-lsp/releases) |
@@ -107,7 +107,7 @@ Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verif
 | CSS | pass | pass | — | — | pass | pass | pass | — | — | pass | — | — | — |
 | HTML | pass | — | — | — | pass | pass | pass | — | — | pass | — | — | — |
 | Terraform | pass | pass | pass | — | pass | pass | pass | — | — | pass | — | — | — |
-| Scala | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | — |
+| Scala | — | — | — | — | — | — | — | — | — | — | — | — | — |
 | Gleam | pass | pass | pass | pass | pass | fail | pass | — | — | pass | — | — | — |
 | Elixir | pass | fail | pass | pass | pass | pass | pass | — | — | pass | pass | — | pass |
 | Prisma | pass | pass | pass | pass | — | — | pass | — | — | pass | — | — | — |
@@ -134,14 +134,14 @@ See [ci-notes.md](../architecture/ci-notes.md) for per-language CI quirks.
 | Python | pyright-langserver | stable |
 | Go | gopls | stable |
 | Rust | rust-analyzer | stable |
-| Java | jdtls | flaky (cold-start indexing) |
+| Java | jdtls | stable (Java 25; cold-start indexing is slow) |
 | C | clangd | stable |
 | PHP | intelephense | stable |
 | C++ | clangd | stable |
 | JavaScript | typescript-language-server | stable |
 | Ruby | solargraph | stable |
 | YAML | yaml-language-server | stable |
-| JSON | vscode-json-language-server | stable |
+| JSON | vscode-json-language-server | stable (hover and diagnostics need a JSON schema; the fixture names one with `$schema`) |
 | Dockerfile | docker-langserver | stable |
 | C# | csharp-ls | stable |
 | Kotlin | kotlin-language-server | stable |
@@ -152,7 +152,7 @@ See [ci-notes.md](../architecture/ci-notes.md) for per-language CI quirks.
 | CSS | vscode-css-language-server | stable |
 | HTML | vscode-html-language-server | stable |
 | Terraform | terraform-ls | stable |
-| Scala | metals | experimental |
+| Scala | metals | not verified: Metals starts but waits for a build import that agent-lsp does not yet trigger, so it answers only from its fallback compiler |
 | Gleam | gleam (built-in lsp) | stable |
 | Elixir | elixir-ls | experimental |
 | Prisma | prisma-language-server | experimental |
@@ -160,7 +160,7 @@ See [ci-notes.md](../architecture/ci-notes.md) for per-language CI quirks.
 | Clojure | clojure-lsp | stable |
 | Nix | nil | experimental |
 | Dart | dart language-server | stable |
-| MongoDB | mongodb-language-server | experimental |
+| MongoDB | mongodb-language-server | stable (completion only: the server offers no hover or diagnostics) |
 | MQL | mql-lsp-server | experimental (name-based references/rename) |
 
 ---

@@ -286,7 +286,7 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 	// Check that the LSP binary is available.
 	lspBinaryPath, err := exec.LookPath(lang.binary)
 	if err != nil {
-		t.Skipf("skipping %s: %s not found on PATH", lang.name, lang.binary)
+		skipOrFailInCI(t, "skipping %s: %s not found on PATH", lang.name, lang.binary)
 		return langTestResult{tier1: "skip"}
 	}
 
@@ -341,7 +341,7 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 	}
 	if res.IsError {
 		errText, _ := textFromResult(res)
-		t.Skipf("[%s] start_lsp returned IsError=true (LSP server unavailable or failed to start): %s", lang.name, errText)
+		skipOrFailInCI(t, "[%s] start_lsp returned IsError=true (LSP server unavailable or failed to start): %s", lang.name, errText)
 		return langTestResult{tier1: "skip"}
 	}
 	startText, err := textFromResult(res)
@@ -470,7 +470,7 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 		if diagCount == 0 {
 			// Both diagnostics and hover are empty: server likely hasn't finished
 			// indexing the workspace. Skip rather than fail.
-			t.Skipf("[%s] skipping: server returned no diagnostics and no hover (workspace not indexed)", lang.name)
+			skipOrFailInCI(t, "[%s] skipping: server returned no diagnostics and no hover (workspace not indexed)", lang.name)
 		}
 		t.Errorf("[%s] inspect_symbol returned empty hover text", lang.name)
 		return langTestResult{tier1: "fail"}
@@ -2282,4 +2282,16 @@ func TestFuzzyPositionFallback(t *testing.T) {
 		}
 		t.Logf("find_references(line=%d): result len=%d", offByOneLine, len(text))
 	}
+}
+
+// skipOrFailInCI skips the test locally, where a language server may simply
+// not be installed, but fails it in CI (GitHub Actions sets CI=true): each CI
+// job installs the servers it runs, so a skip there means a server could not
+// start or answer, and skipping hid seven broken languages behind green runs.
+func skipOrFailInCI(t *testing.T, format string, args ...any) {
+	t.Helper()
+	if os.Getenv("CI") == "true" {
+		t.Fatalf("(CI: would have skipped; failing so a broken server is not hidden) "+format, args...)
+	}
+	t.Skipf(format, args...)
 }
