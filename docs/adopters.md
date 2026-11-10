@@ -36,6 +36,17 @@ search layer** (Python). It ships a dedicated `tdq-lsp-setup` skill (a seven-run
 guide covering binary, MCP server, language servers, permissions, and config) and a
 `tdq_lsp.py` diagnostic, so the workflow searches code "by meaning, not by text."
 
+## Research and training datasets
+
+### NVIDIA Research Skill2Env
+
+[NVIDIA Research's Skill2Env](https://github.com/NVlabs/Skill2Env) includes 24
+agent-lsp workflows in SkillHub, its source collection for generating runnable
+terminal-agent training tasks. The [source and license inventory](https://github.com/NVlabs/Skill2Env/blob/main/SkillHub/skillhub_source_licenses.csv)
+credits agent-lsp for all 24. The bundled [`lsp-simulate` workflow](https://github.com/NVlabs/Skill2Env/blob/main/SkillHub/skills/lsp-simulate/SKILL.md)
+declares the agent-lsp MCP server as a requirement for previewing edits and
+simulating multi-file changes.
+
 ## In developer environments
 
 - **[AllySummers/dotfiles](https://github.com/AllySummers/dotfiles)** installs agent-lsp
