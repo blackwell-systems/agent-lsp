@@ -40,12 +40,37 @@ guide covering binary, MCP server, language servers, permissions, and config) an
 
 ### NVIDIA Research Skill2Env
 
-[NVIDIA Research's Skill2Env](https://github.com/NVlabs/Skill2Env) includes 24
-agent-lsp workflows in SkillHub, its source collection for generating runnable
-terminal-agent training tasks. The [source and license inventory](https://github.com/NVlabs/Skill2Env/blob/main/SkillHub/skillhub_source_licenses.csv)
-credits agent-lsp for all 24. The bundled [`lsp-simulate` workflow](https://github.com/NVlabs/Skill2Env/blob/main/SkillHub/skills/lsp-simulate/SKILL.md)
-declares the agent-lsp MCP server as a requirement for previewing edits and
-simulating multi-file changes.
+[NVIDIA Research's Skill2Env](https://github.com/NVlabs/Skill2Env) turns public
+Agent Skills into runnable terminal exercises for reinforcement learning. Each
+exercise gives an agent a task, a container with the workspace and tools, and
+tests that score the result. The [technical report](https://www.alphaxiv.org/abs/2609.reinforcing-agents-collective-skills)
+describes how NVIDIA generated these environments and used them to train a
+terminal agent.
+
+**From 24 source workflows to 41 released tasks.** NVIDIA's public
+[SkillHub source inventory](https://github.com/NVlabs/Skill2Env/blob/main/SkillHub/skillhub_source_licenses.csv)
+credits agent-lsp for 24 of its 2,396 entries. The
+[public Harbor dataset](https://hub.harborframework.com/datasets/skill2env/skill2env)
+lists 41 tasks named for those workflows out of 7,496 released tasks. They
+include four refactoring exercises, four code-generation exercises, and two
+speculative-editing exercises, alongside tasks for cross-repository navigation,
+impact analysis, and other workflows.
+
+**What carried over.** The upstream
+[`lsp-simulate` skill](https://github.com/NVlabs/Skill2Env/blob/main/SkillHub/skills/lsp-simulate/SKILL.md)
+teaches an agent to stage edits in memory and inspect diagnostics before
+writing. The released
+[Chronos](https://hub.harborframework.com/tasks/skill2env/task_lsp-simulate_62fz7nkp)
+and [Beacon](https://hub.harborframework.com/tasks/skill2env/task_lsp-simulate_gdmaapw9)
+exercises put that procedure into concrete Go workspaces with task-local
+simulators. The Dockerfiles for the 41 released exercises show no explicit
+installation of the upstream agent-lsp MCP server. The verified contribution
+is the set of workflows used to design the exercises.
+
+The [project writeup](https://yifzhang.com/blog/Skill2Env/#corpus) describes the
+public Harbor release as a separate generation from the experimental corpus.
+The 41-task count refers to the public release. The report does not identify
+which agent-lsp-derived tasks were included in the reported training runs.
 
 ## In developer environments
 
