@@ -46,6 +46,7 @@ var knownServers = map[string]ServerSpec{
 	// sqls is the fallback for other databases.
 	"sql": {Binary: "postgres-language-server", Args: []string{"lsp-proxy"}, Extensions: []string{"sql"},
 		Fallback: &ServerSpec{Binary: "sqls", Args: nil, Extensions: []string{"sql"}}},
+	"lisp": {Binary: "cl-lsp", Args: nil, Extensions: []string{"lisp", "lsp", "cl", "asd"}},
 }
 
 // AutodetectServers scans PATH for known language server binaries
