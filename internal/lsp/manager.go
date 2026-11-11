@@ -435,6 +435,8 @@ func LanguageIDFromPath(path string) string {
 		return "lua"
 	case ".sql":
 		return "sql"
+	case ".lisp", ".lsp", ".cl", ".asd":
+		return "lisp"
 	default:
 		return "plaintext"
 	}
