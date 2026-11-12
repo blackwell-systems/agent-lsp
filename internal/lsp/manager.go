@@ -369,6 +369,8 @@ func inferLanguageID(entry config.ServerEntry) string {
 		return "kotlin"
 	case "ml", "mli":
 		return "ocaml"
+	case "cl", "lsp", "asd":
+		return "lisp"
 	default:
 		return ext
 	}
