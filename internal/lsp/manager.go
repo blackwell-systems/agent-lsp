@@ -369,6 +369,8 @@ func inferLanguageID(entry config.ServerEntry) string {
 		return "kotlin"
 	case "ml", "mli":
 		return "ocaml"
+	case "cl", "lsp", "asd":
+		return "lisp"
 	default:
 		return ext
 	}
@@ -435,6 +437,8 @@ func LanguageIDFromPath(path string) string {
 		return "lua"
 	case ".sql":
 		return "sql"
+	case ".lisp", ".lsp", ".cl", ".asd":
+		return "lisp"
 	default:
 		return "plaintext"
 	}

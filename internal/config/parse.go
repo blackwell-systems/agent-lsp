@@ -53,6 +53,7 @@ var extensionMap = map[string][]string{
 	"zig":        {"zig"},
 	"scala":      {"scala", "sc", "sbt"},
 	"mql":        {"mq4", "mq5", "mqh"},
+	"lisp":       {"lisp", "lsp", "cl", "asd"},
 }
 
 // ParseArgs parses command-line arguments into a ParseResult.
