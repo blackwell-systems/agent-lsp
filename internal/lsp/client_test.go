@@ -586,6 +586,7 @@ func TestLSPClient_LanguageIDForFile_KnownExtension(t *testing.T) {
 		{"/project/app.py", "python"},
 		{"/project/main.rs", "rust"},
 		{"/project/script.luau", "luau"}, // luau is in client.go's built-in map
+		{"/project/main.lisp", "lisp"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {

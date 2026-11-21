@@ -32,6 +32,7 @@
 | SQL | `sqls` | `go install github.com/sqls-server/sqls@latest` |
 | SQL (PostgreSQL) | `postgres-language-server` | `brew install postgres-language-server`, `npm i -g @postgres-language-server/cli`, or [GitHub releases](https://github.com/supabase-community/postgres-language-server/releases); run as `postgres-language-server lsp-proxy`. See [PostgreSQL](#postgresql-postgres-language-server) below |
 | Clojure | `clojure-lsp` | [GitHub releases](https://github.com/clojure-lsp/clojure-lsp/releases) |
+| Common Lisp | `cl-lsp` | Roswell with pinned Lem, async-process, and cl-lsp checkouts; see `multi-lang-lisp` in `.github/workflows/ci.yml` |
 | Nix | `nil` | [GitHub releases](https://github.com/oxalica/nil/releases) |
 | Dart | `dart language-server` | Ships with Dart SDK (`brew install dart`) |
 | MongoDB | `mongodb-language-server` | Extract from the MongoDB VS Code extension VSIX (not published on npm); see [MongoDB](#mongodb-mongodb-language-server) below |
@@ -40,7 +41,7 @@ TypeScript 7 ships without `tsserver`, which typescript-language-server needs, s
 
 ### Auto-detection coverage
 
-Running agent-lsp with no arguments (or `--auto`) auto-detects only the servers listed in `internal/config/autodetect.go`: `gopls` (Go), `typescript-language-server` (TypeScript, JavaScript), `pyright-langserver` (Python), `rust-analyzer` (Rust), `clangd` (C, C++), `solargraph` (Ruby), `yaml-language-server` (YAML), `vscode-json-language-server` (JSON), `docker-langserver` (Dockerfile), `csharp-ls` (C#), `jdtls` (Java), `kotlin-language-server` (Kotlin), `intelephense` (PHP), `mql-lsp-server` (MQL4/MQL5), and for SQL `postgres-language-server` (started with `lsp-proxy`), falling back to `sqls` when it is not installed.
+Running agent-lsp with no arguments (or `--auto`) auto-detects only the servers listed in `internal/config/autodetect.go`: `gopls` (Go), `typescript-language-server` (TypeScript, JavaScript), `pyright-langserver` (Python), `rust-analyzer` (Rust), `clangd` (C, C++), `solargraph` (Ruby), `yaml-language-server` (YAML), `vscode-json-language-server` (JSON), `docker-langserver` (Dockerfile), `csharp-ls` (C#), `jdtls` (Java), `kotlin-language-server` (Kotlin), `intelephense` (PHP), `mql-lsp-server` (MQL4/MQL5), `cl-lsp` (Common Lisp), and for SQL `postgres-language-server` (started with `lsp-proxy`), falling back to `sqls` when it is not installed.
 
 Every other language in the table above needs an explicit server: pass `language:binary` arguments (for example `agent-lsp lua:lua-language-server`, with extra server args after commas: `css:vscode-css-language-server,--stdio`), or a config file with `--config /path/to/lsp-mcp.json` (or `--merge-config` to overlay it on the auto-detected servers).
 
@@ -101,7 +102,7 @@ command. Verify with `agent-lsp doctor`.
 
 ## CI tool coverage matrix
 
-Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verified for all 32 languages (MongoDB is checked through completion, the only feature its server offers). Tier 2: 34 additional tools.
+Tier 1 (`start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`) verified for all 33 languages (MongoDB is checked through completion, the only feature its server offers). Tier 2: 34 additional tools.
 
 The cells below are generated from CI's own results (the summary table `TestMultiLanguage` prints), not written by hand: `pass` passed, `—` was skipped because the server does not support the feature or the test has no fixture position for it, `fail` failed. Regenerate after a CI run with `gh run view <run-id> --log > ci.log && python3 scripts/update-coverage-matrix.py ci.log`.
 
@@ -147,7 +148,7 @@ See [ci-notes.md](../architecture/ci-notes.md) for per-language CI quirks.
 
 ---
 
-## Current (32 languages, CI-verified)
+## Current (33 languages, CI-verified)
 
 **stable** = all Tier 1 tools pass CI. **experimental** = server works but CI results are informational.
 
@@ -182,6 +183,7 @@ See [ci-notes.md](../architecture/ci-notes.md) for per-language CI quirks.
 | SQL | sqls | stable (postgres:16 service container) |
 | SQL | postgres-language-server | stable (postgres:16 service container; hover and completion from the live schema, no navigation) |
 | Clojure | clojure-lsp | stable |
+| Common Lisp | cl-lsp | stable |
 | Nix | nil | experimental |
 | Dart | dart language-server | stable |
 | MongoDB | mongodb-language-server | stable (completion only: the server offers no hover or diagnostics) |
@@ -208,6 +210,7 @@ See [ci-notes.md](../architecture/ci-notes.md) for per-language CI quirks.
 | `multi-lang-prisma` | Prisma | ubuntu-latest (continue-on-error) |
 | `multi-lang-sql` | SQL (sqls and postgres-language-server) | ubuntu-latest (postgres:16 service) |
 | `multi-lang-clojure` | Clojure | ubuntu-latest |
+| `multi-lang-lisp` | Common Lisp | ubuntu-latest |
 | `multi-lang-nix` | Nix | ubuntu-latest (continue-on-error) |
 | `multi-lang-dart` | Dart | ubuntu-latest |
 | `multi-lang-mongodb` | MongoDB | ubuntu-latest (continue-on-error) |
@@ -281,8 +284,8 @@ Each new language needs three things:
 
 | Tier | Languages | Count |
 |---|---|---|
-| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Luau, Swift, Zig, CSS, HTML, Terraform, Scala, Gleam, Elixir, Prisma, SQL, Clojure, Nix, Dart, MongoDB, MQL | **32** |
+| Current | TypeScript, Python, Go, Rust, Java, C, PHP, C++, JavaScript, Ruby, YAML, JSON, Dockerfile, C#, Kotlin, Lua, Luau, Swift, Zig, CSS, HTML, Terraform, Scala, Gleam, Elixir, Prisma, SQL, Clojure, Common Lisp, Nix, Dart, MongoDB, MQL | **33** |
 | Tier 3 candidates | Bash | 1 |
-| **Potential total** | | **33** |
+| **Potential total** | | **34** |
 
-The 32-language set covers systems, web, JVM, scripting, infrastructure, config, functional, schema, query, document-database, Nix/functional-package-manager, and MQL (MetaTrader) domains.
+The 33-language set covers systems, web, JVM, scripting, infrastructure, config, functional (Clojure, Common Lisp), schema, query, document-database, Nix/functional-package-manager, and MQL (MetaTrader) domains.

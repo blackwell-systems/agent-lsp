@@ -297,7 +297,7 @@ Machine-readable feature inventory for AI analysis. Dense structured lists for t
 - Agents calling `destroy_session` after `preview_edit` (which auto-cleans up) no longer see a confusing error
 
 **Total: 66 tools** (60 core tools, 3 intent aliases, 3 phase-enforcement tools; 63 non-phase tools)
-- **CI-verified:** every tool except `refactor` across the language matrix (including `set_log_level` verified separately across all 32 languages, and the 3 phase enforcement tools verified via mcp-assert); `refactor` is verified end to end against gopls v0.24 in the unit suite
+- **CI-verified:** every tool except `refactor` across the language matrix (including `set_log_level` verified separately across all 33 languages, and the 3 phase enforcement tools verified via mcp-assert); `refactor` is verified end to end against gopls v0.24 in the unit suite
 - **ToolAnnotations:** All 66 tools set `Title`, `ReadOnlyHint`, `DestructiveHint`, and `OpenWorldHint` (`OpenWorldHint` is false on every tool). `ReadOnlyHint` is true on 37 tools, which MCP clients can auto-approve without human confirmation; `rename_symbol` is not one of them, since it writes unless `dry_run` is set. `DestructiveHint` is true on 10 tools (`apply_edit`, `rename_symbol`, `refactor`, `replace_symbol_body`, `safe_delete_symbol`, `safe_apply_edit`, `safe_edit`, `execute_command`, `did_change_watched_files`, `import_cache`). `IdempotentHint` is set on only 7 tools: true on `start_lsp`, `restart_lsp_server`, `add_workspace_folder`, `remove_workspace_folder`, `set_log_level`, `deactivate_skill`; false on `activate_skill`
 - **jsonschema struct tags:** 219 tags across the Args structs in `cmd/agent-lsp`; nearly all parameters carry a description (the `language_id` fields of `open_document`, `format_document`, and `format_range` do not)
 - **1-indexed coordinates:** All line/column parameters are 1-based (editor convention)
@@ -477,7 +477,7 @@ warnings: [roots that failed indexing]
 
 ---
 
-## Languages (32 CI-verified)
+## Languages (33 CI-verified)
 
 | Language | Server Binary | CI Status | Notes |
 |----------|---------------|-----------|-------|
@@ -510,12 +510,13 @@ warnings: [roots that failed indexing]
 | SQL | `sqls` | passing | postgres:16 service container; `go install github.com/sqls-server/sqls@latest` |
 | SQL (PostgreSQL) | `postgres-language-server` | passing | same postgres:16 database; release binary pinned by sha256 |
 | Clojure | `clojure-lsp` | passing | native binary from GitHub releases |
+| Common Lisp | `cl-lsp` | passing | Roswell scripts; CI pins Lem, async-process, and cl-lsp commits |
 | Nix | `nil` | passing | `nix profile install github:oxalica/nil`; DeterminateSystems/nix-installer-action required in CI |
 | Dart | `dart` | passing | Ships with Dart SDK; `brew install dart` |
 | MongoDB | `mongodb-language-server` | passing | completion only (no hover or diagnostics); extracted from the vscode VSIX at `dist/languageServer.js`; mongo:7 service container |
 | MQL | `mql-lsp-server` | passing | pinned release with sha256 check |
 
-**Tier 1 (Core 4 tools):** `start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`, verified for all 32 languages; MongoDB is checked through completion, the only feature its server offers
+**Tier 1 (Core 4 tools):** `start_lsp`, `open_document`, `get_diagnostics`, `inspect_symbol`, verified for all 33 languages; MongoDB is checked through completion, the only feature its server offers
 **Tier 2 (Extended 34 tools):** verified per-language; coverage varies by server capabilities
 
 ### CI Tool Coverage Matrix (Tier 2)
@@ -526,7 +527,7 @@ The per-language, per-tool results are generated from CI's own summary table and
 
 | Tier | Languages | Count | Notes |
 |------|-----------|-------|-------|
-| Current | all 31 above | 31 | |
+| Current | all 33 languages above | 33 | |
 | Tier 3 candidates | Bash (bash-language-server) | 1 | good hover and completions; definition/references limited |
 | Tier 4 — skip for now | Haskell (ghcup slow), OCaml (opam nontrivial), Elm (niche), R (niche) | 4 | CI complexity blockers |
 

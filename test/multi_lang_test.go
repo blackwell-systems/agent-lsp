@@ -120,47 +120,51 @@ type langConfig struct {
 	// nor diagnostics (mongodb-language-server). Its Tier 1 check is a
 	// non-empty completion at completionLine/completionColumn instead of the
 	// hover-or-diagnostics check, which such a server can never pass.
-	tier1Completion     bool
-	javaHome            string
-	fixture             string // absolute path to fixture dir
-	file                string // absolute path to primary source file
-	hoverLine           int
-	hoverColumn         int
-	definitionLine      int
-	definitionColumn    int
-	callSiteLine        int
-	callSiteColumn      int
-	callSiteFile        string // defaults to .file if empty
-	mustResolveTo       string // if set, go_to_definition response must contain this substring (e.g. target file name)
-	referenceLine       int
-	referenceColumn     int
-	completionLine      int
-	completionColumn    int
-	completionFile      string // defaults to .file if empty
-	workspaceSymbol     string
-	supportsFormatting  bool
-	secondFile          string
-	symbolName          string
-	declarationLine     int // C only
-	declarationColumn   int // C only
-	typeHierarchyLine   int // Java and TypeScript only
-	typeHierarchyColumn int // Java and TypeScript only
+	tier1Completion        bool
+	javaHome               string
+	fixture                string // absolute path to fixture dir
+	file                   string // absolute path to primary source file
+	hoverLine              int
+	hoverColumn            int
+	definitionLine         int
+	definitionColumn       int
+	callSiteLine           int
+	callSiteColumn         int
+	callSiteFile           string // defaults to .file if empty
+	mustResolveTo          string // if set, go_to_definition response must contain this substring (e.g. target file name)
+	referenceLine          int
+	referenceColumn        int
+	referenceFile          string   // defaults to .file if empty
+	expectedReferenceFiles []string // basenames that must appear in find_references payload; empty keeps the generic check
+	completionLine         int
+	completionColumn       int
+	completionFile         string // defaults to .file if empty
+	workspaceSymbol        string
+	supportsFormatting     bool
+	secondFile             string
+	symbolName             string
+	declarationLine        int // C only
+	declarationColumn      int // C only
+	typeHierarchyLine      int // Java and TypeScript only
+	typeHierarchyColumn    int // Java and TypeScript only
 
 	// Fields for Tier 2 expansion tools.
-	typeDefLine         int    // for go_to_type_definition; uses referenceLine if 0
-	typeDefColumn       int    // for go_to_type_definition; uses referenceColumn if 0
-	typeDefFile         string // for go_to_type_definition; uses file if empty
-	signatureHelpLine   int    // for get_signature_help; uses completionLine if 0
-	signatureHelpColumn int    // for get_signature_help; uses completionColumn if 0
-	signatureHelpFile   string // for get_signature_help; uses completionFile if empty
-	highlightLine       int    // for get_document_highlights; uses hoverLine if 0
-	highlightColumn     int    // for get_document_highlights; uses hoverColumn if 0
-	inlayHintEndLine    int    // end line for get_inlay_hints range; computed from hoverLine if 0
-	renameSymbolLine    int    // for rename_symbol / prepare_rename
-	renameSymbolColumn  int    // for rename_symbol / prepare_rename
-	renameSymbolName    string // new_name for rename_symbol
-	codeActionLine      int    // start line for suggest_fixes range; uses hoverLine if 0
-	codeActionEndLine   int    // end line for suggest_fixes range; codeActionLine+1 if 0
+	typeDefLine         int      // for go_to_type_definition; uses referenceLine if 0
+	typeDefColumn       int      // for go_to_type_definition; uses referenceColumn if 0
+	typeDefFile         string   // for go_to_type_definition; uses file if empty
+	signatureHelpLine   int      // for get_signature_help; uses completionLine if 0
+	signatureHelpColumn int      // for get_signature_help; uses completionColumn if 0
+	signatureHelpFile   string   // for get_signature_help; uses completionFile if empty
+	highlightLine       int      // for get_document_highlights; uses hoverLine if 0
+	highlightColumn     int      // for get_document_highlights; uses hoverColumn if 0
+	inlayHintEndLine    int      // end line for get_inlay_hints range; computed from hoverLine if 0
+	renameSymbolLine    int      // for rename_symbol / prepare_rename
+	renameSymbolColumn  int      // for rename_symbol / prepare_rename
+	renameSymbolName    string   // new_name for rename_symbol
+	renameSymbolFile    string   // defaults to .file if empty
+	renameVerifyFiles   []string // files whose contents must contain renameSymbolName after rename
+	codeActionLine      int      // start line for suggest_fixes range; uses hoverLine if 0
+	codeActionEndLine   int      // end line for suggest_fixes range; codeActionLine+1 if 0
 }
 
 // toolResult holds the outcome of a single Tier 2 tool test.
@@ -333,13 +337,13 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 	// are idempotent and never leave the working tree dirty.
 	restoreFixtureAfter(t, lang.fixture)
 
-	// Determine timeout. JVM-based servers (Java, Kotlin, Scala) need longer
-	// timeouts due to slow cold-start initialization.
+	// Determine timeout. Servers with slow cold starts or restarts need longer
+	// timeouts than the default 90 seconds.
 	var timeout time.Duration
 	switch lang.id {
-	case "java":
+	case "java", "kotlin", "lisp":
 		timeout = 300 * time.Second
-	case "kotlin", "scala":
+	case "scala":
 		timeout = 180 * time.Second
 	default:
 		timeout = 90 * time.Second
@@ -608,7 +612,7 @@ func testDocumentSymbols(t *testing.T, ctx context.Context, session *mcp.ClientS
 // location, and contains no synthetic "ref_N" placeholder — the regression guard
 // for issue #27, where these tools fabricated "ref_1"/"var" and dropped the
 // actual file/line.
-func checkLocations(tool, text string) toolResult {
+func checkLocations(tool, text string, expectedFiles ...string) toolResult {
 	if strings.Contains(text, "ref_") {
 		return toolResult{tool: tool, status: "fail",
 			detail: "synthetic ref_N placeholder in response (issue #27 regression)"}
@@ -620,6 +624,13 @@ func checkLocations(tool, text string) toolResult {
 	}
 	if genericLen(v) < 1 {
 		return toolResult{tool: tool, status: "skip", detail: "no locations returned"}
+	}
+	for _, expected := range expectedFiles {
+		name := filepath.Base(expected)
+		if !strings.Contains(text, name) {
+			return toolResult{tool: tool, status: "fail",
+				detail: fmt.Sprintf("%s payload does not include %q — raw: %.200s", tool, name, text)}
+		}
 	}
 	return toolResult{tool: tool, status: "pass"}
 }
@@ -679,8 +690,12 @@ func testGetReferences(t *testing.T, ctx context.Context, session *mcp.ClientSes
 		}
 	}
 
+	referenceFile := lang.referenceFile
+	if referenceFile == "" {
+		referenceFile = lang.file
+	}
 	res, err := callTool(ctx, session, "find_references", map[string]any{
-		"file_path":           lang.file,
+		"file_path":           referenceFile,
 		"language_id":         lang.id,
 		"line":                lang.referenceLine,
 		"column":              lang.referenceColumn,
@@ -699,7 +714,7 @@ func testGetReferences(t *testing.T, ctx context.Context, session *mcp.ClientSes
 			detail: fmt.Sprintf("failed to parse find_references response: %v", err)}
 	}
 	// find_references emits a tabular location payload (file/line/column rows).
-	return checkLocations("find_references", text)
+	return checkLocations("find_references", text, lang.expectedReferenceFiles...)
 }
 
 // testGetCompletions tests the get_completions tool.
@@ -1191,8 +1206,12 @@ func testPrepareRename(t *testing.T, ctx context.Context, session *mcp.ClientSes
 	if lang.renameSymbolLine == 0 {
 		return toolResult{tool: "prepare_rename", status: "skip", detail: "renameSymbolLine not configured"}
 	}
+	prepareFile := lang.renameSymbolFile
+	if prepareFile == "" {
+		prepareFile = lang.file
+	}
 	res, err := callTool(ctx, session, "prepare_rename", map[string]any{
-		"file_path":   lang.file,
+		"file_path":   prepareFile,
 		"language_id": lang.id,
 		"line":        lang.renameSymbolLine,
 		"column":      lang.renameSymbolColumn,
@@ -1226,14 +1245,21 @@ func testRenameSymbol(t *testing.T, ctx context.Context, session *mcp.ClientSess
 		snap.restore(t)
 		// The server's open buffers still hold the renamed text: reopen the
 		// fixture's files so it reads them back from disk.
-		for _, f := range []string{lang.file, lang.secondFile, lang.callSiteFile, lang.completionFile} {
+		for _, f := range []string{lang.file, lang.secondFile, lang.callSiteFile, lang.completionFile, lang.renameSymbolFile} {
 			if f != "" {
 				_, _ = callTool(ctx, session, "open_document", map[string]any{"file_path": f, "language_id": lang.id})
 			}
 		}
 	}()
+	renameFile := lang.renameSymbolFile
+	if renameFile == "" {
+		renameFile = lang.file
+	}
+	if renameFile != lang.file {
+		_, _ = callTool(ctx, session, "open_document", map[string]any{"file_path": renameFile, "language_id": lang.id})
+	}
 	res, err := callTool(ctx, session, "rename_symbol", map[string]any{
-		"file_path":   lang.file,
+		"file_path":   renameFile,
 		"language_id": lang.id,
 		"line":        lang.renameSymbolLine,
 		"column":      lang.renameSymbolColumn,
@@ -1275,6 +1301,17 @@ func testRenameSymbol(t *testing.T, ctx context.Context, session *mcp.ClientSess
 	} else if locations < 1 {
 		return toolResult{tool: "rename_symbol", status: "skip",
 			detail: fmt.Sprintf("rename reported %d locations (nothing to rename): %s", locations, text)}
+	}
+	for _, file := range lang.renameVerifyFiles {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			return toolResult{tool: "rename_symbol", status: "fail",
+				detail: fmt.Sprintf("reading renamed file %s: %v", file, err)}
+		}
+		if !strings.Contains(string(content), lang.renameSymbolName) {
+			return toolResult{tool: "rename_symbol", status: "fail",
+				detail: fmt.Sprintf("%s does not contain renamed symbol %q — raw: %.200s", file, lang.renameSymbolName, string(content))}
+		}
 	}
 	return toolResult{tool: "rename_symbol", status: "pass"}
 }
