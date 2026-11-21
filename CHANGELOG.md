@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.24.3] - 2026-11-21
 
 ### Fixed
 - **`rename_symbol` refuses edits that would overwrite text other than the symbol** ([#80](https://github.com/blackwell-systems/agent-lsp/issues/80), [#81](https://github.com/blackwell-systems/agent-lsp/pull/81)): a rename whose edit covered the middle of a docstring left the string unterminated, and the next `replace_symbol_body` then swallowed the following function while reporting no errors. Every edit that replaces text must now cover text containing the old name (case-insensitively, so accessors, qualified names and import paths still pass) and must not start or end inside an identifier; otherwise nothing is written and the error says the server's view of the file may be out of date. Edits are read through the workspace-root check, once per file. Reported by [@norci](https://github.com/norci), who wrote the original guard.
