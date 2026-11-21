@@ -337,11 +337,11 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 	// are idempotent and never leave the working tree dirty.
 	restoreFixtureAfter(t, lang.fixture)
 
-	// Determine timeout. JVM-based servers (Java, Kotlin, Scala) need longer
-	// timeouts due to slow cold-start initialization.
+	// Determine timeout. Servers with slow cold starts or restarts need longer
+	// timeouts than the default 90 seconds.
 	var timeout time.Duration
 	switch lang.id {
-	case "java", "kotlin":
+	case "java", "kotlin", "lisp":
 		timeout = 300 * time.Second
 	case "scala":
 		timeout = 180 * time.Second
