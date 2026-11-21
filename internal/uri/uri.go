@@ -237,3 +237,41 @@ func ApplyRangeEdit(content string, rng types.Range, newText string) string {
 
 	return strings.Join(result, "\n")
 }
+
+// RangeText returns the exact text in content covered by an LSP range.
+// Character offsets are UTF-16 code units, as in ApplyRangeEdit. Lines past
+// the end of content are clamped, so a range that runs past EOF reads to EOF.
+func RangeText(content string, rng types.Range) string {
+	lines := strings.Split(content, "\n")
+	startLine := rng.Start.Line
+	endLine := rng.End.Line
+	if startLine >= len(lines) {
+		startLine = len(lines) - 1
+	}
+	if endLine >= len(lines) {
+		endLine = len(lines) - 1
+	}
+	if startLine < 0 || endLine < 0 || endLine < startLine {
+		return ""
+	}
+	if startLine == endLine {
+		l := lines[startLine]
+		start := utf16ToByteOffset(l, rng.Start.Character)
+		end := utf16ToByteOffset(l, rng.End.Character)
+		if end < start {
+			return ""
+		}
+		return l[start:end]
+	}
+	var sb strings.Builder
+	first := lines[startLine]
+	sb.WriteString(first[utf16ToByteOffset(first, rng.Start.Character):])
+	for i := startLine + 1; i < endLine; i++ {
+		sb.WriteByte('\n')
+		sb.WriteString(lines[i])
+	}
+	sb.WriteByte('\n')
+	last := lines[endLine]
+	sb.WriteString(last[:utf16ToByteOffset(last, rng.End.Character)])
+	return sb.String()
+}

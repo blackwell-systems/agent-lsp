@@ -22,6 +22,7 @@ import (
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
+	uripkg "github.com/blackwell-systems/agent-lsp/internal/uri"
 )
 
 // HandleRenameSymbol renames the symbol at the given location across the workspace.
@@ -77,6 +78,15 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 		return types.TextResult(fmt.Sprintf("No rename edits produced for the symbol at %s:%d:%d (nothing to rename, or the position does not resolve to a renameable symbol).", filePath, line, col)), nil
 	}
 
+	// Validate that every edit covers exactly one identifier. An edit whose
+	// range lands in prose would overwrite docstrings and leave them
+	// unterminated (issue #80).
+	if err := validateRenameTargets(result, func(uri string) (string, error) {
+		b, rErr := os.ReadFile(uripkg.URIToPath(uri))
+		return string(b), rErr
+	}); err != nil {
+		return types.ErrorResult(err.Error()), nil
+	}
 	files, locations, fileNames := summarizeWorkspaceEdit(result)
 
 	dryRun, _ := args["dry_run"].(bool)

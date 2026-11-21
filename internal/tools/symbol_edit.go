@@ -251,6 +251,12 @@ func HandleReplaceSymbolBody(ctx context.Context, client *lsp.LSPClient, args ma
 	bodyStartLine := loc.SelectionRange.End.Line + 1
 	bodyStartPos := types.Position{Line: bodyStartLine, Character: 0}
 	bodyEndPos := loc.Range.End
+	// A malformed symbol range can extend past the target and into the next
+	// definition after an earlier edit left the file unparsable. Clamp the end
+	// using the file text, independent of the server's symbols (issue #80).
+	if content, rErr := os.ReadFile(loc.FilePath); rErr == nil {
+		bodyEndPos = clampBodyEndToNextSibling(string(content), loc.SelectionRange.Start.Line, bodyStartLine, bodyEndPos)
+	}
 
 	fileURI := CreateFileURI(loc.FilePath)
 	edit := map[string]any{
