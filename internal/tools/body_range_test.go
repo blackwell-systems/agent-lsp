@@ -74,3 +74,30 @@ x = 2
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
 }
+
+func TestClampBodyEndToNextSiblingIgnoresDeclarationInString(t *testing.T) {
+	content := `def render():
+    template = """
+def helper():
+    pass
+"""
+    return template
+
+def real_next():
+    return 1
+`
+	end := types.Position{Line: 5, Character: 19}
+	got := clampBodyEndToNextSibling(content, 0, 1, end)
+	if got != end {
+		t.Fatalf("declaration inside a closed multiline string truncated the body: got %+v, want %+v", got, end)
+	}
+}
+
+func TestClampBodyEndToNextSiblingIgnoresDeclarationInBlockComment(t *testing.T) {
+	content := "func f() {\n    x := /*\nfunc g() {\n*/\n    1\n}\n"
+	end := types.Position{Line: 5, Character: 1}
+	got := clampBodyEndToNextSibling(content, 0, 1, end)
+	if got != end {
+		t.Fatalf("declaration inside a block comment truncated the body: got %+v, want %+v", got, end)
+	}
+}

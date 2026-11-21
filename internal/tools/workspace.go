@@ -78,10 +78,12 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 		return types.TextResult(fmt.Sprintf("No rename edits produced for the symbol at %s:%d:%d (nothing to rename, or the position does not resolve to a renameable symbol).", filePath, line, col)), nil
 	}
 
-	// Validate that every edit covers exactly one identifier. An edit whose
+	// Validate that every edit covers the symbol at the cursor. An edit whose
 	// range lands in prose would overwrite docstrings and leave them
-	// unterminated (issue #80).
-	if err := validateRenameTargets(result, func(uri string) (string, error) {
+	// unterminated (issue #80). The cursor symbol gives the guard a spelling to
+	// compare against, so a range landing on a different identifier is refused.
+	oldName := renamedSymbolAt(filePath, line, col)
+	if err := validateRenameTargets(result, oldName, func(uri string) (string, error) {
 		b, rErr := os.ReadFile(uripkg.URIToPath(uri))
 		return string(b), rErr
 	}); err != nil {
