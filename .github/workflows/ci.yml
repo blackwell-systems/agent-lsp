@@ -766,6 +766,17 @@ jobs:
           clone_pinned aiffc cl-sdl3 47c90b54715aba23752b70d382a3eb310172cd34
           clone_pinned cxxxr cl-lsp 83be8428d01fba0ba4de6eee1c3985414232d666
           ros install lem-project/lem cxxxr/cl-lsp
+          # The installed launcher uses plain `ros -Q`, whose ASDF lacks
+          # :LOCAL-NICKNAMES. Load the pinned Qlot setup at runtime so Lem's
+          # ASDF 3.3 is used, and expose both source trees to Quicklisp.
+          mv "$HOME/.roswell/bin/cl-lsp" "$HOME/.roswell/bin/cl-lsp-ros"
+          cat > "$HOME/.roswell/bin/cl-lsp" <<'EOF'
+          #!/bin/sh
+          exec env CL_SOURCE_REGISTRY="$HOME/.roswell/local-projects/cxxxr/cl-lsp:$HOME/.roswell/local-projects/lem-project/lem" \
+            ros -Q --load "$HOME/.roswell/local-projects/lem-project/lem/.qlot/setup.lisp" -- \
+            "$HOME/.roswell/bin/cl-lsp-ros" "$@"
+          EOF
+          chmod +x "$HOME/.roswell/bin/cl-lsp"
 
       - name: Add cl-lsp to PATH
         run: echo "$HOME/.roswell/bin" >> $GITHUB_PATH
