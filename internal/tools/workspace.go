@@ -18,10 +18,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
+	uripkg "github.com/blackwell-systems/agent-lsp/internal/uri"
 )
 
 // HandleRenameSymbol renames the symbol at the given location across the workspace.
@@ -52,29 +54,74 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 		languageID = "plaintext"
 	}
 
-	result, wErr := WithDocument[any](ctx, client, filePath, languageID, func(fileURI string) (any, error) {
-		pos := types.Position{Line: line - 1, Character: col - 1}
-		res, rErr := client.RenameSymbol(ctx, fileURI, pos, newName)
-		if rErr != nil {
-			return nil, rErr
-		}
-		if isEmptyWorkspaceEdit(res) {
-			logging.Log(logging.LevelDebug, "rename_symbol: empty result at exact position, trying fuzzy fallback")
-			res = renameWithFuzzyFallback(ctx, client, fileURI, line, col, newName)
-		}
-		return res, nil
-	})
+	computeRename := func() (any, error) {
+		return WithDocument[any](ctx, client, filePath, languageID, func(fileURI string) (any, error) {
+			pos := types.Position{Line: line - 1, Character: col - 1}
+			res, rErr := client.RenameSymbol(ctx, fileURI, pos, newName)
+			if rErr != nil {
+				return nil, rErr
+			}
+			if isEmptyWorkspaceEdit(res) {
+				logging.Log(logging.LevelDebug, "rename_symbol: empty result at exact position, trying fuzzy fallback")
+				res = renameWithFuzzyFallback(ctx, client, fileURI, line, col, newName)
+			}
+			return res, nil
+		})
+	}
+	result, wErr := computeRename()
 	if wErr != nil {
 		return types.ErrorResult(fmt.Sprintf("rename_symbol: %s", wErr)), nil
 	}
 
 	// Apply glob exclusions if provided.
-	if globs := extractStringSlice(args, "exclude_globs"); len(globs) > 0 {
+	globs := extractStringSlice(args, "exclude_globs")
+	if len(globs) > 0 {
 		result = filterWorkspaceEditByGlobs(result, globs)
 	}
 
 	if isEmptyWorkspaceEdit(result) {
 		return types.TextResult(fmt.Sprintf("No rename edits produced for the symbol at %s:%d:%d (nothing to rename, or the position does not resolve to a renameable symbol).", filePath, line, col)), nil
+	}
+
+	// Validate that every edit covers the symbol at the cursor. An edit whose
+	// range lands in prose would overwrite docstrings and leave them
+	// unterminated (issue #80). Reads are confined to the workspace root.
+	rootDir := client.RootDir()
+	oldName := renamedSymbolAt(filePath, rootDir, line, col)
+	readEditTarget := func(uri string) (string, error) {
+		path, vErr := uripkg.ValidatePath(uripkg.URIToPath(uri), rootDir)
+		if vErr != nil {
+			return "", vErr
+		}
+		b, rErr := os.ReadFile(path)
+		return string(b), rErr
+	}
+	if err := validateRenameTargets(result, oldName, readEditTarget); err != nil {
+		return types.ErrorResult(err.Error()), nil
+	}
+
+	// A server that is still loading the workspace answers with a correct but
+	// incomplete rename and does not say so. Files that mention the name but
+	// are missing from the edit are the sign; ask once more after a short wait
+	// (renaming is a read until the edit is applied), and warn if they remain.
+	// Skipped when the caller excluded files on purpose.
+	var coverageHint string
+	if len(globs) == 0 {
+		if missed := unrenamedMentions(rootDir, filePath, oldName, result); len(missed) > 0 {
+			select {
+			case <-ctx.Done():
+			case <-time.After(renameRetryDelay):
+				if retried, rErr := computeRename(); rErr == nil && !isEmptyWorkspaceEdit(retried) {
+					if err := validateRenameTargets(retried, oldName, readEditTarget); err == nil {
+						_, before, _ := summarizeWorkspaceEdit(result)
+						if _, after, _ := summarizeWorkspaceEdit(retried); after >= before {
+							result = retried
+						}
+					}
+				}
+			}
+			coverageHint = unrenamedHint(oldName, unrenamedMentions(rootDir, filePath, oldName, result))
+		}
 	}
 
 	files, locations, fileNames := summarizeWorkspaceEdit(result)
@@ -98,7 +145,7 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 		// A preview carries the raw edit for inspection; it must round-trip byte-exact,
 		// so always JSON, never GCF's summary tabular form. See issue #12.
 		encoded, _ := EncodeResultJSON(env)
-		return appendHint(encoded, "Re-run rename_symbol without dry_run to apply. Do not reconstruct this edit into apply_edit; rename_symbol applies it directly."), nil
+		return appendHint(encoded, "Re-run rename_symbol without dry_run to apply. Do not reconstruct this edit into apply_edit; rename_symbol applies it directly."+coverageHintSuffix(coverageHint)), nil
 	}
 
 	// Apply the edit server-side, consistent with the other edit tools
@@ -121,7 +168,15 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 		sort.Strings(unverified)
 		hint += " Diagnostics channel unverified for edited file(s): " + strings.Join(unverified, ", ") + "."
 	}
-	return appendHint(types.TextResult(summary), hint), nil
+	return appendHint(types.TextResult(summary), hint+coverageHintSuffix(coverageHint)), nil
+}
+
+// coverageHintSuffix prefixes a non-empty coverage warning with a space.
+func coverageHintSuffix(h string) string {
+	if h == "" {
+		return ""
+	}
+	return " " + h
 }
 
 // verifyWorkspaceEditChannels re-checks the diagnostics channel of every file

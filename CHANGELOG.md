@@ -5,6 +5,10 @@ The format is based on Keep a Changelog, Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+- **`rename_symbol` refuses edits that would overwrite text other than the symbol** ([#80](https://github.com/blackwell-systems/agent-lsp/issues/80), [#81](https://github.com/blackwell-systems/agent-lsp/pull/81)): a rename whose edit covered the middle of a docstring left the string unterminated, and the next `replace_symbol_body` then swallowed the following function while reporting no errors. Every edit that replaces text must now cover text containing the old name (case-insensitively, so accessors, qualified names and import paths still pass) and must not start or end inside an identifier; otherwise nothing is written and the error says the server's view of the file may be out of date. Edits are read through the workspace-root check, once per file. Reported by [@norci](https://github.com/norci), who wrote the original guard.
+- **A rename sent right after startup could silently miss files**: pyright answers its first request before it has read the whole workspace, so a rename returned only the definition and reported success while the call sites elsewhere kept the old name. `rename_symbol` now looks for files that mention the symbol but are absent from the edit, asks the server once more after two seconds, and warns, naming the files, if any are still missing.
+
 ### Added
 - **Postgres Language Server for SQL**: [Supabase's postgres-language-server](https://github.com/supabase-community/postgres-language-server) is supported and CI-verified alongside `sqls`. It parses SQL with Postgres's own parser and answers hover and completion from the connected database's schema (column types, keys, defaults, row-level security). Auto-detection now covers `.sql` files: it starts `postgres-language-server lsp-proxy` when installed and falls back to `sqls`, and `detect_lsp_servers` suggests them in the same order. The connection is read from `postgres-language-server.jsonc` or the standard `PG*` environment variables. See [Language Support](docs/reference/language-support.md#postgresql-postgres-language-server).
 
