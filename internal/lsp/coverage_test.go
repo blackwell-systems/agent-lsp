@@ -90,6 +90,7 @@ func TestLanguageIDFromPath(t *testing.T) {
 		{"/foo/bar.cc", "cpp"},
 		{"/foo/bar.cxx", "cpp"},
 		{"/foo/bar.java", "java"},
+		{"/foo/bar.lisp", "lisp"},
 		{"/foo/bar.unknown", "plaintext"},
 		{"/foo/Makefile", "plaintext"},
 	}

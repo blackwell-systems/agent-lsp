@@ -1,0 +1,2 @@
+(defun run ()
+  (greet "world"))

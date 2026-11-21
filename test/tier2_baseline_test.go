@@ -323,7 +323,8 @@ var tier2Baseline = map[string]map[string]expectedTier2Status{
 		"format_document":  statusAllowedFail,
 	}),
 
-	"SQL": defaultAllowedSkip(nil),
+	"SQL":  defaultAllowedSkip(nil),
+	"Lisp": defaultAllowedSkip(nil),
 	// PostgreSQL (Supabase's postgres-language-server) on the SQL fixture with
 	// CI's postgres:16 database: derived from AGENT_LSP_DUMP_BASELINE. Hover
 	// and completion answer from the live schema and are pinned "pass"; the
