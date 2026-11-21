@@ -20,7 +20,7 @@ import sys
 DOC = "docs/reference/language-support.md"
 ICON = {"✓": "pass", "-": "—", "✗": "fail"}
 DOC_TO_CI_COLUMN = {"Tier 1": "T1"}
-DOC_TO_CI_LANGUAGE = {"C#": "CSharp"}
+DOC_TO_CI_LANGUAGE = {"C#": "CSharp", "Common Lisp": "Lisp"}
 
 
 def parse_ci_rows(log_text):

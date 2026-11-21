@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+- **Common Lisp via cl-lsp** ([#79](https://github.com/blackwell-systems/agent-lsp/pull/79)): `.lisp`, `.cl` and `.asd` files map to the `lisp` language, and `cl-lsp` is auto-detected on `PATH`. CI runs it against a committed fixture with Roswell and every dependency pinned to a commit; Tier 1, hover, completion, formatting, signature help, highlights, code actions and prepare-rename pass (definition, references and rename are not verified). agent-lsp now lists 33 CI-verified languages. Contributed by [@norci](https://github.com/norci).
+
 ## [0.24.3] - 2026-11-21
 
 ### Fixed

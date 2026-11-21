@@ -137,6 +137,7 @@ The cells below are generated from CI's own results (the summary table `TestMult
 | SQL | pass | — | — | — | pass | — | — | — | — | pass | — | — | — |
 | PostgreSQL | pass | — | — | — | pass | — | — | — | — | pass | — | — | — |
 | Clojure | pass | pass | pass | pass | pass | pass | pass | — | — | pass | pass | pass | pass |
+| Common Lisp | pass | — | — | — | pass | — | pass | — | — | pass | — | — | pass |
 | Nix | pass | — | — | — | pass | — | — | — | — | pass | — | pass | — |
 | Dart | pass | pass | pass | pass | pass | pass | pass | — | — | pass | — | pass | pass |
 | MongoDB | pass | — | — | — | pass | — | — | — | — | — | — | — | — |
