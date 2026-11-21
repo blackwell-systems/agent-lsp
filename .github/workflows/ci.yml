@@ -698,7 +698,7 @@ jobs:
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Clojure$" ./test/ -timeout 10m
 
   # Common Lisp via cl-lsp (Roswell scripts, no releases; pinned commits below).
-  # Observed baseline: Roswell 26.10.119, lem d3ff8bd07388, cl-lsp 83be8428d01fba0ba4de6eee1c3985414232d666.
+  # Observed baseline: Roswell 26.10.119, lem d3ff8bd07388, cl-lsp 83be8428d01fba0ba4de6eee1c3985414232d666, async-process ad9f07c1b09dfa.
   multi-lang-lisp:
     permissions:
       contents: read
@@ -727,18 +727,23 @@ jobs:
 
       - name: Install cl-lsp at pinned commits
         run: |
-          # cl-lsp has no releases. Pin it and its lem-language-server/cli dependency.
+          # cl-lsp has no releases. Pin it, its lem-language-server/cli dependency,
+          # and async-process, whose pinned Lem lockfile ships the native library.
           # `ros install owner/repo` skips cloning when the local-projects checkout
           # already exists, then copies launchers from that checkout. Clone and pin
           # first so the installed scripts and loaded systems match these revisions.
           lem_dir="$HOME/.roswell/local-projects/lem-project/lem"
+          async_process_dir="$HOME/.roswell/local-projects/lem-project/async-process"
           cl_lsp_dir="$HOME/.roswell/local-projects/cxxxr/cl-lsp"
-          mkdir -p "$(dirname "$lem_dir")" "$(dirname "$cl_lsp_dir")"
+          mkdir -p "$(dirname "$lem_dir")" "$(dirname "$async_process_dir")" "$(dirname "$cl_lsp_dir")"
           git clone --quiet https://github.com/lem-project/lem.git "$lem_dir"
           git -C "$lem_dir" checkout --quiet d3ff8bd07388e1fd05d82bb1412b2d0986caff36
+          git clone --quiet https://github.com/lem-project/async-process.git "$async_process_dir"
+          git -C "$async_process_dir" checkout --quiet ad9f07c1b09dfa1c9bd8eb2b9d5588baf278b113
           git clone --quiet https://github.com/cxxxr/cl-lsp.git "$cl_lsp_dir"
           git -C "$cl_lsp_dir" checkout --quiet 83be8428d01fba0ba4de6eee1c3985414232d666
           test "$(git -C "$lem_dir" rev-parse HEAD)" = d3ff8bd07388e1fd05d82bb1412b2d0986caff36
+          test "$(git -C "$async_process_dir" rev-parse HEAD)" = ad9f07c1b09dfa1c9bd8eb2b9d5588baf278b113
           test "$(git -C "$cl_lsp_dir" rev-parse HEAD)" = 83be8428d01fba0ba4de6eee1c3985414232d666
           ros install lem-project/lem cxxxr/cl-lsp
 
