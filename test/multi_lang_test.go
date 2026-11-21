@@ -341,9 +341,9 @@ func runLanguageTest(t *testing.T, binaryPath string, lang langConfig) langTestR
 	// timeouts due to slow cold-start initialization.
 	var timeout time.Duration
 	switch lang.id {
-	case "java":
+	case "java", "kotlin":
 		timeout = 300 * time.Second
-	case "kotlin", "scala":
+	case "scala":
 		timeout = 180 * time.Second
 	default:
 		timeout = 90 * time.Second
