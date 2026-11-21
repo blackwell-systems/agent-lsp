@@ -698,7 +698,7 @@ jobs:
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Clojure$" ./test/ -timeout 10m
 
   # Common Lisp via cl-lsp (Roswell scripts, no releases; pinned commits below).
-  # Observed baseline: Roswell 26.10.119 and the git pins in the pinned Lem qlfile.lock.
+  # Observed baseline: Roswell 26.10.119, Qlot 0929984f5037891b4b0eba6ef2aa1f200d57a9fb, and the git pins in the pinned Lem qlfile.lock.
   multi-lang-lisp:
     permissions:
       contents: read
@@ -727,6 +727,7 @@ jobs:
 
       - name: Install cl-lsp at pinned commits
         run: |
+          export PATH="$HOME/.roswell/bin:$PATH"
           # cl-lsp has no releases. Pin it, its lem-language-server/cli dependency,
           # and every git dependency in the pinned Lem lockfile.
           # `ros install owner/repo` skips cloning when the local-projects checkout
@@ -743,6 +744,9 @@ jobs:
             git -C "$dir" checkout --quiet "$commit"
             test "$(git -C "$dir" rev-parse HEAD)" = "$commit"
           }
+          # Lem's pinned lem.asd invokes qlot while Roswell installs it.
+          clone_pinned fukamachi qlot 0929984f5037891b4b0eba6ef2aa1f200d57a9fb
+          ros install qlot
           clone_pinned lem-project lem d3ff8bd07388e1fd05d82bb1412b2d0986caff36
           clone_pinned lem-project micros 08c313476bf436d72bcd5cd8f4e494d9f9323d08
           clone_pinned lem-project lem-mailbox 12d629541da440fadf771b0225a051ae65fa342a
