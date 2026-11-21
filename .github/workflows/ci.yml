@@ -698,7 +698,7 @@ jobs:
         run: GOWORK=off go test -v -run "TestMultiLanguage/^Clojure$" ./test/ -timeout 10m
 
   # Common Lisp via cl-lsp (Roswell scripts, no releases; pinned commits below).
-  # Observed baseline: Roswell 26.10.119, lem d3ff8bd07388, cl-lsp 83be8428d01fba0ba4de6eee1c3985414232d666, async-process ad9f07c1b09dfa.
+  # Observed baseline: Roswell 26.10.119 and the git pins in the pinned Lem qlfile.lock.
   multi-lang-lisp:
     permissions:
       contents: read
@@ -728,23 +728,39 @@ jobs:
       - name: Install cl-lsp at pinned commits
         run: |
           # cl-lsp has no releases. Pin it, its lem-language-server/cli dependency,
-          # and async-process, whose pinned Lem lockfile ships the native library.
+          # and every git dependency in the pinned Lem lockfile.
           # `ros install owner/repo` skips cloning when the local-projects checkout
           # already exists, then copies launchers from that checkout. Clone and pin
           # first so the installed scripts and loaded systems match these revisions.
-          lem_dir="$HOME/.roswell/local-projects/lem-project/lem"
-          async_process_dir="$HOME/.roswell/local-projects/lem-project/async-process"
-          cl_lsp_dir="$HOME/.roswell/local-projects/cxxxr/cl-lsp"
-          mkdir -p "$(dirname "$lem_dir")" "$(dirname "$async_process_dir")" "$(dirname "$cl_lsp_dir")"
-          git clone --quiet https://github.com/lem-project/lem.git "$lem_dir"
-          git -C "$lem_dir" checkout --quiet d3ff8bd07388e1fd05d82bb1412b2d0986caff36
-          git clone --quiet https://github.com/lem-project/async-process.git "$async_process_dir"
-          git -C "$async_process_dir" checkout --quiet ad9f07c1b09dfa1c9bd8eb2b9d5588baf278b113
-          git clone --quiet https://github.com/cxxxr/cl-lsp.git "$cl_lsp_dir"
-          git -C "$cl_lsp_dir" checkout --quiet 83be8428d01fba0ba4de6eee1c3985414232d666
-          test "$(git -C "$lem_dir" rev-parse HEAD)" = d3ff8bd07388e1fd05d82bb1412b2d0986caff36
-          test "$(git -C "$async_process_dir" rev-parse HEAD)" = ad9f07c1b09dfa1c9bd8eb2b9d5588baf278b113
-          test "$(git -C "$cl_lsp_dir" rev-parse HEAD)" = 83be8428d01fba0ba4de6eee1c3985414232d666
+          local_projects="$HOME/.roswell/local-projects"
+          clone_pinned() {
+            owner="$1"
+            repo="$2"
+            commit="$3"
+            dir="$local_projects/$owner/$repo"
+            mkdir -p "$(dirname "$dir")"
+            git clone --quiet "https://github.com/$owner/$repo.git" "$dir"
+            git -C "$dir" checkout --quiet "$commit"
+            test "$(git -C "$dir" rev-parse HEAD)" = "$commit"
+          }
+          clone_pinned lem-project lem d3ff8bd07388e1fd05d82bb1412b2d0986caff36
+          clone_pinned lem-project micros 08c313476bf436d72bcd5cd8f4e494d9f9323d08
+          clone_pinned lem-project lem-mailbox 12d629541da440fadf771b0225a051ae65fa342a
+          clone_pinned lem-project async-process ad9f07c1b09dfa1c9bd8eb2b9d5588baf278b113
+          clone_pinned cxxxr sblint 1037296f604c3210ce073a53539d4ae95b0c2f8c
+          clone_pinned fukamachi rove 27c17044e647367ce8379c11b2f937e5024fb220
+          clone_pinned lem-project cl-sdl2 24dd7f238f99065b0ae35266b71cce7783e89fa7
+          clone_pinned lem-project cl-sdl2-ttf f43344efe89cf9ce509e6ce4f7303ebb2ff14434
+          clone_pinned lem-project cl-sdl2-image 8734b0e24de9ca390c9f763d9d7cd501546d17d4
+          clone_pinned cxxxr jsonrpc 42fa96ec34f6b6be77a6f12f7c4e84f375eff019
+          clone_pinned alpha123 cl-template 46193a9a389bb950530e579eae7e6e5a18184832
+          clone_pinned lem-project webview 607daff93e9e716a76c5dbd08c48b5233c96b9a3
+          clone_pinned melisgl named-readtables fb2aa150440b3368c2ae6bf0ce5e959e3b755a35
+          clone_pinned lem-project lem-extension-manager d467164b0f3e1a479031ec7097fa6fb0cd9d9d09
+          clone_pinned lem-project tree-sitter-cl bfc3471b165856a20c3379f538a00ec256785a44
+          clone_pinned theangelperalta cl-objc 5b59c1643c66700e007637c658cc966b59551839
+          clone_pinned aiffc cl-sdl3 47c90b54715aba23752b70d382a3eb310172cd34
+          clone_pinned cxxxr cl-lsp 83be8428d01fba0ba4de6eee1c3985414232d666
           ros install lem-project/lem cxxxr/cl-lsp
 
       - name: Add cl-lsp to PATH
