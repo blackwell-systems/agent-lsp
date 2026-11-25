@@ -70,7 +70,8 @@ func callToolText(t *testing.T, ctx context.Context, session *mcp.ClientSession,
 }
 
 // A cold blast_radius call must start the server configured for the changed
-// file, even when another configured server cannot start.
+// file, even when another configured server cannot start. Once that server is
+// running, a file for the other language must not be routed to it.
 func TestBlastRadius_InitializesSelectedServer(t *testing.T) {
 	t.Setenv("AGENT_LSP_DISABLE_WATCHER", "1")
 	executable, err := os.Executable()
@@ -88,8 +89,12 @@ func TestBlastRadius_InitializesSelectedServer(t *testing.T) {
 	if err := os.WriteFile(file, []byte("package example\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	rustFile := filepath.Join(root, "script.rs")
+	if err := os.WriteFile(rustFile, []byte("fn main() {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	resolver := lsp.NewMultiServerManager([]config.ServerEntry{
-		{LanguageID: "python", Extensions: []string{"py"}, Command: []string{filepath.Join(root, "unavailable-python-server")}},
+		{LanguageID: "rust", Extensions: []string{"rs"}, Command: []string{filepath.Join(root, "unavailable-rust-server")}},
 		{LanguageID: "go", Extensions: []string{"go"}, Command: []string{executable, "-test.run=^TestImpactLSPProcess$", "--", "impact-lsp-peer"}},
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -125,5 +130,14 @@ func TestBlastRadius_InitializesSelectedServer(t *testing.T) {
 		if !strings.Contains(text, "changed_symbols") {
 			t.Fatalf("call %d: missing impact result: %s", i+1, text)
 		}
+	}
+	// The running Go server must not answer for the configured, unstarted
+	// Rust server. The unavailable Rust command must surface as an error.
+	if text, isError := callToolText(t, ctx, session, "blast_radius", map[string]any{"changed_files": []string{rustFile}}); !isError {
+		t.Fatalf("Rust query used the running Go server: %s", text)
+	}
+	// Failing to start Rust must leave the Go server usable.
+	if text, isError := callToolText(t, ctx, session, "blast_radius", map[string]any{"changed_files": []string{file}}); isError {
+		t.Fatalf("Go query failed after Rust startup failure: %s", text)
 	}
 }
