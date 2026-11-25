@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
+## [Unreleased]
+
+### Security
+- **File paths from the client were read without the workspace check in several places**: every file tool confines its `file_path` to the workspace root, but these paths did not. `position_pattern` (used by `get_references`, `inspect_symbol`, `rename_symbol` and the other position-based tools) matched its pattern against the file before the tool validated the path, so "found" versus "not found" revealed whether an outside file contained a string; the `lsp-hover://`, `lsp-completions://` and `lsp-diagnostics://` resources read the file named in the URI and sent it to the language server; `safe_apply_edit` read the file before confining it; `export_cache` created directories and wrote a file at any path, and `import_cache` read any path; `simulate_edit_atomic` did not tie `file_path` to its `workspace_root`; and `ReopenDocument` opened any untracked URI from disk. All of them now refuse a path outside the workspace root with the same "outside workspace root" error as the other tools, and the position, resource and document-opening paths also refuse to run before `start_lsp` has set a root, since there is nothing to confine to. Cache artifact paths may be relative, taken relative to the root. Nothing here allowed running code. Reported by Yuchen Xue.
+
 ## [0.24.4] - 2026-11-21
 
 ### Added

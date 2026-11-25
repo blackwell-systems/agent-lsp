@@ -284,8 +284,8 @@ func simulateEditAtomicCore(ctx context.Context, mgr *session.SessionManager, ar
 		return nil, errors.New("file_path is required")
 	}
 
-	// Validate file path
-	if _, err := ValidateFilePath(filePath, ""); err != nil {
+	// Validate file path: it must lie inside the workspace being simulated.
+	if _, err := ValidateFilePath(filePath, workspaceRoot); err != nil {
 		return nil, fmt.Errorf("invalid file_path: %s", err)
 	}
 

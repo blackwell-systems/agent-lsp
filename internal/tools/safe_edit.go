@@ -43,7 +43,7 @@ func HandleSafeApplyEdit(ctx context.Context, client *lsp.LSPClient, sessionMgr 
 	}
 
 	// Validate file path.
-	filePath, err := ValidateFilePath(filePath, "")
+	filePath, err := ValidateFilePath(filePath, client.RootDir())
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("invalid file_path: %s", err)), nil
 	}

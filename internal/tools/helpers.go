@@ -46,6 +46,9 @@ func WithDocument[T any](
 ) (T, error) {
 	var zero T
 
+	if client.RootDir() == "" {
+		return zero, errors.New("workspace root not initialized; call start_lsp first")
+	}
 	clean, err := ValidateFilePath(filePath, client.RootDir())
 	if err != nil {
 		return zero, err

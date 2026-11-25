@@ -14,6 +14,7 @@
 package tools
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -199,12 +200,25 @@ func ResolvePositionPatternInRange(filePath, pattern string, startLine, endLine 
 // If args["position_pattern"] is non-empty, it calls ResolvePositionPatternInRange
 // with optional line_scope_start and line_scope_end args (0 means no restriction).
 // Otherwise it falls through to extractPosition(args).
-func ExtractPositionWithPattern(args map[string]any, filePath string) (line, col int, err error) {
+//
+// A pattern is matched against the file's text, so filePath is read here, before
+// any tool opens the document. rootDir confines that read to the workspace: a
+// path outside it is refused with the same error every other tool gives, and
+// never opened (a pattern that is "found" or "not found" in an outside file
+// would otherwise reveal its contents). Pass the client's RootDir.
+func ExtractPositionWithPattern(args map[string]any, filePath, rootDir string) (line, col int, err error) {
 	pp, _ := args["position_pattern"].(string)
 	if pp != "" {
+		if rootDir == "" {
+			return 0, 0, errors.New("workspace root not initialized; call start_lsp first")
+		}
+		clean, vErr := ValidateFilePath(filePath, rootDir)
+		if vErr != nil {
+			return 0, 0, vErr
+		}
 		scopeStart, _ := toIntOptional(args, "line_scope_start")
 		scopeEnd, _ := toIntOptional(args, "line_scope_end")
-		return ResolvePositionPatternInRange(filePath, pp, scopeStart, scopeEnd)
+		return ResolvePositionPatternInRange(clean, pp, scopeStart, scopeEnd)
 	}
 	return extractPosition(args)
 }

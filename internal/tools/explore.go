@@ -60,7 +60,7 @@ func HandleExploreSymbol(ctx context.Context, client *lsp.LSPClient, args map[st
 		return types.ErrorResult(pathErr.Error()), nil
 	}
 
-	line, col, posErr := ExtractPositionWithPattern(args, cleanPath)
+	line, col, posErr := ExtractPositionWithPattern(args, cleanPath, client.RootDir())
 	if posErr != nil {
 		return types.ErrorResult(posErr.Error()), nil
 	}

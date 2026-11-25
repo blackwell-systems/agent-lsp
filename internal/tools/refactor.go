@@ -59,7 +59,7 @@ func HandleRefactor(ctx context.Context, client *lsp.LSPClient, args map[string]
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("invalid file_path: %s", err)), nil
 	}
-	line, col, err := ExtractPositionWithPattern(args, filePath)
+	line, col, err := ExtractPositionWithPattern(args, filePath, client.RootDir())
 	if err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}

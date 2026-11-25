@@ -937,7 +937,7 @@ import it to skip cold-start indexing.
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `dest_path` | string | yes | Absolute path for the output `.gz` file |
+| `dest_path` | string | yes | Path for the output `.gz` file, inside the workspace root (a relative path is taken relative to the root; a path outside the root is refused) |
 
 **Example call**
 
@@ -965,7 +965,7 @@ atomically swapped into the active database.
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `src_path` | string | yes | Absolute path to the `.gz` cache artifact |
+| `src_path` | string | yes | Path to the `.gz` cache artifact, inside the workspace root (a relative path is taken relative to the root; a path outside the root is refused) |
 
 **Example call**
 

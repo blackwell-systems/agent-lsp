@@ -99,7 +99,7 @@ func TestExtractPositionWithPattern_WithPattern(t *testing.T) {
 	args := map[string]any{
 		"position_pattern": "func @@foo",
 	}
-	line, col, err := ExtractPositionWithPattern(args, path)
+	line, col, err := ExtractPositionWithPattern(args, path, filepath.Dir(path))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestExtractPositionWithPattern_Fallback(t *testing.T) {
 		"line":   float64(5),
 		"column": float64(3),
 	}
-	line, col, err := ExtractPositionWithPattern(args, "")
+	line, col, err := ExtractPositionWithPattern(args, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestResolvePositionPattern_FileNotFound(t *testing.T) {
 // TestExtractPositionWithPattern_NeitherPatternNorPosition verifies that when
 // neither position_pattern nor line/column are provided, an error is returned.
 func TestExtractPositionWithPattern_NeitherPatternNorPosition(t *testing.T) {
-	_, _, err := ExtractPositionWithPattern(map[string]any{}, "")
+	_, _, err := ExtractPositionWithPattern(map[string]any{}, "", "")
 	if err == nil {
 		t.Fatal("expected error when no position information provided, got nil")
 	}
@@ -228,7 +228,7 @@ func TestExtractPositionWithPattern_LineScope(t *testing.T) {
 		"line_scope_start": float64(3),
 		"line_scope_end":   float64(3),
 	}
-	line, col, err := ExtractPositionWithPattern(args, path)
+	line, col, err := ExtractPositionWithPattern(args, path, filepath.Dir(path))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -248,7 +248,7 @@ func TestExtractPositionWithPattern_LineScopeAbsent(t *testing.T) {
 	args := map[string]any{
 		"position_pattern": "func @@foo",
 	}
-	line, col, err := ExtractPositionWithPattern(args, path)
+	line, col, err := ExtractPositionWithPattern(args, path, filepath.Dir(path))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -2143,7 +2143,10 @@ func (c *LSPClient) ReopenDocument(ctx context.Context, uri string) error {
 	if !ok {
 		// URI not tracked — attempt to open from disk, mirroring TypeScript behavior.
 		logging.Log(logging.LevelDebug, "ReopenDocument: URI not tracked, attempting disk open: "+uri)
-		filePath := uripkg.URIToPath(uri)
+		filePath, vErr := uripkg.ValidatePath(uripkg.URIToPath(uri), c.rootDir)
+		if vErr != nil {
+			return fmt.Errorf("ReopenDocument: %w", vErr)
+		}
 		data, readErr := os.ReadFile(filePath)
 		if readErr != nil {
 			return fmt.Errorf("ReopenDocument: URI not tracked and disk read failed for %s: %w", uri, readErr)

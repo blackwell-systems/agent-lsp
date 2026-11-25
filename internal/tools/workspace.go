@@ -44,7 +44,7 @@ func HandleRenameSymbol(ctx context.Context, client *lsp.LSPClient, args map[str
 		return types.ErrorResult("new_name is required"), nil
 	}
 
-	line, col, err := ExtractPositionWithPattern(args, filePath)
+	line, col, err := ExtractPositionWithPattern(args, filePath, client.RootDir())
 	if err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}

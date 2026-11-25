@@ -280,7 +280,7 @@ func TestExtractPositionWithPattern_FileNotFoundError(t *testing.T) {
 	args := map[string]any{
 		"pattern": "DoWork",
 	}
-	_, _, err := ExtractPositionWithPattern(args, "/nonexistent/file.go")
+	_, _, err := ExtractPositionWithPattern(args, "/nonexistent/file.go", "")
 	if err == nil {
 		t.Fatal("expected error for nonexistent file")
 	}

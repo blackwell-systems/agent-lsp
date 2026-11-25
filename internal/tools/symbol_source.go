@@ -73,7 +73,7 @@ func HandleGetSymbolSource(ctx context.Context, client *lsp.LSPClient, args map[
 	if args["column"] == nil {
 		args["column"] = float64(1)
 	}
-	line1, col1, posErr := ExtractPositionWithPattern(args, cleanPath)
+	line1, col1, posErr := ExtractPositionWithPattern(args, cleanPath, client.RootDir())
 	if posErr != nil {
 		return types.ErrorResult(fmt.Sprintf("position: %s", posErr)), nil
 	}

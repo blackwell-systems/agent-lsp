@@ -12,6 +12,7 @@ import (
 	"github.com/blackwell-systems/agent-lsp/internal/logging"
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 	"github.com/blackwell-systems/agent-lsp/internal/types"
+	uripkg "github.com/blackwell-systems/agent-lsp/internal/uri"
 )
 
 // ResourceResult is returned by resource read handlers.
@@ -26,6 +27,19 @@ type ResourceTemplate struct {
 	Name        string `json:"name"`
 	URITemplate string `json:"uriTemplate"`
 	Description string `json:"description"`
+}
+
+// confineResourcePath resolves a file path taken from a resource URI and
+// refuses one outside the workspace root, the same check every tool applies to
+// its file_path. Resource URIs are client input like tool arguments: without
+// this, lsp-hover:///etc/passwd would be read and sent to the language server.
+// Without a workspace root nothing can be confined, so the read is refused.
+func confineResourcePath(client *lsp.LSPClient, path string) (string, error) {
+	root := client.RootDir()
+	if root == "" {
+		return "", fmt.Errorf("workspace root not initialized; call start_lsp first")
+	}
+	return uripkg.ValidatePath(path, root)
 }
 
 // HandleDiagnosticsResource handles lsp-diagnostics:// reads.
@@ -78,7 +92,11 @@ func HandleDiagnosticsResource(ctx context.Context, client *lsp.LSPClient, uri s
 	}
 
 	// Specific file path.
-	fileURI := lsp.PathToFileURI(path)
+	clean, err := confineResourcePath(client, path)
+	if err != nil {
+		return ResourceResult{}, fmt.Errorf("diagnostics resource: %w", err)
+	}
+	fileURI := lsp.PathToFileURI(clean)
 	if err := client.ReopenDocument(ctx, fileURI); err != nil {
 		return ResourceResult{}, fmt.Errorf("reopen document %q: %w", fileURI, err)
 	}
@@ -145,6 +163,10 @@ func HandleHoverResource(ctx context.Context, client *lsp.LSPClient, uri string)
 		return ResourceResult{}, fmt.Errorf("hover resource: %w", err)
 	}
 
+	filePath, err = confineResourcePath(client, filePath)
+	if err != nil {
+		return ResourceResult{}, fmt.Errorf("hover resource: %w", err)
+	}
 	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
 		return ResourceResult{}, fmt.Errorf("read file %q: %w", filePath, err)
@@ -175,6 +197,10 @@ func HandleCompletionsResource(ctx context.Context, client *lsp.LSPClient, uri s
 		return ResourceResult{}, fmt.Errorf("completions resource: %w", err)
 	}
 
+	filePath, err = confineResourcePath(client, filePath)
+	if err != nil {
+		return ResourceResult{}, fmt.Errorf("completions resource: %w", err)
+	}
 	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
 		return ResourceResult{}, fmt.Errorf("read file %q: %w", filePath, err)

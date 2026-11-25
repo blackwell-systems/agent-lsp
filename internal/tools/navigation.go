@@ -65,7 +65,7 @@ func HandleGetReferences(ctx context.Context, client *lsp.LSPClient, args map[st
 		return types.ErrorResult("file_path is required"), nil
 	}
 
-	line, col, err := ExtractPositionWithPattern(args, filePath)
+	line, col, err := ExtractPositionWithPattern(args, filePath, client.RootDir())
 	if err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
@@ -142,7 +142,7 @@ func HandleGoToDefinition(ctx context.Context, client *lsp.LSPClient, args map[s
 
 	// position_pattern is advertised in the schema; resolve it like the
 	// other navigation tools instead of reading only line/column.
-	line, col, err := ExtractPositionWithPattern(args, filePath)
+	line, col, err := ExtractPositionWithPattern(args, filePath, client.RootDir())
 	if err != nil {
 		return types.ErrorResult(err.Error()), nil
 	}
