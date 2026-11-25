@@ -251,7 +251,7 @@ func autoInitClient(
 	}
 
 	// Check if client is already initialized and file is within its root.
-	if existing := cs.get(); existing != nil {
+	if existing := cs.get(); existing != nil && existing.IsInitialized() {
 		rootDir := existing.RootDir()
 		if rootDir != "" && strings.HasPrefix(filePath, rootDir+"/") {
 			return existing
@@ -267,7 +267,7 @@ func autoInitClient(
 	defer initMu.Unlock()
 
 	// Re-check after acquiring lock (double-checked locking pattern).
-	if existing := cs.get(); existing != nil {
+	if existing := cs.get(); existing != nil && existing.IsInitialized() {
 		existingRoot := existing.RootDir()
 		if existingRoot != "" && strings.HasPrefix(filePath, existingRoot+"/") {
 			return existing
@@ -278,13 +278,17 @@ func autoInitClient(
 		"auto-init: inferred workspace root %q for file %q", root, filePath))
 
 	if sm, ok := resolver.(*lsp.ServerManager); ok {
-		if err := sm.StartAll(ctx, root); err != nil {
-			logging.Log(logging.LevelWarning, fmt.Sprintf("auto-init StartAll failed: %v", err))
+		// Start only the server that handles filePath. Starting every
+		// configured server would fail the whole query when an unrelated
+		// server is unavailable.
+		client, err := sm.StartForLanguage(ctx, root, sm.LanguageIDForFile(filePath))
+		if err != nil {
+			logging.Log(logging.LevelWarning, fmt.Sprintf("auto-init failed: %v", err))
 			return nil
 		}
-		if c := resolver.DefaultClient(); c != nil {
-			cs.set(c)
-			return c
+		if client != nil {
+			cs.set(client)
+			return client
 		}
 		return nil
 	}
@@ -293,6 +297,18 @@ func autoInitClient(
 	// serverPath/serverArgs are not in scope here. Return nil to fall
 	// through to the existing "LSP not initialized" error.
 	return nil
+}
+
+// newClientForFileWithAutoInit extends clientForFile with auto-init behavior.
+// If the resolver returns no initialized client for filePath, attempt
+// auto-initialization.
+func newClientForFileWithAutoInit(ctx context.Context, resolver lsp.ClientResolver, cs *clientState, initMu *sync.Mutex) func(string) *lsp.LSPClient {
+	return func(filePath string) *lsp.LSPClient {
+		if c := clientForFile(resolver, cs, filePath); c != nil && c.IsInitialized() {
+			return c
+		}
+		return autoInitClient(ctx, resolver, cs, initMu, filePath)
+	}
 }
 
 // toolDeps bundles the shared dependencies passed to each tool registration function.
@@ -342,14 +358,7 @@ func getOutputFormat() string {
 func Run(ctx context.Context, resolver lsp.ClientResolver, registry *extensions.ExtensionRegistry, serverPath string, serverArgs []string, httpMode bool, httpPort int, httpToken string, httpListenAddr string, httpNoAuth bool, auditLogPath string) error {
 	cs := &clientState{client: resolver.DefaultClient()}
 	var initMu sync.Mutex
-	// clientForFileWithAutoInit extends clientForFile with auto-init behavior.
-	// If the resolver returns no client for filePath, attempt auto-initialization.
-	clientForFileWithAutoInit := func(filePath string) *lsp.LSPClient {
-		if c := clientForFile(resolver, cs, filePath); c != nil {
-			return c
-		}
-		return autoInitClient(ctx, resolver, cs, &initMu, filePath)
-	}
+	clientForFileWithAutoInit := newClientForFileWithAutoInit(ctx, resolver, cs, &initMu)
 	sessionMgr := session.NewSessionManager(&csResolver{cs: cs, delegate: resolver})
 
 	auditLogger, err := audit.NewLogger(audit.ResolvePath(auditLogPath), 256)

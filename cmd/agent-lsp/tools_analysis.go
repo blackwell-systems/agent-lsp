@@ -298,8 +298,14 @@ func registerAnalysisTools(d toolDeps) {
 			OpenWorldHint:   boolPtr(false),
 		},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args GetChangeImpactArgs) (*mcp.CallToolResult, any, error) {
-		r, err := tools.HandleGetChangeImpact(ctx, d.cs.get(), toolArgsToMap(args))
-		r = tools.AppendIndexedField(r, d.cs.get())
+		// Route to the server for the changed files, starting it if needed,
+		// instead of whichever client happens to be current.
+		client := d.cs.get()
+		if len(args.ChangedFiles) > 0 {
+			client = d.clientForFileWithAutoInit(args.ChangedFiles[0])
+		}
+		r, err := tools.HandleGetChangeImpact(ctx, client, toolArgsToMap(args))
+		r = tools.AppendIndexedField(r, client)
 		return makeCallToolResult(r), nil, err
 	})
 
