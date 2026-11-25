@@ -222,7 +222,14 @@ func makeCallToolResult(r any) *mcp.CallToolResult {
 func clientForFile(resolver lsp.ClientResolver, cs *clientState, filePath string) *lsp.LSPClient {
 	// Extension-based routing: check if a specific server handles this file type
 	if filePath != "" {
-		if c := resolver.ClientForFile(filePath); c != nil && c.IsInitialized() {
+		c := resolver.ClientForFile(filePath)
+		if sm, managed := resolver.(*lsp.ServerManager); managed && sm.ServesFile(filePath) {
+			// A nil or uninitialized client for a configured language must
+			// reach auto-init instead of being replaced by a running client
+			// for another language.
+			return c
+		}
+		if c != nil && c.IsInitialized() {
 			return c
 		}
 	}
@@ -251,7 +258,7 @@ func autoInitClient(
 	}
 
 	// Check if client is already initialized and file is within its root.
-	if existing := cs.get(); existing != nil && existing.IsInitialized() {
+	if existing := clientForFile(resolver, cs, filePath); existing != nil && existing.IsInitialized() {
 		rootDir := existing.RootDir()
 		if rootDir != "" && strings.HasPrefix(filePath, rootDir+"/") {
 			return existing
@@ -267,7 +274,7 @@ func autoInitClient(
 	defer initMu.Unlock()
 
 	// Re-check after acquiring lock (double-checked locking pattern).
-	if existing := cs.get(); existing != nil && existing.IsInitialized() {
+	if existing := clientForFile(resolver, cs, filePath); existing != nil && existing.IsInitialized() {
 		existingRoot := existing.RootDir()
 		if existingRoot != "" && strings.HasPrefix(filePath, existingRoot+"/") {
 			return existing

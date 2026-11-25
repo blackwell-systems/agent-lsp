@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/blackwell-systems/agent-lsp/internal/config"
 	"github.com/blackwell-systems/agent-lsp/internal/lsp"
 )
 
@@ -107,5 +108,26 @@ func TestClientForFile_EmptyPath(t *testing.T) {
 	got := clientForFile(resolver, cs, "")
 	if got != clangdClient {
 		t.Errorf("clientForFile for empty path = %v, want clangdClient", got)
+	}
+}
+
+// With a ServerManager, a file for a configured but unstarted server must
+// not be routed to a running server for another language. A file whose
+// extension no server lists still falls back to the current client.
+func TestClientForFile_ServerManagerConfiguredUnstarted(t *testing.T) {
+	resolver := lsp.NewMultiServerManager([]config.ServerEntry{
+		{LanguageID: "go", Extensions: []string{"go"}, Command: []string{"gopls"}},
+		{LanguageID: "rust", Extensions: []string{"rs"}, Command: []string{"rust-analyzer"}},
+	})
+	running := lsp.NewLSPClient("gopls", nil)
+	running.MarkInitializedForTest()
+	cs := &clientState{}
+	cs.set(running)
+
+	if got := clientForFile(resolver, cs, "/project/main.rs"); got == running {
+		t.Error("clientForFile for .rs returned the running Go client; want the unstarted Rust entry")
+	}
+	if got := clientForFile(resolver, cs, "/project/README.md"); got != running {
+		t.Errorf("clientForFile for unmapped .md = %v, want the current client", got)
 	}
 }

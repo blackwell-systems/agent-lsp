@@ -153,6 +153,26 @@ func (m *ServerManager) ClientForFile(filePath string) *LSPClient {
 	return m.defaultClientLocked()
 }
 
+// ServesFile reports whether a configured server's extension set includes
+// filePath's extension. It is false for files that ClientForFile routes to
+// the default client only as a fallback.
+func (m *ServerManager) ServesFile(filePath string) bool {
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(filePath)), ".")
+	if ext == "" {
+		return false
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, e := range m.entries {
+		if e.extensions[ext] {
+			return true
+		}
+	}
+	return false
+}
+
 // DefaultClient returns the primary (or only) LSPClient.
 // Used for tools that are not file-specific (e.g. find_symbol).
 func (m *ServerManager) DefaultClient() *LSPClient {
