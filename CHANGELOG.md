@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, Semantic Versioning.
 
-## [Unreleased]
+## [0.24.6] - 2026-11-26
 
 ### Fixed
 - **`blast_radius` no longer reads a failed analysis as "no callers"** ([#82](https://github.com/blackwell-systems/agent-lsp/pull/82), [#85](https://github.com/blackwell-systems/agent-lsp/pull/85)): when it could not read the symbols of a changed file, the warning reached the caller only as text inside the JSON summary and was dropped entirely from the default GCF output, and when no file could be analyzed it returned an empty successful result that an agent reads as "nothing calls this". Failed symbol extraction and reference-query failures are now reported in the warnings of every output format, and an analysis where every file failed returns an error. It also refuses to run when the language server does not advertise `documentSymbolProvider` and `referencesProvider` instead of returning an empty graph, and `get_server_capabilities` lists `blast_radius` as supported or unsupported.
