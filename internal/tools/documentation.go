@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/blackwell-systems/agent-lsp/internal/types"
 )
@@ -180,8 +181,10 @@ func HandleGetSymbolDocumentation(ctx context.Context, args map[string]any) (typ
 		}
 	}
 
-	// Run command with 10-second timeout
-	timeoutCtx, cancel := context.WithTimeout(ctx, 10*1e9) // 10 seconds in nanoseconds
+	// Run the command with a timeout.
+	// A cold toolchain cache on a busy or slow machine can take well over ten
+	// seconds to answer `go doc`, and a timeout turns that into a failed lookup.
+	timeoutCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(timeoutCtx, dispatcher.cmd, cmdArgs...)
